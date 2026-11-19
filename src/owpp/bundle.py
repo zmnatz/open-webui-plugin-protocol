@@ -13,7 +13,7 @@ header and the code is function.py. A plugin may also have
   assets/   loader.js and custom.css: this plugin's fragments of the Shared Assets Protocol's
             two shared files, published by `class Event(PluginAssets)`
   config.yaml   structured settings shipped with the plugin, parsed here and read with plugin_config()
-  jobs:     the default of the sync mixin's SYNC_INTERVAL_MINUTES valve
+  jobs:     the default of the sync mixin's SYNC_INTERVAL_MINUTES valve, and adopt_markers
   source:   `{git, ref, path}`: `tool: {file: ...}`, `skills: {<id>: {file|dir: ...}}` and
             `function: {file: ...}` are read from that repo at a pinned commit
 
@@ -436,17 +436,35 @@ def _read_assets(folder: Path, manifest: dict) -> dict | None:
 
 
 def _read_jobs(folder: Path, manifest: dict) -> dict:
-    """`jobs: {sync_every_minutes: N}`: the default of the SYNC_INTERVAL_MINUTES valve that the
-    sync mixin adds to the function (0 = only on startup, enable and valve changes)."""
+    """`jobs: {sync_every_minutes: N, adopt_markers: [...]}`: the default of the
+    SYNC_INTERVAL_MINUTES valve that the sync mixin adds to the function (0 = only on startup,
+    enable and valve changes), and the markers of an earlier sync to treat as its own."""
+    jobs = _read_jobs_interval(folder, manifest)
+    cfg = manifest.get("jobs")
+    markers = cfg.get("adopt_markers") if isinstance(cfg, dict) else None
+    if markers is not None:
+        where = f"{folder.name}/plugin.yaml: jobs.adopt_markers"
+        if not isinstance(markers, list) or not all(
+            isinstance(m, str) and m.strip() and m == m.strip() for m in markers
+        ):
+            raise OwppError(f"{where} must be a list of markers (non-empty text, no spaces around)")
+        if markers:
+            jobs["adopt_markers"] = list(dict.fromkeys(markers))
+    return jobs
+
+
+def _read_jobs_interval(folder: Path, manifest: dict) -> dict:
     where = f"{folder.name}/plugin.yaml: jobs"
     cfg = manifest.get("jobs")
     if cfg is None:
         return dict(DEFAULT_EMBEDDED["jobs"])
     if not isinstance(cfg, dict):
-        raise OwppError(f"{where} must be a mapping (sync_every_minutes)")
-    unknown = [str(k) for k in cfg if k != "sync_every_minutes"]
+        raise OwppError(f"{where} must be a mapping (sync_every_minutes, adopt_markers)")
+    unknown = [str(k) for k in cfg if k not in ("sync_every_minutes", "adopt_markers")]
     if unknown:
-        raise OwppError(f"{where}: unknown key {', '.join(unknown)} (known: sync_every_minutes)")
+        raise OwppError(
+            f"{where}: unknown key {', '.join(unknown)} (known: sync_every_minutes, adopt_markers)"
+        )
     minutes = coalesce(
         cfg.get("sync_every_minutes"), DEFAULT_EMBEDDED["jobs"]["sync_every_minutes"]
     )

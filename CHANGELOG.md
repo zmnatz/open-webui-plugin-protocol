@@ -29,5 +29,5 @@ The first standalone release, extracted from a working deployment. Nothing has b
 - `access: public` on a tool or skill is Open-WebUI's `user:*` read grant, so every signed-in user can use it. Grants an earlier copy of the runtime wrote to the no-auth `anyone:*` audience, which Open-WebUI ignores for tools and skills, are swapped once on the next sync.
 - `global: false` for a filter that each user switches on (a toggle): the deploy never makes it global, and takes it out of global if someone did. Without the key, a new filter is still made global on first deploy.
 - The mock Open-WebUI fetches a `source:` plugin's pinned files from git when a test gives no `sources=`, stands in for any `open_webui.*` module or name it does not implement (using one raises `NotImplementedError` naming it), and has Open-WebUI's data directories (`owui.data_dir`).
-- mcpo Sync and LiteLLM Model Sync take an `ADOPT_MARKERS` valve: the markers of an earlier sync whose entries they should treat as their own.
+- `jobs: adopt_markers` in `plugin.yaml`: the markers of an earlier sync whose entries a sync treats as its own (`plugin_sync_markers()`), for moving from that sync without leaving its entries behind. mcpo Sync and LiteLLM Model Sync use it. It is part of the plugin's definition, not a valve.
 - Decisions and assumptions: `docs/decisions.md`.

@@ -4,6 +4,7 @@ Run with `owpp test litellm_model_sync`."""
 import copy
 import json
 import logging
+import shutil
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -248,22 +249,36 @@ def test_connections_that_are_not_litellm_are_skipped(owui, plugin, connected):
     assert owui.models == {}
 
 
-def test_adopted_markers_count_as_its_own(owui, plugin, connected):
-    """With ADOPT_MARKERS naming an earlier sync's marker, configs that sync wrote are updated
-    and pruned like this function's own.
+def test_adopted_markers_count_as_its_own(owui, tmp_path, plugin_dir, connected):
+    """With plugin.yaml's jobs: adopt_markers naming an earlier sync's marker, configs that
+    sync wrote are updated and pruned like this function's own.
 
-    By hand: on an instance an earlier sync wrote to (marked, say, litellm-model-sync), set
-    ADOPT_MARKERS to that marker and save. Its configs take this function's marker, and those
-    the gateway no longer serves are removed.
+    By hand: on an instance an earlier sync wrote to (marked, say, litellm-model-sync), add
+    `adopt_markers: [litellm-model-sync]` under `jobs:` in plugin.yaml and deploy. Its configs
+    take this function's marker, and those the gateway no longer serves are removed.
     """
+
+    def load(adopt: bool):
+        folder = tmp_path / ("adopting" if adopt else "plain") / "litellm_model_sync"
+        shutil.copytree(plugin_dir, folder, ignore=shutil.ignore_patterns("tests"))
+        if adopt:
+            manifest = folder / "plugin.yaml"
+            text = manifest.read_text().replace(
+                "jobs:\n", "jobs:\n  adopt_markers: [litellm-model-sync]\n"
+            )
+            manifest.write_text(text)
+        owui.load(folder)
+
+    load(adopt=False)
     sync(owui)
     for row in owui.models.values():
         meta = row.meta.model_dump()
         row.meta = type(row.meta).model_validate({**meta, "managed_by": "litellm-model-sync"})
     connected["models"] = [m for m in MODELS if m["model_name"] != "embed"]
-    sync(owui)  # not adopted yet: the old configs are left as they are
+    sync(owui)  # not adopted: the old configs are left as they are
     assert "gw.embed" in owui.models
-    sync(owui, ADOPT_MARKERS="litellm-model-sync")
+    load(adopt=True)
+    sync(owui)
     assert "gw.embed" not in owui.models
     assert owui.models["gw.gpt-fast"].meta.model_dump()["managed_by"] == "litellm_model_sync"
 

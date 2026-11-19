@@ -93,9 +93,12 @@ Makes `tool: {file}`, `function: {file}` and `skills: {<id>: {file|dir}}` read f
 ```yaml
 jobs:
   sync_every_minutes: ${MCPO_SYNC_MINUTES:-60}   # a number, or an environment template
+  adopt_markers: [mcpo-sync]                     # optional: an earlier sync's markers
 ```
 
-Used with `PluginScheduledSync` (the `jobs` library, which the key brings in). The library adds the `ENABLE` and `SYNC_INTERVAL_MINUTES` valves to the function's `Valves`, and this is the interval's default (`0` repeats nothing: only startup, enable and valve changes). See [libraries: jobs](libraries.md#jobs).
+Used with `PluginScheduledSync` (the `jobs` library, which the key brings in). The library adds the `ENABLE` and `SYNC_INTERVAL_MINUTES` valves to the function's `Valves`, and `sync_every_minutes` is the interval's default (`0` repeats nothing: only startup, enable and valve changes). See [libraries: jobs](libraries.md#jobs).
+
+`adopt_markers` is for **moving from another sync**. A sync marks what it writes with its function id (`managed_by`) and replaces or prunes only entries with that mark, so entries an earlier sync wrote under another marker would be left behind. Listing that marker here makes them count as this sync's own: `plugin_sync_markers()` returns the function id plus these. It is a list of exact markers, checked by `owpp check`; leave it out to adopt nothing. It belongs here, not in a valve, because which sync this one succeeds is decided by the deployment, in git, and a valve is for an admin to change in the UI: a marker typed there by mistake would make the sync prune another sync's entries. Remove it once the old entries have been taken over, or keep it; it does nothing more once none carry the old mark.
 
 ### Environment templates
 

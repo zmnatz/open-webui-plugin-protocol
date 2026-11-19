@@ -13,7 +13,9 @@ Like [mcpo Sync](../mcpo_sync), it uses the scheduled-sync pattern: `class Event
 
 **What it never touches.** It changes and deletes only configs it wrote (marked `managed_by` with this function's id), plus configs nobody named (still the raw id, which Open-WebUI creates when a model is merely toggled). A config someone renamed is left alone unless `ADOPT_EXISTING` is on. It prunes a config only when that config's own connection answered with models in this run, so a gateway that is down or returns nothing deletes nothing. Tags a person added are kept; only the ones it wrote are replaced.
 
-Valves: `INFO_PATH`, `INCLUDE_CONNECTIONS`, `SET_VISION`, `TAG_VENDOR`, `TAG_FAMILY`, `TAG_CAPABILITIES`, `NATIVE_FUNCTION_CALLING` (off by default: it changes how tool calls are made), `PRUNE_MISSING`, `PUBLIC_READ`, `ADOPT_EXISTING`, `HIDE_MODES`, `REQUEST_TIMEOUT`, `ADOPT_MARKERS` (configs an earlier sync wrote under another marker, as in mcpo Sync), `SYNC_INTERVAL_MINUTES`, `ENABLE`.
+Valves: `INFO_PATH`, `INCLUDE_CONNECTIONS`, `SET_VISION`, `TAG_VENDOR`, `TAG_FAMILY`, `TAG_CAPABILITIES`, `NATIVE_FUNCTION_CALLING` (off by default: it changes how tool calls are made), `PRUNE_MISSING`, `PUBLIC_READ`, `ADOPT_EXISTING`, `HIDE_MODES`, `REQUEST_TIMEOUT`, `SYNC_INTERVAL_MINUTES`, `ENABLE`.
+
+**Moving from another sync.** Configs an earlier sync wrote carry its marker. Name it in `plugin.yaml` (`jobs: adopt_markers: [litellm-model-sync]`) and deploy: they are then updated, take this function's marker, and are pruned like its own ([plugin format](../../../docs/plugin-format.md#jobs)).
 
 ## Test
 

@@ -1,15 +1,7 @@
 
-# Open-WebUI Event function. On startup / enable / valve change, and then every
-# SYNC_INTERVAL_MINUTES (the `jobs` library, plugin.yaml: jobs), it walks the
-# OpenAI connections configured in Open-WebUI, asks each LiteLLM gateway for
-# GET /model/info (the base URL minus /v1, same bearer key as the
-# connection), and writes the gateway's metadata into Open-WebUI's model
-# configs: the friendly display name, hiding of non-chat (embedding /
-# decision / transcription) models, the vision capability the model states,
-# and tags for the vendor (model_info.litellm_provider) and the model family
-# (model_info.model_family). Connections that are not LiteLLM are skipped.
-# It only changes or deletes model configs it wrote (meta.managed_by: its own
-# function id), and never on an empty or failed answer.
+# Syncs LiteLLM's GET /model/info into Open-WebUI's model configs: display names, hidden
+# non-chat models, vision and tags. Skips non-LiteLLM connections, and only changes configs it
+# wrote, never on an empty or failed answer.
 
 from __future__ import annotations
 
@@ -160,25 +152,16 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
             ),
         )
         REQUEST_TIMEOUT: int = Field(default=15, description="HTTP timeout in seconds.")
-        ADOPT_MARKERS: str = Field(
-            default="",
-            description=(
-                "Comma-separated managed_by markers of an earlier sync to treat as this "
-                "function's own: their configs are updated and pruned like its own. For "
-                "moving from another sync. Empty adopts nothing."
-            ),
-        )
 
     @property
     def owner(self) -> str:
-        """The marker on every model config this function writes, and the only thing it
-        changes or prunes: its own id. (Never None where it matters: sync() stops if it
-        cannot tell.)"""
+        """The marker on every model config this function writes: its own id. It changes or
+        prunes only configs with this marker or one plugin.yaml's jobs: adopt_markers names
+        (plugin_sync_markers). Never None where it matters: sync() stops if it cannot tell."""
         return plugin_function_id()
 
     def mine(self, meta: dict) -> bool:
-        adopted = {m.strip() for m in self.valves.ADOPT_MARKERS.split(",") if m.strip()}
-        return meta.get("managed_by") in {self.owner} | adopted
+        return meta.get("managed_by") in plugin_sync_markers()
 
     async def sync(self):
         if not self.owner:  # a missing marker would match, and prune, every hand-made config
@@ -307,15 +290,12 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
         hide_modes = {m.strip() for m in v.HIDE_MODES.split(",") if m.strip()}
         written = 0
         for name, record in records.items():
-            # Same id Open-WebUI gives the connection's model, so the config
-            # row overrides that base model.
+            # Same id as the connection's model, so this config overrides it.
             mid = model_id(conn["prefix"], name)
             existing = await Models.get_model_by_id(mid)
             if existing and not v.ADOPT_EXISTING:
                 managed = self.mine(existing.meta.model_dump())
-                # A config nobody named (blank, or still the raw id) is
-                # Open-WebUI's own bookkeeping, e.g. from toggling the model
-                # off, not a customisation, so it is safe to adopt.
+                # An unnamed config is Open-WebUI's bookkeeping (e.g. toggling a model off): safe to adopt.
                 unnamed = existing.name in ("", mid, name)
                 if not managed and not unnamed:
                     log.info(
@@ -340,20 +320,16 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
             meta["sync_source"] = conn["base"]
             hidden = record.get("mode") in hide_modes
             if hidden:
-                # The "hide" toggle in the admin Models list: out of the
-                # selector but still enabled and callable.
+                # The admin "hide" toggle: out of the selector, still callable.
                 meta["hidden"] = True
             if v.NATIVE_FUNCTION_CALLING and record["capabilities"]["tools"]:
                 params["function_calling"] = "native"
 
             display = record["display_name"]
-            # Hiding is enforced every sync; a visible model is left however a
-            # person set it, so un-hiding by hand on a chat model sticks. Hidden
-            # models stay enabled, which also repairs configs an earlier version
-            # of this function disabled instead.
+            # Hiding is enforced every sync; un-hiding a chat model by hand sticks. Hidden models stay
+            # enabled.
             active = True if hidden else (existing.is_active if existing else True)
-            # Other grants (groups, users, write access) are kept as they are;
-            # only the public read grant is added when it is missing.
+            # Only adds the public read grant; other grants are kept.
             grants = [grant_dict(g) for g in (existing.access_grants if existing else [])]
             public = {"principal_type": "user", "principal_id": "*", "permission": "read"}
             grants_changed = False

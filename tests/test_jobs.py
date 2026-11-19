@@ -224,3 +224,28 @@ class TestTheSyncStillBehaves:
         event.valves = ns["Event"].Valves(SYNC_INTERVAL_MINUTES=0)
         asyncio.run(event.event({}, "function.valves_updated", "demo"))
         assert scheduled[-1] == "stopped"  # 0: only on startup, enable and valve changes
+
+
+class TestAdoptMarkers:
+    def test_the_sync_owns_its_id_and_the_markers_it_adopts(self, tmp_path):
+        manifest = (
+            "function:\n  title: T\njobs:\n  adopt_markers: [old-sync, older-sync, old-sync]\n"
+        )
+        ns = load(tmp_path, SIMPLE, manifest)
+        assert ns["plugin_sync_markers"]() == {"demo", "old-sync", "older-sync"}
+
+    def test_without_the_key_it_owns_only_its_id(self, tmp_path):
+        assert load(tmp_path, SIMPLE)["plugin_sync_markers"]() == {"demo"}
+
+    def test_it_owns_nothing_when_it_cannot_tell_which_function_it_is(self, tmp_path):
+        ns = load(tmp_path, SIMPLE, "function:\n  title: T\njobs:\n  adopt_markers: [old-sync]\n")
+        ns["plugin_function_id"] = lambda: None
+        assert ns["plugin_sync_markers"]() == set()
+
+    @pytest.mark.parametrize("value", ["old-sync", "[1]", '[""]', '[" old "]', "{a: b}"])
+    def test_anything_but_a_list_of_markers_is_refused_when_bundling(self, tmp_path, value):
+        folder = tmp_path / "p"
+        manifest = f"function:\n  title: T\njobs:\n  adopt_markers: {value}\n"
+        write_tree(folder, {"plugin.yaml": manifest, "function.py": SIMPLE})
+        with pytest.raises(OwppError, match="must be a list of markers"):
+            load_function_files(tmp_path)

@@ -1,7 +1,4 @@
-# Settings that ship with the plugin, read by function.py through plugin_config() and laid
-# over the defaults there. Change this file and redeploy. Anything not listed keeps its
-# default. Values an admin may want to change in the UI stay valves (MCPO_BASE_URL, ...);
-# this is for structured data. It is in git, so no secret goes here as text: refer to one with ${NAME}.
+# Laid over function.py's defaults; UI-tunable values stay valves. No secrets as text: use ${NAME}.
 enable: ${MCPO_SERVERS_ENABLED:-true}   # whether synced servers start enabled; from the container's environment
 servers:                # overrides per mcpo server name
   time:
