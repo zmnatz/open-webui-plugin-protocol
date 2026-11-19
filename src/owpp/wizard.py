@@ -377,10 +377,6 @@ def stage_header(p: Prompter, title: str, kind: str) -> dict:
         "required_open_webui_version": p.ask(
             "Oldest Open-WebUI it supports (Event functions need 0.10.0)", "0.10.0"
         ),
-        "requirements": p.ask(
-            "Extra pip packages, comma-separated (optional; installed when the function is saved)",
-            "",
-        ),
     }
 
 

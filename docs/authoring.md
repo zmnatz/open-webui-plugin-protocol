@@ -17,7 +17,7 @@ After the name, it asks **where the code lives**.
 | Name | the id (the folder, and the function id in Open-WebUI) and title | `plugins/<id>/` |
 | Where the code lives | here | |
 | Plugin type | filter, action, event, pipe or **installer**, or a few questions to decide (below) | `class Filter`, `Action`, `Event` or `Pipe`; no `function.py` for an installer |
-| Describe it | description, author, version, license, `required_open_webui_version`, `requirements` (an `icon_url` can be added to `plugin.yaml` by hand) | the `function:` header in `plugin.yaml` |
+| Describe it | description, author, version, license, `required_open_webui_version` (header keys such as `icon_url` and `requirements` can be added to `plugin.yaml` by hand) | the `function:` header in `plugin.yaml` |
 | Type options | filter: hooks (`inlet`, `request`, `stream`, `outlet`), a user toggle, `global`, `file_handler`, `priority`. Action: several buttons (`actions`), `global`, an HTML page above the message, `priority`. Pipe: several models (`pipes()`), streaming. Event: a scheduled sync (`PluginScheduledSync`, its interval `${<ID>_SYNC_MINUTES:-60}`), the events to handle with `@on` | the class's methods and attributes |
 | Tool | id, method names, title, `access: public`, a method that shows a page in the chat (`HTMLResponse`), `chat_data` | `tool.py`, `tool:` in `plugin.yaml` |
 | Skills | name and description of each | `skills/<name>/SKILL.md`, in Open-WebUI's layout |
