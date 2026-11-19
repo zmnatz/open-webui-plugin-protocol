@@ -29,10 +29,8 @@ html,body,#root{height:100%;margin:0}
 <body>
 <div id="root"></div>
 <script type="module">
-// The server keeps only one of the two marked blocks below, the CDN one or the self-hosted one
-// (the markers never reach the browser, and must not appear anywhere else in this file).
-// Hosted (EXCALIDRAW_ASSETS_URL, see self-host/): the editor is one module from your own host
-// and nothing at all comes from the internet. Otherwise it comes from the CDN via the import map.
+// The server keeps one of the two marked blocks (CDN or self-hosted); the markers must not appear
+// elsewhere in this file.
 <!--esm.sh-->
 window.EXCALIDRAW_ASSET_PATH =
   "https://esm.sh/@excalidraw/excalidraw@__VERSION__/dist/prod/";
@@ -47,9 +45,7 @@ const { React, createRoot, Excalidraw, MainMenu, convertToExcalidrawElements } =
   await import("__ASSETS_URL__/editor.js");
 <!--/hosted-->
 
-// Served at <prefix>/view/<chat id> to a signed-in user; the API lives beside "view".
-// The sandboxed panel sends no cookies, so API calls carry a token: the short-lived
-// one the server renders into this page after checking the login.
+// The sandboxed panel sends no cookies, so API calls carry the token rendered into this page.
 const parts = location.pathname.split("/");
 const id = decodeURIComponent(parts.pop());
 parts.pop();
@@ -60,11 +56,8 @@ const url = (query = "") =>
 const me = crypto.randomUUID();
 const dark = matchMedia("(prefers-color-scheme: dark)").matches;
 const hash = (els) => els.map((e) => e.id + ":" + e.version).join(",");
-// Excalidraw goes blank and its zoom control reads "NaN%" once any element
-// has a non-finite x/y: the scene bounds become NaN, and so do zoom and
-// scroll afterwards (there is no recovery in the UI). LLM-authored skeletons
-// can omit or mistype those fields, and conversion passes them through, so
-// repair geometry before and after it.
+// A non-finite x/y blanks the canvas (zoom "NaN%") with no recovery; LLM skeletons can have
+// one, so repair geometry before and after conversion.
 const num = (v) => (typeof v === "boolean" || v === "" ? NaN : Number(v));
 const finite = (v) => Number.isFinite(num(v));
 const mid = (e) => [
@@ -86,8 +79,7 @@ const repair = (els, converted) => {
     .filter((e) => e && typeof e === "object" && !Array.isArray(e))
     .map((e) => ({ ...e, id: e.id || crypto.randomUUID() }));
   const byId = new Map(list.map((e) => [e.id, e]));
-  // A skeleton arrow with bindings but no x/y (LLMs often drop it) would end
-  // up at the origin; route it from the bound shape to the other one instead.
+  // A bound arrow without x/y would start at the origin; route it between its shapes.
   const route = (e) => {
     const a = byId.get(e.start?.id), b = byId.get(e.end?.id);
     if (!a || !b || !finite(a.x) || !finite(a.y) || !finite(b.x) || !finite(b.y)) return null;
@@ -125,8 +117,7 @@ const repair = (els, converted) => {
     return e;
   });
 };
-// LLM-authored skeletons and full elements may be mixed; conversion passes
-// complete elements through and fills in the rest.
+// Skeletons and full elements may be mixed; conversion fills in the skeletons.
 const normalize = (els) =>
   repair(convertToExcalidrawElements(repair(els, false), { regenerateIds: false }), true);
 
@@ -155,8 +146,7 @@ function fit(els) {
   if (api && els.length) api.scrollToContent(els, { fitToViewport: true, animate: true });
 }
 
-// A non-finite zoom or scroll leaves the canvas blank and its control at
-// "NaN%" with no way back from the UI; reset such a viewport and refit.
+// Reset a non-finite viewport (blank canvas, "NaN%") and refit.
 function recover() {
   if (!api) return;
   const s = api.getAppState();
@@ -189,8 +179,7 @@ version = first.version;
 const initial = normalize(first.elements);
 lastHash = hash(initial);
 
-// The default main menu links out (GitHub, X, Discord, Help docs); pop-ups
-// are blocked inside Open-WebUI's sandbox, so offer only in-page items.
+// Pop-ups are blocked in the sandbox, so the menu offers only in-page items.
 const D = MainMenu.DefaultItems;
 const menu = React.createElement(
   MainMenu,

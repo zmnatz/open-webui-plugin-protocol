@@ -1,10 +1,5 @@
 
-# Open-WebUI Event function. On startup / enable / valve change, and then every
-# SYNC_INTERVAL_MINUTES (the `jobs` library, plugin.yaml: jobs), it reads the
-# mcpo proxy's root OpenAPI document (GET /openapi.json), parses the server
-# list out of its description, and writes each server into Open-WebUI as an
-# OpenAPI tool server (bearer MCPO_API_KEY), so the tool surface is managed
-# in mcpo's own config instead of being re-typed in the admin UI.
+# Syncs the servers listed in mcpo's /openapi.json into Open-WebUI as OpenAPI tool servers.
 
 from __future__ import annotations
 
@@ -70,8 +65,7 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
             log.warning("mcpo Sync: cannot tell which function this is; skipping")
             return
         base = self.valves.MCPO_BASE_URL.strip().rstrip("/")
-        # The valve wins; otherwise the container's MCPO_API_KEY (the Stack variable
-        # the mcpo service also uses), so the key need not be typed into the UI.
+        # The valve wins; otherwise the container's MCPO_API_KEY.
         key = (self.valves.MCPO_API_KEY or os.environ.get("MCPO_API_KEY", "")).strip()
         if not base or not key:
             log.warning("mcpo Sync: MCPO_BASE_URL / MCPO_API_KEY not set; skipping")
@@ -90,8 +84,7 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
             log.error("mcpo Sync: failed to persist tool servers: %s", e)
 
     async def fetch_servers(self, base: str, key: str) -> list[str]:
-        # /docs is the Swagger HTML; the same description is in the root
-        # OpenAPI document.
+        # The server list is in the root OpenAPI document's description.
         url = f"{base}/openapi.json"
         headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
         timeout = aiohttp.ClientTimeout(total=self.valves.REQUEST_TIMEOUT)
