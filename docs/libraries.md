@@ -27,7 +27,7 @@ Updating a vendored library updates every plugin that includes it on its next de
 
 ## routes
 
-**Every route requires a signed-in user, unless a mount says `public` in so many words.** A route is open to any signed-in user; one that needs more is **marked** (below), never checked by hand in its handler. The level belongs on the route, or on the mount (`access=`), or, for the `static/` files, on [`static:`](plugin-format.md#static). There is no plugin-wide setting.
+**Every route requires a signed-in user, unless a mount says `public` in so many words.** A route is open to any signed-in user; one that needs more is **marked** (below), never checked by hand in its handler. The level belongs on the route, or on the mount (`access=`), or, for the `static/` files, on [`static:`](plugin-format.md#static-and-the-static-and-templates-folders). There is no plugin-wide setting.
 
 `plugin_mount(app, router, prefix, owner=None, name="", access=None, guard=None) -> int`
 

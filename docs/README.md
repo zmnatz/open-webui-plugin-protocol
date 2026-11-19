@@ -18,9 +18,13 @@ Open-WebUI stores a function or tool as **one code blob** and cannot import sibl
 | Know exactly what ends up in the deployed file | [bundling](bundling.md) |
 | Understand install/remove, valves and sync | [runtime](runtime.md) |
 | Use routes, jobs, chat data, static files and templates | [libraries](libraries.md) |
+| Unit-test a plugin against a mock Open-WebUI | [testing](testing.md) |
 | Test, deploy, set up CI | [tooling](tooling.md) |
 | Use it in your repository, or move existing functions over | [adopting](adopting.md) |
 | Know why it is the way it is | [decisions](decisions.md) |
+| Review a change, or repeat the tests by hand | [reviewing](reviewing.md), [test catalogue](reference/test-catalogue.md) |
+| Make a change to this repository | [making a change](contributing.md) |
+| See every change so far | [audit trail](project/audit-trail.md), [changelog](../CHANGELOG.md) |
 | Know what you are trusting, and how to report a problem | [security](../SECURITY.md) |
 
 ## At a glance
@@ -34,6 +38,7 @@ plugins/<id>/
   skills/<id>/     optional skills, whole folders
   static/          optional files served at /<id>/<path>
   templates/       optional files the function renders itself (never served)
+  tests/           optional unit tests, run by `owpp test` (never deployed)
   README.md        what it is, how to test it, how to deploy it
 ```
 
@@ -51,6 +56,7 @@ tool: { id: my_plugin, access: public }
 ```
 owpp list                            # plugins and their function type
 owpp check my_plugin                 # bundle, compile, find undefined names
+owpp test my_plugin                  # its tests/, against a mock Open-WebUI
 owpp deploy --only my_plugin --dry-run
 ```
 

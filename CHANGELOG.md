@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- `owpp test [id ...]`: runs each plugin's `tests/` folder with pytest against a mock Open-WebUI (`owpp.testing.MockOpenWebUI`, `docs/testing.md`). The mock covers the function, tool and skill tables, users and auth, chats in SQLite, config, the socket, event sinks and the FastAPI app. The `owui`, `plugin_dir` and `plugin` pytest fixtures are registered wherever owpp is installed. The extra `owpp[test]` brings pytest and the packages Open-WebUI ships.
+- `owpp init` scaffolds a `tests/test_<id>.py` that passes.
+- Every example plugin has unit tests in its own `tests/` folder. The example tests that lived in `tests/test_examples.py` moved there.
+- Every example plugin test has a docstring: what it checks, then `By hand:` steps to repeat it on a live Open-WebUI. `owpp init` scaffolds tests that do the same, and `tests/test_test_docs.py` enforces it.
+- A documentation site (Zensical, `zensical.toml`, built by `tools/build_docs.py`), published to GitHub Pages by `.github/workflows/docs.yml`. It adds pages for review: a test catalogue built from the test docstrings, an audit trail built from `git log`, and how to review and make a change.
+
 ## 0.1.0 (2026-11-18)
 
 First standalone release, extracted from a working deployment.
