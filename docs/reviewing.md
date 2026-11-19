@@ -8,7 +8,7 @@ How a person checks a pull request or a release before it reaches an Open-WebUI 
 | --- | --- |
 | The pull request's description and commits | What the author meant to do. Each commit message says why. |
 | The [audit trail](project/audit-trail.md) | Every commit so far, with the files it touched. It is built from `git log`. |
-| The [changelog](project/changelog.md), `## Unreleased` | What users will notice. A change they would notice needs an entry here. |
+| The [changelog](project/changelog.md), the version being prepared | What users will notice. A change they would notice needs an entry here. |
 | [Decisions](decisions.md) | Why things are the way they are. A change that reverses one of these should update it. |
 
 A change of behaviour with no changelog entry, or a new design choice with no line in decisions, is a review comment.

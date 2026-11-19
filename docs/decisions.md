@@ -1,6 +1,6 @@
 # Decisions and assumptions for 0.1.0
 
-The first standalone release was cut without a round of review, so these are the calls made, recorded so each can be revisited.
+The first standalone release, 0.1.0, is being prepared without a round of review (it is not released yet), so these are the calls made, recorded so each can be revisited.
 
 ## Packaging
 

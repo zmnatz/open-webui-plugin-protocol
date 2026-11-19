@@ -89,7 +89,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ## Status
 
-0.1.0, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). There is no live end-to-end test yet. See [decisions](docs/decisions.md#not-done-yet).
+0.1.0, not released yet, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). There is no live end-to-end test yet. See [decisions](docs/decisions.md#not-done-yet).
 
 ## Development
 
