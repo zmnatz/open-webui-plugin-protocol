@@ -7,7 +7,7 @@ Enabling the function (it is global) installs the tool `inline_visualizer` and t
 ## Settings the deploy cannot make
 
 - Admin Settings > General > **Skill Read Limit**: raise to 50000 or more (default 20000 can cut the skill short).
-- Each user: Settings > Interface > **iframe Sandbox Allow Same Origin**, or live rendering shows "Streaming visualization unavailable".
+- Each user: Settings > Interface > **iframe Sandbox Allow Same Origin**, or live rendering shows "Streaming visualization unavailable". For everyone at once: Admin Settings > General > Default Interface Settings, or `DEFAULT_INTERFACE_SETTINGS='{"iframeSandboxAllowSameOrigin": true}'`. It lets the script of *any* artifact reach Open-WebUI's origin, the sign-in token included, so turn it on only where you trust what the models produce. Excalidraw needs the same setting ([its README](../excalidraw/README.md#requirement-iframe-sandbox-allow-same-origin)).
 - The tool's valves (`security_level`, `chime`) are changed in Workspace > Tools; the deploy does not set them.
 
 ## Upgrading

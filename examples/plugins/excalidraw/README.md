@@ -26,7 +26,11 @@ To make it work, turn the setting on:
 - for everyone: **Admin Settings > General > Default Interface Settings**, or the container variable `DEFAULT_INTERFACE_SETTINGS='{"iframeSandboxAllowSameOrigin": true}'`. A user's own setting still wins;
 - or for one user: **Settings > Interface > iframe Sandbox Allow Same Origin**.
 
-**Know what it costs.** The setting applies to every artifact, not only this one. With it on, the script in any HTML a model produces runs with Open-WebUI's own origin, so it can read the sign-in token Open-WebUI keeps in the browser and call the API as that user. Turn it on only where you trust what the models put into artifacts. An editor page that needs no cookie, so the setting can stay off, is [issue #6](https://github.com/zmnatz/open-webui-plugin-protocol/issues/6).
+**Know what it costs.** The setting applies to every artifact, not only this one. With it on, the script in any HTML a model produces runs with Open-WebUI's own origin, so it can read the sign-in token Open-WebUI keeps in the browser and call the API as that user. This is an Open-WebUI permission that no plugin can narrow. **Use this plugin only on an instance where you trust what the models put into artifacts.**
+
+It is the same setting, and the same cost, as [Inline Visualizer](../inline_visualizer/README.md) (its upstream README says so too): an instance that already runs it for live rendering has already accepted it, and Excalidraw adds nothing to it.
+
+The plugin keeps the requirement on purpose rather than working around it ([decisions](../../../docs/decisions.md#examples), [issue #6](https://github.com/zmnatz/open-webui-plugin-protocol/issues/6)). A token in the iframe's address would be written into the chat's stored HTML and would have expired by the time an old chat is reopened; a public page that asks the parent window for a credential needs Open-WebUI to answer, which it does not today.
 
 ## Self-hosting the editor
 

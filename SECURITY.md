@@ -69,6 +69,10 @@ about keeping that explicit and narrow, not about making untrusted plugins safe.
   trusted headers: **your reverse proxy must strip a client-supplied trusted-identity header** and
   Open-WebUI must not be reachable except through it. If it is, anyone can claim any identity at the
   login page already, and now at plugin pages too.
+- **Excalidraw and Inline Visualizer need Open-WebUI's "iframe Sandbox Allow Same Origin".** With it
+  on, the script of every artifact, not only theirs, runs with Open-WebUI's origin and can act as the
+  user. This is an Open-WebUI setting the plugins cannot narrow; enable them only where you trust what
+  the models put into artifacts.
 - **Third-party hosting is yours to secure.** Excalidraw loads its editor from esm.sh unless you
   self-host it (see its README); either way the code runs in your users' browsers with no integrity
   check.
