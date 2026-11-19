@@ -386,3 +386,34 @@ def test_it_will_not_sync_when_it_cannot_tell_which_function_it_is(owui, plugin_
     with caplog.at_level(logging.WARNING):
         owui.run(event.sync())
     assert "cannot tell which function this is" in caplog.text
+
+
+def test_adopted_markers_are_pruned_and_replaced_like_its_own(owui, plugin):
+    """With ADOPT_MARKERS naming an earlier sync's markers, that sync's entries count as this
+    function's: a stale one is pruned, one with a synced id is replaced, and entries of any
+    other marker are left alone.
+
+    By hand: with tool servers left by an earlier sync (marked, say, mcpo-sync), set
+    ADOPT_MARKERS to that marker and save. Its entries for servers mcpo still has are replaced
+    by synced ones, the rest are removed, and hand-made entries stay.
+    """
+    plugin.instance.valves.ADOPT_MARKERS = "mcpo-sync, litellm-mcp-sync"
+    existing = [
+        connection("old-gone", "mcpo-sync"),  # an earlier sync's, gone from mcpo
+        connection("mcpo-time", "mcpo-sync"),  # an earlier sync's, being replaced
+        connection("legacy", "litellm-mcp-sync"),
+        connection("manual"),
+        connection("theirs", "some_other_function"),
+    ]
+    assert persisted(owui, plugin, existing) == ["manual", "theirs", "mcpo-time"]
+
+
+def test_without_adopt_markers_another_syncs_entries_are_kept(owui, plugin):
+    """By default nothing is adopted: an earlier sync's entries stay unless their id collides
+    with a synced server.
+
+    By hand: leave ADOPT_MARKERS empty and sync. Entries another sync wrote are still listed,
+    except one with the same id as a synced server, which is replaced.
+    """
+    existing = [connection("old-gone", "mcpo-sync"), connection("mcpo-time", "mcpo-sync")]
+    assert persisted(owui, plugin, existing) == ["old-gone", "mcpo-time"]

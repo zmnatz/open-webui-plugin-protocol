@@ -8,6 +8,8 @@ tools the same way every time, so this one follows a script instead of thinking:
 - Asked in Open-WebUI's default mode (a prompt listing the tools, answered with JSON), it answers
   with the same call as {"tool_calls": [...]}.
 - Anything else gets a short fixed reply, so the chat shows a normal answer.
+
+It also answers /model/info as a LiteLLM gateway would, for the LiteLLM Model Sync example.
 """
 
 from __future__ import annotations
@@ -44,6 +46,29 @@ SCRIPT = {
     ),
 }
 PLAIN = "Hello! I am the screenshot model: I answer the same way every time."
+EMBEDDING = "screenshot-embedding"
+# What a LiteLLM gateway's /model/info says about the models, for examples/plugins/litellm_model_sync.
+MODEL_INFO = [
+    {
+        "model_name": MODEL,
+        "model_info": {
+            "display_name": "Screenshot Model",
+            "litellm_provider": "anthropic",
+            "model_family": "claude",
+            "mode": "chat",
+            "capabilities": {"vision": True, "tools": True},
+        },
+    },
+    {
+        "model_name": EMBEDDING,
+        "model_info": {
+            "display_name": "Screenshot Embeddings",
+            "litellm_provider": "openai",
+            "mode": "embedding",
+            "capabilities": {},
+        },
+    },
+]
 
 
 def _tool_names(body: dict) -> list[str]:
@@ -91,8 +116,12 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def do_GET(self):
-        if self.path.rstrip("/").endswith("/models"):
-            self._send(200, {"object": "list", "data": [{"id": MODEL, "object": "model"}]})
+        path = self.path.rstrip("/")
+        if path.endswith("/model/info"):  # LiteLLM's, beside /v1
+            self._send(200, {"data": MODEL_INFO})
+        elif path.endswith("/models"):
+            models = [{"id": m, "object": "model"} for m in (MODEL, EMBEDDING)]
+            self._send(200, {"object": "list", "data": models})
         else:
             self._send(200, {"status": "ok"})
 

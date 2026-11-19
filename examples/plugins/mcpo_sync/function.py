@@ -50,6 +50,14 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
             default=15,
             description="HTTP timeout in seconds for the mcpo request.",
         )
+        ADOPT_MARKERS: str = Field(
+            default="",
+            description=(
+                "Comma-separated managed_by markers of an earlier sync to treat as this "
+                "function's own: their entries are replaced and pruned like its own. For moving "
+                "from another sync without leaving its entries behind. Empty adopts nothing."
+            ),
+        )
 
     @property
     def owner(self) -> str:
@@ -143,10 +151,11 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
         existing = await Config.get("tool_server.connections", []) or []
         synced_ids = {connection["info"]["id"] for connection in connections}
 
+        mine = {self.owner} | self._names(self.valves.ADOPT_MARKERS)
         kept = []
         for connection in existing:
             info = connection.get("info") or {}
-            if info.get("managed_by") == self.owner:
+            if info.get("managed_by") in mine:
                 # Drop entries being replaced, and stale ones when pruning.
                 if info.get("id") in synced_ids or self.valves.PRUNE_MANAGED:
                     continue

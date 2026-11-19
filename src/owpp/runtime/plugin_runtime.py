@@ -48,20 +48,39 @@ def _plugin_state(function_id: str) -> _types.ModuleType:
 
 
 def _plugin_public_read() -> list:
-    try:
-        from open_webui.models.access_grants import (
-            PRINCIPAL_TYPE_ANYONE,
-            WILDCARD_PRINCIPAL_ID,
-        )
-    except ImportError:
-        PRINCIPAL_TYPE_ANYONE, WILDCARD_PRINCIPAL_ID = "anyone", "*"
-    return [
-        {
-            "principal_type": PRINCIPAL_TYPE_ANYONE,
-            "principal_id": WILDCARD_PRINCIPAL_ID,
-            "permission": "read",
-        }
+    """Read for every signed-in user: Open-WebUI's `user:*` grant. (Not its `anyone:*` grant,
+    which is a separate no-auth audience that its tool and skill access checks ignore.)"""
+    return [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
+
+
+def _plugin_grant(grant) -> tuple:
+    if isinstance(grant, dict):
+        return (grant.get("principal_type"), grant.get("principal_id"), grant.get("permission"))
+    return (
+        getattr(grant, "principal_type", None),
+        getattr(grant, "principal_id", None),
+        getattr(grant, "permission", None),
+    )
+
+
+async def _plugin_repair_public(resource_type: str, item: dict, grants) -> None:
+    """Runtimes before this one granted a public tool or skill to `anyone:*`, which
+    Open-WebUI does not honour for them, so only admins could use it. Swap exactly that
+    grant for `user:*` read, once, and leave any other grants as the admin set them."""
+    if item["access"] != "public":
+        return
+    triples = [_plugin_grant(g) for g in grants or []]
+    if ("anyone", "*", "read") not in triples or ("user", "*", "read") in triples:
+        return
+    from open_webui.models.access_grants import AccessGrants
+
+    kept = [
+        {"principal_type": a, "principal_id": b, "permission": c}
+        for a, b, c in triples
+        if (a, b, c) != ("anyone", "*", "read")
     ]
+    await AccessGrants.set_access_grants(resource_type, item["id"], kept + _plugin_public_read())
+    _plog.info("plugin: %s %r made readable by every user", resource_type, item["id"])
 
 
 async def _plugin_valves(function_id: str) -> dict:
@@ -156,6 +175,7 @@ async def _plugin_install_tools(function, overrides: dict) -> None:
                     item["id"],
                 )
                 continue
+            await _plugin_repair_public("tool", item, getattr(tool, "access_grants", None))
             if tool.content == content:
                 await _plugin_apply_valves(item, overrides)
                 continue
@@ -222,7 +242,10 @@ async def _plugin_install_skills(function) -> None:
                 function.id,
                 item["id"],
             )
-        elif (skill.name, skill.description, (skill.data or {}).get("files")) != (
+            continue
+        else:
+            await _plugin_repair_public("skill", item, getattr(skill, "access_grants", None))
+        if skill is not None and (skill.name, skill.description, (skill.data or {}).get("files")) != (
             item["name"],
             item["description"],
             files,

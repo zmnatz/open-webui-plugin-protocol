@@ -62,7 +62,7 @@ When a test cannot be repeated by hand, its `By hand:` says so and why (for exam
 
 | Call | What happens |
 | --- | --- |
-| `owui.load(folder, valves=None, active=True, sources=None)` | Bundles the folder, stores it as a function and loads it as `function_<id>_<hex>`. The class is instantiated with the stored valves, and the runtime installs the tool and skills. Loading the same id again is an update. `sources={"tool.py": "..."}` stands in for the files a `source:` plugin fetches from git, so no network is needed. |
+| `owui.load(folder, valves=None, active=True, sources=None)` | Bundles the folder, stores it as a function and loads it as `function_<id>_<hex>`. The class is instantiated with the stored valves, and the runtime installs the tool and skills. Loading the same id again is an update. A `source:` plugin's files are fetched from git at the pinned commit, as the deploy does, once per test run. `sources={"tool.py": "..."}` stands in for them instead, so no network is needed. |
 | `owui.startup()` | `system.startup.completed`. |
 | `owui.enable(id)` / `owui.disable(id)` | `function.enable_started` / `function.disable_started`, the flag change, then `function.enabled` / `function.disabled`. |
 | `owui.set_valves(id, **valves)` | The admin saved the valves: they are stored, applied, and `function.valves_updated` is sent. |
@@ -89,9 +89,10 @@ When a test cannot be repeated by hand, its `By hand:` says so and why (for exam
 | `owui.add_chat(user, title=, messages=, meta=, updated_at=, files=[file ids])` | A saved chat, in a real SQLite database with Open-WebUI's `chat` and `chat_file` tables, so the `chat_data` library's SQL runs for real. `owui.chat(id)` reads it back. |
 | `owui.grant_chat(chat_id, user, "read" \| "write")` | Gives a user other than the owner access to the chat. |
 | `owui.add_note(user, ...)`, `owui.add_file(user, ...)` | Notes (timestamps in nanoseconds, as Open-WebUI stores them) and files. |
-| `owui.functions`, `function_valves`, `tools`, `tool_valves`, `skills`, `users`, `config` | The tables, as dicts. `config` is what `Config.get` and `Config.upsert` read and write. |
+| `owui.functions`, `function_valves`, `tools`, `tool_valves`, `skills`, `models`, `users`, `config` | The tables, as dicts. `models` are model configs (`Models`, with v0.13.4's `ModelForm`, `ModelMeta` and `ModelParams`); `config` is what `Config.get` and `Config.upsert` read and write, the OpenAI connections (`openai.api_base_urls`, ...) included. |
 | `owui.emitted` | `[(event, data)]` sent on the socket (`sio.emit`). |
 | `owui.chat_events` | `[(chat_id, event)]` sent through `__event_emitter__`. |
+| `owui.data_dir` | A temporary `DATA_DIR`, with `uploads/`, `cache/` and `build/` in it: `open_webui.config`'s `DATA_DIR`, `UPLOAD_DIR` and `CACHE_DIR`, and `open_webui.env`'s `FRONTEND_BUILD_DIR`. Removed when the mock closes. |
 | `owui.app`, `owui.static_dir`, `owui.event_sinks` | The FastAPI app, with Open-WebUI's `/static` mount and its catch-all web app at `/`. Also `STATIC_DIR` and `EVENT_SINKS`. |
 
 Signing in works like this: a request carries `Authorization: Bearer <user.token>` or a `token` cookie, and `get_current_user` returns that user. Chat access belongs to the owner, plus anyone given `grant_chat`.
@@ -104,6 +105,8 @@ The mock implements what plugins call, written against Open-WebUI v0.13. It does
 - OIDC, LDAP and trusted-header sign-in;
 - Redis, multiple workers, and `live_reload` across containers;
 - permission groups and the real access-control rules.
+
+**What it does not implement still imports.** Third-party plugins import parts of Open-WebUI the mock has no use for (`open_webui.models.messages`, `open_webui.models.users.User`, ...). Any `open_webui.*` module or name the mock lacks imports as a stand-in, so the plugin loads. Calling or using one raises `NotImplementedError` naming it ("the mock Open-WebUI has no open_webui.models.messages.Messages; add it to src/owpp/testing/mock.py"), so a test reaches it only by exercising code that really needs it.
 
 So keep the live checks in each plugin's README under `## Test`, and treat a passing `owpp test` as "the plugin's own logic works", not "it works in Open-WebUI". When a plugin needs an Open-WebUI call the mock does not have, add it to `src/owpp/testing/mock.py`.
 

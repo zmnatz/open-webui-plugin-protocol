@@ -8,7 +8,9 @@ Per-server overrides ship in `config.yaml`, read with `plugin_config()` (the `co
 
 Two settings can come from the Open-WebUI container's environment, written as templates in the files: `MCPO_SYNC_MINUTES` (the interval valve's default, `jobs:` in `plugin.yaml`, default 60) and `MCPO_SERVERS_ENABLED` (`enable:` in `config.yaml`, default `true`). They are read when the plugin loads inside the container, never when it is deployed. `owpp check mcpo_sync` lists them.
 
-Valves: `MCPO_BASE_URL` (default `http://mcpo:8000`), `MCPO_API_KEY` (empty uses the container's `MCPO_API_KEY` environment variable), `INCLUDE_SERVERS`, `EXCLUDE_SERVERS`, `PRUNE_MANAGED`, `REQUEST_TIMEOUT`, `SYNC_INTERVAL_MINUTES`, `ENABLE`.
+Valves: `MCPO_BASE_URL` (default `http://mcpo:8000`), `MCPO_API_KEY` (empty uses the container's `MCPO_API_KEY` environment variable), `INCLUDE_SERVERS`, `EXCLUDE_SERVERS`, `PRUNE_MANAGED`, `REQUEST_TIMEOUT`, `ADOPT_MARKERS`, `SYNC_INTERVAL_MINUTES`, `ENABLE`.
+
+**Moving from another sync.** Entries an earlier sync wrote carry its marker, not this function's id, so they are never pruned (only one whose id collides with a synced server is replaced). Set `ADOPT_MARKERS` to that marker (comma-separated for several), for example in `plugin.yaml`'s `function: valves:`, and they are treated as this function's own from the next sync on.
 
 ## Test
 

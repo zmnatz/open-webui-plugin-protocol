@@ -35,8 +35,41 @@ def test_loading_the_function_installs_the_tool_for_everyone(owui, plugin):
     assert tool.name == "Excalidraw"
     assert tool.meta.manifest["parent_function_id"] == "excalidraw"
     assert tool.access_grants == [
-        {"principal_type": "anyone", "principal_id": "*", "permission": "read"}
+        {"principal_type": "user", "principal_id": "*", "permission": "read"}
     ]
+
+
+def test_a_tool_an_earlier_runtime_shared_with_anyone_is_shared_with_every_user(owui, plugin):
+    """Runtimes before this one granted a public tool to Open-WebUI's no-auth `anyone`
+    audience, which it ignores for tools, so only admins could use it. The next sync swaps
+    exactly that grant for every signed-in user, and keeps grants an admin added.
+
+    By hand: on an instance deployed with an earlier owpp, sign in as a user who is not an
+    admin; Excalidraw is missing from the tools. Deploy this version. The user
+    now sees it, and any group an admin shared it with still has it.
+    """
+    group = {"principal_type": "group", "principal_id": "designers", "permission": "write"}
+    owui.tools["excalidraw"].access_grants = [
+        {"principal_type": "anyone", "principal_id": "*", "permission": "read"},
+        group,
+    ]
+    owui.update("excalidraw")  # the deploy of this version
+    assert owui.tools["excalidraw"].access_grants == [
+        group,
+        {"principal_type": "user", "principal_id": "*", "permission": "read"},
+    ]
+
+
+def test_grants_an_admin_set_are_left_alone(owui, plugin):
+    """Once the tool is installed, its sharing is the admin's: a later sync changes nothing.
+
+    By hand: share the Excalidraw tool with one group only, then deploy again. It is still
+    shared with just that group.
+    """
+    only = [{"principal_type": "group", "principal_id": "designers", "permission": "read"}]
+    owui.tools["excalidraw"].access_grants = list(only)
+    owui.update("excalidraw")
+    assert owui.tools["excalidraw"].access_grants == only
 
 
 def test_the_tool_goes_with_the_function_and_comes_back_with_it(owui, plugin):

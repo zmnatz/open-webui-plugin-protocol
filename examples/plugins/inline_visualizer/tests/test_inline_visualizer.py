@@ -51,7 +51,7 @@ def test_loading_it_installs_the_tool_and_the_skill_for_everyone(owui, plugin):
     By hand: enable the function. Workspace > Tools lists Inline Visualizer and Workspace >
     Skills lists visualize, and a user who is not an admin sees both.
     """
-    public = [{"principal_type": "anyone", "principal_id": "*", "permission": "read"}]
+    public = [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
     tool = owui.tools["inline_visualizer"]
     assert tool.meta.manifest["parent_function_id"] == "inline_visualizer"
     assert tool.access_grants == public
