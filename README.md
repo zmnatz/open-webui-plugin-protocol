@@ -67,7 +67,7 @@ OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deplo
 
 ## Documentation
 
-Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built from `docs/` (`uv run --group docs mkdocs serve` to preview it).
+Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built from `docs/` (`uv run --group docs python tools/build_docs.py serve` to preview it).
 
 | | |
 | --- | --- |

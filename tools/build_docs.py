@@ -1,30 +1,41 @@
-"""MkDocs hooks for the documentation site (mkdocs.yml: `hooks:`).
+"""Build the documentation site.
 
-The guides live in docs/ and build as they are. This hook adds what lives elsewhere or has to
-be generated, so it can never drift from the repository:
+    uv run --group docs python tools/build_docs.py          # build into site/
+    uv run --group docs python tools/build_docs.py serve    # preview at http://127.0.0.1:8000
+
+The guides live in docs/. This script puts them, together with what lives elsewhere or has to be
+generated, into build/docs/, then runs Zensical (zensical.toml) on that folder. Nothing generated
+is checked in, so none of it can drift from the repository:
 
 - the root CHANGELOG, SECURITY and NOTICE files, and each example plugin's README;
 - an examples overview, built from each plugin.yaml;
 - the test catalogue, built from the test docstrings (docs/testing.md, "Describe every test");
 - the audit trail, built from `git log`.
 
-It also rewrites links that point outside docs/ (`../SECURITY.md`, `config.yaml` in an example's
-README) to the page that now carries that file, or else to the file on GitHub.
+Links are written for GitHub, relative to the file they are in. They are rewritten to the page
+that carries the target on the site, or else to the file on GitHub. A link to a file or heading
+that does not exist fails the build.
+
+`serve` assembles once: after editing docs/, stop it and run it again.
 """
 
 from __future__ import annotations
 
+import argparse
 import ast
 import os
 import posixpath
 import re
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
-from mkdocs.structure.files import File, Files
 
 ROOT = Path(__file__).resolve().parent.parent
+DOCS = ROOT / "docs"
+OUT = ROOT / "build" / "docs"  # zensical.toml: docs_dir
 EXAMPLES = ROOT / "examples" / "plugins"
 REPO_URL = "https://github.com/zmnatz/open-webui-plugin-protocol"
 # Link to the commit being built on CI (a pull request's own files), else to main.
@@ -37,9 +48,6 @@ COPIED = {
     "NOTICE.md": "project/notice.md",
 }
 
-# Page -> the repository file it came from (for resolving its relative links).
-_origin: dict[str, str] = {}
-
 
 def _plugins() -> list[Path]:
     return sorted(p.parent for p in EXAMPLES.glob("*/plugin.yaml"))
@@ -50,58 +58,103 @@ def _blob(path: str, line: int | None = None) -> str:
     return f"{REPO_URL}/{kind}/{REF}/{path}" + (f"#L{line}" if line else "")
 
 
-# ---- pages -----------------------------------------------------------------------------
+# ---- assembling the pages ------------------------------------------------------------------
 
 
-def on_files(files: Files, config) -> Files:
-    _origin.clear()
-    for src in files.documentation_pages():
-        _origin[src.src_uri] = f"docs/{src.src_uri}"
-
-    def add(uri: str, content: str, origin: str) -> None:
-        files.append(File.generated(config, uri, content=content))
-        _origin[uri] = origin
-
+def assemble(out: Path = OUT) -> list[str]:
+    """Write every page into `out`. Returns the broken links found, if any."""
+    shutil.rmtree(out, ignore_errors=True)
+    pages: dict[str, tuple[str, str]] = {}  # page -> (the repository file it came from, text)
+    for path in sorted(DOCS.rglob("*")):
+        if not path.is_file():
+            continue
+        uri = path.relative_to(DOCS).as_posix()
+        if path.suffix == ".md":
+            pages[uri] = (f"docs/{uri}", path.read_text())
+        else:
+            (out / uri).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, out / uri)
+    copied = dict(COPIED)
     for path, uri in COPIED.items():
-        add(uri, (ROOT / path).read_text(), path)
+        pages[uri] = (path, (ROOT / path).read_text())
     for plugin in _plugins():
         rel = plugin.relative_to(ROOT).as_posix()
-        COPIED[f"{rel}/README.md"] = COPIED[rel] = f"examples/{plugin.name}.md"
-        add(f"examples/{plugin.name}.md", (plugin / "README.md").read_text(), f"{rel}/README.md")
+        copied[f"{rel}/README.md"] = copied[rel] = f"examples/{plugin.name}.md"
+        pages[f"examples/{plugin.name}.md"] = (
+            f"{rel}/README.md",
+            (plugin / "README.md").read_text(),
+        )
     # Generated pages write their links relative to the repository root.
-    add("examples/index.md", _examples_index(), "generated.md")
-    add("reference/test-catalogue.md", _test_catalogue(), "generated.md")
-    add("project/audit-trail.md", _audit_trail(), "generated.md")
-    return files
+    pages["examples/index.md"] = ("generated.md", _examples_index())
+    pages["reference/test-catalogue.md"] = ("generated.md", _test_catalogue())
+    pages["project/audit-trail.md"] = ("generated.md", _audit_trail())
+
+    anchors = {uri: _anchors(text) for uri, (_, text) in pages.items()}
+    problems: list[str] = []
+    for uri, (origin, text) in pages.items():
+
+        def relink(m: re.Match, origin=origin, uri=uri) -> str:
+            target = _relink(m.group(2), origin, uri, pages, copied, anchors)
+            if target is None:
+                problems.append(f"{origin}: broken link {m.group(2)}")
+                target = m.group(2)
+            return m.group(1) + target + m.group(3)
+
+        # Links in fenced code blocks are examples, not links: leave them alone.
+        parts = re.split(r"(^```.*?^```)", text, flags=re.M | re.S)
+        for i in range(0, len(parts), 2):
+            parts[i] = re.sub(r"(\]\()([^)\s]+)(\))", relink, parts[i])
+        (out / uri).parent.mkdir(parents=True, exist_ok=True)
+        (out / uri).write_text("".join(parts))
+    return problems
 
 
-def on_page_markdown(markdown: str, page, config, files) -> str:
-    origin = _origin.get(page.file.src_uri)
-    if origin is None:
-        return markdown
-    return re.sub(
-        r"(\]\()([^)\s]+)(\))",
-        lambda m: m.group(1) + _relink(m.group(2), origin, page.file.src_uri) + m.group(3),
-        markdown,
-    )
-
-
-def _relink(target: str, origin: str, page_uri: str) -> str:
-    """A link written for the repository, made to work on the site."""
-    if re.match(r"[a-z]+:|#|/", target):
-        return target  # a URL, an anchor on this page, or a site path
+def _relink(target, origin, page_uri, pages, copied, anchors) -> str | None:
+    """A link written for the repository, made to work on the site. None: it is broken."""
+    if re.match(r"[a-z]+:|/", target):
+        return target  # a URL, or a site path
     path, _, fragment = target.partition("#")
+    if not path:  # an anchor on this page
+        return target if fragment in anchors[page_uri] else None
     repo_path = posixpath.normpath(posixpath.join(posixpath.dirname(origin), path))
-    if repo_path.startswith("docs/") and repo_path[len("docs/") :] in _origin:
-        site = repo_path[len("docs/") :]  # a page in docs/, or one this hook generates
-    elif repo_path in COPIED:
-        site = COPIED[repo_path]
+    if repo_path.startswith("docs/") and repo_path[len("docs/") :] in pages:
+        site = repo_path[len("docs/") :]
+    elif repo_path in copied:
+        site = copied[repo_path]
     elif (ROOT / repo_path).exists():
         return _blob(repo_path) + (f"#{fragment}" if fragment else "")
     else:
-        return target  # leave it for MkDocs to report
+        return None
+    if fragment and fragment not in anchors[site]:
+        return None
     rel = posixpath.relpath(site, posixpath.dirname(page_uri) or ".")
     return rel + (f"#{fragment}" if fragment else "")
+
+
+def _anchors(markdown: str) -> set[str]:
+    """The ids of a page's headings, as the toc extension makes them."""
+    text = re.sub(r"^```.*?^```", "", markdown, flags=re.M | re.S)
+    found = set()
+    for heading in re.findall(r"^#{1,6}\s+(.+?)\s*#*$", text, flags=re.M):
+        plain = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", heading).replace("`", "")
+        slug = re.sub(r"[^\w\s-]", "", plain).strip().lower()
+        found.add(re.sub(r"[-\s]+", "-", slug))
+    return found
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("command", nargs="?", default="build", choices=["build", "serve", "pages"])
+    args = parser.parse_args(argv)
+    problems = assemble()
+    for problem in problems:
+        print(f"error  {problem}", file=sys.stderr)
+    if problems:
+        return 1
+    if args.command == "pages":  # only assemble build/docs/
+        return 0
+    extra = ["--clean", "--strict"] if args.command == "build" else []
+    return subprocess.call([sys.executable, "-m", "zensical", args.command, *extra], cwd=ROOT)
 
 
 # ---- examples overview -----------------------------------------------------------------
@@ -336,3 +389,7 @@ def _audit_trail() -> str:
             "",
         ]
     return "\n".join(head + out)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -50,8 +50,7 @@ dev = [
     "starlette>=1.7.0",
 ]
 docs = [
-    "mkdocs>=1.6",
-    "mkdocs-material>=9.5",
+    "zensical>=0.1.2 ; python_full_version >= '3.11'",
 ]
 
 [tool.hatch.version]

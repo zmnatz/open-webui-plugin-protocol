@@ -24,7 +24,7 @@ The pull request's checks run `.github/workflows/ci.yml` and `docs.yml`:
 | `owpp test --dir examples/plugins` | Each example plugin's own tests, against the mock Open-WebUI ([testing](testing.md)). |
 | `owpp check --strict --dir examples/plugins` | Every example bundles and compiles against its real, pinned upstream sources, with no undefined names. |
 | `uv build`, then the wheel runs `owpp check` | The package that goes to PyPI carries the runtime and works. |
-| `mkdocs build --strict` | This site builds, and no link in it is broken. |
+| `tools/build_docs.py` | This site builds, and no link or heading it points to is missing. |
 
 ## 3. Run it yourself
 
@@ -34,7 +34,7 @@ uv run ruff check . && uv run ruff format --check .
 uv run pytest
 uv run owpp test --dir examples/plugins
 uv run owpp check --strict --dir examples/plugins
-uv run --group docs mkdocs serve      # this site, at http://127.0.0.1:8000
+uv run --group docs python tools/build_docs.py serve   # preview this site (Python 3.11+)
 ```
 
 ## 4. See it work on a live Open-WebUI

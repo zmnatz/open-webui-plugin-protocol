@@ -6,7 +6,7 @@
 - `owpp init` scaffolds a `tests/test_<id>.py` that passes.
 - Every example plugin has unit tests in its own `tests/` folder. The example tests that lived in `tests/test_examples.py` moved there.
 - Every example plugin test has a docstring: what it checks, then `By hand:` steps to repeat it on a live Open-WebUI. `owpp init` scaffolds tests that do the same, and `tests/test_test_docs.py` enforces it.
-- A documentation site (MkDocs with the Material theme, `mkdocs.yml`), published to GitHub Pages by `.github/workflows/docs.yml`. It adds pages for review: a test catalogue built from the test docstrings, an audit trail built from `git log`, and how to review and make a change.
+- A documentation site (Zensical, `zensical.toml`, built by `tools/build_docs.py`), published to GitHub Pages by `.github/workflows/docs.yml`. It adds pages for review: a test catalogue built from the test docstrings, an audit trail built from `git log`, and how to review and make a change.
 
 ## 0.1.0 (2026-11-18)
 

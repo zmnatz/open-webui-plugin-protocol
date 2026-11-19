@@ -1,5 +1,5 @@
 name: docs
-# Builds the documentation site (mkdocs.yml) on every pull request, and publishes it to GitHub
+# Builds the documentation site (zensical.toml, tools/build_docs.py) on every pull request, and publishes it to GitHub
 # Pages from main. Once per repository: Settings > Pages > Source: GitHub Actions.
 on:
   push:
@@ -19,10 +19,10 @@ jobs:
         with:
           fetch-depth: 0 # the audit trail is built from the whole git history
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --group docs
-      - run: uv run mkdocs build --strict
+      - run: uv sync --group docs --python 3.13 # Zensical needs 3.11+
+      - run: uv run python tools/build_docs.py # fails on a broken link
       - if: github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: site
   deploy:
@@ -37,4 +37,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
