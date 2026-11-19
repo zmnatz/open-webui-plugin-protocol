@@ -4,6 +4,7 @@
   owpp check [id ...]                bundle, compile, report undefined names
   owpp bundle <id> [out.py]          print (or write) the exact code that would be deployed
   owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
+  owpp test [id ...] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
   owpp init <id> [--type event|filter|action|pipe]   scaffold a plugin folder
 
 Every command takes --dir <plugins folder> (default: $OWPP_PLUGINS_DIR, else ./plugins).
@@ -28,7 +29,7 @@ from .bundle import VALID_ID, FunctionFile, env_references, load_function_files
 from .deploy import options_from_env, run_deploy
 from .errors import OwppError
 from .lint import lint_notes, lint_plugin
-from .sources import fetch_sources, source_keys
+from .sources import fetch_sources, plugin_folders, source_keys
 
 # ---- check --------------------------------------------------------------------
 
@@ -99,6 +100,28 @@ METHOD = {
 }
 
 
+TESTS = {
+    "event": """def test_it_starts_with_open_webui(owui, plugin):
+    owui.startup()  # every enabled Event function gets system.startup.completed
+""",
+    "filter": """def test_a_chat_passes_through_unchanged(owui, plugin):
+    user = owui.add_user("Ada")
+    body = {"messages": [{"role": "user", "content": "hi"}]}
+    assert plugin.inlet(body, user=user) == body
+    assert plugin.outlet(body, user=user) == body
+""",
+    "action": """def test_the_action_runs(owui, plugin):
+    user = owui.add_user("Ada")
+    assert plugin.call("action", {"messages": []}, user=user) is None
+""",
+    "pipe": """def test_it_answers(owui, plugin):
+    user = owui.add_user("Ada")
+    assert plugin.call("pipes") == [{"id": "default", "name": TITLE}]
+    assert plugin.call("pipe", {"messages": []}, user=user) == "Hello from " + TITLE
+""",
+}
+
+
 def scaffold(directory: Path | str, plugin_id: str, type: str = "event") -> Path:
     if not VALID_ID.fullmatch(plugin_id):
         raise OwppError(
@@ -154,6 +177,7 @@ Valves: `ENABLE`.
 ## Test
 
 - `owpp check {plugin_id}` bundles it exactly as the deploy does, compiles it and lists undefined names.
+- `owpp test {plugin_id}` runs `tests/` against a mock Open-WebUI (docs/testing.md).
 - On a live Open-WebUI: the steps that show it works.
 
 ## Deploy
@@ -161,8 +185,21 @@ Valves: `ENABLE`.
 - Function type: **{type}**.
 - `owpp deploy --only {plugin_id} --dry-run`, then without `--dry-run`.
 """,
+        f"tests/test_{plugin_id}.py": f'''"""{title} against a mock Open-WebUI: `owpp test {plugin_id}` (docs/testing.md).
+
+`plugin` is this folder, bundled as the deploy would and loaded into `owui`, the mock."""
+
+TITLE = "{title}"
+
+
+def test_it_loads_with_its_default_valves(plugin):
+    assert plugin.valves.ENABLE is True
+
+
+{TESTS[type]}''',
     }
     for name, text in files.items():
+        (folder / name).parent.mkdir(parents=True, exist_ok=True)
         (folder / name).write_bytes(text.encode("utf-8"))
     return folder
 
@@ -243,6 +280,49 @@ def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str
     return run_deploy(opts, env)
 
 
+def _cmd_test(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    if not directory.exists():
+        raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
+    try:
+        import pytest  # noqa: F401
+
+        import owpp.testing.mock  # noqa: F401  (its imports: FastAPI, SQLAlchemy, ...)
+    except ImportError as error:
+        print(
+            f"error: owpp test needs {error.name or 'pytest'}: run it as "
+            "`uvx --from 'owpp[test]' owpp test`, or `pip install 'owpp[test]'`",
+            file=sys.stderr,
+        )
+        return 1
+    import pytest
+
+    folders = {f.name: f for f in plugin_folders(directory)}
+    missing = [i for i in args.ids if i not in folders]
+    if missing:
+        print(f"no plugin {', '.join(missing)} in {directory}", file=sys.stderr)
+        return 1
+    chosen = [folders[i] for i in args.ids] if args.ids else list(folders.values())
+    paths = [str(f / "tests") for f in chosen if (f / "tests").is_dir()]
+    untested = [f.name for f in chosen if not (f / "tests").is_dir()]
+    if untested:
+        print(f"note  no tests/ folder: {', '.join(untested)}")
+    if not paths:
+        print("no plugin has a tests/ folder: `owpp init` makes one, see docs/testing.md")
+        return 1 if args.ids else 0
+    # importlib: every plugin may have its own tests/test_function.py without a name clash.
+    # owpp itself is already imported (this command), so pytest cannot rewrite its asserts; say nothing.
+    pytest_args = [
+        *paths,
+        "--import-mode=importlib",
+        "-W",
+        "ignore::pytest.PytestAssertRewriteWarning",
+        *args.pytest_args,
+    ]
+    if env.get("PYTEST_DISABLE_PLUGIN_AUTOLOAD"):
+        pytest_args += ["-p", "owpp.testing.pytest_plugin"]
+    return int(pytest.main(pytest_args))
+
+
 def _cmd_init(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
     print(f"created {scaffold(directory, args.id, args.type)}")
     return 0
@@ -288,6 +368,8 @@ def build_parser() -> argparse.ArgumentParser:
     deploy.add_argument(
         "--managed-by", metavar="marker", help="ownership marker (default $OWPP_MANAGED_BY)"
     )
+    test = add("test", _cmd_test, "run each plugin's tests/ against a mock Open-WebUI")
+    test.add_argument("ids", nargs="*", metavar="id", help="plugins to test (default: all)")
     init = add("init", _cmd_init, "scaffold a plugin folder")
     init.add_argument("id")
     init.add_argument("--type", choices=list(CLASS), default="event")
@@ -297,7 +379,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None) -> int:
     env = os.environ if env is None else env
     parser = build_parser()
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # Everything after `--` goes to pytest (owpp test -- -k name -x).
+    passthrough = argv[argv.index("--") + 1 :] if "--" in argv else []
+    argv = argv[: argv.index("--")] if "--" in argv else argv
     args = parser.parse_args(argv)
+    if passthrough and args.command != "test":
+        parser.error("only `owpp test` takes arguments after --")
+    args.pytest_args = passthrough
     if not getattr(args, "handler", None):
         parser.print_help()
         return 0

@@ -19,6 +19,7 @@ owpp list                           plugins with their function type
 owpp check [id ...] [--strict]      bundle, compile, report undefined names; warn about valves and tools
 owpp bundle <id> [out.py]           print (or write) the code that would be deployed
 owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
+owpp test [id ...] [-- pytest args]
 owpp init <id> [--type event|filter|action|pipe]
 ```
 
@@ -31,7 +32,8 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
 
   Warnings read the plugin's own source (`function.py`, `tool.py`, `shared.py`, or a loose `<id>.py`) with real file and line numbers, and skip a plugin that takes its code from a pinned `source:`, which is not yours to lint. They do not change the exit status; **`--strict` makes them fail**, for CI.
 - **`bundle`** writes the deployed code, to read or diff.
-- **`init`** scaffolds `plugin.yaml`, `function.py` and a README with Test and Deploy sections. The scaffold passes `check` for every type.
+- **`test`** runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. It needs the `test` extra: `uvx --from 'owpp[test]' owpp test`. See [testing](testing.md).
+- **`init`** scaffolds `plugin.yaml`, `function.py`, `tests/test_<id>.py` and a README with Test and Deploy sections. For every type, the scaffold passes both `check` and `test`.
 - **`deploy`** deploys to a running Open-WebUI. With `--only` it deploys just those ids and **never prunes**, so deploying one plugin cannot delete another.
 
 ## Deploy settings
@@ -101,7 +103,8 @@ The action runs `owpp` from its own checkout, so the version you deploy with is 
 | Git sources (pinned commits, fetching, refusing unsafe URLs) | `tests/test_sources.py` |
 | Deploy against a stand-in Open-WebUI API: create, update, global, prune, valves, `--only` | `tests/test_deploy.py` |
 | CLI commands, `check`, `init` scaffolds | `tests/test_cli.py` |
-| Every example plugin bundles, compiles and documents Test and Deploy | `tests/test_bundle.py`, "TestExamples" |
+| Every example plugin bundles, compiles, has unit tests and documents Test and Deploy | `tests/test_bundle.py`, "TestExamples" |
+| Each example plugin's behaviour, against the mock Open-WebUI | `examples/plugins/<id>/tests/` |
 | Runtime install/update/remove, valves, markers | `tests/plugin_runtime_test.py` |
 | Libraries (core, routes, jobs, chat_data, public) against stubbed Open-WebUI modules | `tests/plugin_libs_test.py` |
 
@@ -110,5 +113,6 @@ Git sources are faked in the tests (no network); `owpp check` compiles the real 
 ### Testing your own plugins
 
 - Run `owpp check` in CI (the action does).
-- Keep pure logic importable and test it with any Python test runner, without Open-WebUI. Anything that needs Open-WebUI imports it inside the function that uses it, so the module loads under a stub.
-- Write the live checks in each plugin's README, under `## Test`.
+- Put unit tests in each plugin's `tests/` folder and run them with `owpp test`. They run against a mock Open-WebUI (see [testing](testing.md)): `owui.load(...)`, `owui.startup()`, `owui.client(user).get(...)`, `owui.tool(id).call(...)`. In CI: `uvx --from 'owpp[test]' owpp test`.
+- Anything that needs Open-WebUI imports it inside the function that uses it, so the module loads under the mock (or any stub).
+- Write the live checks in each plugin's README, under `## Test`. The mock is not Open-WebUI.

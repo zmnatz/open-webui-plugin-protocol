@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `owpp test [id ...]`: runs each plugin's `tests/` folder with pytest against a mock Open-WebUI (`owpp.testing.MockOpenWebUI`, `docs/testing.md`). The mock covers the function, tool and skill tables, users and auth, chats in SQLite, config, the socket, event sinks and the FastAPI app. The `owui`, `plugin_dir` and `plugin` pytest fixtures are registered wherever owpp is installed. The extra `owpp[test]` brings pytest and the packages Open-WebUI ships.
+- `owpp init` scaffolds a `tests/test_<id>.py` that passes.
+- Every example plugin has unit tests in its own `tests/` folder. The example tests that lived in `tests/test_examples.py` moved there.
+
 ## 0.1.0 (2026-11-18)
 
 First standalone release, extracted from a working deployment.
