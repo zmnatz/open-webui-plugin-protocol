@@ -93,6 +93,21 @@ def test_the_token_and_version_are_filled_in_and_nothing_is_left_over(page, mode
     assert not re.search(r"__[A-Z_]+__", html) and "<!--" not in html
 
 
+@pytest.mark.parametrize("mode", [None, "https://static.example.com/x"])
+def test_the_page_script_imports_everything_it_uses(page, mode):
+    """Either way, the page's script imports React, the Excalidraw component and the helpers it
+    calls, so the editor can start. A stray marker in the template once cut the imports out.
+
+    By hand: open the editor with the browser's console open. There is no "is not defined"
+    error, and the drawing appears.
+    """
+    html = page(mode)
+    script = html[html.index('<script type="module">') :]
+    assert "await import(" in script
+    for name in ("createRoot", "Excalidraw", "MainMenu", "convertToExcalidrawElements"):
+        assert re.search(rf"const \{{[^}}]*\b{name}\b[^}}]*\}} =", script), name
+
+
 @pytest.mark.parametrize(
     "bad",
     [

@@ -29,9 +29,10 @@ html,body,#root{height:100%;margin:0}
 <body>
 <div id="root"></div>
 <script type="module">
-// The server keeps only one of each <!--esm.sh--> / <!--hosted--> pair (the markers never reach the
-// browser). Hosted (EXCALIDRAW_ASSETS_URL, see self-host/): the editor is one module from your own
-// host and nothing at all comes from the internet. Otherwise it comes from esm.sh via the import map.
+// The server keeps only one of the two marked blocks below, the CDN one or the self-hosted one
+// (the markers never reach the browser, and must not appear anywhere else in this file).
+// Hosted (EXCALIDRAW_ASSETS_URL, see self-host/): the editor is one module from your own host
+// and nothing at all comes from the internet. Otherwise it comes from the CDN via the import map.
 <!--esm.sh-->
 window.EXCALIDRAW_ASSET_PATH =
   "https://esm.sh/@excalidraw/excalidraw@__VERSION__/dist/prod/";
