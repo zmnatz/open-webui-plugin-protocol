@@ -1,14 +1,25 @@
-"""`owpp create`: a wizard that asks what a plugin is, one stage at a time, then writes it.
+"""`owpp create`: a wizard that scaffolds a plugin, one stage at a time.
 
-Each stage clears the screen (on a terminal) and shows how far along it is and roughly how long
-is left. Every question has a default (Enter takes it), and nothing is written until the last
-stage shows the files and you say yes. The answers become a `PluginSpec` and `owpp.create` writes
-the folder, so what the wizard makes is exactly what the tests of `owpp.create` check: a plugin
-that bundles, passes `owpp check --strict` and passes its own tests, ready to be filled in.
+It asks what the plugin is and writes a folder ready to fill in: the files, stubs for the code,
+tests and a README. Each stage clears the screen (on a terminal) and shows how far along it is.
+Every question has a default (Enter takes it), and nothing is written until the last stage shows
+the files and you say yes.
+
+The first branch is where the code lives:
+
+- **written here**: a function (filter, action, event or pipe) with optional tool, skills, page
+  and libraries, or an **installer**, a plugin with no function code that only deploys a tool
+  and/or skills (the function that installs them is generated);
+- **a git repository**: pinned to a commit, from which it takes the function itself, or just a
+  tool and skills (then it is an installer).
+
+The answers become a `PluginSpec` and `owpp.create` writes the folder, so what the wizard makes is
+what the tests of `owpp.create` check.
 """
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -16,21 +27,16 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any, TextIO
 
-from .bundle import VALID_ID
+from .bundle import VALID_ID, VALID_SKILL_ID
 from .create import (
     ACCESS,
     FILTER_HOOKS,
-    PARAM_TYPES,
     VALID_SKILL,
     VALID_SUB_ID,
-    VALID_VALVE,
-    VALVE_KINDS,
     PluginSpec,
     SkillSpec,
-    ToolMethod,
+    SourceSpec,
     ToolSpec,
-    Valve,
-    parse_default,
     render,
     title_of,
     validate,
@@ -38,10 +44,13 @@ from .create import (
 )
 from .errors import OwppError
 from .events import KNOWN_EVENTS, problem_with
+from .sources import GIT_URL, SHA40
 
 DOCS = "https://docs.openwebui.com/features/extensibility/"
-TOTAL_STAGES = 10
-TOTAL_MINUTES = 12
+# (stages, minutes) for each branch; the first two stages are the same in both.
+HERE = (9, 8)
+FROM_GIT = (6, 5)
+TOTAL_STAGES, TOTAL_MINUTES = HERE
 
 
 class Cancelled(Exception):
@@ -233,12 +242,52 @@ def _git_author() -> str:
     return done.stdout.strip() if done.returncode == 0 else ""
 
 
+def resolve_ref(git: str, ref: str) -> str | None:
+    """The full commit SHA a branch or tag of `git` points at (with `git ls-remote`), or None
+    when it cannot be found. A full SHA is returned as it is."""
+    if SHA40.fullmatch(ref):
+        return ref
+    if not GIT_URL.fullmatch(git) or not shutil.which("git") or ref.startswith("-"):
+        return None
+    try:
+        done = subprocess.run(
+            ["git", "ls-remote", git, ref, f"{ref}^{{}}"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},  # never wait for a password
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if done.returncode != 0:
+        return None
+    found = dict(
+        (name, sha)
+        for sha, _, name in (line.partition("\t") for line in done.stdout.splitlines())
+        if SHA40.fullmatch(sha)
+    )
+    # An annotated tag's commit is the peeled ^{} entry; a branch or light tag has just one.
+    for name in (f"refs/tags/{ref}^{{}}", f"refs/heads/{ref}", f"refs/tags/{ref}", ref):
+        if name in found:
+            return found[name]
+    return next(iter(found.values()), None)
+
+
 def _need(text: str, label: str) -> str | None:
     return None if text else f"{label} is required"
 
 
+def _repo_path(text: str) -> str | None:
+    parts = [p for p in text.split("/") if p]
+    if not parts or any(p in (".", "..") for p in parts):
+        return "a path inside the repository, without . or .."
+    return None
+
+
 def _decide_type(p: Prompter) -> str:
     """The questions in docs/authoring.md, "Pick the function type first"."""
+    if p.confirm("Is it only there to deploy a tool or skills (no code of its own)?"):
+        return "installer"
     if p.confirm("Is it a model people pick in the chat (its own backend)?"):
         return "pipe"
     if p.confirm("Is it a button the user presses under a message?"):
@@ -250,85 +299,7 @@ def _decide_type(p: Prompter) -> str:
     return "event"
 
 
-def _ask_valves(p: Prompter, label: str, taken: set[str]) -> list[Valve]:
-    valves: list[Valve] = []
-    while True:
-        name = p.ask(
-            f"{label} name (UPPER_SNAKE; Enter when done)",
-            check=lambda n: (
-                None
-                if not n
-                else f'"{n}" is not a valid name'
-                if not VALID_VALVE.fullmatch(n)
-                else f"{n} is already taken"
-                if n in taken
-                else None
-            ),
-        )
-        if not name:
-            return valves
-        kind = p.choose(
-            f"What kind of setting is {name}?",
-            [
-                ("str", "text"),
-                ("int", "whole number"),
-                ("float", "number"),
-                ("bool", "a switch"),
-                ("password", "text, masked in the UI (an API key)"),
-                ("select", "one of a list: a dropdown"),
-                ("multiselect", "any of a list: checkboxes"),
-                ("range", "a number on a slider"),
-            ],
-            "str",
-        )
-        assert kind in VALVE_KINDS
-        options: list[str] = []
-        lo, hi, step = 0.0, 1.0, 0.1
-        if kind in ("select", "multiselect"):
-            raw = p.ask(
-                "Options (comma-separated)",
-                check=lambda t: (
-                    None if [s for s in t.split(",") if s.strip()] else "give at least one"
-                ),
-            )
-            options = [s.strip() for s in raw.split(",") if s.strip()]
-        if kind == "range":
-            lo = float(p.ask("Minimum", "0", check=lambda t: parse_default("float", t) and None))
-            hi = float(
-                p.ask(
-                    "Maximum",
-                    "1",
-                    check=lambda t, lo=lo: (
-                        None
-                        if parse_default("float", t) > lo
-                        else "the maximum must be above the minimum"
-                    ),
-                )
-            )
-            step = float(p.ask("Step", "0.1", check=lambda t: parse_default("float", t) and None))
-        suggested = {
-            "bool": "false",
-            "select": options[0] if options else "",
-            "range": str(lo),
-        }.get(kind, "")
-        if kind == "password":
-            p.note("Leave a secret's default empty: the default is in the code, which is in git.")
-        raw_default = p.ask(
-            "Default",
-            suggested,
-            check=lambda t, kind=kind, options=options: parse_default(kind, t, options) and None,
-        )
-        default = parse_default(kind, raw_default, options)
-        description = p.ask(
-            "Description (shown next to it in the admin UI)",
-            check=lambda t: _need(t, "a description"),
-        )
-        valves.append(Valve(name, kind, default, description, options, lo, hi, step))
-        taken.add(name)
-        p.done(f"{name} ({kind})")
-
-
-def _ask_pairs(p: Prompter, label: str, title: str) -> list[tuple[str, str]]:
+def _ask_pairs(p: Prompter, label: str) -> list[tuple[str, str]]:
     pairs: list[tuple[str, str]] = []
     while True:
         sub = p.ask(
@@ -344,23 +315,20 @@ def _ask_pairs(p: Prompter, label: str, title: str) -> list[tuple[str, str]]:
         pairs.append((sub, p.ask("Name shown in Open-WebUI", title_of(sub))))
 
 
-def _params(text: str) -> list[tuple[str, str]]:
-    out = []
-    for part in (s.strip() for s in text.split(",") if s.strip()):
-        name, _, kind = part.partition(":")
-        name, kind = name.strip(), (kind.strip() or "str")
-        if not VALID_SUB_ID.fullmatch(name):
-            raise OwppError(f'"{name}" is not a valid parameter name')
-        if kind not in PARAM_TYPES:
-            raise OwppError(f"{kind} is not one of {', '.join(PARAM_TYPES)}")
-        out.append((name, kind))
-    return out
+def _names(text: str) -> list[str]:
+    names = [n.strip() for n in text.split(",") if n.strip()]
+    bad = [n for n in names if not VALID_SUB_ID.fullmatch(n)]
+    if bad:
+        raise OwppError(f"not a valid name: {', '.join(bad)} (a-z, 0-9, _)")
+    if len(set(names)) != len(names):
+        raise OwppError("a name is listed twice")
+    return names
 
 
 def stage_identity(p: Prompter, directory: Path, preset_id: str = "") -> dict:
     p.stage("Name the plugin")
-    p.say(f"It will be a folder in {directory}. Its name is the function id in Open-WebUI,")
-    p.say("so it cannot change once deployed.")
+    p.say(f"It will be a folder in {directory}.")
+    p.say("Its name is the function id in Open-WebUI, so it cannot change once deployed.")
     plugin_id = p.ask(
         "Plugin id (lowercase letters, digits and _)",
         preset_id,
@@ -374,18 +342,38 @@ def stage_identity(p: Prompter, directory: Path, preset_id: str = "") -> dict:
     return {"id": plugin_id, "title": title}
 
 
-def stage_header(p: Prompter, title: str) -> dict:
+def stage_origin(p: Prompter) -> bool:
+    """True: the code comes from a git repository."""
+    p.stage("Where the code lives")
+    origin = p.choose(
+        "Where does its code come from?",
+        [
+            ("here", "written in this repository (a function, or an installer of a tool/skills)"),
+            ("git", "another git repository, pinned to a commit (a function, a tool, skills)"),
+        ],
+        "here",
+    )
+    return origin == "git"
+
+
+def stage_header(p: Prompter, title: str, kind: str) -> dict:
     p.stage("Describe it")
     p.say("These go into plugin.yaml's function: section, which becomes the header")
     p.say("Open-WebUI reads. Each answer must fit on one line.")
-    one_line = lambda t: "it must fit on one line" if "\n" in t else None  # noqa: E731
-    return {
-        "description": p.ask(
-            "One-line description", f"What {title} does, on one line.", check=one_line
-        ),
+    default = (
+        f"Installs {title}; disabling this function removes it."
+        if kind == "installer"
+        else f"What {title} does, on one line."
+    )
+    answers = {
+        "description": p.ask("One-line description", default),
         "author": p.ask("Author", _git_author() or "you"),
         "version": p.ask("Version", "0.1.0"),
         "license": p.ask("License", "MIT"),
+    }
+    if kind == "installer":
+        return answers
+    return answers | {
         "required_open_webui_version": p.ask(
             "Oldest Open-WebUI it supports (Event functions need 0.10.0)", "0.10.0"
         ),
@@ -398,15 +386,16 @@ def stage_header(p: Prompter, title: str) -> dict:
 
 
 def stage_type(p: Prompter) -> str:
-    p.stage("Pick the function type")
+    p.stage("Pick the plugin type")
     p.say("The function is the plugin's parent: its tool and skills come and go with it.")
     kind = p.choose(
-        "What kind of function?",
+        "What kind of plugin?",
         [
             ("filter", "changes chat requests and replies (inlet, stream, outlet)"),
             ("action", "a button under a message"),
             ("event", "reacts to Open-WebUI events, runs on a schedule, serves pages"),
             ("pipe", "appears as a model"),
+            ("installer", "no code of its own: deploys a tool and/or skills"),
             ("help", "not sure: ask me a few questions"),
         ],
         "event",
@@ -414,8 +403,13 @@ def stage_type(p: Prompter) -> str:
     return _decide_type(p) if kind == "help" else kind
 
 
-def stage_type_options(p: Prompter, kind: str, title: str) -> dict:
+def stage_type_options(p: Prompter, kind: str) -> dict:
     p.stage(f"{kind.capitalize()} options")
+    if kind == "installer":
+        p.say("An installer's function is generated: a global filter that installs the tool")
+        p.say("and skills when it is enabled and removes them when it is disabled.")
+        p.pause()
+        return {}
     if kind == "filter":
         hooks = p.choose_many(
             "Which hooks does it need?",
@@ -450,20 +444,15 @@ def stage_type_options(p: Prompter, kind: str, title: str) -> dict:
             "priority": p.confirm("A priority valve (its place among other filters)?"),
         }
     if kind == "action":
-        buttons = []
-        if p.confirm("More than one button (sub-actions)?"):
-            buttons = _ask_pairs(p, "Button", title)
-        global_ = p.confirm("Global (a button on every model's messages)?", True)
+        buttons = _ask_pairs(p, "Button") if p.confirm("More than one button?") else []
         return {
             "buttons": buttons,
-            "global_": True if global_ else None,
+            "global_": True if p.confirm("Global (on every model's messages)?", True) else None,
             "rich_ui": p.confirm("Show a page (HTML) above the message when pressed?"),
             "priority": p.confirm("A priority valve (its place among other actions)?"),
         }
     if kind == "pipe":
-        models = []
-        if p.confirm("Several models (a manifold)?"):
-            models = _ask_pairs(p, "Model", title)
+        models = _ask_pairs(p, "Model") if p.confirm("Several models (a manifold)?") else []
         return {"models": models, "stream": p.confirm("Stream its answers?", True)}
     sync = p.confirm("Does it run a sync on a schedule (and on startup and saved valves)?")
     minutes = 60
@@ -475,10 +464,9 @@ def stage_type_options(p: Prompter, kind: str, title: str) -> dict:
                 check=lambda t: None if t.isdigit() else "a whole number",
             )
         )
-    known = [(e, "") for e in KNOWN_EVENTS]
     events = p.choose_many(
         "Which Open-WebUI events should it handle (with @on)?",
-        known,
+        [(e, "") for e in KNOWN_EVENTS],
         [] if sync else ["system.startup.completed"],
     )
     more = p.ask(
@@ -493,73 +481,32 @@ def stage_type_options(p: Prompter, kind: str, title: str) -> dict:
         ),
     )
     events += [n.strip() for n in more.split(",") if n.strip() and n.strip() not in events]
-    p.note(f"The full list of events: {DOCS}plugin/functions/event")
+    p.note(f"Every event: {DOCS}plugin/functions/event")
     return {"sync": sync, "sync_minutes": minutes, "events": events}
 
 
-def stage_valves(p: Prompter, spec: dict) -> list[Valve]:
-    p.stage("Valves", 2)
-    p.say("Valves are settings an admin changes in the UI without a deploy. They are")
-    p.say("UPPER_SNAKE and each has a description.")
-    added = ["ENABLE"] if not spec.get("sync") else ["ENABLE", "SYNC_INTERVAL_MINUTES"]
-    if spec.get("priority"):
-        added.append("priority")
-    p.note(f"Already there: {', '.join(added)}.")
-    return _ask_valves(p, "Valve", set(added))
-
-
-def stage_user_valves(p: Prompter, kind: str) -> list[Valve]:
-    p.stage("User valves")
-    if kind == "event":
-        p.say("An event function runs without a user, so it has no user valves.")
-        p.pause()
-        return []
-    p.say("User valves are settings each user sets for themselves, in a chat.")
-    if not p.confirm("Add user valves?"):
-        return []
-    return _ask_valves(p, "User valve", set())
-
-
-def stage_tool(p: Prompter, plugin_id: str, title: str) -> ToolSpec | None:
-    p.stage("Tool", 2)
+def stage_tool(p: Prompter, plugin_id: str, title: str, kind: str) -> ToolSpec | None:
+    p.stage("Tool")
     p.say("A tool is code the model can call. The function installs it when enabled and")
     p.say("removes it when disabled.")
-    if not p.confirm("Add a tool?"):
+    if not p.confirm("Add a tool?", kind == "installer"):
         return None
     tool_id = p.ask(
         "Tool id",
         plugin_id,
         check=lambda t: None if VALID_ID.fullmatch(t) else "lowercase letters, digits and _",
     )
-    tool_title = p.ask("Tool title", title)
-    description = p.ask("What the tool does, in one line", f"What {tool_title} does.")
-    methods: list[ToolMethod] = []
-    p.say("Methods: each one is offered to the model, which reads its description.")
-    while True:
-        name = p.ask(
-            "Method name (Enter when done)" if methods else "Method name",
-            "" if methods else "lookup",
-            check=lambda n: (
-                None
-                if not n or (VALID_SUB_ID.fullmatch(n) and n not in {m.name for m in methods})
-                else f'"{n}" is not a valid name, or is taken'
-            ),
+    methods = _names(
+        p.ask(
+            "Method names the model can call, comma-separated",
+            "lookup",
+            check=lambda t: (_names(t) and None) if t.strip() else "at least one",
         )
-        if not name:
-            break
-        what = p.ask("When should the model call it?", f"Use {name} to ...")
-        params = _params(
-            p.ask(
-                f"Parameters, name:type, comma-separated (types: {', '.join(PARAM_TYPES)})",
-                "query:str",
-                check=lambda t: _params(t) and None,
-            )
-        )
-        methods.append(ToolMethod(name, what, params))
+    )
     return ToolSpec(
         tool_id,
-        tool_title,
-        description,
+        p.ask("Tool title", title),
+        "",
         methods,
         public=p.confirm("Let every signed-in user use it (access: public)?", True),
         rich_ui=p.confirm("A method that shows a page (HTML) in the chat?"),
@@ -567,11 +514,15 @@ def stage_tool(p: Prompter, plugin_id: str, title: str) -> ToolSpec | None:
     )
 
 
-def stage_skills(p: Prompter) -> list[SkillSpec]:
+def stage_skills(p: Prompter, need_one: bool) -> list[SkillSpec]:
     p.stage("Skills")
     p.say("A skill is a SKILL.md of instructions the model reads when it needs them.")
     skills: list[SkillSpec] = []
-    while p.confirm("Add a skill?" if not skills else "Add another skill?"):
+    while True:
+        if need_one and not skills:
+            p.note("An installer with no tool needs at least one skill.")
+        elif not p.confirm("Add a skill?" if not skills else "Add another skill?"):
+            return skills
         name = p.ask(
             "Skill name (lowercase, hyphens)",
             check=lambda n: (
@@ -581,18 +532,20 @@ def stage_skills(p: Prompter) -> list[SkillSpec]:
             ),
         )
         description = p.ask(
-            "When it applies, in a sentence (ending in a period)",
-            check=lambda t: (
-                _need(t, "a description") or ("at most 1024 characters" if len(t) > 1024 else None)
-            ),
+            "When it applies, in a sentence",
+            f"Use {name} when ...",
+            check=lambda t: "at most 1024 characters" if len(t) > 1024 else None,
         )
         public = p.confirm("Let every signed-in user use it (access: public)?", True)
         skills.append(SkillSpec(name, description, public))
-    return skills
 
 
 def stage_libraries(p: Prompter, kind: str) -> dict:
     p.stage("Pages and libraries")
+    if kind == "installer":
+        p.say("An installer has no code of its own, so no page or libraries.")
+        p.pause()
+        return {}
     page = p.choose(
         "Does it serve a page?",
         [
@@ -621,22 +574,101 @@ def stage_libraries(p: Prompter, kind: str) -> dict:
         "page_access": access,
         "chat_data": p.confirm("Does the function keep data with each chat (chat_data)?"),
         "config": p.confirm("Ship structured settings in a config.yaml?"),
-        "assets": False,
-        "live_reload": False,
     }
-    if kind == "event":
-        out["assets"] = p.confirm("Add JavaScript or CSS to every page (assets/)?")
-        if out["assets"]:
-            out["live_reload"] = p.confirm(
-                "Reach every container within a second of a change (live_reload; Redis)?"
-            )
+    if kind == "event" and p.confirm("Add JavaScript or CSS to every page (assets/)?"):
+        out["assets"] = True
+        out["live_reload"] = p.confirm(
+            "Reach every container within a second of a change (live_reload; Redis)?"
+        )
     return out
+
+
+def stage_repository(p: Prompter, resolve: Callable[[str, str], str | None]) -> SourceSpec:
+    p.stage("The repository")
+    p.say("The plugin takes its files from this repository at one commit, so what is")
+    p.say("deployed never changes until you move the commit yourself.")
+    git = p.ask(
+        "Git URL (https://, ssh:// or user@host:path)",
+        check=lambda t: (
+            None if GIT_URL.fullmatch(t) else "an https://, ssh:// or user@host:path URL"
+        ),
+    )
+    ref = p.ask("Branch, tag or commit SHA", "main", check=lambda t: _need(t, "a ref"))
+    sha = resolve(git, ref)
+    if sha:
+        p.done(f"{ref} is commit {sha}")
+    else:
+        p.warn(f"could not look up {ref} in {git} (offline, private, or no such ref)")
+        sha = p.ask(
+            "Full 40-character commit SHA",
+            check=lambda t: None if SHA40.fullmatch(t) else "40 lowercase hex characters",
+        )
+    path = p.ask(
+        "Folder in the repository the files are in (Enter for the root)",
+        check=lambda t: _repo_path(t) if t else None,
+    )
+    return SourceSpec(git, sha, path.strip("/"))
+
+
+def stage_take(p: Prompter, plugin_id: str, title: str, src: SourceSpec) -> dict:
+    p.stage("What it takes")
+    where = f"`{src.path}/`" if src.path else "the repository root"
+    p.say(f"Paths are relative to {where}.")
+    out: dict = {"type": "installer", "tool": None, "skills": []}
+    if p.confirm("Take the function itself from the repository (its header included)?"):
+        src.function_file = p.ask("Its file", "function.py", check=_repo_path)
+        out["type"] = "upstream"
+    if p.confirm("Take a tool from it?", True):
+        file = p.ask("The tool's file", "tool.py", check=_repo_path)
+        tool_id = p.ask(
+            "Tool id",
+            plugin_id,
+            check=lambda t: None if VALID_ID.fullmatch(t) else "lowercase letters, digits and _",
+        )
+        public = p.confirm("Let every signed-in user use it (access: public)?", True)
+        out["tool"] = ToolSpec(tool_id, title, file=file, public=public)
+    skills: list[SkillSpec] = []
+    while p.confirm("Take a skill from it?" if not skills else "Take another skill?"):
+        skill_id = p.ask(
+            "Skill id",
+            check=lambda n: (
+                None
+                if VALID_SKILL_ID.fullmatch(n) and n not in {s.id for s in skills}
+                else "a-z, 0-9, _ and -, not taken"
+            ),
+        )
+        path = p.ask(
+            "Its folder (SKILL.md plus files), or its SKILL.md",
+            f"skills/{skill_id}",
+            check=_repo_path,
+        )
+        public = p.confirm("Let every signed-in user use it (access: public)?", True)
+        skills.append(
+            SkillSpec(skill_id, path=path, is_dir=not path.endswith(".md"), public=public)
+        )
+    out["skills"] = skills
+    if out["type"] == "installer" and not (out["tool"] or skills):
+        raise OwppError("it takes nothing from the repository: a function, a tool or a skill")
+    return out
+
+
+def stage_git_header(p: Prompter, title: str, kind: str) -> dict:
+    if kind == "installer":
+        return stage_header(p, title, kind)
+    p.stage("Global?")
+    p.say("The function's header comes from its file. One thing is set here:")
+    if p.confirm("Make it active and global on every deploy (filters and actions only)?"):
+        return {"global_": True}
+    return {}
 
 
 def stage_write(p: Prompter, directory: Path, spec: PluginSpec) -> Path | None:
     p.stage("Review and write")
     files = render(spec)
-    p.say(f"{spec.title} ({spec.type} function) in {directory / spec.id}:")
+    kind = {"installer": "installer", "upstream": "function from git"}.get(
+        spec.type, f"{spec.type} function"
+    )
+    p.say(f"{spec.title} ({kind}) in {directory / spec.id}:")
     for name in files:
         p.print(f"     {name}")
     p.print()
@@ -656,17 +688,21 @@ def _summary(p: Prompter, folder: Path, spec: PluginSpec, checked: int | None) -
             "owpp check --strict: " + ("clean" if checked == 0 else "see the output above")
         )
     p.print()
-    p.say("Next:")
-    todo = ["function.py: the work itself (every hook and handler is a stub)"]
-    if spec.tool:
-        todo.append("tool.py: each method's body and its description for the model")
-    if spec.skills:
+    todo = []
+    if spec.has_code:
+        todo.append(
+            "function.py: the work itself, and its valves (every hook and handler is a stub)"
+        )
+    if spec.tool and not spec.tool.file:
+        todo.append("tool.py: each method's parameters, body and description for the model")
+    if spec.skills and not spec.source:
         todo.append("skills/*/SKILL.md: the instructions")
     if spec.page:
         todo.append(
             f"{'static/index.html' if spec.page == 'static' else 'templates/page.html'}: the page"
         )
     todo.append("README.md: what it does, and the live checks under ## Test")
+    p.say("Next:")
     for t in todo:
         p.print(f"   • {t}")
     p.print()
@@ -683,17 +719,28 @@ def _summary(p: Prompter, folder: Path, spec: PluginSpec, checked: int | None) -
     p.print()
 
 
-def ask_spec(p: Prompter, directory: Path, preset_id: str = "") -> PluginSpec:
+def ask_spec(
+    p: Prompter,
+    directory: Path,
+    preset_id: str = "",
+    resolve: Callable[[str, str], str | None] = resolve_ref,
+) -> PluginSpec:
     """Every stage but the last: the answers, as a PluginSpec."""
     answers: dict = stage_identity(p, directory, preset_id)
-    answers |= stage_header(p, answers["title"])
-    answers["type"] = stage_type(p)
-    answers |= stage_type_options(p, answers["type"], answers["title"])
-    answers["valves"] = stage_valves(p, answers)
-    answers["user_valves"] = stage_user_valves(p, answers["type"])
-    answers["tool"] = stage_tool(p, answers["id"], answers["title"])
-    answers["skills"] = stage_skills(p)
-    answers |= stage_libraries(p, answers["type"])
+    if stage_origin(p):
+        p.total_stages, p.total_minutes = FROM_GIT
+        src = stage_repository(p, resolve)
+        answers |= stage_take(p, answers["id"], answers["title"], src)
+        answers |= stage_git_header(p, answers["title"], answers["type"])
+        answers["source"] = src
+    else:
+        p.total_stages, p.total_minutes = HERE
+        kind = answers["type"] = stage_type(p)
+        answers |= stage_header(p, answers["title"], kind)
+        answers |= stage_type_options(p, kind)
+        answers["tool"] = stage_tool(p, answers["id"], answers["title"], kind)
+        answers["skills"] = stage_skills(p, kind == "installer" and not answers["tool"])
+        answers |= stage_libraries(p, kind)
     spec = PluginSpec(**answers)
     validate(spec)
     return spec
@@ -704,24 +751,31 @@ def run_wizard(
     preset_id: str = "",
     prompter: Prompter | None = None,
     check: Callable[[Path, str], int] | None = None,
+    resolve: Callable[[str, str], str | None] = resolve_ref,
 ) -> int:
-    """`owpp create`. `check(directory, id)` runs `owpp check --strict` on the new plugin."""
+    """`owpp create`. `check(directory, id)` runs `owpp check --strict` on the new plugin;
+    `resolve(git, ref)` turns a branch or tag into a commit SHA."""
     p = prompter or Prompter()
     try:
         p.banner(
             "Create an Open-WebUI plugin",
             [
-                "Answer a few questions and get a plugin folder that uses owpp: a function,",
-                "and optionally a tool, skills, a page and libraries, with tests and a README.",
-                "Enter takes the default. Nothing is written until the last stage; Ctrl-C stops.",
+                "Answer a few questions and get a plugin folder that uses owpp, ready to fill",
+                "in: a function, or an installer for a tool and skills, written here or taken",
+                "from a git repository, with tests and a README. Enter takes the default.",
+                "Nothing is written until the last stage; Ctrl-C stops.",
             ],
         )
-        spec = ask_spec(p, directory, preset_id)
+        spec = ask_spec(p, directory, preset_id, resolve)
         folder = stage_write(p, directory, spec)
     except Cancelled:
         p.print()
         p.warn("cancelled: nothing was written")
         return 130
+    except OwppError as e:
+        p.print()
+        p.warn(f"{e}: nothing was written")
+        return 1
     if folder is None:
         p.warn("nothing was written")
         return 1

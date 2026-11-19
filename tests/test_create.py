@@ -2,70 +2,49 @@
 
 from __future__ import annotations
 
+import ast
 import io
 import subprocess
 import sys
 
 import pytest
+from conftest import fake_remote
 
 from owpp.bundle import load_function_files
 from owpp.cli import check_bundle, main
 from owpp.create import (
+    CODE_TYPES,
     FILTER_HOOKS,
-    TYPES,
     PluginSpec,
     SkillSpec,
-    ToolMethod,
+    SourceSpec,
     ToolSpec,
-    Valve,
-    parse_default,
     render,
     write_plugin,
 )
 from owpp.errors import OwppError
 from owpp.lint import lint_plugin
 from owpp.manifest import read_manifest
-from owpp.wizard import Prompter, run_wizard
+from owpp.wizard import Prompter, resolve_ref, run_wizard
 
-VALVES = [
-    Valve("API_URL", "str", "http://api", "Where the API is."),
-    Valve("API_KEY", "password", None, "The API key."),
-    Valve("MODE", "select", None, "How it runs.", ["fast", "slow"]),
-    Valve("TAGS", "multiselect", ["a"], "Which tags.", ["a", "b"]),
-    Valve("TEMPERATURE", "range", 0.5, "How creative.", minimum=0, maximum=1, step=0.1),
-    Valve("LIMIT", "int", 3, "How many."),
-    Valve("RATIO", "float", 1.5, "A ratio."),
-    Valve("VERBOSE", "bool", False, "Log more."),
-]
-USER_VALVES = [Valve("STYLE", "select", None, "Your style.", ["short", "long"])]
+SHA = "917c88f3029c0c6500139ba7b7b061f358d8aaea"
+GIT = "https://github.com/owner/repo.git"
 
 
 def tool(tool_id: str) -> ToolSpec:
     return ToolSpec(
-        tool_id,
-        "Lookup",
-        "Looks things up.",
-        [
-            ToolMethod("lookup", "Look something up.", [("query", "str"), ("limit", "int")]),
-            ToolMethod("tags", "List tags.", [("names", "list[str]"), ("all", "bool")]),
-            ToolMethod("ping", "Check it is up.", []),
-        ],
-        public=True,
-        rich_ui=True,
-        chat_data=True,
+        tool_id, "Lookup", "Looks things up.", ["lookup", "ping"], rich_ui=True, chat_data=True
     )
 
 
-# Every part the wizard can add, in at least one plugin of each type.
-SPECS = [PluginSpec(id=f"min_{t}", type=t) for t in TYPES] + [
+# Every part the wizard can add, in at least one plugin of each type, all written here.
+SPECS = [PluginSpec(id=f"min_{t}", type=t) for t in CODE_TYPES] + [
     PluginSpec(
         id="full_filter",
         type="filter",
         icon_url="https://example.com/icon.svg",
         requirements="httpx",
         required_open_webui_version="0.10.0",
-        valves=VALVES,
-        user_valves=USER_VALVES,
         priority=True,
         hooks=list(FILTER_HOOKS),
         toggle=True,
@@ -81,8 +60,6 @@ SPECS = [PluginSpec(id=f"min_{t}", type=t) for t in TYPES] + [
         id="full_action",
         type="action",
         global_=True,
-        valves=VALVES,
-        user_valves=USER_VALVES,
         priority=True,
         buttons=[("summarize", "Summarize"), ("translate", "Translate")],
         rich_ui=True,
@@ -93,8 +70,6 @@ SPECS = [PluginSpec(id=f"min_{t}", type=t) for t in TYPES] + [
     PluginSpec(
         id="full_pipe",
         type="pipe",
-        valves=VALVES,
-        user_valves=USER_VALVES,
         models=[("fast", "Fast"), ("slow", "Slow")],
         stream=True,
         page="rendered",
@@ -105,7 +80,6 @@ SPECS = [PluginSpec(id=f"min_{t}", type=t) for t in TYPES] + [
     PluginSpec(
         id="full_event",
         type="event",
-        valves=VALVES,
         events=["system.startup.completed", "function.valves_updated", "user.created"],
         sync=True,
         sync_minutes=15,
@@ -119,6 +93,32 @@ SPECS = [PluginSpec(id=f"min_{t}", type=t) for t in TYPES] + [
     ),
     PluginSpec(id="event_page", type="event", page="static", page_access="admin"),
     PluginSpec(id="event_assets", type="event", assets=True, events=[]),
+    PluginSpec(
+        id="installs_tool", type="installer", tool=ToolSpec("installs_tool", methods=["run"])
+    ),
+    PluginSpec(
+        id="installs_skills", type="installer", skills=[SkillSpec("a-skill"), SkillSpec("b")]
+    ),
+]
+
+# From a git repository: these fetch at deploy time, so they are bundled here with stand-ins.
+GIT_SPECS = [
+    PluginSpec(
+        id="git_installer",
+        type="installer",
+        source=SourceSpec(GIT, SHA, "plugins/viz"),
+        tool=ToolSpec("viz", file="tool.py"),
+        skills=[
+            SkillSpec("visualize", path="skills/visualize"),
+            SkillSpec("draw", path="draw/SKILL.md", is_dir=False, public=False),
+        ],
+    ),
+    PluginSpec(
+        id="git_function",
+        type="upstream",
+        global_=True,
+        source=SourceSpec(GIT, SHA, "", function_file="src/function.py"),
+    ),
 ]
 
 
@@ -130,13 +130,21 @@ def written(tmp_path_factory):
     return directory
 
 
+@pytest.fixture(scope="module")
+def from_git(tmp_path_factory):
+    directory = tmp_path_factory.mktemp("from_git")
+    for spec in GIT_SPECS:
+        write_plugin(directory, spec)
+    return directory
+
+
 class TestWhatItWrites:
     def test_every_plugin_bundles_compiles_and_has_no_warnings(self, written):
         functions = {f.id: f for f in load_function_files(written)}
         assert sorted(functions) == sorted(s.id for s in SPECS)
         for spec in SPECS:
             fn = functions[spec.id]
-            assert fn.type == spec.type
+            assert fn.type == ("filter" if spec.type == "installer" else spec.type)
             assert check_bundle(fn.content, f"{spec.id}.py") is None, spec.id
             assert lint_plugin(written / spec.id, spec.id) == [], spec.id
 
@@ -183,14 +191,19 @@ class TestWhatItWrites:
         assert read_manifest(written / "full_action")["static"] == {"access": "public"}
         assert read_manifest(written / "min_event")["include"] == ["events"]
 
-    def test_the_valves_are_the_widgets_open_webui_documents(self, written):
+    def test_valves_are_left_to_fill_in(self, written):
         code = (written / "full_filter" / "function.py").read_text()
-        assert 'json_schema_extra={"input": {"type": "password"}}' in code
-        assert 'MODE: Literal["fast", "slow"]' in code
-        assert '"type": "multiselect", "options": ["a", "b"]' in code
-        assert '"type": "range", "step": 0.1' in code and "ge=0" in code and "le=1" in code
+        assert "plugin/development/valves" in code  # where the widgets are documented
+        assert "priority: int" in code and "ENABLE: bool" in code
         assert "class UserValves(BaseModel):" in code
         assert "self.toggle = True" in code and "self.file_handler = True" in code
+
+    def test_an_installer_has_no_function_code(self, written):
+        folder = written / "installs_tool"
+        assert not (folder / "function.py").exists() and (folder / "tool.py").is_file()
+        assert read_manifest(folder)["function"]["global"] is True
+        folder = written / "installs_skills"
+        assert sorted(p.name for p in (folder / "skills").iterdir()) == ["a-skill", "b"]
 
     def test_skills_follow_open_webuis_layout(self, written):
         text = (written / "full_filter" / "skills" / "take-notes" / "SKILL.md").read_text()
@@ -200,15 +213,50 @@ class TestWhatItWrites:
         for section in ("When to Use", "Prerequisites", "Procedure", "Pitfalls", "Verification"):
             assert f"\n## {section}\n" in text
 
-    def test_the_readme_has_test_and_deploy(self, written):
-        for spec in SPECS:
-            readme = (written / spec.id / "README.md").read_text()
-            assert "\n## Test\n" in readme and "\n## Deploy\n" in readme
-            assert f"owpp test {spec.id}" in readme
+    def test_the_readme_has_test_and_deploy(self, written, from_git):
+        for d, specs in ((written, SPECS), (from_git, GIT_SPECS)):
+            for spec in specs:
+                readme = (d / spec.id / "README.md").read_text()
+                assert "\n## Test\n" in readme and "\n## Deploy\n" in readme
+                assert f"owpp test {spec.id}" in readme
 
     def test_it_refuses_a_folder_that_exists(self, written):
         with pytest.raises(OwppError, match="already exists"):
             write_plugin(written, PluginSpec(id="min_event"))
+
+
+class TestFromGit:
+    def test_the_manifest_pins_the_repository(self, from_git):
+        m = read_manifest(from_git / "git_installer")
+        assert m["source"] == {"git": GIT, "ref": SHA, "path": "plugins/viz"}
+        assert m["tool"] == {"id": "viz", "file": "tool.py", "access": "public"}
+        assert m["skills"] == {
+            "visualize": {"dir": "skills/visualize", "access": "public"},
+            "draw": {"file": "draw/SKILL.md"},
+        }
+        assert m["function"]["global"] is True
+        m = read_manifest(from_git / "git_function")
+        assert m["function"] == {"file": "src/function.py", "global": True}
+        assert "tool" not in m and "skills" not in m
+
+    def test_it_writes_no_code_of_its_own(self, from_git):
+        for spec in GIT_SPECS:
+            names = {p.name for p in (from_git / spec.id).iterdir()}
+            assert names == {"plugin.yaml", "README.md", "tests"}
+            readme = (from_git / spec.id / "README.md").read_text()
+            assert SHA in readme and "To upgrade" in readme
+
+    def test_it_bundles_from_the_pinned_files(self, from_git):
+        remote = fake_remote(from_git)
+        # The upstream function is global, so it must be a filter (or an action).
+        remote[f"{GIT}#{SHA}:src/function.py"] = "class Filter:\n    pass\n"
+        functions = {f.id: f for f in load_function_files(from_git, remote)}
+        for spec in GIT_SPECS:
+            assert check_bundle(functions[spec.id].content) is None, spec.id
+
+    def test_its_tests_are_python(self, from_git):
+        for spec in GIT_SPECS:
+            ast.parse((from_git / spec.id / "tests" / f"test_{spec.id}.py").read_text())
 
 
 class TestWhatItRefuses:
@@ -219,41 +267,60 @@ class TestWhatItRefuses:
             (PluginSpec(id="p", type="model"), "type must be"),
             (PluginSpec(id="p", type="event", global_=True), "filters and actions only"),
             (PluginSpec(id="p", type="action", toggle=True), "never global"),
-            (PluginSpec(id="p", type="event", user_valves=[Valve("X")]), "no user valves"),
             (PluginSpec(id="p", type="filter", assets=True), "Event function"),
             (PluginSpec(id="p", live_reload=True), "live_reload"),
             (PluginSpec(id="p", type="filter", hooks=[]), "at least one"),
             (PluginSpec(id="p", events=["function.valve_updated"]), "did you mean"),
-            (PluginSpec(id="p", valves=[Valve("ENABLE", "bool")]), "added by the wizard"),
-            (PluginSpec(id="p", valves=[Valve("A"), Valve("A")]), "declared twice"),
-            (PluginSpec(id="p", valves=[Valve("M", "select")]), "needs options"),
             (PluginSpec(id="p", type="action", buttons=[("a.b", "A")]), "no dots"),
             (PluginSpec(id="p", tool=ToolSpec("t")), "at least one method"),
-            (
-                PluginSpec(
-                    id="p", tool=ToolSpec("t", methods=[ToolMethod("f", "", [("x", "dict")])])
-                ),
-                "parameter types",
-            ),
+            (PluginSpec(id="p", tool=ToolSpec("t", methods=["a", "a"])), "declared twice"),
             (PluginSpec(id="p", skills=[SkillSpec("Notes")]), "not a valid skill name"),
             (PluginSpec(id="p", description="two\nlines"), "one line"),
+            (PluginSpec(id="p", type="installer"), "at least one"),
+            (
+                PluginSpec(id="p", type="installer", tool=ToolSpec("t", ["a"]), page="static"),
+                "written here",
+            ),
+            (PluginSpec(id="p", type="upstream"), "source repository"),
+            (
+                PluginSpec(
+                    id="p", type="filter", source=SourceSpec(GIT, SHA), tool=ToolSpec("t", ["a"])
+                ),
+                "installer or takes its function",
+            ),
+            (
+                PluginSpec(
+                    id="p",
+                    type="installer",
+                    source=SourceSpec(GIT, "main"),
+                    tool=ToolSpec("t", file="t.py"),
+                ),
+                "40-character",
+            ),
+            (
+                PluginSpec(
+                    id="p",
+                    type="installer",
+                    source=SourceSpec("/local/repo", SHA),
+                    tool=ToolSpec("t", file="t.py"),
+                ),
+                "git URL",
+            ),
+            (
+                PluginSpec(
+                    id="p",
+                    type="installer",
+                    source=SourceSpec(GIT, SHA),
+                    tool=ToolSpec("t", file="../t.py"),
+                ),
+                "without . or ..",
+            ),
+            (PluginSpec(id="p", type="installer", tool=ToolSpec("t", file="t.py")), "source"),
         ],
     )
     def test_a_spec_that_would_not_work(self, spec, message):
         with pytest.raises(OwppError, match=message):
             render(spec)
-
-    def test_defaults_are_read_as_the_valves_type(self):
-        assert parse_default("bool", "") is True
-        assert parse_default("bool", "no") is False
-        assert parse_default("int", "4") == 4
-        assert parse_default("range", "0.25") == 0.25
-        assert parse_default("select", "", ["a", "b"]) == "a"
-        assert parse_default("multiselect", "a, b", ["a", "b"]) == ["a", "b"]
-        with pytest.raises(OwppError):
-            parse_default("int", "four")
-        with pytest.raises(OwppError):
-            parse_default("select", "c", ["a", "b"])
 
 
 # ---- the wizard ------------------------------------------------------------------------
@@ -275,27 +342,33 @@ def scripted(answers: list[str]):
     return read
 
 
-def wizard(directory, answers, preset_id=""):
+def wizard(directory, answers, preset_id="", resolve=lambda git, ref: SHA, check=True):
     read = scripted(answers)
     out = io.StringIO()
     code = run_wizard(
         directory,
         preset_id,
         Prompter(read, out),
-        check=lambda d, i: main(["check", i, "--strict", "--dir", str(d)], env={}),
+        check=(lambda d, i: main(["check", i, "--strict", "--dir", str(d)], env={}))
+        if check
+        else None,
+        resolve=resolve,
     )
     return code, out.getvalue(), read
 
 
-HEADER_DEFAULTS = [""] * 7  # description, author, version, license, Open-WebUI, icon, pip
+HEADER = [""] * 7  # description, author, version, license, Open-WebUI, icon, pip
+# Enter at every question of the event path: ready, id, title, where, type, the header, the
+# event's three, tool, skills, the four of pages and libraries.
+ALL_DEFAULTS = ["", "", "", "", "", *HEADER, "", "", "", "", "", "", "", "", ""]
 
 
 class TestWizard:
     def test_enter_all_the_way_makes_an_event_plugin_like_init(self, tmp_path, capsys):
-        answers = ["", "", ""] + HEADER_DEFAULTS + [""] * 20
-        code, out, read = wizard(tmp_path, answers, preset_id="hello")
+        code, out, read = wizard(tmp_path, [*ALL_DEFAULTS, ""], preset_id="hello")
         assert code == 0, out
-        assert "Stage 10/10 · Review and write" in out and "ready to fill in" in out
+        assert read.left == []
+        assert "Stage 9/9 · Review and write" in out and "ready to fill in" in out
         (fn,) = load_function_files(tmp_path)
         assert fn.id == "hello" and fn.type == "event"
         assert "ok    hello" in capsys.readouterr().out  # owpp check --strict ran
@@ -303,57 +376,12 @@ class TestWizard:
 
     def test_a_filter_with_everything(self, tmp_path):
         answers = [
-            "",  # ready
-            "notes",
-            "",  # id, title
-            "Keeps notes.",
-            "me",
-            "",
-            "",
-            "",
-            "",
-            "",  # header
-            "filter",
-            "1,3,4",  # hooks: inlet, stream, outlet
-            "y",  # a toggle
-            "",  # file_handler
-            "y",  # priority
-            "API_KEY",
-            "5",  # password
-            "",
-            "The key.",
-            "MODE",
-            "select",
-            "fast, slow",
-            "",
-            "How it runs.",
-            "",  # valves done
-            "y",
-            "SHORT",
-            "bool",
-            "",
-            "Short answers.",
-            "",  # user valves
-            "y",
-            "",
-            "",
-            "",  # tool id, title, description
-            "",
-            "",
-            "query:str, limit:int",  # method lookup
-            "",  # methods done
-            "",
-            "y",
-            "",  # public, rich UI, chat_data
-            "y",
-            "take-notes",
-            "Take notes.",
-            "",
-            "",  # one skill
-            "rendered",
-            "admin",
-            "y",
-            "",  # page, chat_data, config
+            *["", "notes", "", "here", "filter"],
+            *["Keeps notes.", "me", "", "", "", "", ""],  # header
+            *["1,3,4", "y", "", "y"],  # hooks inlet, stream, outlet; toggle; file_handler; priority
+            *["y", "", "lookup, save", "", "", "y", ""],  # tool: id, methods, title, public, UI
+            *["y", "take-notes", "Take notes.", "", ""],  # one skill
+            *["rendered", "admin", "y", ""],  # page, who, chat_data, config
             "",  # write
         ]
         code, out, read = wizard(tmp_path, answers)
@@ -365,19 +393,89 @@ class TestWizard:
         assert m["tool"]["id"] == "notes" and m["include"] == ["routes", "chat_data"]
         code_text = (folder / "function.py").read_text()
         assert "async def stream(" in code_text and "async def request(" not in code_text
-        assert "API_KEY: str" in code_text and 'MODE: Literal["fast", "slow"]' in code_text
-        assert "SHORT: bool" in code_text and "user: PluginAdmin" in code_text
-        assert "async def lookup(self, query: str, limit: int" in (folder / "tool.py").read_text()
+        assert "user: PluginAdmin" in code_text and "priority: int" in code_text
+        tool_text = (folder / "tool.py").read_text()
+        assert "async def lookup(" in tool_text and "async def save(" in tool_text
         assert (folder / "skills" / "take-notes" / "SKILL.md").is_file()
-        assert (folder / "templates" / "page.html").is_file()
 
-    def test_not_sure_asks_the_authoring_guides_questions(self, tmp_path):
-        answers = ["", "btn", ""] + HEADER_DEFAULTS + ["help", "n", "y"] + [""] * 30
+    def test_an_installer_of_a_skill(self, tmp_path):
+        answers = [
+            *["", "kit", "", "", "installer"],
+            *["", "", "", ""],  # header: description, author, version, license
+            "",  # the installer's options: a note
+            "n",  # no tool
+            *["deploy-kit", "", ""],  # one skill is required: no "Add?" first
+            "",  # another? no
+            "",  # pages and libraries: a note
+            "",  # write
+        ]
         code, out, read = wizard(tmp_path, answers)
         assert code == 0, out
-        assert "Is it a button" in "".join(read.asked)
+        assert read.left == []
+        assert not (tmp_path / "kit" / "function.py").exists()
+        assert (tmp_path / "kit" / "skills" / "deploy-kit" / "SKILL.md").is_file()
+
+    def test_not_sure_asks_the_authoring_guides_questions(self, tmp_path):
+        answers = ["", "btn", "", "", "help", "n", "n", "y"] + [""] * 30
+        code, out, read = wizard(tmp_path, answers)
+        assert code == 0, out
+        assert any("Is it a button" in q for q in read.asked)
         (fn,) = load_function_files(tmp_path)
         assert fn.type == "action"
+
+    def test_from_git_it_installs_a_tool_and_skills_at_a_commit(self, tmp_path):
+        looked_up = []
+        answers = [
+            *["", "viz", "", "git"],
+            *[GIT, "v1.2", "plugins/viz"],  # repository, tag, folder
+            *["", "", "", "", ""],  # no function; take a tool: tool.py, id viz, public
+            *["y", "visualize", "", ""],  # a skill: id, folder, public
+            "",  # another? no
+            *["", "", "", ""],  # header
+            "",  # write
+        ]
+        code, out, read = wizard(
+            tmp_path,
+            answers,
+            resolve=lambda git, ref: looked_up.append((git, ref)) or SHA,
+            check=False,
+        )
+        assert code == 0, out
+        assert read.left == [] and looked_up == [(GIT, "v1.2")]
+        assert "Stage 6/6 · Review and write" in out and f"v1.2 is commit {SHA}" in out
+        m = read_manifest(tmp_path / "viz")
+        assert m["source"] == {"git": GIT, "ref": SHA, "path": "plugins/viz"}
+        assert m["tool"] == {"id": "viz", "file": "tool.py", "access": "public"}
+        assert m["skills"] == {"visualize": {"dir": "skills/visualize", "access": "public"}}
+
+    def test_from_git_it_can_take_the_function_itself(self, tmp_path):
+        answers = [
+            *["", "upstream_fn", "", "git", GIT, SHA, ""],
+            *["y", "", "n", ""],  # function.py; no tool; no skill
+            "y",  # global
+            "",  # write
+        ]
+        code, out, read = wizard(tmp_path, answers, check=False)
+        assert code == 0, out
+        assert read.left == []
+        m = read_manifest(tmp_path / "upstream_fn")
+        assert m["function"] == {"file": "function.py", "global": True}
+
+    def test_a_ref_it_cannot_look_up_asks_for_the_commit(self, tmp_path):
+        answers = [
+            *["", "pinned", "", "git", GIT, "main", "not-a-sha", SHA, ""],
+            *["y", "", "n", "", "", ""],
+        ]
+        code, out, read = wizard(tmp_path, answers, resolve=lambda git, ref: None, check=False)
+        assert code == 0, out
+        assert "could not look up main" in out and "40 lowercase hex" in out
+        assert read_manifest(tmp_path / "pinned")["source"]["ref"] == SHA
+
+    def test_taking_nothing_from_git_writes_nothing(self, tmp_path):
+        answers = ["", "empty", "", "git", GIT, SHA, "", "", "n", ""]
+        code, out, _ = wizard(tmp_path, answers, check=False)
+        assert code == 1 and "takes nothing" in out
+        assert list(tmp_path.iterdir()) == []
 
     def test_ctrl_c_writes_nothing(self, tmp_path):
         code, out, _ = wizard(tmp_path, ["", "half"])  # input ends at the title
@@ -385,21 +483,26 @@ class TestWizard:
         assert list(tmp_path.iterdir()) == []
 
     def test_a_bad_answer_is_asked_again(self, tmp_path):
-        answers = ["", "My-Plugin", "my_plugin", ""] + HEADER_DEFAULTS + [""] * 20
+        answers = ["", "My-Plugin", *ALL_DEFAULTS[1:], ""]
+        answers[2:3] = ["my_plugin", ""]  # the id again, then the title
         code, out, _ = wizard(tmp_path, answers)
-        assert code == 0
+        assert code == 0, out
         assert '"My-Plugin" is not valid' in out
         assert (tmp_path / "my_plugin").is_dir()
 
     def test_saying_no_at_the_end_writes_nothing(self, tmp_path):
-        answers = ["", "", ""] + HEADER_DEFAULTS + [""] * 12 + ["n"]
-        code, out, read = wizard(tmp_path, answers, preset_id="nope")
+        code, out, read = wizard(tmp_path, [*ALL_DEFAULTS, "n"], preset_id="nope")
         assert code == 1 and read.left == []
         assert not (tmp_path / "nope").exists()
 
     def test_owpp_create_reads_the_terminal(self, tmp_path, monkeypatch, capsys):
-        answers = ["", "", ""] + HEADER_DEFAULTS + [""] * 20
-        monkeypatch.setattr(sys, "stdin", io.StringIO("\n".join(answers) + "\n"))
+        monkeypatch.setattr(sys, "stdin", io.StringIO("\n".join([*ALL_DEFAULTS, ""]) + "\n"))
         assert main(["create", "from_cli", "--dir", str(tmp_path)], env={}) == 0
         assert (tmp_path / "from_cli" / "plugin.yaml").is_file()
         assert "ready to fill in" in capsys.readouterr().out
+
+
+def test_a_full_sha_needs_no_lookup():
+    """resolve_ref asks git only for a branch or tag."""
+    assert resolve_ref("https://example.invalid/repo.git", SHA) == SHA
+    assert resolve_ref("/not/a/url", "main") is None

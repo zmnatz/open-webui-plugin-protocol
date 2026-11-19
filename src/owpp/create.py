@@ -1,9 +1,19 @@
 """A plugin folder from a description of it: what `owpp create` (the wizard) and `owpp init` write.
 
-`PluginSpec` says what the plugin is (its header, function type, valves, tool, skills, pages and
-libraries); `render()` turns it into the files of a plugin folder, and `write_plugin()` writes them.
-Nothing here asks questions, so every combination can be tested: each one bundles, compiles,
-passes `owpp check --strict` and passes its own generated tests.
+`PluginSpec` says what the plugin is; `render()` turns it into the files of a plugin folder, and
+`write_plugin()` writes them. It is a scaffold: every hook, handler and tool method is a stub to
+fill in. Nothing here asks questions, so every combination can be tested: each one bundles,
+compiles, passes `owpp check --strict` and passes its own generated tests.
+
+A plugin is one of three kinds:
+
+- **code written here**: a function of one of Open-WebUI's types (`filter`, `action`, `event`,
+  `pipe`), with an optional tool, skills, a page and libraries;
+- an **installer**: no function code at all, only a tool and/or skills, which the generated
+  parent function installs when it is enabled and removes when it is disabled (the protocol's
+  deployment mechanism for tools and skills);
+- **from git**: a `source:` repository pinned to a commit, from which it takes the function
+  (`upstream`) or, as an installer, just a tool and skills.
 
 What the generated code uses follows Open-WebUI's plugin docs
 (https://docs.openwebui.com/features/extensibility/) and this repository's conventions
@@ -17,23 +27,24 @@ import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
-from .bundle import VALID_ID
+from .bundle import VALID_ID, VALID_SKILL_ID
 from .errors import OwppError
 from .events import problem_with
+from .sources import GIT_URL, SHA40
 
 CLASS = {"event": "Event", "filter": "Filter", "action": "Action", "pipe": "Pipe"}
-TYPES = tuple(CLASS)
+CODE_TYPES = tuple(CLASS)
+# installer: the function is generated, and only installs the tool and skills.
+# upstream: the function is taken from the source repository, verbatim.
+TYPES = (*CODE_TYPES, "installer", "upstream")
 FILTER_HOOKS = ("inlet", "request", "stream", "outlet")
-VALVE_KINDS = ("str", "int", "float", "bool", "password", "select", "multiselect", "range")
-PARAM_TYPES = ("str", "int", "float", "bool", "list[str]")
 ACCESS = ("user", "admin", "public")
 PAGES = ("", "static", "rendered")
-VALID_VALVE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 VALID_SKILL = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")  # Open-WebUI's skill name standard
-VALID_SUB_ID = re.compile(r"[a-z_][a-z0-9_]*")  # an action button or a pipe model: no dots
+VALID_SUB_ID = re.compile(r"[a-z_][a-z0-9_]*")  # an action button, a pipe model, a method
 VERSION = re.compile(r"\d+\.\d+\.\d+")
+VALVES_DOCS = "https://docs.openwebui.com/features/extensibility/plugin/development/valves"
 # Events that are about one function: a handler for them takes only this function's (own=True).
 _OWN_PREFIXES = ("function.",)
 # Startup, enable, update and saved valves: when an Event function (re)mounts its routes.
@@ -46,46 +57,43 @@ MOUNT_EVENTS = (
 
 
 @dataclass
-class Valve:
-    """One setting. `kind` is how Open-WebUI shows it: a text box (str, int, float), a switch
-    (bool), a masked text box (password), a dropdown (select), checkboxes (multiselect) or a
-    slider (range, between `minimum` and `maximum`)."""
-
-    name: str
-    kind: str = "str"
-    default: Any = None
-    description: str = ""
-    options: list[str] = field(default_factory=list)
-    minimum: float = 0
-    maximum: float = 1
-    step: float = 0.1
-
-
-@dataclass
-class ToolMethod:
-    """A method the model may call: its description and its parameters, (name, type)."""
-
-    name: str
-    description: str = ""
-    params: list[tuple[str, str]] = field(default_factory=lambda: [("query", "str")])
-
-
-@dataclass
 class ToolSpec:
+    """A tool. Written here: `methods` are the stubs in tool.py. From git: `file` is its path in
+    the source repository."""
+
     id: str
     title: str = ""
     description: str = ""
-    methods: list[ToolMethod] = field(default_factory=list)
+    methods: list[str] = field(default_factory=list)
     public: bool = True
     rich_ui: bool = False  # a method that returns an HTMLResponse, shown in the chat
     chat_data: bool = False
+    file: str = ""
+
+    def __post_init__(self) -> None:
+        self.title = self.title or title_of(self.id)
 
 
 @dataclass
 class SkillSpec:
+    """A skill. Written here: skills/<id>/SKILL.md. From git: `path` in the source repository,
+    a SKILL.md (`is_dir` False) or a folder holding one."""
+
     id: str
     description: str = ""
     public: bool = True
+    path: str = ""
+    is_dir: bool = True
+
+
+@dataclass
+class SourceSpec:
+    """A git repository, pinned to a full commit SHA, and the folder in it the paths are under."""
+
+    git: str
+    ref: str
+    path: str = ""
+    function_file: str = ""  # the function itself, taken verbatim (type "upstream")
 
 
 @dataclass
@@ -100,9 +108,7 @@ class PluginSpec:
     required_open_webui_version: str = ""
     icon_url: str = ""
     requirements: str = ""
-    global_: bool | None = None  # filters and actions: plugin.yaml's `global:`
-    valves: list[Valve] = field(default_factory=list)
-    user_valves: list[Valve] = field(default_factory=list)
+    global_: bool | None = None  # plugin.yaml's `global:` (filters, actions, upstream)
     priority: bool = False  # filters and actions: a `priority` valve (lower runs first)
     # filter
     hooks: list[str] = field(default_factory=lambda: ["inlet", "outlet"])
@@ -121,6 +127,7 @@ class PluginSpec:
     # parts and libraries
     tool: ToolSpec | None = None
     skills: list[SkillSpec] = field(default_factory=list)
+    source: SourceSpec | None = None
     page: str = ""  # "", "static" (static/index.html) or "rendered" (templates/page.html)
     page_access: str = "user"
     chat_data: bool = False
@@ -130,11 +137,18 @@ class PluginSpec:
 
     def __post_init__(self) -> None:
         self.title = self.title or title_of(self.id)
+        if self.type == "installer" and not self.description:
+            self.description = f"Installs {self.title}; disabling this function removes it."
         self.description = self.description or f"What {self.title} does, on one line."
 
     @property
     def cls(self) -> str:
         return CLASS[self.type]
+
+    @property
+    def has_code(self) -> bool:
+        """A function.py written here."""
+        return self.type in CODE_TYPES
 
     @property
     def env_prefix(self) -> str:
@@ -162,24 +176,35 @@ def _one_line(label: str, value: str) -> None:
         raise OwppError(f"{label} must fit on one line (it goes into the header)")
 
 
+def _check_repo_path(label: str, value: str) -> None:
+    parts = [p for p in value.split("/") if p]
+    if not parts or any(p in (".", "..") for p in parts):
+        raise OwppError(f"{label} must be a path inside the repository, without . or ..")
+
+
 def validate(spec: PluginSpec) -> None:
     """Refuse what would not bundle, or would not work in Open-WebUI. Raises OwppError."""
     if not VALID_ID.fullmatch(spec.id):
         raise OwppError(
             f'"{spec.id}" is not a valid id: lowercase letters, digits and _ (no hyphens)'
         )
-    if spec.type not in CLASS:
-        raise OwppError(f"the type must be one of {', '.join(CLASS)}")
+    if spec.type not in TYPES:
+        raise OwppError(f"the type must be one of {', '.join(TYPES)}")
     for key in ("title", "author", "version", "license", "description"):
         _one_line(key, getattr(spec, key))
     for key in ("required_open_webui_version", "icon_url", "requirements"):
         _one_line(key, getattr(spec, key))
-    if spec.global_ is not None and spec.type not in ("filter", "action"):
+    if spec.global_ is not None and spec.type not in ("filter", "action", "upstream"):
         raise OwppError("global applies to filters and actions only")
     if spec.toggle and (spec.type != "filter" or spec.global_):
         raise OwppError("a toggle is a filter that each user switches on, so it is never global")
-    if spec.type == "event" and spec.user_valves:
-        raise OwppError("an Event function has no user valves (it runs without a user)")
+    if not spec.has_code and (
+        spec.page or spec.chat_data or spec.config or spec.assets or spec.live_reload
+    ):
+        raise OwppError(
+            "a page, chat_data, config.yaml and assets/ need a function written here, "
+            "not a generated or upstream one"
+        )
     if spec.assets and spec.type != "event":
         raise OwppError("assets/ is published by an Event function (class Event(PluginAssets))")
     if spec.live_reload and not spec.assets:
@@ -197,17 +222,6 @@ def validate(spec: PluginSpec) -> None:
         problem = problem_with(name)
         if problem:
             raise OwppError(problem)
-    names = set()
-    for v in [*spec.valves, *spec.user_valves]:
-        _check_valve(v)
-    for v in spec.valves:
-        if v.name in names:
-            raise OwppError(f"the valve {v.name} is declared twice")
-        names.add(v.name)
-    reserved = {"ENABLE", "priority"} | ({"SYNC_INTERVAL_MINUTES"} if spec.sync else set())
-    clash = names & reserved
-    if clash:
-        raise OwppError(f"{', '.join(sorted(clash))} is added by the wizard; pick another name")
     for label, items in (("button", spec.buttons), ("model", spec.models)):
         seen = set()
         for sub_id, _ in items:
@@ -216,26 +230,18 @@ def validate(spec: PluginSpec) -> None:
             if sub_id in seen:
                 raise OwppError(f"the {label} id {sub_id} is used twice")
             seen.add(sub_id)
+    _validate_source(spec)
+    if spec.type == "installer" and not (spec.tool or spec.skills):
+        raise OwppError("an installer installs a tool or skills: add at least one")
     if spec.tool:
-        if not VALID_ID.fullmatch(spec.tool.id):
-            raise OwppError(f'"{spec.tool.id}" is not a valid tool id')
-        if not spec.tool.methods and not spec.tool.rich_ui:
-            raise OwppError("a tool needs at least one method")
-        seen = set()
-        for m in spec.tool.methods:
-            if not VALID_SUB_ID.fullmatch(m.name):
-                raise OwppError(f'"{m.name}" is not a valid method name (a-z, 0-9, _)')
-            if m.name in seen:
-                raise OwppError(f"the tool method {m.name} is declared twice")
-            seen.add(m.name)
-            for p, t in m.params:
-                if not VALID_SUB_ID.fullmatch(p):
-                    raise OwppError(f'"{p}" is not a valid parameter name')
-                if t not in PARAM_TYPES:
-                    raise OwppError(f"parameter types are {', '.join(PARAM_TYPES)}, not {t}")
+        _validate_tool(spec, spec.tool)
     seen = set()
     for s in spec.skills:
-        if not VALID_SKILL.fullmatch(s.id):
+        if spec.source:
+            if not VALID_SKILL_ID.fullmatch(s.id):
+                raise OwppError(f'"{s.id}" is not a valid skill id: a-z, 0-9, _ and -')
+            _check_repo_path(f"the path of skill {s.id}", s.path)
+        elif not VALID_SKILL.fullmatch(s.id):
             raise OwppError(
                 f'"{s.id}" is not a valid skill name: lowercase letters, digits and hyphens, '
                 "at most 64"
@@ -247,136 +253,97 @@ def validate(spec: PluginSpec) -> None:
             raise OwppError(f"the description of skill {s.id} is over 1024 characters")
 
 
-def _check_valve(v: Valve) -> None:
-    if not VALID_VALVE.fullmatch(v.name):
-        raise OwppError(f'"{v.name}" is not a valid valve name')
-    if v.kind not in VALVE_KINDS:
-        raise OwppError(f"valve kinds are {', '.join(VALVE_KINDS)}, not {v.kind}")
-    if v.kind in ("select", "multiselect") and not v.options:
-        raise OwppError(f"the valve {v.name} needs options")
-    if v.kind == "range" and not v.minimum < v.maximum:
-        raise OwppError(f"the valve {v.name} needs a minimum below its maximum")
+def _validate_source(spec: PluginSpec) -> None:
+    src = spec.source
+    if spec.type == "upstream" and not (src and src.function_file):
+        raise OwppError("an upstream function needs a source repository and its function file")
+    if not src:
+        return
+    if spec.type not in ("installer", "upstream"):
+        raise OwppError("a plugin from git is an installer or takes its function from the repo")
+    if src.function_file and spec.type != "upstream":
+        raise OwppError("with the function taken from the repository, the type is upstream")
+    if not GIT_URL.fullmatch(src.git):
+        raise OwppError("the repository must be an https://, ssh:// or user@host:path git URL")
+    if not SHA40.fullmatch(src.ref):
+        raise OwppError("the commit must be a full 40-character SHA (a branch or tag can move)")
+    if src.path:
+        _check_repo_path("the folder in the repository", src.path)
+    if src.function_file:
+        _check_repo_path("the function file", src.function_file)
+    if spec.tool and not spec.tool.file:
+        raise OwppError("a tool from the repository needs its file")
 
 
-def parse_default(kind: str, text: str, options: list[str] | None = None) -> Any:
-    """A valve's default from what someone typed, as the valve's type."""
-    text = text.strip()
-    if kind == "bool":
-        if text.lower() in ("", "true", "yes", "y", "on", "1"):
-            return True
-        if text.lower() in ("false", "no", "n", "off", "0"):
-            return False
-        raise OwppError(f"{text!r} is not true or false")
-    if kind == "int":
-        try:
-            return int(text or 0)
-        except ValueError:
-            raise OwppError(f"{text!r} is not a whole number") from None
-    if kind in ("float", "range"):
-        try:
-            return float(text or 0)
-        except ValueError:
-            raise OwppError(f"{text!r} is not a number") from None
-    if kind == "select":
-        if text and options and text not in options:
-            raise OwppError(f"{text!r} is not one of {', '.join(options)}")
-        return text or (options[0] if options else "")
-    if kind == "multiselect":
-        chosen = [s.strip() for s in text.split(",") if s.strip()]
-        bad = [c for c in chosen if options and c not in options]
-        if bad:
-            raise OwppError(f"{', '.join(bad)} is not one of {', '.join(options or [])}")
-        return chosen
-    return text
+def _validate_tool(spec: PluginSpec, tool: ToolSpec) -> None:
+    if not VALID_ID.fullmatch(tool.id):
+        raise OwppError(f'"{tool.id}" is not a valid tool id')
+    _one_line("the tool's title", tool.title)
+    _one_line("the tool's description", tool.description)
+    if tool.file:
+        if not spec.source:
+            raise OwppError("a tool file is taken from a source repository")
+        _check_repo_path("the tool file", tool.file)
+        return
+    if not tool.methods and not tool.rich_ui:
+        raise OwppError("a tool needs at least one method")
+    seen = set()
+    for m in tool.methods:
+        if not VALID_SUB_ID.fullmatch(m):
+            raise OwppError(f'"{m}" is not a valid method name (a-z, 0-9, _)')
+        if m in seen:
+            raise OwppError(f"the tool method {m} is declared twice")
+        seen.add(m)
 
 
 # ---- code -------------------------------------------------------------------------
 
 
-def _py(value: Any) -> str:
+def _py(value: object) -> str:
     """A Python literal (JSON's are Python's for str, numbers and lists of them)."""
     if isinstance(value, bool):
         return "True" if value else "False"
     return json.dumps(value, ensure_ascii=False)
 
 
-def _valve_default(v: Valve) -> Any:
-    if v.default is not None:
-        return v.default
-    return {
-        "str": "",
-        "password": "",
-        "int": 0,
-        "float": 0.0,
-        "bool": False,
-        "select": v.options[0] if v.options else "",
-        "multiselect": [],
-        "range": v.minimum,
-    }[v.kind]
+def _valve(name: str, annotation: str, default: object, description: str) -> list[str]:
+    return [
+        f"        {name}: {annotation} = Field(",
+        f"            default={_py(default)},",
+        f"            description={_py(description)},",
+        "        )",
+    ]
 
 
-def _valve_lines(v: Valve, indent: str) -> list[str]:
-    default = _valve_default(v)
-    description = v.description or f"What {v.name} changes."
-    annotation = {
-        "str": "str",
-        "password": "str",
-        "int": "int",
-        "float": "float",
-        "bool": "bool",
-        "select": "Literal[" + ", ".join(_py(o) for o in v.options) + "]",
-        "multiselect": "list[str]",
-        "range": "float",
-    }[v.kind]
-    args = [f"default={_py(default)}"]
-    if v.kind == "range":
-        args += [f"ge={_py(v.minimum)}", f"le={_py(v.maximum)}"]
-    args.append(f"description={_py(description)}")
-    if v.kind == "password":  # masked in the UI only; ENABLE_VALVE_ENCRYPTION encrypts it at rest
-        args.append('json_schema_extra={"input": {"type": "password"}}')
-    elif v.kind == "multiselect":
-        args.append(
-            'json_schema_extra={"input": {"type": "multiselect", "options": '
-            + _py(v.options)
-            + "}}"
-        )
-    elif v.kind == "range":
-        args.append(f'json_schema_extra={{"input": {{"type": "range", "step": {_py(v.step)}}}}}')
-    inner = indent + "    "
-    return (
-        [f"{indent}{v.name}: {annotation} = Field("]
-        + [f"{inner}{a}," for a in args]
-        + [f"{indent})"]
-    )
-
-
-def _valves_class(name: str, valves: list[Valve], indent: str, comment: str) -> list[str]:
-    lines = [f"{indent}class {name}(BaseModel):", f"{indent}    # {comment}"]
-    if not valves:
-        return [*lines, f"{indent}    pass"]
-    for v in valves:
-        lines += _valve_lines(v, indent + "    ")
-    return lines
-
-
-def _function_valves(spec: PluginSpec) -> list[Valve]:
-    valves = []
+def _valves_class(spec: PluginSpec) -> list[str]:
+    lines = [
+        "    class Valves(BaseModel):",
+        "        # Settings an admin changes under Admin Panel > Functions, each with a description:",
+        '        #   API_URL: str = Field(default="", description="Where the API is.")',
+        f"        # Dropdowns, sliders and masked fields: {VALVES_DOCS}",
+    ]
+    if spec.type == "event" and spec.sync:
+        lines.append("        # The sync adds ENABLE and SYNC_INTERVAL_MINUTES itself.")
     if spec.priority:
-        valves.append(
-            Valve(
-                "priority",
-                "int",
-                0,
-                "Order among the filters and actions of a model: lower runs first.",
-            )
+        lines += _valve(
+            "priority",
+            "int",
+            0,
+            "Order among the filters and actions of a model: lower runs first.",
         )
     if spec.has_enable:
-        valves.append(Valve("ENABLE", "bool", True, f"Turn {spec.title} on or off."))
-    return valves + spec.valves
-
-
-def _uses_literal(valves: list[Valve]) -> bool:
-    return any(v.kind == "select" for v in valves)
+        lines += _valve("ENABLE", "bool", True, f"Turn {spec.title} on or off.")
+    if not (spec.priority or spec.has_enable):
+        lines.append("        pass")
+    if spec.type in ("filter", "action", "pipe"):
+        lines += [
+            "",
+            "    class UserValves(BaseModel):",
+            "        # Settings each user sets in a chat (Controls > Valves); they arrive as",
+            '        # __user__["valves"].',
+            "        pass",
+        ]
+    return lines
 
 
 def _status(text: str, done: bool, indent: str) -> list[str]:
@@ -397,10 +364,6 @@ def _filter_body(spec: PluginSpec) -> list[str]:
             '        body["messages"] here. Always return body: returning None breaks the chain."""',
             off.format("body"),
         ]
-        if spec.user_valves:
-            out.append(
-                '        user_valves = (__user__ or {}).get("valves")  # this user\'s UserValves'
-            )
         if spec.file_handler:
             out.append(
                 '        # file_handler: body["files"] is yours to handle; Open-WebUI drops it after inlet.'
@@ -470,15 +433,18 @@ def _action_body(spec: PluginSpec) -> list[str]:
     return [*out, ""]
 
 
-def _pipe_body(spec: PluginSpec) -> list[str]:
-    models = ", ".join(
+def _models_literal(spec: PluginSpec) -> str:
+    return ", ".join(
         f'{{"id": {_py(i)}, "name": {"TITLE" if n == spec.title else _py(n)}}}'
         for i, n in spec.pipe_models
     )
+
+
+def _pipe_body(spec: PluginSpec) -> list[str]:
     out = [
         "    def pipes(self):",
         '        """The models this pipe adds. Each appears as "<function id>.<id>"."""',
-        f"        return [{models}]",
+        f"        return [{_models_literal(spec)}]",
         "",
         "    async def pipe(self, body: dict, __user__: dict = None, __event_emitter__=None):",
         '        """Answers a chat sent to one of the models. body["model"] says which, and',
@@ -486,10 +452,7 @@ def _pipe_body(spec: PluginSpec) -> list[str]:
         '        answer = "Hello from " + TITLE',
     ]
     if spec.stream:
-        out += [
-            '        if body.get("stream"):',
-            "            return self._chunks(answer)",
-        ]
+        out += ['        if body.get("stream"):', "            return self._chunks(answer)"]
     out += ["        return answer", ""]
     if spec.stream:
         out += [
@@ -520,9 +483,11 @@ def _event_body(spec: PluginSpec) -> list[str]:
             f"    @on({_py(name)}{own})",
             f"    async def {method}(self, event):",
             f'        """{name}: what {spec.title} does then."""',
+            "        if not self.valves.ENABLE:",
+            "            return",
+            f'        log.info("%s: {name}", TITLE)',
+            "",
         ]
-        out += ["        if not self.valves.ENABLE:", "            return"]
-        out += [f'        log.info("%s: {name}", TITLE)', ""]
     if spec.page == "rendered":
         events = ", ".join(_py(e) for e in MOUNT_EVENTS)
         out += [
@@ -552,11 +517,7 @@ def _event_bases(spec: PluginSpec) -> list[str]:
 
 
 def render_function(spec: PluginSpec) -> str:
-    valves = _function_valves(spec)
-    imports = ["import logging"]
-    if _uses_literal(valves + spec.user_valves):
-        imports.append("from typing import Literal")
-    imports.append("")
+    imports = ["import logging", ""]
     if spec.page == "rendered":
         imports.append("from fastapi import APIRouter")
     if spec.page == "rendered" or spec.rich_ui:
@@ -625,20 +586,7 @@ def render_function(spec: PluginSpec) -> str:
             f"    actions = [{buttons}]",
             "",
         ]
-    comment = (
-        "Set by an admin under Admin Panel > Functions > the gear."
-        if not (spec.type == "event" and spec.sync)
-        else "Set by an admin. The sync adds ENABLE and SYNC_INTERVAL_MINUTES itself."
-    )
-    lines += _valves_class("Valves", valves, "    ", comment)
-    if spec.user_valves:
-        lines += [""] + _valves_class(
-            "UserValves",
-            spec.user_valves,
-            "    ",
-            'Each user sets these in a chat: Controls > Valves. They arrive as __user__["valves"].',
-        )
-    lines.append("")
+    lines += [*_valves_class(spec), ""]
     if spec.type != "event":  # an events class makes self.valves itself
         lines += ["    def __init__(self):", "        self.valves = self.Valves()"]
         if spec.toggle:
@@ -665,9 +613,6 @@ def render_function(spec: PluginSpec) -> str:
     return "\n".join(lines) + "\n"
 
 
-_SAMPLE = {"str": '"x"', "int": "1", "float": "1.5", "bool": "True", "list[str]": '["x"]'}
-
-
 def render_tool(spec: PluginSpec) -> str:
     tool = spec.tool
     assert tool is not None
@@ -688,27 +633,25 @@ def render_tool(spec: PluginSpec) -> str:
     lines += [
         "",
         "class Tools:",
-        *_valves_class(
-            "Valves", [], "    ", "Set by an admin, or the tool's owner, under Workspace > Tools."
-        ),
+        "    class Valves(BaseModel):",
+        "        # Set by an admin, or the tool's owner, under Workspace > Tools.",
+        "        pass",
         "",
         "    def __init__(self):",
         "        self.valves = self.Valves()",
         "",
     ]
     for m in tool.methods:
-        params = "".join(f", {p}: {t}" for p, t in m.params)
-        result = "{" + ", ".join(f"{_py(p)}: {p}" for p, _ in m.params) + "}"
         lines += [
-            f"    async def {m.name}(self{params}, __user__: dict = None, __event_emitter__=None) -> dict:",
+            f"    async def {m}(self, query: str, __user__: dict = None, __event_emitter__=None) -> dict:",
             '        """',
-            f"        {m.description or f'What {m.name} does, and when the model should call it.'}",
+            f"        What {m} does, and when the model should call it.",
             "",
-            *[f"        :param {p}: Describe {p} for the model." for p, _ in m.params],
+            "        :param query: Describe query for the model.",
             '        """',
-            *_status(_py(f"{m.name}: working"), False, "        "),
-            f"        result = {result}",
-            *_status(_py(f"{m.name}: done"), True, "        "),
+            *_status(_py(f"{m}: working"), False, "        "),
+            '        result = {"query": query}',
+            *_status(_py(f"{m}: done"), True, "        "),
             "        return result",
             "",
         ]
@@ -728,77 +671,6 @@ def render_tool(spec: PluginSpec) -> str:
     return "\n".join(lines) + "\n"
 
 
-def render_manifest(spec: PluginSpec) -> str:
-    out = [
-        "# Manifest (docs/plugin-format.md). The function: keys become the docstring header.",
-        "function:",
-    ]
-    header = [
-        ("title", spec.title),
-        ("author", spec.author),
-        ("version", spec.version),
-        ("required_open_webui_version", spec.required_open_webui_version),
-        ("license", spec.license),
-        ("icon_url", spec.icon_url),
-        ("requirements", spec.requirements),
-        ("description", spec.description),
-    ]
-    out += [f"  {k}: {_yaml(v)}" for k, v in header if v]
-    if spec.global_ is not None or spec.toggle:  # a toggle is switched on by each user
-        out.append(f"  global: {_py(bool(spec.global_)).lower()}")
-    elif spec.type in ("filter", "action"):
-        out.append(
-            "  # global: true   # active and global on every deploy; false: never (a user toggle)"
-        )
-    if spec.tool:
-        t = spec.tool
-        out += ["tool:", f"  id: {t.id}", f"  title: {_yaml(t.title)}"]
-        if t.description:
-            out.append(f"  description: {_yaml(t.description)}")
-        if t.chat_data:
-            out.append("  include: [chat_data]")
-        if t.public:
-            out.append(
-                "  access: public # every signed-in user may use it; later UI changes are kept"
-            )
-    include = []
-    if spec.type == "event" and _event_bases(spec) == ["PluginEvents"]:
-        include.append("events")
-    if spec.page == "rendered":
-        include.append("routes")
-    if spec.chat_data:
-        include.append("chat_data")
-    if spec.live_reload:
-        include.append("live_reload")
-    if include:
-        out.append(f"include: [{', '.join(include)}]")
-    else:
-        out.append(
-            "# include: [routes]   # libraries: core, routes, jobs, events, chat_data, shared_assets, live_reload"
-        )
-    if spec.sync:
-        out += [
-            "jobs:",
-            f"  sync_every_minutes: ${{{spec.env_prefix}_SYNC_MINUTES:-{spec.sync_minutes}}} # 0: only on startup, enable and saved valves",
-        ]
-    if spec.page == "static" and spec.page_access != "user":
-        out += ["static:", f"  access: {spec.page_access}"]
-    parts = []
-    if spec.page == "static":
-        parts.append(f"static/ is served at /{spec.id}/")
-    if spec.page == "rendered" or (spec.rich_ui and spec.type == "action"):
-        parts.append("templates/ is rendered by the function")
-    if spec.config:
-        parts.append("config.yaml is read with plugin_config()")
-    if spec.assets:
-        parts.append("assets/ is published by class Event(PluginAssets)")
-    if spec.skills:
-        parts.append("skills/ are installed with the function")
-    if parts:
-        out.append("# " + "; ".join(parts) + ".")
-    return "\n".join(out) + "\n"
-
-
 def _yaml(value: str) -> str:
     """A header value: plain text, unless YAML would read it as something else."""
     plain = re.fullmatch(r"[A-Za-z0-9][^#:{}\[\],&*!|>'\"%@`]*", value) and not value.endswith(" ")
@@ -810,198 +682,304 @@ def _yaml(value: str) -> str:
     return value if plain and not looks_typed else json.dumps(value, ensure_ascii=False)
 
 
+def render_manifest(spec: PluginSpec) -> str:
+    out = ["# Manifest (docs/plugin-format.md). The function: keys become the docstring header."]
+    src = spec.source
+    if src:
+        out += [
+            f"# {spec.title} comes from a git repository, pinned to a commit. To upgrade, review the",
+            "# upstream diff, then set `ref` to the new full commit SHA.",
+            "source:",
+            f"  git: {_yaml(src.git)}",
+            f"  ref: {src.ref}",
+            f"  path: {_yaml(src.path) if src.path else _py('')}",
+        ]
+    out.append("function:")
+    if spec.type == "upstream":
+        assert src is not None
+        out.append(f"  file: {_yaml(src.function_file)} # taken verbatim, its header included")
+    else:
+        header = [
+            ("title", spec.title),
+            ("author", spec.author),
+            ("version", spec.version),
+            ("required_open_webui_version", spec.required_open_webui_version),
+            ("license", spec.license),
+            ("icon_url", spec.icon_url),
+            ("requirements", spec.requirements),
+            ("description", spec.description),
+        ]
+        out += [f"  {k}: {_yaml(v)}" for k, v in header if v]
+    if spec.type == "installer":
+        out.append("  global: true # Open-WebUI loads it at startup, so it installs the rest")
+    elif spec.global_ is not None or spec.toggle:  # a toggle is switched on by each user
+        out.append(f"  global: {_py(bool(spec.global_)).lower()}")
+    elif spec.type in ("filter", "action", "upstream"):
+        out.append(
+            "  # global: true   # active and global on every deploy; false: never (a user toggle)"
+        )
+    if spec.tool:
+        t = spec.tool
+        out += ["tool:", f"  id: {t.id}"]
+        if t.file:
+            out.append(f"  file: {_yaml(t.file)}")
+        else:
+            out.append(f"  title: {_yaml(t.title)}")
+            if t.description:
+                out.append(f"  description: {_yaml(t.description)}")
+        if t.chat_data:
+            out.append("  include: [chat_data]")
+        if t.public:
+            out.append(
+                "  access: public # every signed-in user may use it; later UI changes are kept"
+            )
+    if src and spec.skills:
+        out.append("skills:")
+        for s in spec.skills:
+            out += [f"  {s.id}:", f"    {'dir' if s.is_dir else 'file'}: {_yaml(s.path)}"]
+            if s.public:
+                out.append("    access: public")
+    if spec.has_code:
+        include = []
+        if spec.type == "event" and _event_bases(spec) == ["PluginEvents"]:
+            include.append("events")
+        if spec.page == "rendered":
+            include.append("routes")
+        if spec.chat_data:
+            include.append("chat_data")
+        if spec.live_reload:
+            include.append("live_reload")
+        if include:
+            out.append(f"include: [{', '.join(include)}]")
+        else:
+            out.append(
+                "# include: [routes]   # libraries: core, routes, jobs, events, chat_data, shared_assets, live_reload"
+            )
+    if spec.sync:
+        out += [
+            "jobs:",
+            f"  sync_every_minutes: ${{{spec.env_prefix}_SYNC_MINUTES:-{spec.sync_minutes}}} # 0: only on startup, enable and saved valves",
+        ]
+    if spec.page == "static" and spec.page_access != "user":
+        out += ["static:", f"  access: {spec.page_access}"]
+    parts = []
+    if spec.type == "installer" and not src:
+        parts.append("no function.py: the generated function installs the tool and skills")
+    if spec.page == "static":
+        parts.append(f"static/ is served at /{spec.id}/")
+    if spec.page == "rendered" or (spec.rich_ui and spec.type == "action"):
+        parts.append("templates/ is rendered by the function")
+    if spec.config:
+        parts.append("config.yaml is read with plugin_config()")
+    if spec.assets:
+        parts.append("assets/ is published by class Event(PluginAssets)")
+    if spec.skills and not src:
+        parts.append("skills/ are installed with the function")
+    if parts:
+        out.append("# " + "; ".join(parts) + ".")
+    return "\n".join(out) + "\n"
+
+
+def _test(name: str, args: str, what: str, by_hand: str, body: list[str]) -> list[str]:
+    return [
+        "",
+        "",
+        f"def {name}({args}):",
+        f'    """{what}',
+        "",
+        f"    By hand: {by_hand}",
+        '    """',
+        *body,
+    ]
+
+
 def render_tests(spec: PluginSpec) -> str:
     out = [
         f'"""{spec.title} against a mock Open-WebUI: `owpp test {spec.id}` (docs/testing.md).',
         "",
-        '`plugin` is this folder, bundled as the deploy would and loaded into `owui`, the mock."""',
-        "",
-        f"TITLE = {_py(spec.title)}",
-        "",
-        "",
-        "def test_it_loads_with_its_default_valves(plugin):",
-        '    """It loads, and its valves start at their defaults.',
-        "",
-        "    By hand: install it, then open its valves under Admin Panel > Functions: ENABLE is on.",
-        '    """',
-        "    assert plugin.valves.ENABLE is True",
+        "`plugin` is this folder, bundled as the deploy would and loaded into `owui`, the mock.",
     ]
-    for v in spec.valves:
-        out.append(f"    assert plugin.valves.{v.name} == {_py(_valve_default(v))}")
-    out += ["", ""]
-    out += _type_tests(spec)
+    if spec.source:
+        out += [
+            "Its files are fetched from the pinned commit, so these tests need the network; to run",
+            'them offline, load it with stand-ins: owui.load(plugin_dir, sources={"tool.py": "..."}).',
+        ]
+    out += ['"""', "", f"TITLE = {_py(spec.title)}"]
+    if spec.has_code:
+        out += _test(
+            "test_it_loads_with_its_default_valves",
+            "plugin",
+            "It loads, and its valves start at their defaults.",
+            "install it, then open its valves under Admin Panel > Functions: ENABLE is on.",
+            ["    assert plugin.valves.ENABLE is True"],
+        )
+        out += _type_tests(spec)
+    elif spec.type == "installer":
+        out += _test(
+            "test_it_is_a_global_filter_that_only_installs_things",
+            "plugin",
+            "It is a global filter, whose only job is to install the tool and skills.",
+            f"Admin Panel > Functions shows {spec.title} as a filter with Global on.",
+            ['    assert plugin.type == "filter" and plugin.row.is_global'],
+        )
+    else:
+        out += _test(
+            "test_the_upstream_function_loads",
+            "plugin",
+            "The function taken from the repository loads, as one of Open-WebUI's types.",
+            f"after deploy, Admin Panel > Functions lists {spec.title}.",
+            ['    assert plugin.type in ("filter", "action", "event", "pipe")'],
+        )
     if spec.tool:
         t = spec.tool
-        names = sorted([m.name for m in t.methods] + ([f"show_{t.id}"] if t.rich_ui else []))
-        out += [
-            "",
-            "",
-            "def test_it_installs_its_tool(owui, plugin):",
-            f'    """Enabling the function installs the {t.title} tool, with what the model is told.',
-            "",
-            f"    By hand: enable the function, then find {t.title} under Workspace > Tools.",
-            '    """',
-            f"    tool = owui.tool({_py(t.id)})",
-            f'    assert sorted(s["name"] for s in tool.specs) == {_py(names)}',
-        ]
-        user_line = '    user = owui.add_user("Ada")'
+        body = [f"    assert {_py(t.id)} in owui.tools"]
+        if not t.file:
+            names = sorted(t.methods + ([f"show_{t.id}"] if t.rich_ui else []))
+            body.append(
+                f'    assert sorted(s["name"] for s in owui.tool({_py(t.id)}).specs) == {_py(names)}'
+            )
+        out += _test(
+            "test_it_installs_its_tool",
+            "owui, plugin",
+            f"Enabling the function installs the {t.title} tool.",
+            f"enable the function, then find {t.title} under Workspace > Tools.",
+            body,
+        )
         for m in t.methods:
-            args = ", ".join(f"{p}={_SAMPLE[ty]}" for p, ty in m.params)
-            expected = "{" + ", ".join(f"{_py(p)}: {_SAMPLE[ty]}" for p, ty in m.params) + "}"
-            out += [
-                "",
-                "",
-                f"def test_the_tool_answers_{m.name}(owui, plugin):",
-                f'    """The model can call {m.name}, and gets an answer back.',
-                "",
-                f"    By hand: with {t.title} on in a chat, ask for something that needs {m.name}.",
-                '    """',
-                user_line,
-                f"    result = owui.tool({_py(t.id)}).call({_py(m.name)}{', ' + args if args else ''}, user=user)",
-                f"    assert result == {expected}",
-            ]
+            out += _test(
+                f"test_the_tool_answers_{m}",
+                "owui, plugin",
+                f"The model can call {m}, and gets an answer back.",
+                f"with {t.title} on in a chat, ask for something that needs {m}.",
+                [
+                    '    user = owui.add_user("Ada")',
+                    f'    assert owui.tool({_py(t.id)}).call({_py(m)}, query="x", user=user) == {{"query": "x"}}',
+                ],
+            )
         if t.rich_ui:
-            out += [
-                "",
-                "",
-                "def test_the_tool_shows_a_page_in_the_chat(owui, plugin):",
-                '    """Its page is returned inline, for Open-WebUI to show at the tool call.',
-                "",
-                f"    By hand: ask the model to show {t.title}: a page appears in the chat.",
-                '    """',
-                user_line,
-                f"    page = owui.tool({_py(t.id)}).call({_py('show_' + t.id)}, user=user)",
-                '    assert page.headers["content-disposition"] == "inline"',
-            ]
+            out += _test(
+                "test_the_tool_shows_a_page_in_the_chat",
+                "owui, plugin",
+                "Its page is returned inline, for Open-WebUI to show at the tool call.",
+                f"ask the model to show {t.title}: a page appears in the chat.",
+                [
+                    '    user = owui.add_user("Ada")',
+                    f"    page = owui.tool({_py(t.id)}).call({_py('show_' + t.id)}, user=user)",
+                    '    assert page.headers["content-disposition"] == "inline"',
+                ],
+            )
     if spec.skills:
         ids = sorted(s.id for s in spec.skills)
-        out += [
-            "",
-            "",
-            "def test_it_installs_its_skills(owui, plugin):",
-            '    """Enabling the function installs its skills.',
-            "",
-            "    By hand: enable the function, then find them under Workspace > Skills.",
-            '    """',
-            f"    assert {_py(ids)} == sorted(s for s in owui.skills if s in {_py(ids)})",
-        ]
+        out += _test(
+            "test_it_installs_its_skills",
+            "owui, plugin",
+            "Enabling the function installs its skills.",
+            "enable the function, then find them under Workspace > Skills.",
+            [f"    assert {_py(ids)} == sorted(s for s in owui.skills if s in {_py(ids)})"],
+        )
     if spec.page:
-        url = f"/{spec.id}/"
-        start = "    owui.startup()\n" if spec.type == "event" else ""
-        if spec.page_access == "public":
-            check = f'    assert owui.client().get("{url}").status_code == 200'
-            by_hand = f"open {url} in a private window: the page loads"
-        elif spec.page_access == "admin":
-            check = (
-                f'    assert owui.client(owui.add_user("Ada")).get("{url}").status_code == 403\n'
-                f'    assert owui.client(owui.admin).get("{url}").status_code == 200'
-            )
-            by_hand = f"open {url} as a user (403), then as an admin (the page)"
-        else:
-            check = (
-                f'    assert owui.client().get("{url}").status_code == 401\n'
-                f'    assert owui.client(owui.add_user("Ada")).get("{url}").status_code == 200'
-            )
-            by_hand = f"open {url} signed in: the page loads"
-        out += [
-            "",
-            "",
-            "def test_it_serves_its_page(owui, plugin):",
-            f'    """Its page is served at {url}, to {spec.page_access if spec.page_access != "user" else "signed-in"} users.',
-            "",
-            f"    By hand: {by_hand}.",
-            '    """',
-            start + check,
-        ]
+        out += _page_test(spec)
     if spec.config:
-        out += [
-            "",
-            "",
-            "def test_it_reads_its_config(plugin):",
-            '    """It reads config.yaml, with the defaults for what the file leaves out.',
-            "",
-            "    By hand: not repeatable on a live Open-WebUI; compare config.yaml with what it does.",
-            '    """',
-            '    assert plugin.module._settings()["greeting"] == "Hello"',
-        ]
+        out += _test(
+            "test_it_reads_its_config",
+            "plugin",
+            "It reads config.yaml, with the defaults for what the file leaves out.",
+            "not repeatable on a live Open-WebUI; compare config.yaml with what it does.",
+            ['    assert plugin.module._settings()["greeting"] == "Hello"'],
+        )
     return "\n".join(out) + "\n"
+
+
+def _page_test(spec: PluginSpec) -> list[str]:
+    url = f"/{spec.id}/"
+    body = ["    owui.startup()"] if spec.type == "event" else []
+    if spec.page_access == "public":
+        body.append(f'    assert owui.client().get("{url}").status_code == 200')
+        by_hand = f"open {url} in a private window: the page loads."
+    elif spec.page_access == "admin":
+        body += [
+            f'    assert owui.client(owui.add_user("Ada")).get("{url}").status_code == 403',
+            f'    assert owui.client(owui.admin).get("{url}").status_code == 200',
+        ]
+        by_hand = f"open {url} as a user (403), then as an admin (the page)."
+    else:
+        body += [
+            f'    assert owui.client().get("{url}").status_code == 401',
+            f'    assert owui.client(owui.add_user("Ada")).get("{url}").status_code == 200',
+        ]
+        by_hand = f"open {url} signed in: the page loads."
+    who = {"user": "signed-in users", "admin": "admins", "public": "anyone"}[spec.page_access]
+    return _test(
+        "test_it_serves_its_page",
+        "owui, plugin",
+        f"Its page is served at {url}, to {who}.",
+        by_hand,
+        body,
+    )
 
 
 def _type_tests(spec: PluginSpec) -> list[str]:
     if spec.type == "event":
-        lines = [
-            "def test_it_starts_with_open_webui(owui, plugin):",
-            '    """It runs its startup work when Open-WebUI starts.',
-            "",
-            "    By hand: restart Open-WebUI and look for the function's startup lines in the log.",
-            '    """',
-            "    owui.startup()  # every enabled Event function gets system.startup.completed",
-        ]
+        body = ["    owui.startup()  # every enabled Event function gets system.startup.completed"]
         if spec.sync:
-            lines.append(f"    assert plugin.valves.SYNC_INTERVAL_MINUTES == {spec.sync_minutes}")
-        return lines
+            body.append(f"    assert plugin.valves.SYNC_INTERVAL_MINUTES == {spec.sync_minutes}")
+        return _test(
+            "test_it_starts_with_open_webui",
+            "owui, plugin",
+            "It runs its startup work when Open-WebUI starts.",
+            "restart Open-WebUI and look for the function's startup lines in the log.",
+            body,
+        )
     if spec.type == "filter":
-        lines = [
-            "def test_a_chat_passes_through_unchanged(owui, plugin):",
-            '    """A chat request and its reply pass through the filter unchanged.',
-            "",
-            '    By hand: turn the filter on for a model, send "hi": the answer is what it would be without it.',
-            '    """',
+        body = [
             '    user = owui.add_user("Ada")',
             '    body = {"messages": [{"role": "user", "content": "hi"}]}',
         ]
         for hook in spec.hooks:
-            if hook == "inlet":
-                lines.append("    assert plugin.inlet(body, user=user) == body")
-            elif hook == "outlet":
-                lines.append("    assert plugin.outlet(body, user=user) == body")
+            if hook in ("inlet", "outlet"):
+                body.append(f"    assert plugin.{hook}(body, user=user) == body")
             elif hook == "request":
-                lines.append('    assert plugin.call("request", body, user=user) == body')
+                body.append('    assert plugin.call("request", body, user=user) == body')
             else:
-                lines += [
+                body += [
                     '    chunk = {"choices": [{"delta": {"content": "hi"}}]}',
                     '    assert plugin.call("stream", chunk) == chunk',
                 ]
-        return lines
+        return _test(
+            "test_a_chat_passes_through_unchanged",
+            "owui, plugin",
+            "A chat request and its reply pass through the filter unchanged.",
+            'turn the filter on for a model, send "hi": the answer is what it would be without it.',
+            body,
+        )
     if spec.type == "action":
-        lines = [
-            "def test_the_action_runs(owui, plugin):",
-            '    """The action runs on a message without failing.',
-            "",
-            "    By hand: under a reply, click the action's button: no error toast appears.",
-            '    """',
-            '    user = owui.add_user("Ada")',
-        ]
+        body = ['    user = owui.add_user("Ada")']
         if spec.buttons:
-            lines.append(
+            body.append(
                 f'    assert [a["id"] for a in plugin.instance.actions] == {_py([b for b, _ in spec.buttons])}'
             )
         if spec.rich_ui:
-            lines += [
+            body += [
                 '    page = plugin.call("action", {"messages": []}, user=user)',
                 '    assert page.headers["content-disposition"] == "inline"',
                 "    assert TITLE in page.body.decode()",
             ]
         else:
-            lines.append('    assert plugin.call("action", {"messages": []}, user=user) is None')
-        return lines
-    models = ", ".join(
-        f'{{"id": {_py(i)}, "name": {"TITLE" if n == spec.title else _py(n)}}}'
-        for i, n in spec.pipe_models
-    )
-    lines = [
-        "def test_it_answers(owui, plugin):",
-        '    """It offers its models, and they answer.',
-        "",
-        "    By hand: pick one of its models in a new chat and send anything: it answers",
-        '    "Hello from <title>".',
-        '    """',
+            body.append('    assert plugin.call("action", {"messages": []}, user=user) is None')
+        return _test(
+            "test_the_action_runs",
+            "owui, plugin",
+            "The action runs on a message without failing.",
+            "under a reply, click the action's button: no error toast appears.",
+            body,
+        )
+    body = [
         '    user = owui.add_user("Ada")',
-        f'    assert plugin.call("pipes") == [{models}]',
+        f'    assert plugin.call("pipes") == [{_models_literal(spec)}]',
         '    assert plugin.call("pipe", {"messages": []}, user=user) == "Hello from " + TITLE',
     ]
     if spec.stream:
-        lines += [
+        body += [
             '    chunks = plugin.call("pipe", {"messages": [], "stream": True}, user=user)',
             "",
             "    async def read():",
@@ -1009,7 +987,13 @@ def _type_tests(spec: PluginSpec) -> list[str]:
             "",
             '    assert owui.run(read()) == "Hello from " + TITLE',
         ]
-    return lines
+    return _test(
+        "test_it_answers",
+        "owui, plugin",
+        "It offers its models, and they answer.",
+        'pick one of its models in a new chat and send anything: it answers "Hello from <title>".',
+        body,
+    )
 
 
 def render_skill(spec: PluginSpec, skill: SkillSpec) -> str:
@@ -1033,17 +1017,40 @@ def render_skill(spec: PluginSpec, skill: SkillSpec) -> str:
 
 
 def render_readme(spec: PluginSpec) -> str:
-    valves = [v.name for v in _function_valves(spec)] + (
-        ["ENABLE", "SYNC_INTERVAL_MINUTES"] if spec.sync else []
-    )
-    settings = [f"Valves: {', '.join(f'`{v}`' for v in valves)}."]
-    if spec.user_valves:
+    sections = [f"# {spec.title}", "", spec.description]
+    parts = []
+    if spec.tool:
+        parts.append(f"the **{spec.tool.title}** tool")
+    if spec.skills:
+        parts.append("the skill(s) " + ", ".join(f"`{s.id}`" for s in spec.skills))
+    if parts:
+        sections += [
+            "",
+            f"Enabling the function installs {' and '.join(parts)}; disabling it removes them.",
+        ]
+    src = spec.source
+    if src:
+        sections += [
+            "",
+            "## Source",
+            "",
+            f"From {src.git}{f' (`{src.path}`)' if src.path else ''}, pinned to commit `{src.ref}`.",
+            "To upgrade: review the upstream diff from that commit, then set `ref` in plugin.yaml to",
+            "the new full commit SHA. This code runs with admin rights in Open-WebUI.",
+        ]
+    settings = []
+    if spec.has_code:
+        names = (["priority"] if spec.priority else []) + ["ENABLE"]
+        if spec.sync:
+            names.append("SYNC_INTERVAL_MINUTES")
+            settings.append(
+                f"Environment (on the Open-WebUI container): `{spec.env_prefix}_SYNC_MINUTES`, the default sync interval."
+            )
+        settings.insert(0, f"Valves: {', '.join(f'`{v}`' for v in names)}.")
+    elif spec.type == "installer":
         settings.append(
-            f"User valves (each user, in a chat under Controls > Valves): {', '.join(f'`{v.name}`' for v in spec.user_valves)}."
-        )
-    if spec.sync:
-        settings.append(
-            f"Environment (on the Open-WebUI container): `{spec.env_prefix}_SYNC_MINUTES`, the default sync interval (60)."
+            "Valves: `INSTALL_TOOLS` and `INSTALL_SKILLS` (off removes that part), `TOOL_VALVES` "
+            "(valves to set on the tool). See docs/runtime.md."
         )
     if spec.config:
         settings.append(
@@ -1053,53 +1060,44 @@ def render_readme(spec: PluginSpec) -> str:
         settings.append(
             "A toggle: each user turns it on in a chat's + menu, so it is never made global."
         )
-    parts = []
-    if spec.tool:
-        parts.append(f"the **{spec.tool.title}** tool (`tool.py`)")
-    if spec.skills:
-        parts.append("the skill(s) " + ", ".join(f"`{s.id}`" for s in spec.skills))
-    installs = (
-        f"\n\nEnabling the function installs {' and '.join(parts)}; disabling it removes them."
-        if parts
-        else ""
-    )
+    if settings:
+        sections += ["", *settings]
     live = {
         "event": "Restart Open-WebUI (or enable the function) and look for its lines in the log.",
         "filter": "Turn it on for a model (or make it global) and send a message.",
         "action": "Under a reply, press its button.",
         "pipe": "Pick its model in a new chat and send a message.",
+        "installer": "Enable the function: Workspace lists what it installs; disable it: they are gone.",
+        "upstream": "Use it as its upstream documentation describes.",
     }[spec.type]
-    deploy_notes = []
+    kind = {
+        "installer": "filter (generated: it only installs the rest)",
+        "upstream": "the one in the upstream file",
+    }
+    sections += [
+        "",
+        "## Test",
+        "",
+        f"- `owpp check {spec.id}` bundles it exactly as the deploy does, compiles it and lists undefined names.",
+        f"- `owpp test {spec.id}` runs `tests/` against a mock Open-WebUI (docs/testing.md).",
+        f"- On a live Open-WebUI: {live}",
+        "",
+        "## Deploy",
+        "",
+        f"- Function type: **{kind.get(spec.type, spec.type)}**.",
+        f"- `owpp deploy --only {spec.id} --dry-run`, then without `--dry-run`.",
+    ]
     if spec.type == "filter" and spec.global_ is None and not spec.toggle:
-        deploy_notes.append(
+        sections.append(
             "- A new filter is made global on its first deploy; set `global:` in plugin.yaml to change that."
         )
     if spec.type == "filter" and spec.toggle:
-        deploy_notes.append(
+        sections.append(
             "- After deploy: attach it to the models that should offer the toggle (Workspace > Models > Filters)."
         )
     if spec.page:
-        deploy_notes.append(f"- Its page is at `/{spec.id}/` on the Open-WebUI host.")
-    return (
-        f"""# {spec.title}
-
-{spec.description}{installs}
-
-{chr(10).join(settings)}
-
-## Test
-
-- `owpp check {spec.id}` bundles it exactly as the deploy does, compiles it and lists undefined names.
-- `owpp test {spec.id}` runs `tests/` against a mock Open-WebUI (docs/testing.md).
-- On a live Open-WebUI: {live}
-
-## Deploy
-
-- Function type: **{spec.type}**.
-- `owpp deploy --only {spec.id} --dry-run`, then without `--dry-run`.
-{chr(10).join(deploy_notes)}""".rstrip()
-        + "\n"
-    )
+        sections.append(f"- Its page is at `/{spec.id}/` on the Open-WebUI host.")
+    return "\n".join(sections) + "\n"
 
 
 _PAGE_HTML = """<!doctype html>
@@ -1120,20 +1118,20 @@ _PAGE_HTML = """<!doctype html>
 def render(spec: PluginSpec) -> dict[str, str]:
     """The plugin folder's files, {path: text}."""
     validate(spec)
-    files = {
-        "plugin.yaml": render_manifest(spec),
-        "function.py": render_function(spec),
-        "README.md": render_readme(spec),
-        f"tests/test_{spec.id}.py": render_tests(spec),
-    }
-    if spec.tool:
+    files = {"plugin.yaml": render_manifest(spec)}
+    if spec.has_code:
+        files["function.py"] = render_function(spec)
+    files["README.md"] = render_readme(spec)
+    files[f"tests/test_{spec.id}.py"] = render_tests(spec)
+    if spec.tool and not spec.tool.file:
         files["tool.py"] = render_tool(spec)
         if spec.tool.rich_ui:
             files["embed.html"] = _PAGE_HTML.replace("__TITLE__", spec.tool.title).format(
                 note="Shown in the chat by the tool. It is put into tool.py when bundled."
             )
-    for s in spec.skills:
-        files[f"skills/{s.id}/SKILL.md"] = render_skill(spec, s)
+    if not spec.source:
+        for s in spec.skills:
+            files[f"skills/{s.id}/SKILL.md"] = render_skill(spec, s)
     if spec.page == "static":
         files["static/index.html"] = _PAGE_HTML.replace("__TITLE__", spec.title).format(
             note="Served as it is; add scripts and styles beside it in static/."
