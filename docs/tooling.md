@@ -10,7 +10,7 @@ Nothing to install; run it from the repository that holds your plugins:
 uvx owpp list
 ```
 
-Pin the version (`uvx owpp@0.1.0 list`, or `uv tool install owpp==0.1.0`): the runtime and libraries are copied into what you deploy, so an upgrade changes your deployed code. To run an unreleased commit: `uvx --from git+https://github.com/zmnatz/open-webui-plugin-protocol@<sha> owpp list`. `pipx install owpp` and `pip install owpp` work too, and `python -m owpp` is the same command.
+Pin the version (`uvx owpp@0.2.0 list`, or `uv tool install owpp==0.2.0`): the runtime and libraries are copied into what you deploy, so an upgrade changes your deployed code. To run an unreleased commit: `uvx --from git+https://github.com/zmnatz/open-webui-plugin-protocol@<sha> owpp list`. `pipx install owpp` and `pip install owpp` work too, and `python -m owpp` is the same command.
 
 ## The CLI: `owpp`
 
@@ -20,6 +20,7 @@ owpp check [id ...] [--strict]      bundle, compile, report undefined names; war
 owpp bundle <id> [out.py]           print (or write) the code that would be deployed
 owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
 owpp test [id ...] [-- pytest args]
+owpp create [id]
 owpp init <id> [--type event|filter|action|pipe]
 ```
 
@@ -33,6 +34,7 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
   Warnings read the plugin's own source (`function.py`, `tool.py`, `shared.py`, or a loose `<id>.py`) with real file and line numbers, and skip a plugin that takes its code from a pinned `source:`, which is not yours to lint. They do not change the exit status; **`--strict` makes them fail**, for CI.
 - **`bundle`** writes the deployed code, to read or diff.
 - **`test`** runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. It needs the `test` extra: `uvx --from 'owpp[test]' owpp test`. See [testing](testing.md).
+- **`create`** is a wizard: it asks, one stage at a time, what the plugin is (its header, function type and that type's options, valves and user valves, a tool, skills, a page, libraries), shows the files and writes them only when you say yes, then runs `check --strict` on the result. Every question has a default, so pressing Enter all the way makes what `init` makes. See [authoring](authoring.md#start-with-owpp-create).
 - **`init`** scaffolds `plugin.yaml`, `function.py`, `tests/test_<id>.py` and a README with Test and Deploy sections. For every type, the scaffold passes both `check` and `test`.
 - **`deploy`** deploys to a running Open-WebUI. With `--only` it deploys just those ids and **never prunes**, so deploying one plugin cannot delete another.
 
@@ -82,7 +84,7 @@ jobs:
     concurrency: deploy-plugins
     steps:
       - uses: actions/checkout@v5
-      - uses: zmnatz/open-webui-plugin-protocol@v0.1.0
+      - uses: zmnatz/open-webui-plugin-protocol@v0.2.0
         with:
           url: https://chat.example.com
           api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
@@ -103,6 +105,7 @@ The action runs `owpp` from its own checkout, so the version you deploy with is 
 | Git sources (pinned commits, fetching, refusing unsafe URLs) | `tests/test_sources.py` |
 | Deploy against a stand-in Open-WebUI API: create, update, global, prune, valves, `--only` | `tests/test_deploy.py` |
 | CLI commands, `check`, `init` scaffolds | `tests/test_cli.py` |
+| `owpp create`: every combination it writes bundles, passes `check --strict` and its own tests; the wizard, driven by scripted answers | `tests/test_create.py` |
 | Every example plugin bundles, compiles, has unit tests and documents Test and Deploy | `tests/test_bundle.py`, "TestExamples" |
 | Each example plugin's behaviour, against the mock Open-WebUI | `examples/plugins/<id>/tests/` |
 | Runtime install/update/remove, valves, markers | `tests/plugin_runtime_test.py` |

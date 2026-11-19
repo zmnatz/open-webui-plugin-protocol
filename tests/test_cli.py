@@ -28,6 +28,12 @@ class TestCheckBundle:
         code = "import a.b as c\ndef f(arg):\n    try:\n        return arg + c\n    except E as err:\n        return err\nclass E(Exception): pass\n"
         assert check_bundle(code) is None
 
+    def test_a_name_used_only_when_globals_has_it_is_fine(self):
+        """The assets library calls live_reload's functions only when that library is there."""
+        code = 'def f():\n    if "reload_active" in globals():\n        return reload_active()\n'
+        assert check_bundle(code) is None
+        assert check_bundle("def f():\n    return reload_active()\n") is not None
+
 
 class TestScaffold:
     @pytest.mark.parametrize("kind", ["event", "filter", "action", "pipe"])

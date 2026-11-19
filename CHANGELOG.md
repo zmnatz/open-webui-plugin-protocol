@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0
+
+- `owpp create [id]`: a wizard that asks what a plugin is, one stage at a time (its header, function type and that type's options, valves and user valves, a tool, skills, a page, libraries), then writes a plugin folder ready to fill in, with tests and a README. What it writes follows Open-WebUI's plugin docs: filter hooks `inlet`, `request`, `stream` and `outlet`, user toggles and their icon, `file_handler` and `priority`; several action buttons (`actions`) and a page returned as an `HTMLResponse`; manifold pipes and streaming; `@on` event handlers and scheduled syncs; valves with Open-WebUI's input widgets (password, select, multiselect, range) and `UserValves`; tool methods with typed parameters and `:param` lines; skills in Open-WebUI's `SKILL.md` layout. Every combination bundles, passes `owpp check --strict` and passes the tests it writes. Nothing is written until the last stage, and Ctrl-C writes nothing.
+- `owpp init` now writes what `owpp create` writes with every answer left at its default. An event plugin's starting point uses `@on("system.startup.completed")` (`include: [events]`) instead of an `event()` method of `if` checks, as the authoring guide asks.
+- `owpp check` no longer reports a name as undefined when the code uses it only after `"name" in globals()`. A plugin with an `assets/` folder and no `live_reload` failed `check` because of it.
+- A local skill's `access` can be set in its SKILL.md front matter (documented; it already worked).
+
 ## 0.1.0 (2026-11-19)
 
 The first standalone release, extracted from a working deployment. On [PyPI](https://pypi.org/project/owpp/) as `owpp`; the GitHub Action is `zmnatz/open-webui-plugin-protocol@v0.1.0`.

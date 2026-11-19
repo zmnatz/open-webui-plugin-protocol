@@ -17,7 +17,7 @@ uvx --from 'owpp[test]' owpp test excalidraw    # just these
 owpp test excalidraw -- -k token -x             # after --: arguments for pytest
 ```
 
-`owpp test` needs the `test` extra: pytest plus the packages Open-WebUI itself ships that plugins import at the top level (FastAPI, httpx, SQLAlchemy, aiohttp). `owpp init` scaffolds a `tests/test_<id>.py` that passes. The bundler ignores `tests/`, so tests are never deployed.
+`owpp test` needs the `test` extra: pytest plus the packages Open-WebUI itself ships that plugins import at the top level (FastAPI, httpx, SQLAlchemy, aiohttp). `owpp create` and `owpp init` scaffold a `tests/test_<id>.py` that passes. The bundler ignores `tests/`, so tests are never deployed.
 
 ## A first test
 

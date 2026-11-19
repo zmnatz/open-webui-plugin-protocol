@@ -5,6 +5,7 @@
   owpp bundle <id> [out.py]          print (or write) the exact code that would be deployed
   owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
   owpp test [id ...] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
+  owpp create [id]                   a wizard: asks what the plugin is, then writes it
   owpp init <id> [--type event|filter|action|pipe]   scaffold a plugin folder
 
 Every command takes --dir <plugins folder> (default: $OWPP_PLUGINS_DIR, else ./plugins).
@@ -25,13 +26,28 @@ from pathlib import Path
 import yaml
 
 from . import __version__
-from .bundle import VALID_ID, FunctionFile, env_references, load_function_files
+from .bundle import FunctionFile, env_references, load_function_files
+from .create import CLASS, PluginSpec, write_plugin
 from .deploy import options_from_env, run_deploy
 from .errors import OwppError
 from .lint import lint_notes, lint_plugin
 from .sources import fetch_sources, plugin_folders, source_keys
 
 # ---- check --------------------------------------------------------------------
+
+
+def _globals_guard(n: ast.AST) -> bool:
+    """`"name" in globals()`: code that uses `name` only when another library defined it."""
+    return (
+        isinstance(n, ast.Compare)
+        and isinstance(n.left, ast.Constant)
+        and isinstance(n.left.value, str)
+        and len(n.ops) == 1
+        and isinstance(n.ops[0], ast.In)
+        and isinstance(n.comparators[0], ast.Call)
+        and isinstance(n.comparators[0].func, ast.Name)
+        and n.comparators[0].func.id == "globals"
+    )
 
 
 def undefined_names(tree: ast.AST) -> list[str]:
@@ -54,6 +70,8 @@ def undefined_names(tree: ast.AST) -> list[str]:
             defined.add(n.arg)
         elif isinstance(n, ast.ExceptHandler) and n.name:
             defined.add(n.name)
+        elif _globals_guard(n):  # `if "name" in globals(): name()`, an optional library's name
+            defined.add(n.left.value)
     return sorted(loaded - defined)
 
 
@@ -80,149 +98,13 @@ def bundle_parts(fn: FunctionFile) -> list[tuple[str, str]]:
 
 # ---- init ---------------------------------------------------------------------
 
-CLASS = {"event": "Event", "filter": "Filter", "action": "Action", "pipe": "Pipe"}
-METHOD = {
-    "event": """    async def event(self, event: dict, __event_name__: str = None, __id__: str = None, **kwargs):
-        if __event_name__ == "system.startup.completed":
-            log.info("%s: started", TITLE)""",
-    "filter": """    async def inlet(self, body: dict, __user__: dict = None) -> dict:
-        return body
-
-    async def outlet(self, body: dict, __user__: dict = None) -> dict:
-        return body""",
-    "action": """    async def action(self, body: dict, __user__: dict = None, __event_emitter__=None):
-        return None""",
-    "pipe": """    def pipes(self):
-        return [{"id": "default", "name": TITLE}]
-
-    async def pipe(self, body: dict, __user__: dict = None):
-        return "Hello from " + TITLE""",
-}
-
-
-TESTS = {
-    "event": '''def test_it_starts_with_open_webui(owui, plugin):
-    """It runs its startup work when Open-WebUI starts.
-
-    By hand: restart Open-WebUI and look for the function's startup lines in the log.
-    """
-    owui.startup()  # every enabled Event function gets system.startup.completed
-''',
-    "filter": '''def test_a_chat_passes_through_unchanged(owui, plugin):
-    """A chat request and its reply pass through the filter unchanged.
-
-    By hand: turn the filter on for a model, send "hi": the answer is what it would be without it.
-    """
-    user = owui.add_user("Ada")
-    body = {"messages": [{"role": "user", "content": "hi"}]}
-    assert plugin.inlet(body, user=user) == body
-    assert plugin.outlet(body, user=user) == body
-''',
-    "action": '''def test_the_action_runs(owui, plugin):
-    """The action runs on a message without failing.
-
-    By hand: under a reply, click the action's button: no error toast appears.
-    """
-    user = owui.add_user("Ada")
-    assert plugin.call("action", {"messages": []}, user=user) is None
-''',
-    "pipe": '''def test_it_answers(owui, plugin):
-    """It offers one model, and that model answers.
-
-    By hand: pick the model named after the plugin in a new chat and send anything: it answers
-    "Hello from <title>".
-    """
-    user = owui.add_user("Ada")
-    assert plugin.call("pipes") == [{"id": "default", "name": TITLE}]
-    assert plugin.call("pipe", {"messages": []}, user=user) == "Hello from " + TITLE
-''',
-}
-
 
 def scaffold(directory: Path | str, plugin_id: str, type: str = "event") -> Path:
-    if not VALID_ID.fullmatch(plugin_id):
-        raise OwppError(
-            f'"{plugin_id}" is not a valid id: lowercase letters, digits and _ (no hyphens)'
-        )
+    """`owpp init`: the smallest plugin of a type (what `owpp create` makes when every answer is
+    the default)."""
     if type not in CLASS:
         raise OwppError(f"--type must be one of {', '.join(CLASS)}")
-    folder = Path(directory) / plugin_id
-    if folder.exists():
-        raise OwppError(f"{folder} already exists")
-    folder.mkdir(parents=True)
-    title = re.sub(r"\b\w", lambda m: m.group().upper(), plugin_id.replace("_", " "))
-    global_hint = (
-        "  # global: true   # filters and actions only: active and global on every deploy\n"
-        if type in ("filter", "action")
-        else ""
-    )
-    files = {
-        "plugin.yaml": f"""# Manifest (docs/plugin-format.md). The function: keys become the docstring header.
-function:
-  title: {title}
-  author: you
-  version: 0.1.0
-  license: MIT
-  description: What {title} does, on one line.
-{global_hint}# include: [jobs]   # libraries: core, routes, jobs, chat_data, shared_assets, live_reload
-""",
-        "function.py": f'''# {title}: an Open-WebUI {type} function. The header is generated from plugin.yaml.
-
-import logging
-
-from pydantic import BaseModel, Field
-
-log = logging.getLogger(__name__)
-TITLE = "{title}"
-
-
-class {CLASS[type]}:
-    class Valves(BaseModel):
-        ENABLE: bool = Field(default=True, description="Turn {title} on or off.")
-
-    def __init__(self):
-        self.valves = self.Valves()
-
-{METHOD[type]}
-''',
-        "README.md": f"""# {title}
-
-What it does, which libraries it uses, and what it changes in Open-WebUI.
-
-Valves: `ENABLE`.
-
-## Test
-
-- `owpp check {plugin_id}` bundles it exactly as the deploy does, compiles it and lists undefined names.
-- `owpp test {plugin_id}` runs `tests/` against a mock Open-WebUI (docs/testing.md).
-- On a live Open-WebUI: the steps that show it works.
-
-## Deploy
-
-- Function type: **{type}**.
-- `owpp deploy --only {plugin_id} --dry-run`, then without `--dry-run`.
-""",
-        f"tests/test_{plugin_id}.py": f'''"""{title} against a mock Open-WebUI: `owpp test {plugin_id}` (docs/testing.md).
-
-`plugin` is this folder, bundled as the deploy would and loaded into `owui`, the mock."""
-
-TITLE = "{title}"
-
-
-def test_it_loads_with_its_default_valves(plugin):
-    """It loads, and its valves start at their defaults.
-
-    By hand: install it, then open its valves under Admin Panel > Functions: ENABLE is on.
-    """
-    assert plugin.valves.ENABLE is True
-
-
-{TESTS[type]}''',
-    }
-    for name, text in files.items():
-        (folder / name).parent.mkdir(parents=True, exist_ok=True)
-        (folder / name).write_bytes(text.encode("utf-8"))
-    return folder
+    return write_plugin(directory, PluginSpec(id=plugin_id, type=type))
 
 
 # ---- commands -----------------------------------------------------------------
@@ -349,6 +231,16 @@ def _cmd_init(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
     return 0
 
 
+def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    from .wizard import run_wizard
+
+    def check(folder: Path, plugin_id: str) -> int:
+        print()
+        return main(["check", plugin_id, "--strict", "--dir", str(folder)], env)
+
+    return run_wizard(directory, args.id or "", check=check)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="owpp",
@@ -391,6 +283,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     test = add("test", _cmd_test, "run each plugin's tests/ against a mock Open-WebUI")
     test.add_argument("ids", nargs="*", metavar="id", help="plugins to test (default: all)")
+    create = add("create", _cmd_create, "create a plugin, answering a few questions (a wizard)")
+    create.add_argument("id", nargs="?", help="the plugin id (asked if left out)")
     init = add("init", _cmd_init, "scaffold a plugin folder")
     init.add_argument("id")
     init.add_argument("--type", choices=list(CLASS), default="event")

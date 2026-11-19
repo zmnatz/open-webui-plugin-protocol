@@ -1,5 +1,28 @@
 # Authoring a plugin
 
+## Start with `owpp create`
+
+```sh
+uvx owpp create            # or: uvx owpp create my_plugin
+```
+
+A wizard: ten short stages, each on its own screen with how far along it is. Every question has a default (Enter takes it), and nothing is written until the last stage lists the files and you say yes; Ctrl-C stops without writing anything. It asks:
+
+| Stage | What it asks | What it writes |
+| --- | --- | --- |
+| Name | the id (the folder, and the function id in Open-WebUI) and title | `plugins/<id>/` |
+| Describe it | description, author, version, license, `required_open_webui_version`, `icon_url`, `requirements` | the `function:` header in `plugin.yaml` |
+| Function type | filter, action, event or pipe, or a few questions to decide (below) | `class Filter`, `Action`, `Event` or `Pipe` |
+| Type options | filter: hooks (`inlet`, `request`, `stream`, `outlet`), a user toggle, `global`, `file_handler`, `priority`. Action: several buttons (`actions`), `global`, an HTML page above the message, `priority`. Pipe: several models (`pipes()`), streaming. Event: a scheduled sync (`PluginScheduledSync`, with its interval as `${<ID>_SYNC_MINUTES:-60}`), the events to handle with `@on` | the class's methods and attributes |
+| Valves | name, kind and description of each: text, number, switch, password (masked), select (dropdown), multiselect (checkboxes), range (slider) | `class Valves`, with Open-WebUI's input widgets |
+| User valves | the same, for each user's own settings (not for an event) | `class UserValves` |
+| Tool | id, title, methods with typed parameters, `access: public`, a method that shows a page in the chat (`HTMLResponse`), `chat_data` | `tool.py`, `tool:` in `plugin.yaml` |
+| Skills | name and description of each | `skills/<name>/SKILL.md`, in Open-WebUI's layout |
+| Pages and libraries | a page (`static/index.html`, or `templates/page.html` rendered behind a route) and who may open it, `chat_data`, `config.yaml`, `assets/` and `live_reload` (events) | the files, and `include:` |
+| Review and write | yes or no | the folder, then `owpp check --strict` on it |
+
+What it writes follows the conventions below and [Open-WebUI's plugin docs](https://docs.openwebui.com/features/extensibility/): every hook, handler and tool method is a stub to fill in, valves have descriptions, tool methods have type hints and `:param` lines, routes go through `plugin_mount` with the access you chose, and HTML lives in files. It includes `tests/test_<id>.py`, one test per part (valves, the type's entry point, the tool's methods, its skills, the page, the config), and a README with Test and Deploy sections. Each combination bundles, passes `owpp check --strict` and passes its own tests (`tests/test_create.py`). `owpp init <id> --type <type>` writes the same as pressing Enter all the way.
+
 ## Pick the function type first
 
 The type decides how the function runs and whether `global` applies (see the table in [plugin format](plugin-format.md#function-type)).
@@ -27,7 +50,7 @@ A plugin that serves HTTP routes from a **filter** (Excalidraw) mounts them when
 
 ## Steps
 
-1. `owpp init <id> --type event|filter|action|pipe` (or write `plugins/<id>/plugin.yaml` with a `function:` section and `function.py` by hand).
+1. `owpp create` (or `owpp init <id> --type event|filter|action|pipe`, or write `plugins/<id>/plugin.yaml` with a `function:` section and `function.py` by hand).
 2. Add `tool.py`, `skills/`, `public/` or `include:` only when needed.
 3. `owpp check <id>` until it is clean.
 4. Add tests for pure logic (any Python test runner; keep Open-WebUI imports inside the functions that use them) and note any live checks in the README.
