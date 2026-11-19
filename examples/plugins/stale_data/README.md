@@ -11,7 +11,7 @@ Valves: `DASHBOARD_PATH`, `STALE_THRESHOLD_HOURS`. Not a global function: event 
 - `owpp check stale_data` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines (the function and any tool it embeds).
 - `owpp bundle stale_data out.py` writes the deployed code to read or diff.
 - `owpp test stale_data` runs `tests/` against a mock Open-WebUI (docs/testing.md).
-- On a live Open-WebUI: open `/stale-data` as an admin (the tables fill in), then in a private window (404).
+- On a live Open-WebUI: open `/stale-data` as an admin (the tables fill in), then in a private window (the sign-in page), and as a user who is not an admin (403).
 
 ## Deploy
 

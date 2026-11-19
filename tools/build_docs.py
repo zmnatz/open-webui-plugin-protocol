@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+import json
 import os
 import posixpath
 import re
@@ -40,6 +41,9 @@ EXAMPLES = ROOT / "examples" / "plugins"
 REPO_URL = "https://github.com/zmnatz/open-webui-plugin-protocol"
 # Link to the commit being built on CI (a pull request's own files), else to main.
 REF = os.environ.get("GITHUB_SHA") or "main"
+
+# Taken on a real Open-WebUI by tools/screenshots/run.py; see docs/screenshots.md.
+SHOTS = DOCS / "screenshots" / "screenshots.json"
 
 # Repository path -> the page that carries it on the site.
 COPIED = {
@@ -82,12 +86,13 @@ def assemble(out: Path = OUT) -> list[str]:
         copied[f"{rel}/README.md"] = copied[rel] = f"examples/{plugin.name}.md"
         pages[f"examples/{plugin.name}.md"] = (
             f"{rel}/README.md",
-            (plugin / "README.md").read_text(),
+            (plugin / "README.md").read_text() + _gallery(plugin.name, f"{rel}/README.md"),
         )
     # Generated pages write their links relative to the repository root.
     pages["examples/index.md"] = ("generated.md", _examples_index())
     pages["reference/test-catalogue.md"] = ("generated.md", _test_catalogue())
     pages["project/audit-trail.md"] = ("generated.md", _audit_trail())
+    pages["reference/screenshots.md"] = ("generated.md", _screenshots_page())
 
     anchors = {uri: _anchors(text) for uri, (_, text) in pages.items()}
     problems: list[str] = []
@@ -119,6 +124,9 @@ def _relink(target, origin, page_uri, pages, copied, anchors) -> str | None:
     repo_path = posixpath.normpath(posixpath.join(posixpath.dirname(origin), path))
     if repo_path.startswith("docs/") and repo_path[len("docs/") :] in pages:
         site = repo_path[len("docs/") :]
+    elif repo_path.startswith("docs/") and (ROOT / repo_path).is_file():
+        # An image or other file in docs/: copied beside the pages, so linked as it is.
+        return posixpath.relpath(repo_path[len("docs/") :], posixpath.dirname(page_uri) or ".")
     elif repo_path in copied:
         site = copied[repo_path]
     elif (ROOT / repo_path).exists():
@@ -187,6 +195,72 @@ def _examples_index() -> str:
     )
 
 
+# ---- screenshots ---------------------------------------------------------------------------
+
+
+def _shots() -> dict:
+    return json.loads(SHOTS.read_text()) if SHOTS.exists() else {"shots": []}
+
+
+def _figure(shot: dict, origin: str) -> list[str]:
+    """One screenshot, linked relative to the file the text is written for."""
+    path = posixpath.relpath(f"docs/screenshots/{shot['file']}", posixpath.dirname(origin) or ".")
+    caption = _text(shot["caption"])
+    return [f"![{caption}]({path})", "", f"*{caption}*", ""]
+
+
+def _gallery(plugin: str, origin: str) -> str:
+    shots = [s for s in _shots()["shots"] if s["plugin"] == plugin]
+    if not shots:
+        return ""
+    meta = _shots()
+    out = [
+        "",
+        "## Screenshots",
+        "",
+        f"Taken on Open-WebUI {meta.get('open_webui', '?')} on {meta.get('taken', '?')} by "
+        f"`tools/screenshots/run.py` ([how](../../../docs/screenshots.md)).",
+        "",
+    ]
+    for shot in shots:
+        out += _figure(shot, origin)
+    return "\n".join(out)
+
+
+def _screenshots_page() -> str:
+    meta = _shots()
+    out = [
+        "# Screenshots",
+        "",
+        "The plugins on a real Open-WebUI, taken by `tools/screenshots/run.py`: it starts "
+        "Open-WebUI in Docker, deploys `examples/plugins` with `owpp deploy`, and follows the "
+        "plugins' By hand steps in a browser ([how it works](docs/screenshots.md)). The "
+        "[test catalogue](docs/reference/test-catalogue.md) shows each one beside the tests it "
+        "illustrates.",
+        "",
+    ]
+    if not meta["shots"]:
+        return "\n".join(out + ["No screenshots have been taken yet.", ""])
+    commit = meta.get("commit", "")
+    out += [
+        f"**Open-WebUI {meta.get('open_webui', '?')}** · taken {meta.get('taken', '?')} · from "
+        + (f"[`{commit}`]({REPO_URL}/commit/{commit})" if commit else "an unknown commit"),
+        "",
+    ]
+    plugin = None
+    for shot in meta["shots"]:
+        if shot["plugin"] != plugin:
+            plugin = shot["plugin"]
+            out += [f"## {plugin}", ""]
+        out += _figure(shot, "generated.md")
+        if shot["illustrates"]:
+            names = ", ".join(f"`{name}`" for name in shot["illustrates"])
+            out += [f"Illustrates {names}. Script: `{shot['script']}`.", ""]
+        else:
+            out += [f"Script: `{shot['script']}`.", ""]
+    return "\n".join(out)
+
+
 # ---- test catalogue --------------------------------------------------------------------
 
 
@@ -247,7 +321,7 @@ def _title(name: str) -> str:
 
 def _test_catalogue() -> str:
     out: list[str] = []
-    total = described = manual = 0
+    total = described = manual = pictured = 0
     for plugin in _plugins():
         files = sorted((plugin / "tests").glob("test_*.py"))
         if not files:
@@ -282,6 +356,10 @@ def _test_catalogue() -> str:
                     out += [f'!!! {kind} "{label}"', f"    {hand}", ""]
                 elif what:
                     out += ['!!! warning "No by-hand steps"', "    Add a `By hand:` paragraph.", ""]
+                for s in _shots()["shots"]:
+                    if s["plugin"] == plugin.name and test["name"] in s["illustrates"]:
+                        out += _figure(s, "generated.md")
+                        pictured += 1
 
     head = [
         "# Test catalogue",
@@ -295,7 +373,8 @@ def _test_catalogue() -> str:
         "Grey boxes say why a test has no live equivalent.",
         "",
         f"**{total}** tests · **{described}** described · **{manual}** with live steps "
-        f"· **{total - manual}** checked only by the unit test",
+        f"· **{total - manual}** checked only by the unit test "
+        f"· **{pictured}** [screenshots](docs/reference/screenshots.md) from a real Open-WebUI",
         "",
     ]
     return "\n".join(head + out + _library_tests())

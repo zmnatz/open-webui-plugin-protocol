@@ -45,6 +45,7 @@ The unit tests run against a mock. It covers what plugins call, not Open-WebUI's
 2. Open the [test catalogue](reference/test-catalogue.md) at that plugin and work through the **By hand** boxes for the tests the change touches. Before a release, work through all of them.
 3. Work through the `## Test` list in the plugin's README.
 4. Disable the function and check that what it installed (tools, skills, routes, files) is gone.
+5. If the change alters what users see, retake the [screenshots](screenshots.md) and compare them with the committed ones. The diff of `docs/screenshots/` is part of the review.
 
 ## 5. Check what you are trusting
 
