@@ -68,8 +68,8 @@ def test_saving_the_valves_syncs_every_mcpo_server_as_a_tool_server(owui, plugin
     <base>/<server> with openapi.json, bearer auth with the mcpo key, marked as managed by
     mcpo_sync.
 
-    By hand: set MCPO_BASE_URL and MCPO_API_KEY in the function's valves and save. Admin Panel >
-    Settings > External Tools lists one connection per mcpo server, each at <base>/<server> with
+    By hand: set MCPO_BASE_URL and MCPO_API_KEY in the function's valves and save. Admin Settings >
+    Integrations > External Tool Servers lists one connection per mcpo server, each at <base>/<server> with
     bearer auth, and the log says `mcpo Sync: N server(s) synced`.
     """
     configure(owui, mcpo)
@@ -86,7 +86,7 @@ def test_startup_syncs_too_and_a_server_gone_from_mcpo_is_pruned(owui, plugin, m
     longer has.
 
     By hand: take a server out of mcpo's config, restart mcpo, then restart Open-WebUI. That
-    server's connection is gone from External Tools and the rest are still there.
+    server's connection is gone from External Tool Servers and the rest are still there.
     """
     configure(owui, mcpo)
     mcpo["routes"] = ["time"]
@@ -134,7 +134,7 @@ def test_a_refused_key_is_logged_and_nothing_is_written(owui, plugin, mcpo, capl
     """If mcpo refuses the key, the error (HTTP 401) is logged and the tool servers, including
     hand-made ones, are left as they were.
 
-    By hand: add a connection by hand under External Tools, set a wrong MCPO_API_KEY and save.
+    By hand: add a connection by hand under External Tool Servers, set a wrong MCPO_API_KEY and save.
     The log shows HTTP 401 and your connection is untouched.
     """
     owui.config["tool_server.connections"] = [{"url": "x", "info": {"id": "manual"}}]
@@ -193,7 +193,7 @@ def test_it_applies_the_config_it_ships(plugin):
     does not mention gets "<server> (mcpo)", "<server> MCP server via mcpo (OpenAPI)" and is
     enabled.
 
-    By hand: after a sync, compare External Tools with config.yaml: the names, descriptions and
+    By hand: after a sync, compare External Tool Servers with config.yaml: the names, descriptions and
     on/off switches match.
     """
     got = connections(plugin)
@@ -332,7 +332,7 @@ def test_it_prunes_only_what_it_wrote(owui, plugin):
     no longer has, replaces its current ones, and keeps hand-made ones and other functions'
     ones.
 
-    By hand: add a connection by hand under External Tools and sync. Then take a server out of
+    By hand: add a connection by hand under External Tool Servers and sync. Then take a server out of
     mcpo and sync again: that server's connection is gone, yours is still there.
     """
     existing = [
@@ -357,7 +357,7 @@ def test_without_pruning_a_stale_entry_of_its_own_is_kept(owui, plugin):
 def test_a_hand_made_entry_with_a_synced_id_is_replaced_not_duplicated(owui, plugin):
     """A hand-made connection with the same id as a synced one is replaced by it, not duplicated.
 
-    By hand: under External Tools add a connection with the id mcpo-time, then sync. There is
+    By hand: under External Tool Servers add a connection with the id mcpo-time, then sync. There is
     one mcpo-time, the synced one.
     """
     existing = [connection("mcpo-time"), connection("manual")]  # someone typed it in by hand

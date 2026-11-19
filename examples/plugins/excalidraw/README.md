@@ -17,6 +17,17 @@ Every route requires a signed-in user (the `routes` library). The editor page op
 
 Valve (Admin Panel > Functions > Excalidraw): `SESSION_TOKEN_HOURS`.
 
+## Requirement: iframe Sandbox Allow Same Origin
+
+**On a default Open-WebUI the editor answers 401 ("Sign in to Open-WebUI first.") inside the panel.** The Artifacts panel is a sandboxed iframe. Unless the user's **iframe Sandbox Allow Same Origin** setting is on, the panel sends no cookies at all, so the editor page (not only its API) cannot tell who is signed in. Open-WebUI v0.13.4 ships with the setting off. Found on a real Open-WebUI by the [screenshot run](../../../docs/screenshots.md#what-it-found).
+
+To make it work, turn the setting on:
+
+- for everyone: **Admin Settings > General > Default Interface Settings**, or the container variable `DEFAULT_INTERFACE_SETTINGS='{"iframeSandboxAllowSameOrigin": true}'`. A user's own setting still wins;
+- or for one user: **Settings > Interface > iframe Sandbox Allow Same Origin**.
+
+**Know what it costs.** The setting applies to every artifact, not only this one. With it on, the script in any HTML a model produces runs with Open-WebUI's own origin, so it can read the sign-in token Open-WebUI keeps in the browser and call the API as that user. Turn it on only where you trust what the models put into artifacts. An editor page that needs no cookie, so the setting can stay off, is [issue #6](https://github.com/zmnatz/open-webui-plugin-protocol/issues/6).
+
 ## Self-hosting the editor
 
 Out of the box the user's browser fetches the editor from [esm.sh](https://esm.sh), a public CDN: it needs internet access, trusts esm.sh to serve the code (there is no integrity check), and tells esm.sh the user's IP and the Open-WebUI origin. To load everything from a host you run instead, so the page needs nothing from the internet:
@@ -49,7 +60,7 @@ This host is outside Open-WebUI, so it is yours to keep up: its files are public
 - `owpp check excalidraw` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines (the function and any tool it embeds).
 - `owpp bundle excalidraw out.py` writes the deployed code to read or diff.
 - `owpp test excalidraw` runs `tests/` against a mock Open-WebUI (docs/testing.md).
-- On a live Open-WebUI: open a chat and ask the model to draw something: the editor opens in the Artifacts panel and edits survive a reload. With `EXCALIDRAW_ASSETS_URL` set, the network tab shows every file coming from your host.
+- On a live Open-WebUI, with [iframe Sandbox Allow Same Origin](#requirement-iframe-sandbox-allow-same-origin) on: open a chat and ask the model to draw something: the editor opens in the Artifacts panel and edits survive a reload. With `EXCALIDRAW_ASSETS_URL` set, the network tab shows every file coming from your host.
 
 ## Deploy
 

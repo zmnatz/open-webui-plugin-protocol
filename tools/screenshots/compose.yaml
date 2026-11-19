@@ -1,0 +1,36 @@
+# A throwaway Open-WebUI for the screenshot run: `uv run --group screenshots python
+# tools/screenshots/run.py` starts it, deploys examples/plugins into it, takes the screenshots
+# and removes it again (no volumes, so nothing is kept). See docs/screenshots.md.
+name: owpp-screenshots
+
+services:
+  open-webui:
+    # The version the protocol is written against (docs/README.md, "Status and limits").
+    image: ghcr.io/open-webui/open-webui:v0.13.4
+    ports: ["127.0.0.1:3000:8080"]
+    environment:
+      WEBUI_SECRET_KEY: screenshots-only
+      # The only model is the scripted one below: no Ollama, no real provider.
+      ENABLE_OLLAMA_API: "false"
+      OPENAI_API_BASE_URL: http://fake-llm:9000/v1
+      OPENAI_API_KEY: unused
+      # Nothing downloaded at startup, no update checks: the run is the same offline or not.
+      OFFLINE_MODE: "true"
+      ENABLE_VERSION_UPDATE_CHECK: "false"
+      # Read by examples/plugins/mcpo_sync, whose MCPO_BASE_URL default is http://mcpo:8000.
+      MCPO_API_KEY: mcpo-key
+    depends_on: [fake-llm, mcpo]
+
+  fake-llm:
+    # tools/screenshots/fake_llm.py: an OpenAI-compatible server that calls the tools on a script.
+    image: python:3.12-slim
+    command: ["python", "/app/fake_llm.py"]
+    environment:
+      FAKE_LLM_LOG: ${FAKE_LLM_LOG:-} # set to 1 to log every request it gets
+    volumes: ["./fake_llm.py:/app/fake_llm.py:ro"]
+
+  mcpo:
+    # For examples/plugins/mcpo_sync. The image only publishes a moving tag.
+    image: ghcr.io/open-webui/mcpo:latest
+    command: ["--port", "8000", "--api-key", "mcpo-key", "--config", "/app/mcpo.json"]
+    volumes: ["./mcpo.json:/app/mcpo.json:ro"]
