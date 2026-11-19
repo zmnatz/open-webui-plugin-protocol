@@ -49,7 +49,7 @@ Open-WebUI stores each function and tool as **one code blob**, edited in the adm
 Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (for remote sources). Nothing to install: `uvx` runs `owpp` straight from PyPI. To have it on your `PATH`, `uv tool install owpp` (or `pipx install owpp`).
 
 ```sh
-uvx owpp init hello --type event     # scaffold plugins/hello/
+uvx owpp create                      # a wizard: asks what the plugin is, writes plugins/<id>/
 uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
 ```
@@ -58,7 +58,7 @@ OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deplo
 
 ```yaml
 - uses: actions/checkout@v5
-- uses: zmnatz/open-webui-plugin-protocol@v0.1.0
+- uses: zmnatz/open-webui-plugin-protocol@v0.2.0
   with:
     url: https://chat.example.com
     api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
@@ -72,6 +72,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 | | |
 | --- | --- |
 | [Overview](docs/README.md) | concepts, guarantees, status |
+| [Creating a plugin](docs/creating.md) | the `owpp create` wizard: code written here, installers, plugins from git |
 | [Authoring guide](docs/authoring.md) | function types, conventions, checklist |
 | [Plugin format](docs/plugin-format.md) | `plugin.yaml` reference |
 | [Bundling](docs/bundling.md) | exactly what gets deployed; git sources |
@@ -89,7 +90,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ## Status
 
-0.1.0, released 2026-11-19, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), but that run is started by hand, not part of CI. See [decisions](docs/decisions.md#not-done-yet).
+0.2.0, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), but that run is started by hand, not part of CI. See [decisions](docs/decisions.md#not-done-yet).
 
 ## Development
 

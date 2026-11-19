@@ -87,7 +87,7 @@ about keeping that explicit and narrow, not about making untrusted plugins safe.
 - Give CI a **dedicated admin user and API key** used for nothing else, stored as a secret, and rotate it.
 - Restrict who can push to the plugins repository (and to any repository a `source:` names). Require
   review for changes to `plugin.yaml`, `assets/` and anything that touches `ref:`.
-- **Pin `owpp`** (`uvx owpp@0.1.0`) and pin the action to a tag or SHA: the runtime and libraries are
+- **Pin `owpp`** (`uvx owpp@0.2.0`) and pin the action to a tag or SHA: the runtime and libraries are
   copied into what you deploy, so an upgrade changes your deployed code.
 - Run `owpp deploy --dry-run` before the first deploy and read the plan; run `owpp check --strict`
   in CI.

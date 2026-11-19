@@ -4,7 +4,7 @@
 
 ```sh
 mkdir my-plugins && cd my-plugins && git init
-uvx owpp init hello --type event
+uvx owpp create hello                # the wizard (docs/creating.md), or: uvx owpp init hello --type event
 uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
 ```

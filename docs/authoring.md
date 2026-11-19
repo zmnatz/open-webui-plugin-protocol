@@ -1,5 +1,13 @@
 # Authoring a plugin
 
+## Start with `owpp create`
+
+```sh
+uvx owpp create
+```
+
+A wizard that scaffolds the plugin: code written here (a filter, action, event or pipe, or an installer of a tool and skills) or taken from a git repository pinned to a commit, with stubs, tests and a README ready to fill in. See [creating a plugin](creating.md).
+
 ## Pick the function type first
 
 The type decides how the function runs and whether `global` applies (see the table in [plugin format](plugin-format.md#function-type)).
@@ -27,7 +35,7 @@ A plugin that serves HTTP routes from a **filter** (Excalidraw) mounts them when
 
 ## Steps
 
-1. `owpp init <id> --type event|filter|action|pipe` (or write `plugins/<id>/plugin.yaml` with a `function:` section and `function.py` by hand).
+1. `owpp create` (or `owpp init <id> --type event|filter|action|pipe`, or write `plugins/<id>/plugin.yaml` with a `function:` section and `function.py` by hand).
 2. Add `tool.py`, `skills/`, `public/` or `include:` only when needed.
 3. `owpp check <id>` until it is clean.
 4. Add tests for pure logic (any Python test runner; keep Open-WebUI imports inside the functions that use them) and note any live checks in the README.
