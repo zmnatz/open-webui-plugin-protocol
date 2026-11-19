@@ -35,6 +35,7 @@ nav = [
     { "mcpo Sync" = "examples/mcpo_sync.md" },
     { "Page Banners" = "examples/page_banners.md" },
     { "Stale Data Dashboard" = "examples/stale_data.md" },
+    { "LiteLLM Model Sync" = "examples/litellm_model_sync.md" },
   ] },
   { "Review and audit" = [
     { "Reviewing a change" = "reviewing.md" },

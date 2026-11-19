@@ -265,6 +265,7 @@ class MockOpenWebUI:
         self.tool_valves: dict[str, dict] = {}
         self.skills: dict[str, Record] = {}
         self.users: dict[str, Record] = {}
+        self.models: dict[str, Record] = {}  # model configs (Models), by id
         self.notes: dict[str, Record] = {}
         self.files: dict[str, Record] = {}
         self.config: dict[str, Any] = {}
@@ -850,6 +851,16 @@ class MockOpenWebUI:
                 return mock.skills.pop(id, None) is not None
 
         # models.chats
+        class AccessGrants:
+            """Grants live on the tool and skill records, as their `access_grants` lists."""
+
+            @staticmethod
+            async def set_access_grants(resource_type, resource_id, access_grants, db=None):
+                table = {"tool": mock.tools, "skill": mock.skills}[resource_type]
+                if resource_id in table:
+                    table[resource_id].access_grants = [dict(g) for g in access_grants or []]
+                return list(access_grants or [])
+
         class Chats:
             @staticmethod
             async def get_chat_by_id(id):
@@ -903,10 +914,103 @@ class MockOpenWebUI:
                 return mock.users.get(id)
 
             @staticmethod
+            async def get_super_admin_user():
+                return next((u for u in mock.users.values() if u.role == "admin"), None)
+
+            @staticmethod
             async def get_users(filter=None, skip=0, limit=50):
                 ids = (filter or {}).get("user_ids")
                 users = [u for u in mock.users.values() if ids is None or u.id in ids]
                 return {"users": users[skip : skip + limit], "total": len(users)}
+
+        from pydantic import BaseModel as _BaseModel
+        from pydantic import ConfigDict as _ConfigDict
+        from pydantic import Field as _Field
+        from pydantic import model_validator as _model_validator
+
+        class ModelParams(_BaseModel):
+            """v0.13.4: any inference parameter, plus model_controls (left out when empty)."""
+
+            model_config = _ConfigDict(extra="allow")
+            model_controls: dict = _Field(default_factory=dict, exclude_if=lambda value: not value)
+
+        class ModelMeta(_BaseModel):
+            """v0.13.4's fields, any others kept, and tags normalised to [{"name": ...}]."""
+
+            model_config = _ConfigDict(extra="allow")
+            profile_image_url: str | None = None
+            background_image_url: str | None = None
+            description: str | None = None
+            i18n: dict | None = None
+            capabilities: dict | None = None
+            knowledge: list | None = None
+            subagents: dict | None = None
+            voice: dict | None = None
+            voice_avatar: dict | None = None
+
+            @_model_validator(mode="before")
+            @classmethod
+            def _tags(cls, data):
+                if isinstance(data, dict) and "tags" in data:
+                    tags = data["tags"] if isinstance(data["tags"], list) else []
+                    names = [(t.get("name") if isinstance(t, dict) else t) for t in tags]
+                    data = {
+                        **data,
+                        "tags": [
+                            {"name": n.strip()} for n in names if isinstance(n, str) and n.strip()
+                        ],
+                    }
+                return data
+
+        class ModelForm(_BaseModel):
+            model_config = _ConfigDict(extra="ignore")
+            id: str
+            base_model_id: str | None = None
+            name: str
+            meta: ModelMeta
+            params: ModelParams
+            access_grants: list[dict] | None = None
+            is_active: bool = True
+
+        def _model_row(form, user_id, created_at=None):
+            return Record(
+                id=form.id,
+                user_id=user_id,
+                base_model_id=form.base_model_id,
+                name=form.name,
+                meta=ModelMeta.model_validate(form.meta.model_dump()),
+                params=ModelParams.model_validate(form.params.model_dump()),
+                access_grants=[dict(g) for g in form.access_grants or []],
+                is_active=form.is_active,
+                created_at=created_at or _now(),
+                updated_at=_now(),
+            )
+
+        class Models:
+            @staticmethod
+            async def get_all_models():
+                return list(mock.models.values())
+
+            @staticmethod
+            async def get_model_by_id(id):
+                return mock.models.get(id)
+
+            @staticmethod
+            async def insert_new_model(form_data, user_id):
+                mock.models[form_data.id] = _model_row(form_data, user_id)
+                return mock.models[form_data.id]
+
+            @staticmethod
+            async def update_model_by_id(id, model, user_id=None):
+                current = mock.models.get(id)
+                if current is None:
+                    return None
+                mock.models[id] = _model_row(model, user_id or current.user_id, current.created_at)
+                return mock.models[id]
+
+            @staticmethod
+            async def delete_model_by_id(id):
+                return mock.models.pop(id, None) is not None
 
         class Config:
             @staticmethod
@@ -1004,9 +1108,19 @@ class MockOpenWebUI:
                 "open_webui.models.notes": module("open_webui.models.notes", Notes=Notes),
                 "open_webui.models.files": module("open_webui.models.files", Files=Files),
                 "open_webui.models.users": module("open_webui.models.users", Users=Users),
+                "open_webui.models.models": module(
+                    "open_webui.models.models",
+                    Models=Models,
+                    ModelForm=ModelForm,
+                    ModelMeta=ModelMeta,
+                    ModelParams=ModelParams,
+                ),
                 "open_webui.models.config": module("open_webui.models.config", Config=Config),
                 "open_webui.models.access_grants": module(
                     "open_webui.models.access_grants",
+                    AccessGrants=AccessGrants,
+                    PRINCIPAL_TYPE_USER="user",
+                    PRINCIPAL_TYPE_GROUP="group",
                     PRINCIPAL_TYPE_ANYONE="anyone",
                     WILDCARD_PRINCIPAL_ID="*",
                 ),

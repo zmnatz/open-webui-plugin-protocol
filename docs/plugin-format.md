@@ -56,7 +56,7 @@ A new filter is made global on first deploy (a filter that is not attached to a 
 | `title`, `description`, and other header keys | Header of the tool bundle (code in `tool.py`). |
 | `file` | With `source:`, take the tool from the git repo verbatim. |
 | `from: function` | Install the function's own bundle as the tool (one module serving as both). |
-| `access` | `public` makes it available to everyone when first installed; later changes in the UI are kept. |
+| `access` | `public` makes it readable by every signed-in user when first installed (Open-WebUI's `user:*` read grant); later changes in the UI are kept. Without it, only admins can use the tool. |
 | `valves` | `{name: value}` enforced on every sync, for the declared keys only, validated against the tool's `Valves` class (a value it rejects is logged and skipped). |
 | `include` | Libraries for the tool bundle (the function's `include:` does not apply to it). |
 
@@ -69,7 +69,9 @@ skills:
     access: public
 ```
 
-Local skills are the folder `skills/<id>/`. From a `source:` a skill is a `file:` or a `dir:`.
+Local skills are the folder `skills/<id>/`. From a `source:` a skill is a `file:` or a `dir:`. A skill's `access` works like a tool's.
+
+**Earlier copies of the runtime (portainer's, before it moved to owpp) granted `public` items to Open-WebUI's `anyone:*` audience.** That is the no-auth audience Open-WebUI uses for shared chats, and its tool and skill access checks ignore it, so only admins could use them. The runtime now swaps exactly that grant for `user:*` on the next sync of an item it installed, and leaves every other grant as the admin set it.
 
 ### `source:`
 

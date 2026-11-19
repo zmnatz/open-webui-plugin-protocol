@@ -1,7 +1,7 @@
 {
   "open_webui": "0.13.4",
   "taken": "2026-11-19",
-  "commit": "7aec192",
+  "commit": "0ae8f6d",
   "shots": [
     {
       "file": "deploy/functions.png",
@@ -64,6 +64,26 @@
         "test_loading_the_function_installs_the_tool_for_everyone"
       ],
       "script": "shots_installed.py::test_the_tools_the_functions_installed"
+    },
+    {
+      "file": "litellm_model_sync/admin-models.png",
+      "plugin": "litellm_model_sync",
+      "caption": "Admin Settings > Models after a sync: display names from the gateway, each readable by every user (Public), and the embedding model greyed out (hidden) but still on.",
+      "illustrates": [
+        "test_each_model_gets_its_display_name_tags_and_vision",
+        "test_non_chat_models_are_hidden_but_stay_usable"
+      ],
+      "script": "shots_litellm_model_sync.py::test_the_admin_model_list"
+    },
+    {
+      "file": "litellm_model_sync/model-selector.png",
+      "plugin": "litellm_model_sync",
+      "caption": "A user's model selector after a sync: the gateway's display name, readable by every user, and the embedding model hidden.",
+      "illustrates": [
+        "test_each_model_gets_its_display_name_tags_and_vision",
+        "test_non_chat_models_are_hidden_but_stay_usable"
+      ],
+      "script": "shots_litellm_model_sync.py::test_users_see_the_gateways_names"
     },
     {
       "file": "mcpo_sync/tool-servers.png",

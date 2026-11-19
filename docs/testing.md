@@ -89,7 +89,7 @@ When a test cannot be repeated by hand, its `By hand:` says so and why (for exam
 | `owui.add_chat(user, title=, messages=, meta=, updated_at=, files=[file ids])` | A saved chat, in a real SQLite database with Open-WebUI's `chat` and `chat_file` tables, so the `chat_data` library's SQL runs for real. `owui.chat(id)` reads it back. |
 | `owui.grant_chat(chat_id, user, "read" \| "write")` | Gives a user other than the owner access to the chat. |
 | `owui.add_note(user, ...)`, `owui.add_file(user, ...)` | Notes (timestamps in nanoseconds, as Open-WebUI stores them) and files. |
-| `owui.functions`, `function_valves`, `tools`, `tool_valves`, `skills`, `users`, `config` | The tables, as dicts. `config` is what `Config.get` and `Config.upsert` read and write. |
+| `owui.functions`, `function_valves`, `tools`, `tool_valves`, `skills`, `models`, `users`, `config` | The tables, as dicts. `models` are model configs (`Models`, with v0.13.4's `ModelForm`, `ModelMeta` and `ModelParams`); `config` is what `Config.get` and `Config.upsert` read and write, the OpenAI connections (`openai.api_base_urls`, ...) included. |
 | `owui.emitted` | `[(event, data)]` sent on the socket (`sio.emit`). |
 | `owui.chat_events` | `[(chat_id, event)]` sent through `__event_emitter__`. |
 | `owui.app`, `owui.static_dir`, `owui.event_sinks` | The FastAPI app, with Open-WebUI's `/static` mount and its catch-all web app at `/`. Also `STATIC_DIR` and `EVENT_SINKS`. |
