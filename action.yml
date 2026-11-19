@@ -1,0 +1,51 @@
+name: Deploy Open-WebUI plugins
+description: Check a folder of Open-WebUI plugins and deploy them (functions, with their tools and skills) to an instance.
+branding:
+  icon: upload-cloud
+  color: blue
+inputs:
+  url:
+    description: Base URL of the Open-WebUI instance.
+    required: true
+  api-key:
+    description: An Open-WebUI admin API key (store it as a secret).
+    required: true
+  plugins-dir:
+    description: The plugins folder, relative to the repository root.
+    default: plugins
+  managed-by:
+    description: Ownership marker written on deployed functions; pruning only touches functions carrying it. Keep it stable.
+    default: open-webui-plugin-protocol
+  only:
+    description: Comma-separated plugin ids to deploy (no pruning). Empty deploys all.
+    default: ""
+  dry-run:
+    description: '"true" lists what would change without writing.'
+    default: "false"
+  check:
+    description: '"false" skips `owpp check` before deploying.'
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v6
+    - name: Check plugins
+      if: inputs.check == 'true'
+      shell: bash
+      env:
+        OWPP_PLUGINS_DIR: ${{ inputs.plugins-dir }}
+      run: uvx --from "$GITHUB_ACTION_PATH" owpp check
+    - name: Deploy plugins
+      shell: bash
+      env:
+        OPEN_WEBUI_URL: ${{ inputs.url }}
+        OPEN_WEBUI_API_KEY: ${{ inputs.api-key }}
+        OWPP_PLUGINS_DIR: ${{ inputs.plugins-dir }}
+        OWPP_MANAGED_BY: ${{ inputs.managed-by }}
+        ONLY: ${{ inputs.only }}
+        DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        args=(deploy)
+        if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
+        if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+        uvx --from "$GITHUB_ACTION_PATH" owpp "${args[@]}"

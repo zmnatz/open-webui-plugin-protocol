@@ -1,0 +1,103 @@
+# Open-WebUI plugin protocol
+
+Write, test and deploy [Open-WebUI](https://github.com/open-webui/open-webui) plugins from a git repository.
+
+A **plugin** is a folder: a function (the parent), plus an optional tool and skills that are installed when the function is enabled and removed when it is disabled. Shared libraries cover what every plugin ends up re-implementing: HTTP routes that survive reloads, scheduled jobs that run on one worker, data stored with a chat, static files. A CLI (`owpp`) checks, bundles and deploys them, from a laptop or a GitHub Action.
+
+```
+plugins/excalidraw/
+  plugin.yaml          function + tool + libraries, in one manifest
+  function.py          class Filter: serves the editor, adds it to replies
+  tool.py              class Tools: lets the model read and change the drawing
+  shared.py            code both need
+  templates/viewer.html   the page, kept out of Python strings
+  README.md            what it is, how to test it, how to deploy it
+```
+
+```yaml
+# plugin.yaml
+function:
+  title: Excalidraw
+  version: 3.1.0
+  global: true
+tool:
+  id: excalidraw
+  include: [chat_data]
+  access: public
+include: [routes, chat_data]
+```
+
+```sh
+uvx owpp list
+#  excalidraw              filter (global)
+#  mcpo_sync               event
+uvx owpp check                       # bundle, compile, report undefined names
+uvx owpp deploy --only excalidraw --dry-run
+```
+
+## Why
+
+Open-WebUI stores each function and tool as **one code blob**, edited in the admin UI. That makes it hard to review changes, share code between plugins, keep a tool in step with the function it belongs to, or pin third-party code. This project:
+
+- **bundles a folder into the single file Open-WebUI stores**, in a fixed order, with vendored libraries and code pulled from any git repo at a pinned commit;
+- **makes the function the parent**: its tool and skills come and go with it;
+- **deploys from git**, updating only what it created (an ownership marker), never hand-made functions.
+
+## Install
+
+Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (for remote sources). Nothing to install: `uvx` runs `owpp` straight from PyPI. To have it on your `PATH`, `uv tool install owpp` (or `pipx install owpp`).
+
+```sh
+uvx owpp init hello --type event     # scaffold plugins/hello/
+uvx owpp check
+OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
+```
+
+## Deploy from GitHub Actions
+
+```yaml
+- uses: actions/checkout@v5
+- uses: zmnatz/open-webui-plugin-protocol@v0.1.0
+  with:
+    url: https://chat.example.com
+    api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
+    plugins-dir: plugins
+```
+
+## Documentation
+
+| | |
+| --- | --- |
+| [Overview](docs/README.md) | concepts, guarantees, status |
+| [Authoring guide](docs/authoring.md) | function types, conventions, checklist |
+| [Plugin format](docs/plugin-format.md) | `plugin.yaml` reference |
+| [Bundling](docs/bundling.md) | exactly what gets deployed; git sources |
+| [Runtime](docs/runtime.md) | install/remove of tools and skills, parent valves |
+| [Libraries](docs/libraries.md) | `core`, `routes`, `jobs`, `events`, `chat_data`, `static`, `templates`, `assets`, Shared Assets |
+| [Tooling](docs/tooling.md) | CLI, deploy settings, ownership marker, GitHub Action, tests |
+| [Adopting](docs/adopting.md) | new repositories, migrating existing functions |
+| [Decisions](docs/decisions.md) | the calls made for 0.1.0 and what is not done yet |
+| [Security](SECURITY.md) | the trust model, what `owpp` limits, known limits, how to report |
+
+## Examples
+
+[`examples/plugins/`](examples/plugins): `excalidraw` (filter + tool + page), `mcpo_sync` (scheduled event), `stale_data` (admin dashboard), `inline_visualizer` (third-party tool and skill from a pinned commit), `page_banners` (a variant of Better Banners: its script and stylesheet are files in `assets/`).
+
+## Status
+
+0.1.0, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules; there is no live end-to-end test yet. See [decisions](docs/decisions.md#not-done-yet).
+
+## Development
+
+```sh
+uv sync
+uv run pytest
+uv run ruff check . && uv run ruff format --check .
+uv run owpp check --dir examples/plugins
+```
+
+## Licence
+
+MIT ([LICENSE](LICENSE)). Vendored third-party code (Classic298's Shared Assets Protocol, BSD-3-Clause): [NOTICE.md](NOTICE.md).
+
+This project contains no Open WebUI code: it talks to Open WebUI's API and produces plugins that run inside it. It is an independent project, **not affiliated with or endorsed by Open WebUI Inc.**; "Open WebUI" is used only to say what it works with. Open WebUI itself is under the [Open WebUI License](https://github.com/open-webui/open-webui/blob/main/LICENSE).

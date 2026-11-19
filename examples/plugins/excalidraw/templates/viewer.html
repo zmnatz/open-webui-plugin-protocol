@@ -1,0 +1,220 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Excalidraw</title>
+<!--esm.sh-->
+<link rel="stylesheet" href="https://esm.sh/@excalidraw/excalidraw@__VERSION__/dist/prod/index.css">
+<script type="importmap">
+{"imports":{
+  "react":"https://esm.sh/react@18.3.1",
+  "react/jsx-runtime":"https://esm.sh/react@18.3.1/jsx-runtime",
+  "react-dom":"https://esm.sh/react-dom@18.3.1",
+  "react-dom/client":"https://esm.sh/react-dom@18.3.1/client",
+  "@excalidraw/excalidraw":"https://esm.sh/@excalidraw/excalidraw@__VERSION__?external=react,react-dom"
+}}
+</script>
+<!--/esm.sh-->
+<!--hosted-->
+<link rel="stylesheet" href="__ASSETS_URL__/index.css">
+<!--/hosted-->
+<style>
+html,body,#root{height:100%;margin:0}
+/* Opens libraries.excalidraw.com in a new window, which Open-WebUI's iframe
+   sandbox (no allow-popups) blocks. The library itself still works. */
+.library-menu-browse-button{display:none!important}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="module">
+// The server keeps only one of each <!--esm.sh--> / <!--hosted--> pair (the markers never reach the
+// browser). Hosted (EXCALIDRAW_ASSETS_URL, see self-host/): the editor is one module from your own
+// host and nothing at all comes from the internet. Otherwise it comes from esm.sh via the import map.
+<!--esm.sh-->
+window.EXCALIDRAW_ASSET_PATH =
+  "https://esm.sh/@excalidraw/excalidraw@__VERSION__/dist/prod/";
+const React = await import("react");
+const { createRoot } = await import("react-dom/client");
+const { Excalidraw, MainMenu, convertToExcalidrawElements } =
+  await import("@excalidraw/excalidraw");
+<!--/esm.sh-->
+<!--hosted-->
+window.EXCALIDRAW_ASSET_PATH = "__ASSETS_URL__/";
+const { React, createRoot, Excalidraw, MainMenu, convertToExcalidrawElements } =
+  await import("__ASSETS_URL__/editor.js");
+<!--/hosted-->
+
+// Served at <prefix>/view/<chat id> to a signed-in user; the API lives beside "view".
+// The sandboxed panel sends no cookies, so API calls carry a token: the short-lived
+// one the server renders into this page after checking the login.
+const parts = location.pathname.split("/");
+const id = decodeURIComponent(parts.pop());
+parts.pop();
+const base = parts.join("/");
+const token = "__TOKEN__";
+const url = (query = "") =>
+  `${base}/api/scenes/${encodeURIComponent(id)}?t=${encodeURIComponent(token)}${query}`;
+const me = crypto.randomUUID();
+const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+const hash = (els) => els.map((e) => e.id + ":" + e.version).join(",");
+// Excalidraw goes blank and its zoom control reads "NaN%" once any element
+// has a non-finite x/y: the scene bounds become NaN, and so do zoom and
+// scroll afterwards (there is no recovery in the UI). LLM-authored skeletons
+// can omit or mistype those fields, and conversion passes them through, so
+// repair geometry before and after it.
+const num = (v) => (typeof v === "boolean" || v === "" ? NaN : Number(v));
+const finite = (v) => Number.isFinite(num(v));
+const mid = (e) => [
+  num(e.x) + Math.abs(num(e.width) || 0) / 2,
+  num(e.y) + Math.abs(num(e.height) || 0) / 2,
+];
+// Where the line from e's centre towards `to` leaves e's box, so a bound
+// arrow starts and ends at the shapes rather than through their middles.
+const edge = (e, to) => {
+  const [cx, cy] = mid(e);
+  const [tx, ty] = to;
+  const dx = tx - cx, dy = ty - cy;
+  const w = Math.abs(num(e.width) || 0) / 2, h = Math.abs(num(e.height) || 0) / 2;
+  const s = Math.min(dx ? w / Math.abs(dx) : Infinity, dy ? h / Math.abs(dy) : Infinity);
+  return Number.isFinite(s) ? [cx + dx * s, cy + dy * s] : [cx, cy];
+};
+const repair = (els, converted) => {
+  const list = (Array.isArray(els) ? els : [])
+    .filter((e) => e && typeof e === "object" && !Array.isArray(e))
+    .map((e) => ({ ...e, id: e.id || crypto.randomUUID() }));
+  const byId = new Map(list.map((e) => [e.id, e]));
+  // A skeleton arrow with bindings but no x/y (LLMs often drop it) would end
+  // up at the origin; route it from the bound shape to the other one instead.
+  const route = (e) => {
+    const a = byId.get(e.start?.id), b = byId.get(e.end?.id);
+    if (!a || !b || !finite(a.x) || !finite(a.y) || !finite(b.x) || !finite(b.y)) return null;
+    const p = edge(a, mid(b)), q = edge(b, mid(a));
+    return { x: p[0], y: p[1], points: [[0, 0], [q[0] - p[0], q[1] - p[1]]] };
+  };
+  return list.map((source) => {
+    const e = { ...source };
+    const ends =
+      !converted && (e.type === "arrow" || e.type === "line") && !(finite(e.x) && finite(e.y))
+        ? route(e)
+        : null;
+    e.x = finite(e.x) ? num(e.x) : 0;
+    e.y = finite(e.y) ? num(e.y) : 0;
+    for (const k of ["width", "height", "angle", "fontSize"]) {
+      const fallback = k === "fontSize" ? 16 : 0;
+      if (!(k in e)) {
+        if (converted && k !== "fontSize") e[k] = fallback;
+        continue;
+      }
+      if (finite(e[k])) e[k] = num(e[k]);
+      else if (converted) e[k] = fallback;
+      else delete e[k];
+    }
+    if (Array.isArray(e.points)) {
+      e.points = e.points
+        .filter((p) => Array.isArray(p) && finite(p[0]) && finite(p[1]))
+        .map(([x, y]) => [num(x), num(y)]);
+      if (!e.points.length) {
+        if (converted && (e.type === "arrow" || e.type === "line")) e.points = [[0, 0], [1, 0]];
+        else delete e.points;
+      }
+    }
+    if (ends) Object.assign(e, ends);
+    return e;
+  });
+};
+// LLM-authored skeletons and full elements may be mixed; conversion passes
+// complete elements through and fills in the rest.
+const normalize = (els) =>
+  repair(convertToExcalidrawElements(repair(els, false), { regenerateIds: false }), true);
+
+let api = null, version = -1, lastHash = "", pointerDown = false, timer = null;
+
+async function save(elements) {
+  timer = null;
+  // text/plain keeps this a CORS "simple" request: no preflight.
+  const r = await fetch(url(), {
+    method: "POST",
+    headers: { "content-type": "text/plain;charset=utf-8" },
+    body: JSON.stringify({ client: me, elements }),
+  });
+  if (r.ok) version = (await r.json()).version;
+}
+
+function onChange(elements) {
+  const h = hash(elements);
+  if (h === lastHash) return;
+  lastHash = h;
+  clearTimeout(timer);
+  timer = setTimeout(() => save(elements), 700);
+}
+
+function fit(els) {
+  if (api && els.length) api.scrollToContent(els, { fitToViewport: true, animate: true });
+}
+
+// A non-finite zoom or scroll leaves the canvas blank and its control at
+// "NaN%" with no way back from the UI; reset such a viewport and refit.
+function recover() {
+  if (!api) return;
+  const s = api.getAppState();
+  if (Number.isFinite(s.zoom?.value) && Number.isFinite(s.scrollX) && Number.isFinite(s.scrollY)) return;
+  api.updateScene({ appState: { zoom: { value: 1 }, scrollX: 0, scrollY: 0 } });
+  fit(api.getSceneElements());
+}
+
+async function poll() {
+  try {
+    if (api && !pointerDown && timer === null) {
+      const d = await (await fetch(url(`&since=${version}`))).json();
+      if (d.changed) {
+        version = d.version;
+        if (d.writer !== me) {
+          const els = normalize(d.elements);
+          lastHash = hash(els);
+          api.updateScene({ elements: els });
+          fit(els);
+        }
+      }
+    }
+  } catch (e) { /* server restarting; retry next tick */ }
+  recover();
+  setTimeout(poll, 1500);
+}
+
+const first = await (await fetch(url())).json();
+version = first.version;
+const initial = normalize(first.elements);
+lastHash = hash(initial);
+
+// The default main menu links out (GitHub, X, Discord, Help docs); pop-ups
+// are blocked inside Open-WebUI's sandbox, so offer only in-page items.
+const D = MainMenu.DefaultItems;
+const menu = React.createElement(
+  MainMenu,
+  null,
+  React.createElement(D.SaveAsImage),
+  React.createElement(D.Export),
+  React.createElement(D.SearchMenu),
+  React.createElement(D.ClearCanvas),
+  React.createElement(MainMenu.Separator),
+  React.createElement(D.ToggleTheme),
+  React.createElement(D.ChangeCanvasBackground),
+);
+
+createRoot(document.getElementById("root")).render(
+  React.createElement(Excalidraw, {
+    initialData: { elements: initial, scrollToContent: initial.length > 0 },
+    excalidrawAPI: (a) => { api = a; },
+    onChange,
+    onPointerDown: () => { pointerDown = true; },
+    onPointerUp: () => { pointerDown = false; },
+    theme: dark ? "dark" : "light",
+    UIOptions: { canvasActions: { loadScene: false } },
+  }, menu),
+);
+poll();
+</script>
+</body>
+</html>

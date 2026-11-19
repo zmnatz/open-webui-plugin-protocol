@@ -1,0 +1,17 @@
+function:
+  title: Excalidraw
+  author: zmnatz
+  version: 3.1.0
+  global: true
+  required_open_webui_version: 0.10.0
+  license: MIT
+  description: A shared Excalidraw drawing per chat, opened in the Artifacts side panel.
+tool:
+  id: excalidraw
+  title: Excalidraw
+  description: Show, read and change the shared Excalidraw drawing of the chat.
+  include: [chat_data] # the tool reads and writes the same scene store
+  access: public # everyone may use it when first installed; later changes in the UI are kept
+include: [routes, chat_data] # plugin_mount; the scene store the tool shares
+# templates/viewer.html is embedded and rendered by the page (never served raw); config.yaml (assets_url) is
+# read with plugin_config(). Both are picked up automatically.

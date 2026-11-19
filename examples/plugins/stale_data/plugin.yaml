@@ -1,0 +1,9 @@
+function:
+  title: Stale Data Dashboard
+  author: zmnatz
+  version: 1.3.0
+  required_open_webui_version: 0.10.0
+  license: MIT
+  description: A read-only admin page listing chats, notes and files older than a threshold.
+include: [routes, events] # plugin_mount, and @on(...) event handlers
+# templates/index.html is the page's template, filled in by the admin-only route and never served raw.

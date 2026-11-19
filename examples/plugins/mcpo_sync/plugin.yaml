@@ -1,0 +1,11 @@
+function:
+  title: mcpo Sync
+  author: zmnatz
+  version: 0.3.0
+  required_open_webui_version: 0.10.0
+  license: MIT
+  description: Open-WebUI Event function that syncs the mcpo servers into Open-WebUI as OpenAPI tool servers.
+# The sync mixin adds ENABLE and SYNC_INTERVAL_MINUTES to the Valves; this is the interval's default
+# (0: only on startup, enable and valve changes), read from the container's environment when the plugin loads.
+jobs:
+  sync_every_minutes: ${MCPO_SYNC_MINUTES:-60}

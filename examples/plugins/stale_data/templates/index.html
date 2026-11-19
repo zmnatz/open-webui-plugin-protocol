@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Stale Data Dashboard</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: #0f172a; color: #e2e8f0; padding: 24px; }
+  .wrap { max-width: 1280px; margin: 0 auto; }
+  h1 { font-size: 1.5em; margin-bottom: 6px; color: #f8fafc; }
+  h2 { font-size: 1.1em; margin: 24px 0 10px; color: #38bdf8; border-bottom: 1px solid rgba(255,255,255,.1); padding-bottom: 6px; }
+  .sub { color: #94a3b8; font-size: .85em; margin-bottom: 20px; }
+  table { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: .85em; background: #1e293b; border-radius: 6px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.08); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  th { color: #94a3b8; font-weight: 600; font-size: .75em; text-transform: uppercase; letter-spacing: .05em; background: #0f172a; }
+  td.id a { color: #60a5fa; text-decoration: none; }
+  td.id a:hover { text-decoration: underline; }
+  .unk { color: #64748b; font-style: italic; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🍄 Stale Data Dashboard</h1>
+  <div class="sub">Items older than <strong>__THRESHOLD__ hour(s)</strong> (Last updated before: __CUTOFF__)</div>
+  <div class="sub">__SCAN__</div>
+  __ERROR__
+
+  <h2>Chats (__N_CHATS__)</h2>
+  <table>
+    <thead><tr><th>Chat Title</th><th>Owner</th><th>Msgs</th><th>Flags</th><th>Created</th><th>Last Updated</th><th>Age</th></tr></thead>
+    <tbody>__CHATS_ROWS__</tbody>
+  </table>
+
+  <h2>Notes (__N_NOTES__)</h2>
+  <table>
+    <thead><tr><th>Note Title</th><th>Owner</th><th>Preview</th><th>Chars</th><th>Flags</th><th>Created</th><th>Last Updated</th><th>Age</th></tr></thead>
+    <tbody>__NOTES_ROWS__</tbody>
+  </table>
+
+  <h2>Files (__N_FILES__)</h2>
+  <table>
+    <thead><tr><th>Filename</th><th>Chat</th><th>Owner</th><th>Size</th><th>Type</th><th>Path</th><th>Hash</th><th>Created At</th><th>Age</th></tr></thead>
+    <tbody>__FILES_ROWS__</tbody>
+  </table>
+</div>
+</body>
+</html>

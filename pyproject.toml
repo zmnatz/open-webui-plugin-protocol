@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "owpp"
+dynamic = ["version"]
+description = "Write, test and deploy Open-WebUI plugins (a function plus its tool and skills) from a git repository."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE", "NOTICE.md"]
+requires-python = ">=3.10"
+dependencies = ["PyYAML>=6.0"]
+keywords = ["open-webui", "plugins", "functions", "tools", "skills", "deploy"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+]
+
+[project.urls]
+Repository = "https://github.com/zmnatz/open-webui-plugin-protocol"
+Changelog = "https://github.com/zmnatz/open-webui-plugin-protocol/blob/main/CHANGELOG.md"
+
+[project.scripts]
+owpp = "owpp.cli:console_main"
+
+[dependency-groups]
+dev = [
+    "fastapi>=0.162.5",
+    "httpx>=0.28.1",
+    "pytest>=8",
+    "ruff>=0.8",
+    "starlette>=1.7.0",
+]
+
+[tool.hatch.version]
+path = "src/owpp/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/owpp"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/owpp", "docs", "examples", "tests", "README.md", "LICENSE", "NOTICE.md", "CHANGELOG.md", "SECURITY.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+# The vendored libraries and the runtime are deployed byte for byte; never reformat them.
+extend-exclude = ["src/owpp/runtime", "examples"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]

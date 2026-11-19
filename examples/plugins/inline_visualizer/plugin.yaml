@@ -1,0 +1,23 @@
+# Inline Visualizer, taken from git (Classic298/open-webui-plugins). The tool and skill are fetched
+# at deploy time from the pinned commit and embedded in this function, which installs them while it
+# is enabled and removes them when it is not. To upgrade, review the upstream diff, then change `ref`
+# to the new commit SHA; it must be a full SHA, never a branch.
+source:
+  git: https://github.com/Classic298/open-webui-plugins.git
+  ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea
+  path: inline-visualizer-v2
+function:
+  title: Inline Visualizer
+  author: zmnatz
+  version: 1.0.0
+  license: MIT
+  global: true
+  description: Installs the Inline Visualizer tool and its visualize skill from Classic298/open-webui-plugins; disabling this function removes both.
+tool:
+  id: inline_visualizer
+  file: tool.py
+  access: public
+skills:
+  visualize:
+    file: SKILL.md
+    access: public

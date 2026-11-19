@@ -1,0 +1,66 @@
+# Open-WebUI plugin protocol
+
+A way to write, test and deploy Open-WebUI **plugins** from a git repository: a function (the parent) plus an optional tool and skills, installed and removed together, with shared libraries for the things every plugin ends up needing (routes, background jobs, per-chat data, static files).
+
+Open-WebUI stores a function or tool as **one code blob** and cannot import siblings. This protocol is the layer that makes a folder of files behave like one plugin:
+
+1. A **plugin** is a folder with a `plugin.yaml` manifest ([plugin format](plugin-format.md)).
+2. A **bundler** turns the folder into the single file Open-WebUI stores, in a fixed order, and can pull function, tool and skill code from any git repo at a pinned commit ([bundling](bundling.md)).
+3. A **runtime**, appended to the bundle, makes the function the parent: enabling it installs its tool and skills, disabling or deleting it removes them ([runtime](runtime.md)).
+4. **Libraries** are vendored Python blocks a manifest lists under `include:` ([libraries](libraries.md)).
+5. A **CLI and a deploy script** check, bundle and deploy one plugin or all of them, from a laptop or CI ([tooling](tooling.md)).
+
+## Reading order
+
+| If you want to... | Read |
+| --- | --- |
+| Write a plugin | [authoring guide](authoring.md), then [plugin format](plugin-format.md) |
+| Know exactly what ends up in the deployed file | [bundling](bundling.md) |
+| Understand install/remove, valves and sync | [runtime](runtime.md) |
+| Use routes, jobs, chat data, static files and templates | [libraries](libraries.md) |
+| Test, deploy, set up CI | [tooling](tooling.md) |
+| Use it in your repository, or move existing functions over | [adopting](adopting.md) |
+| Know why it is the way it is | [decisions](decisions.md) |
+| Know what you are trusting, and how to report a problem | [security](../SECURITY.md) |
+
+## At a glance
+
+```
+plugins/<id>/
+  plugin.yaml      function: (parent) / tool: / skills: / source: / include: / public:
+  function.py      the function's code        (a Filter, Event, Action or Pipe)
+  tool.py          optional tool code
+  shared.py        optional code both need, placed in front of each
+  skills/<id>/     optional skills, whole folders
+  static/          optional files served at /<id>/<path>
+  templates/       optional files the function renders itself (never served)
+  README.md        what it is, how to test it, how to deploy it
+```
+
+```yaml
+# plugin.yaml
+function:
+  title: My Plugin
+  author: me
+  version: 1.0.0
+  global: true            # filters and actions only
+include: [routes, chat_data]
+tool: { id: my_plugin, access: public }
+```
+
+```
+owpp list                            # plugins and their function type
+owpp check my_plugin                 # bundle, compile, find undefined names
+owpp deploy --only my_plugin --dry-run
+```
+
+## Guarantees
+
+- **Reproducible.** A bundle depends only on the folder and the pinned git commits it names. Libraries are vendored byte for byte.
+- **Reviewed upgrades.** Remote code is referenced by full commit SHA, never a branch or tag, because it runs inside Open-WebUI with admin rights.
+- **Owned objects only.** The deploy marks what it creates (`meta.managed_by`) and only ever updates or deletes those. Hand-made functions are never touched.
+- **No surprises on disable.** Whatever a function installed (tools, skills, routes, background jobs) goes away or stops when it is disabled.
+
+## Status and limits
+
+Written against Open-WebUI **v0.13.4**. API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) were read from that source, and the libraries are tested against stubbed Open-WebUI modules, not a live instance. Known gaps are collected in [decisions](decisions.md#not-done-yet).

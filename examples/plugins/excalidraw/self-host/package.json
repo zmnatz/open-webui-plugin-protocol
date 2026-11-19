@@ -1,0 +1,11 @@
+{
+  "name": "excalidraw-self-host",
+  "private": true,
+  "type": "module",
+  "description": "Builds a self-hostable copy of the editor the Excalidraw plugin loads. The versions must match EXCALIDRAW_VERSION in ../shared.py.",
+  "dependencies": {
+    "@excalidraw/excalidraw": "0.18.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  }
+}
