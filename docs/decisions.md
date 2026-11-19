@@ -54,6 +54,13 @@ The first standalone release was cut without a round of review, so these are the
 - **`live_reload` is opt-in** (`include: [live_reload]`): it needs Open-WebUI 0.11+ and imports `JSONCodec` at load, so it would break older instances if it were automatic.
 - **Not verified against a live Open-WebUI.** The assets library is tested through the real protocol block and Starlette routing (`tests/test_assets.py`), with Open-WebUI's own modules stubbed.
 
+## Documentation and review
+
+- **A documentation site, built with MkDocs and the Material theme, published to GitHub Pages.** Docusaurus was the other candidate. MkDocs is Python, so it installs into the same uv environment as everything else (`uv sync --group docs`), it builds the existing `docs/*.md` as they are, and its hooks are plain Python that can read the tests and `git log`. Docusaurus would bring a Node toolchain into a Python repository for features (React pages, versioned docs) nothing here needs yet. Material for MkDocs has announced end of life on 2027-05-05, with Zensical, from the same team and able to read `mkdocs.yml`, as its successor. Moving over is a later decision.
+- **The pages for review are generated, never written by hand.** The test catalogue comes from the test docstrings, the audit trail from `git log`, the examples overview from each `plugin.yaml`, and the changelog, security and notice pages from the root files (`tools/docs_hooks.py`). Generated pages cannot drift from the code, and a test with no description shows up as a gap.
+- **Every plugin test says how to repeat it by hand** (`By hand:` in its docstring, [testing](testing.md#describe-every-test)), and `tests/test_test_docs.py` fails when one does not. The mock is not Open-WebUI, so a person still has to see each behaviour on a live instance before a release. The docstring keeps those steps next to the test that covers the same behaviour.
+- **The audit trail shows names, never email addresses.** They are stripped from commit trailers before the page is built.
+
 ## Licensing
 
 - MIT for this repository. It contains no Open WebUI source (it uses Open WebUI's API, and plugins import Open WebUI modules at runtime), so Open WebUI's own licence, a BSD-3 variant with a branding clause, is not inherited. MIT matches what community functions and tools use. The README says the project is not affiliated with or endorsed by Open WebUI Inc., per clause 3 of that licence.

@@ -22,6 +22,9 @@ Open-WebUI stores a function or tool as **one code blob** and cannot import sibl
 | Test, deploy, set up CI | [tooling](tooling.md) |
 | Use it in your repository, or move existing functions over | [adopting](adopting.md) |
 | Know why it is the way it is | [decisions](decisions.md) |
+| Review a change, or repeat the tests by hand | [reviewing](reviewing.md), [test catalogue](reference/test-catalogue.md) |
+| Make a change to this repository | [making a change](contributing.md) |
+| See every change so far | [audit trail](project/audit-trail.md), [changelog](../CHANGELOG.md) |
 | Know what you are trusting, and how to report a problem | [security](../SECURITY.md) |
 
 ## At a glance

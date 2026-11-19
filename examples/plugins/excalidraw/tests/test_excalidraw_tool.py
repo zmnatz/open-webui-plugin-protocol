@@ -25,6 +25,12 @@ def tool(owui, plugin):
 
 
 def test_loading_the_function_installs_the_tool_for_everyone(owui, plugin):
+    """Loading the function installs an Excalidraw tool, marked as the function's own and readable
+    by everyone.
+
+    By hand: after installing the function, Workspace > Tools lists Excalidraw, and a user who
+    is not an admin can turn it on in a chat.
+    """
     tool = owui.tools["excalidraw"]
     assert tool.name == "Excalidraw"
     assert tool.meta.manifest["parent_function_id"] == "excalidraw"
@@ -34,6 +40,12 @@ def test_loading_the_function_installs_the_tool_for_everyone(owui, plugin):
 
 
 def test_the_tool_goes_with_the_function_and_comes_back_with_it(owui, plugin):
+    """Disabling the function removes the tool, enabling puts it back, and deleting the function
+    removes it.
+
+    By hand: under Admin Panel > Functions switch Excalidraw off: it is gone from Workspace >
+    Tools. Switch it on: it is back. Delete the function: it is gone.
+    """
     owui.disable("excalidraw")
     assert "excalidraw" not in owui.tools
     owui.enable("excalidraw")
@@ -43,6 +55,13 @@ def test_the_tool_goes_with_the_function_and_comes_back_with_it(owui, plugin):
 
 
 def test_a_hand_made_tool_with_the_same_id_is_left_alone(owui, plugin_dir):
+    """A tool with the id excalidraw that someone made by hand is neither overwritten when the
+    function loads nor removed when it is disabled.
+
+    By hand: with the function deleted, create a tool with the id excalidraw under Workspace >
+    Tools, then install the function. Your tool's code is unchanged. Disable the function: your
+    tool is still there.
+    """
     from owpp.testing import Record
 
     owui.tools["excalidraw"] = Record(
@@ -55,6 +74,13 @@ def test_a_hand_made_tool_with_the_same_id_is_left_alone(owui, plugin_dir):
 
 
 def test_every_method_the_model_sees_explains_the_element_format(tool):
+    """The model is offered the five drawing methods. Those that take elements explain the skeleton
+    format, and arguments Open-WebUI fills in, such as __metadata__, are not shown as
+    parameters.
+
+    By hand: open the tool under Workspace > Tools and read the docstrings of these five
+    methods. What the model is actually sent is only visible in this test.
+    """
     specs = {s["name"]: s for s in tool.specs}
     assert set(specs) == {
         "show_excalidraw",
@@ -76,6 +102,12 @@ def scene(owui, chat_id):
 
 
 def test_show_creates_the_drawing_and_hands_the_filter_an_artifact(owui, tool, ada):
+    """show_excalidraw stores the elements in the chat (version 1, written by the tool) and returns
+    an artifact whose iframe opens /excalidraw/view/<chat id>.
+
+    By hand: in a new chat with the tool on, ask "draw a rectangle". The editor opens at this
+    chat's /excalidraw/view/ URL with one rectangle in it.
+    """
     chat = owui.add_chat(ada)
     result = tool.call("show_excalidraw", elements=[RECT], chat_id=chat, user=ada)
     assert result["version"] == 1
@@ -85,18 +117,34 @@ def test_show_creates_the_drawing_and_hands_the_filter_an_artifact(owui, tool, a
 
 
 def test_show_again_without_elements_changes_nothing(owui, tool, ada):
+    """Calling show_excalidraw again with no elements only shows the drawing; the version stays the
+    same.
+
+    By hand: after the first drawing, ask "show the drawing again". It is the same drawing.
+    """
     chat = owui.add_chat(ada)
     tool.call("show_excalidraw", elements=[RECT], chat_id=chat)
     assert tool.call("show_excalidraw", chat_id=chat)["version"] == 1
 
 
 def test_the_drawing_is_kept_beside_the_chats_other_metadata(owui, tool, ada):
+    """The drawing is stored alongside the chat's other metadata, such as its tags, and they are
+    kept.
+
+    By hand: tag a chat, then have the model draw in it. The tag is still there.
+    """
     chat = owui.add_chat(ada, meta={"tags": ["work"]})
     tool.call("show_excalidraw", elements=[RECT], chat_id=chat)
     assert owui.chat(chat).meta["tags"] == ["work"]
 
 
 def test_upsert_merges_by_id_and_gives_new_elements_an_id(owui, tool, ada):
+    """upsert_excalidraw_elements updates the elements whose id matches and adds the rest, giving
+    each new one an id.
+
+    By hand: after a rectangle, ask the model to "move the rectangle right and add the text hi".
+    The rectangle moves (there is not a second one) and the text appears.
+    """
     chat = owui.add_chat(ada)
     tool.call("show_excalidraw", elements=[RECT], chat_id=chat)
     tool.call(
@@ -110,12 +158,22 @@ def test_upsert_merges_by_id_and_gives_new_elements_an_id(owui, tool, ada):
 
 
 def test_models_may_pass_elements_as_json_text(owui, tool, ada):
+    """Elements passed as a JSON string, as some models do, are accepted.
+
+    By hand: not reliably repeatable: whether the model sends a string depends on the model.
+    """
     chat = owui.add_chat(ada)
     tool.call("upsert_excalidraw_elements", elements=json.dumps(RECT), chat_id=chat)
     assert scene(owui, chat)["elements"] == [RECT]
 
 
 def test_replace_discards_everything_and_delete_takes_bound_text_with_its_shape(owui, tool, ada):
+    """replace_excalidraw_elements discards the drawing and stores exactly what it is given.
+    Deleting a shape also deletes the text bound to it.
+
+    By hand: ask for a box labelled B and a second box, then "delete box B". Its label goes with
+    it, and the other box stays.
+    """
     chat = owui.add_chat(ada)
     label = {"type": "text", "id": "t", "containerId": "b", "x": 0, "y": 0, "text": "B"}
     tool.call(
@@ -129,6 +187,13 @@ def test_replace_discards_everything_and_delete_takes_bound_text_with_its_shape(
 
 
 def test_read_shows_the_model_a_compact_drawing(owui, tool, ada):
+    """read_excalidraw gives the model a compact drawing: rendering detail (roughness, seed) and
+    deleted elements are left out, a shape's bound text becomes its label, and an arrow's
+    binding is shown as start: {id}.
+
+    By hand: draw a labelled box with an arrow from it, then ask the model to describe the
+    drawing. It names the box by its label and says the arrow starts at it.
+    """
     chat = owui.add_chat(ada)
     tool.call(
         "replace_excalidraw_elements",
@@ -156,11 +221,21 @@ def test_read_shows_the_model_a_compact_drawing(owui, tool, ada):
 
 
 def test_a_temporary_chat_keeps_its_drawing_in_memory(owui, tool):
+    """In a temporary chat (id local:...), the drawing is kept in memory, not in the database.
+
+    By hand: start a temporary chat, ask for a drawing, then ask the model to describe it. It
+    reads back what it drew.
+    """
     tool.call("show_excalidraw", elements=[RECT], chat_id="local:abc")
     assert json.loads(tool.call("read_excalidraw", chat_id="local:abc"))["elements"] == [RECT]
 
 
 def test_without_a_saved_chat_the_model_is_told_what_to_do(tool):
+    """With no chat id, or a chat not saved yet, the tool fails with a message that tells the model
+    what to do ("send a message first", "not saved yet").
+
+    By hand: hard to catch: it only happens before a new chat's first message is saved.
+    """
     with pytest.raises(RuntimeError, match="send a message first"):
         tool.call("show_excalidraw", chat_id=None)
     with pytest.raises(RuntimeError, match="not saved yet"):

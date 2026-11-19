@@ -64,6 +64,14 @@ def configure(owui, mcpo, **valves):
 
 
 def test_saving_the_valves_syncs_every_mcpo_server_as_a_tool_server(owui, plugin, mcpo):
+    """Saving the valves adds each mcpo server as a tool server: id mcpo-<server>, URL
+    <base>/<server> with openapi.json, bearer auth with the mcpo key, marked as managed by
+    mcpo_sync.
+
+    By hand: set MCPO_BASE_URL and MCPO_API_KEY in the function's valves and save. Admin Panel >
+    Settings > External Tools lists one connection per mcpo server, each at <base>/<server> with
+    bearer auth, and the log says `mcpo Sync: N server(s) synced`.
+    """
     configure(owui, mcpo)
     got = synced(owui)
     assert sorted(got) == ["mcpo-filesystem", "mcpo-other", "mcpo-time"]
@@ -74,6 +82,12 @@ def test_saving_the_valves_syncs_every_mcpo_server_as_a_tool_server(owui, plugin
 
 
 def test_startup_syncs_too_and_a_server_gone_from_mcpo_is_pruned(owui, plugin, mcpo):
+    """It also syncs when Open-WebUI starts, and removes the connection of a server that mcpo no
+    longer has.
+
+    By hand: take a server out of mcpo's config, restart mcpo, then restart Open-WebUI. That
+    server's connection is gone from External Tools and the rest are still there.
+    """
     configure(owui, mcpo)
     mcpo["routes"] = ["time"]
     owui.startup()
@@ -81,17 +95,35 @@ def test_startup_syncs_too_and_a_server_gone_from_mcpo_is_pruned(owui, plugin, m
 
 
 def test_include_and_exclude_pick_the_servers(owui, plugin, mcpo):
+    """INCLUDE_SERVERS limits the sync to the servers it lists, and EXCLUDE_SERVERS takes servers
+    out again; exclude wins.
+
+    By hand: set INCLUDE_SERVERS to "time, other" and EXCLUDE_SERVERS to "other", and save. Only
+    mcpo-time is synced.
+    """
     configure(owui, mcpo, INCLUDE_SERVERS="time, other", EXCLUDE_SERVERS="other")
     assert list(synced(owui)) == ["mcpo-time"]
 
 
 def test_the_key_can_come_from_the_container(owui, plugin, mcpo, monkeypatch):
+    """With the MCPO_API_KEY valve empty, the key comes from Open-WebUI's MCPO_API_KEY environment
+    variable.
+
+    By hand: leave the valve empty, set MCPO_API_KEY in Open-WebUI's environment, restart and
+    save the valves. The servers are synced.
+    """
     monkeypatch.setenv("MCPO_API_KEY", "mcpo-key")
     owui.set_valves("mcpo_sync", MCPO_BASE_URL=mcpo["url"])
     assert "mcpo-time" in synced(owui)
 
 
 def test_without_a_key_it_does_not_call_mcpo(owui, plugin, mcpo, caplog):
+    """With no key anywhere, it does not call mcpo, writes nothing, and logs "MCPO_API_KEY not
+    set".
+
+    By hand: clear the valve and the variable, and save the valves. Nothing is added to External
+    Tools, the log has the warning, and mcpo's log shows no request.
+    """
     with caplog.at_level(logging.WARNING):
         owui.set_valves("mcpo_sync", MCPO_BASE_URL=mcpo["url"])
     assert mcpo["requests"] == 0 and synced(owui) == {}
@@ -99,6 +131,12 @@ def test_without_a_key_it_does_not_call_mcpo(owui, plugin, mcpo, caplog):
 
 
 def test_a_refused_key_is_logged_and_nothing_is_written(owui, plugin, mcpo, caplog):
+    """If mcpo refuses the key, the error (HTTP 401) is logged and the tool servers, including
+    hand-made ones, are left as they were.
+
+    By hand: add a connection by hand under External Tools, set a wrong MCPO_API_KEY and save.
+    The log shows HTTP 401 and your connection is untouched.
+    """
     owui.config["tool_server.connections"] = [{"url": "x", "info": {"id": "manual"}}]
     with caplog.at_level(logging.ERROR):
         owui.set_valves("mcpo_sync", MCPO_BASE_URL=mcpo["url"], MCPO_API_KEY="wrong")
@@ -107,18 +145,31 @@ def test_a_refused_key_is_logged_and_nothing_is_written(owui, plugin, mcpo, capl
 
 
 def test_switched_off_it_does_nothing(owui, plugin, mcpo):
+    """With ENABLE off, it does not contact mcpo, even at startup.
+
+    By hand: turn ENABLE off, save, and restart Open-WebUI. mcpo's log shows no request from it.
+    """
     configure(owui, mcpo, ENABLE=False)
     owui.startup()
     assert mcpo["requests"] == 0
 
 
 def test_another_functions_valves_do_not_trigger_it(owui, plugin, mcpo):
+    """Saving another function's valves does not start a sync.
+
+    By hand: save the valves of some other function. mcpo's log shows no request.
+    """
     owui.function_valves["mcpo_sync"] = {"MCPO_BASE_URL": mcpo["url"], "MCPO_API_KEY": "mcpo-key"}
     owui.emit("function.valves_updated", "someone_else")
     assert mcpo["requests"] == 0
 
 
 def test_with_an_interval_it_schedules_a_repeat(owui, plugin, mcpo):
+    """SYNC_INTERVAL_MINUTES above 0 schedules a repeating sync; 0 cancels it.
+
+    By hand: set SYNC_INTERVAL_MINUTES to 1 and save: `mcpo Sync: N server(s) synced` appears in
+    the log every minute. Set it to 0: it stops.
+    """
     import sys
 
     configure(owui, mcpo, SYNC_INTERVAL_MINUTES=5)
@@ -137,6 +188,14 @@ def connections(plugin, routes=ROUTES):
 
 
 def test_it_applies_the_config_it_ships(plugin):
+    """The sync applies config.yaml: time is renamed Clock, with its description, and enabled;
+    filesystem is disabled but keeps the default name "filesystem (mcpo)"; a server config.yaml
+    does not mention gets "<server> (mcpo)", "<server> MCP server via mcpo (OpenAPI)" and is
+    enabled.
+
+    By hand: after a sync, compare External Tools with config.yaml: the names, descriptions and
+    on/off switches match.
+    """
     got = connections(plugin)
     assert got["mcpo-time"]["info"]["name"] == "Clock"
     assert got["mcpo-time"]["info"]["description"] == "The current time and time zone conversions."
@@ -150,6 +209,12 @@ def test_it_applies_the_config_it_ships(plugin):
 
 
 def test_the_default_enable_comes_from_the_container(plugin, monkeypatch):
+    """MCPO_SERVERS_ENABLED=false makes the servers config.yaml does not mention start switched
+    off.
+
+    By hand: set MCPO_SERVERS_ENABLED=false in Open-WebUI's environment, restart and sync. The
+    servers config.yaml does not mention are listed, switched off.
+    """
     monkeypatch.setenv("MCPO_SERVERS_ENABLED", "false")
     assert connections(plugin)["mcpo-other"]["config"] == {"enable": False}
 
@@ -162,6 +227,12 @@ def copy(tmp_path, plugin_dir):
 
 
 def test_a_changed_config_changes_what_is_synced(owui, copy):
+    """Editing config.yaml changes the sync: a top-level enable: false switches every server off by
+    default, and a server's own entry can switch it on and rename it.
+
+    By hand: change config.yaml to the text above, deploy, and save the valves. mcpo-time is
+    off, and mcpo-other is on and named Other.
+    """
     (copy / "config.yaml").write_text("enable: false\nservers:\n  other: {enable: true, name: Other}\n")
     got = connections(owui.load(copy))
     assert got["mcpo-time"]["config"] == {"enable": False}  # the global default flipped
@@ -171,11 +242,21 @@ def test_a_changed_config_changes_what_is_synced(owui, copy):
 
 @pytest.mark.parametrize("config", ["servers: [time, filesystem]\n", "servers:\n  time: just-a-string\n"])
 def test_a_malformed_servers_entry_is_ignored_not_fatal(owui, copy, config):
+    """A servers: that is a list, or a server given as a plain string, is ignored rather than
+    breaking the sync, and the defaults apply.
+
+    By hand: put `servers: [time, filesystem]` in config.yaml, deploy and save the valves. The
+    sync works and the names are the defaults ("time (mcpo)").
+    """
     (copy / "config.yaml").write_text(config)
     assert connections(owui.load(copy))["mcpo-time"]["info"]["name"] == "time (mcpo)"
 
 
 def test_an_empty_config_leaves_the_defaults(owui, copy):
+    """With an empty config.yaml, every server is enabled with the default name.
+
+    By hand: empty config.yaml, deploy and sync. Every server is on, named "<server> (mcpo)".
+    """
     (copy / "config.yaml").write_text("")
     got = connections(owui.load(copy))
     assert all(c["config"] == {"enable": True} for c in got.values())
@@ -186,6 +267,12 @@ def test_an_empty_config_leaves_the_defaults(owui, copy):
 
 
 def test_it_gets_its_sync_valves_from_the_jobs_library(plugin):
+    """Its own valves come first, in order, then ENABLE and SYNC_INTERVAL_MINUTES from the jobs
+    library. With MCPO_SYNC_MINUTES unset, the interval defaults to 60.
+
+    By hand: open the function's valves. MCPO_BASE_URL to REQUEST_TIMEOUT come first, ENABLE and
+    SYNC_INTERVAL_MINUTES (60) last.
+    """
     valves = plugin.valves
     assert valves.ENABLE is True
     assert valves.SYNC_INTERVAL_MINUTES == 60  # plugin.yaml: ${MCPO_SYNC_MINUTES:-60}, nothing set
@@ -202,11 +289,22 @@ def test_it_gets_its_sync_valves_from_the_jobs_library(plugin):
 
 
 def test_the_interval_default_comes_from_the_container(owui, plugin_dir, monkeypatch):
+    """MCPO_SYNC_MINUTES in Open-WebUI's environment sets the default interval.
+
+    By hand: set MCPO_SYNC_MINUTES=15 and restart. On a function whose valves were never saved,
+    SYNC_INTERVAL_MINUTES shows 15.
+    """
     monkeypatch.setenv("MCPO_SYNC_MINUTES", "15")
     assert owui.load(plugin_dir).valves.SYNC_INTERVAL_MINUTES == 15
 
 
 def test_the_interval_default_comes_from_the_manifest(owui, copy):
+    """The default interval can also be written into plugin.yaml in place of
+    ${MCPO_SYNC_MINUTES:-60}.
+
+    By hand: replace it with 15 in plugin.yaml and deploy. On a function whose valves were never
+    saved, SYNC_INTERVAL_MINUTES shows 15.
+    """
     manifest = (copy / "plugin.yaml").read_text()
     (copy / "plugin.yaml").write_text(manifest.replace("${MCPO_SYNC_MINUTES:-60}", "15"))
     assert owui.load(copy).valves.SYNC_INTERVAL_MINUTES == 15
@@ -230,6 +328,13 @@ def persisted(owui, plugin, existing, prune=True, synced_ids=("mcpo-time",)):
 
 
 def test_it_prunes_only_what_it_wrote(owui, plugin):
+    """When it writes the synced servers, it removes only its own (managed_by: mcpo_sync) that mcpo
+    no longer has, replaces its current ones, and keeps hand-made ones and other functions'
+    ones.
+
+    By hand: add a connection by hand under External Tools and sync. Then take a server out of
+    mcpo and sync again: that server's connection is gone, yours is still there.
+    """
     existing = [
         connection("mcpo-stale", "mcpo_sync"),  # written by this function, gone from mcpo
         connection("mcpo-time", "mcpo_sync"),  # written by this function, being replaced
@@ -240,16 +345,31 @@ def test_it_prunes_only_what_it_wrote(owui, plugin):
 
 
 def test_without_pruning_a_stale_entry_of_its_own_is_kept(owui, plugin):
+    """With PRUNE_MANAGED off, its own connection for a server that left mcpo is kept.
+
+    By hand: turn PRUNE_MANAGED off, take a server out of mcpo and sync. That server's
+    connection is still listed.
+    """
     existing = [connection("mcpo-stale", "mcpo_sync"), connection("manual")]
     assert persisted(owui, plugin, existing, prune=False) == ["mcpo-stale", "manual", "mcpo-time"]
 
 
 def test_a_hand_made_entry_with_a_synced_id_is_replaced_not_duplicated(owui, plugin):
+    """A hand-made connection with the same id as a synced one is replaced by it, not duplicated.
+
+    By hand: under External Tools add a connection with the id mcpo-time, then sync. There is
+    one mcpo-time, the synced one.
+    """
     existing = [connection("mcpo-time"), connection("manual")]  # someone typed it in by hand
     assert persisted(owui, plugin, existing) == ["manual", "mcpo-time"]
 
 
 def test_it_will_not_sync_when_it_cannot_tell_which_function_it_is(owui, plugin_dir, caplog):
+    """Loaded under a module name Open-WebUI would never use, it has no function id, so it refuses
+    to sync ("cannot tell which function this is") rather than prune every hand-made connection.
+
+    By hand: not repeatable: Open-WebUI always loads a function under its own function id.
+    """
     # Loaded under a module name Open-WebUI would never use, so it has no function id.
     from owpp.bundle import bundle_function
 

@@ -24,6 +24,12 @@ owpp test excalidraw -- -k token -x             # after --: arguments for pytest
 ```python
 # plugins/stale_data/tests/test_stale_data.py
 def test_only_admins_see_it(owui, plugin):
+    """Signed out, a client gets 401; a user who is not an admin gets 403; an admin gets the
+    dashboard.
+
+    By hand: open /stale-data in a private window (the sign-in page), as a user (403), and as
+    an admin (the dashboard).
+    """
     owui.startup()  # system.startup.completed: it mounts its page
     ada = owui.add_user("Ada")
     assert owui.client().get("/stale-data").status_code == 401
@@ -40,6 +46,15 @@ The fixtures come with owpp (a pytest plugin, registered whenever owpp is instal
 | `plugin` | That plugin, bundled and loaded into `owui`: enabled, with the manifest's valves. Startup has not run yet. |
 
 Outside pytest, use `with MockOpenWebUI() as owui:` from `owpp.testing`.
+
+## Describe every test
+
+Each test starts with a docstring that a person can read without reading the code:
+
+1. **What it checks**, in one or two sentences, in the plugin's terms (pages, valves, chats), not the mock's.
+2. **`By hand:`** the steps to see the same thing on a live Open-WebUI: where to click, what to set, what you should see. A reviewer can repeat them before a release, and they are the source for the README's `## Test` list.
+
+When a test cannot be repeated by hand, its `By hand:` says so and why (for example, "not repeatable: Open-WebUI always loads a function under its own function id"). When it checks files rather than behaviour, it says which files to compare. The [test catalogue](reference/test-catalogue.md) on the documentation site is built from these docstrings, so a missing one shows up there as a gap.
 
 ## The mock
 

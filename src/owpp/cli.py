@@ -101,24 +101,41 @@ METHOD = {
 
 
 TESTS = {
-    "event": """def test_it_starts_with_open_webui(owui, plugin):
+    "event": '''def test_it_starts_with_open_webui(owui, plugin):
+    """It runs its startup work when Open-WebUI starts.
+
+    By hand: restart Open-WebUI and look for the function's startup lines in the log.
+    """
     owui.startup()  # every enabled Event function gets system.startup.completed
-""",
-    "filter": """def test_a_chat_passes_through_unchanged(owui, plugin):
+''',
+    "filter": '''def test_a_chat_passes_through_unchanged(owui, plugin):
+    """A chat request and its reply pass through the filter unchanged.
+
+    By hand: turn the filter on for a model, send "hi": the answer is what it would be without it.
+    """
     user = owui.add_user("Ada")
     body = {"messages": [{"role": "user", "content": "hi"}]}
     assert plugin.inlet(body, user=user) == body
     assert plugin.outlet(body, user=user) == body
-""",
-    "action": """def test_the_action_runs(owui, plugin):
+''',
+    "action": '''def test_the_action_runs(owui, plugin):
+    """The action runs on a message without failing.
+
+    By hand: under a reply, click the action's button: no error toast appears.
+    """
     user = owui.add_user("Ada")
     assert plugin.call("action", {"messages": []}, user=user) is None
-""",
-    "pipe": """def test_it_answers(owui, plugin):
+''',
+    "pipe": '''def test_it_answers(owui, plugin):
+    """It offers one model, and that model answers.
+
+    By hand: pick the model named after the plugin in a new chat and send anything: it answers
+    "Hello from <title>".
+    """
     user = owui.add_user("Ada")
     assert plugin.call("pipes") == [{"id": "default", "name": TITLE}]
     assert plugin.call("pipe", {"messages": []}, user=user) == "Hello from " + TITLE
-""",
+''',
 }
 
 
@@ -193,6 +210,10 @@ TITLE = "{title}"
 
 
 def test_it_loads_with_its_default_valves(plugin):
+    """It loads, and its valves start at their defaults.
+
+    By hand: install it, then open its valves under Admin Panel > Functions: ENABLE is on.
+    """
     assert plugin.valves.ENABLE is True
 
 

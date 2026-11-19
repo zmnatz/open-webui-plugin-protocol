@@ -1,0 +1,75 @@
+# The documentation site, published to GitHub Pages by .github/workflows/docs.yml.
+# Build it locally: uv run --group docs mkdocs serve   (or: mkdocs build --strict)
+site_name: Open-WebUI plugin protocol
+site_description: Write, test and deploy Open-WebUI plugins from a git repository.
+site_url: https://zmnatz.github.io/open-webui-plugin-protocol/
+repo_url: https://github.com/zmnatz/open-webui-plugin-protocol
+repo_name: zmnatz/open-webui-plugin-protocol
+edit_uri: edit/main/docs/
+docs_dir: docs
+
+# Adds the root files, the example READMEs, the test catalogue and the audit trail,
+# and fixes links that point outside docs/ (tools/docs_hooks.py).
+hooks:
+  - tools/docs_hooks.py
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - search.highlight
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle: { icon: material/weather-night, name: Dark mode }
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle: { icon: material/weather-sunny, name: Light mode }
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc: { permalink: true }
+  - pymdownx.details
+  - pymdownx.superfences
+
+validation:
+  links:
+    anchors: warn
+
+nav:
+  - Home: README.md
+  - Guide:
+      - Authoring a plugin: authoring.md
+      - Plugin format: plugin-format.md
+      - Bundling: bundling.md
+      - Runtime: runtime.md
+      - Libraries: libraries.md
+      - Testing: testing.md
+      - Tooling and CI: tooling.md
+      - Adopting it: adopting.md
+  - Examples:
+      - examples/index.md
+      - Excalidraw: examples/excalidraw.md
+      - Inline Visualizer: examples/inline_visualizer.md
+      - mcpo Sync: examples/mcpo_sync.md
+      - Page Banners: examples/page_banners.md
+      - Stale Data Dashboard: examples/stale_data.md
+  - Review and audit:
+      - Reviewing a change: reviewing.md
+      - Making a change: contributing.md
+      - Test catalogue: reference/test-catalogue.md
+      - Audit trail: project/audit-trail.md
+      - Decisions: decisions.md
+      - Changelog: project/changelog.md
+  - Project:
+      - Security: project/security.md
+      - Notice: project/notice.md
+      - Agent instructions:
+          - Issue tracker: agents/issue-tracker.md
+          - Triage labels: agents/triage-labels.md
+          - Domain docs: agents/domain.md
