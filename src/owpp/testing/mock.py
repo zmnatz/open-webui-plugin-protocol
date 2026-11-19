@@ -146,6 +146,75 @@ class _AsyncSession:
 # ---- the plugins it has loaded ----------------------------------------------------------
 
 
+class _MissingName:
+    """Stands in for a name from an `open_webui.*` module the mock does not implement: the
+    import works, so third-party code loads, and using the name says what to add."""
+
+    def __init__(self, module: str, name: str):
+        self._where = f"{module}.{name}"
+
+    def _missing(self, *args, **kwargs):
+        raise NotImplementedError(
+            f"the mock Open-WebUI has no {self._where}; add it to src/owpp/testing/mock.py"
+        )
+
+    __call__ = __fspath__ = __iter__ = __len__ = __getitem__ = __enter__ = __aenter__ = _missing
+
+    def __getattr__(self, attr):
+        if attr.startswith("__"):
+            raise AttributeError(attr)
+        self._missing()
+
+    def __mro_entries__(self, bases):  # `class X(Missing)` at import: a plain base instead
+        return (object,)
+
+
+class _MissingModule(types.ModuleType):
+    def __getattr__(self, name):
+        if name.startswith("__"):
+            raise AttributeError(name)
+        return _MissingName(self.__name__, name)
+
+
+class _MissingFinder:
+    """While the mock is installed, any other `open_webui.*` module imports as a stand-in."""
+
+    def find_spec(self, fullname, path=None, target=None):
+        import importlib.machinery
+
+        if fullname == "open_webui" or fullname.startswith("open_webui."):
+            return importlib.machinery.ModuleSpec(fullname, self, is_package=True)
+        return None
+
+    def create_module(self, spec):
+        module = _MissingModule(spec.name)
+        module.__path__ = []
+        return module
+
+    def exec_module(self, module):
+        pass
+
+
+_MISSING_FINDER = _MissingFinder()
+
+# Pinned git sources fetched for `load()` without `sources=`, once per run: {key: content}.
+_FETCHED: dict[str, Any] = {}
+
+
+def _fetch_pinned(name: str, manifest: dict) -> dict[str, Any]:
+    """The files a `source:` plugin takes from git, fetched as `owpp deploy` does."""
+    from .. import sources as _sources
+    from ..sources import _source_files, fetch_sources, source_key
+
+    keys = [
+        source_key(name, manifest["source"], rel, is_dir) for rel, is_dir in _source_files(manifest)
+    ]
+    missing = [k for k in keys if k not in _FETCHED]
+    if missing:
+        _FETCHED.update(fetch_sources(missing, fetcher=_sources.git_fetcher))
+    return dict(_FETCHED)  # a folder comes back as one key per file, so hand over all
+
+
 class LoadedPlugin:
     """A function as Open-WebUI holds it: its module and the instance of its class."""
 
@@ -256,6 +325,12 @@ class MockOpenWebUI:
 
         self._own_static = static_dir is None
         self.static_dir = Path(static_dir or tempfile.mkdtemp(prefix="owpp-static-"))
+        # DATA_DIR and what Open-WebUI keeps under it (uploads, cache), and a stand-in for
+        # its frontend build, for plugins that read them from open_webui.config /
+        # open_webui.env. Removed on close.
+        self.data_dir = Path(tempfile.mkdtemp(prefix="owpp-data-"))
+        for sub in ("uploads", "cache", "build"):
+            (self.data_dir / sub).mkdir()
         self.static_dir.mkdir(parents=True, exist_ok=True)
         self.secret_key = secret_key
 
@@ -321,6 +396,8 @@ class MockOpenWebUI:
         for name in list(self._saved_modules):
             del sys.modules[name]
         sys.modules.update(self._modules())
+        if _MISSING_FINDER not in sys.meta_path:
+            sys.meta_path.append(_MISSING_FINDER)  # last: only what nothing else provides
 
     def close(self) -> None:
         """Stop the plugins' background tasks and take the mock out of sys.modules."""
@@ -338,9 +415,12 @@ class MockOpenWebUI:
                 del sys.modules[name]
             sys.modules.update(self._saved_modules)
             self._saved_modules = None
+            if _MISSING_FINDER in sys.meta_path:
+                sys.meta_path.remove(_MISSING_FINDER)
         self.engine.dispose()
         if self._own_static:
             shutil.rmtree(self.static_dir, ignore_errors=True)
+        shutil.rmtree(self.data_dir, ignore_errors=True)
 
     # ---- running async code --------------------------------------------------------
 
@@ -533,8 +613,9 @@ class MockOpenWebUI:
     ) -> LoadedPlugin:
         """Bundle a plugin folder as `owpp deploy` would, store it as a function, and load
         it as Open-WebUI does. `valves` are the stored valves (default: the manifest's).
-        `sources` stands in for the files a `source:` plugin takes from git, so a test needs
-        no network: {path inside the source's `path`: text}, e.g. {"tool.py": "class Tools: ..."}.
+        A `source:` plugin's files are fetched from git at the pinned commit, as the deploy
+        does (once per run). `sources` stands in for them instead, so a test needs no network:
+        {path inside the source's `path`: text}, e.g. {"tool.py": "class Tools: ..."}.
         Loading the same id again is an update."""
         from ..sources import source_key
 
@@ -542,10 +623,13 @@ class MockOpenWebUI:
         id = id or folder.name
         manifest = read_manifest(folder)
         fn = manifest.get("function") or {}
-        remote = {
-            source_key(folder.name, manifest.get("source"), rel): text
-            for rel, text in (sources or {}).items()
-        }
+        if sources is None and manifest.get("source"):
+            remote = _fetch_pinned(folder.name, manifest)  # from git, at the pinned commit
+        else:
+            remote = {
+                source_key(folder.name, manifest.get("source"), rel): text
+                for rel, text in (sources or {}).items()
+            }
         if content is None:
             content = bundle_function(folder, remote)
         if content is None:
@@ -721,7 +805,9 @@ class MockOpenWebUI:
         from sqlalchemy.orm import Session
 
         def module(name: str, **attrs) -> types.ModuleType:
-            m = types.ModuleType(name)
+            # A name the mock does not implement still imports, as a stand-in (_MissingName).
+            m = _MissingModule(name)
+            m.__path__ = []  # a package, so the modules it does not have import as stand-ins
             m.__dict__.update(attrs)
             return m
 
@@ -1079,9 +1165,19 @@ class MockOpenWebUI:
         modules.update(
             {
                 "open_webui.main": module("open_webui.main", app=self.app),
+                "open_webui.config": module(
+                    "open_webui.config",
+                    DATA_DIR=str(self.data_dir),
+                    UPLOAD_DIR=str(self.data_dir / "uploads"),
+                    CACHE_DIR=str(self.data_dir / "cache"),
+                    STATIC_DIR=str(self.static_dir),
+                    STORAGE_PROVIDER="",
+                ),
                 "open_webui.env": module(
                     "open_webui.env",
                     WEBUI_SECRET_KEY=self.secret_key,
+                    DATA_DIR=str(self.data_dir),
+                    FRONTEND_BUILD_DIR=str(self.data_dir / "build"),
                     STATIC_DIR=str(self.static_dir),
                     REDIS_KEY_PREFIX="open-webui",
                     REDIS_URL="",

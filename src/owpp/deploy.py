@@ -2,9 +2,10 @@
 (docs/tooling.md). Normally run through the CLI (`owpp deploy`).
 
 The repo is the source of truth: a function whose code differs is updated, one that is
-missing is created, activated and (for a Filter) made global. Existing functions keep
-their active/global state and their valves, which are stored outside the code. A plugin
-that declares `global: true` is kept active and global on every run, not just when created.
+missing is created, activated and (for a Filter, unless it says `global: false`) made
+global. Existing functions keep their active/global state and their valves, which are
+stored outside the code. A plugin that declares `global: true` is kept active and global on
+every run, not just when created; one that declares `global: false` is kept out of global.
 
 Every function it deploys is marked as git-controlled (meta.managed_by, plus a note in the
 description the UI shows). That mark is also the only thing it will delete: a marked
@@ -238,6 +239,14 @@ def _ensure_global(opts: Options, fn_id: str, state: Any) -> list[str]:
     return notes
 
 
+def _ensure_not_global(opts: Options, fn_id: str, state: Any) -> list[str]:
+    """Takes a function declared `global: false` (a toggle) out of global, when it is in."""
+    if _field(state, "is_global"):
+        _call(opts, "POST", f"{API}/id/{fn_id}/toggle/global")
+        return ["made not global"]
+    return []
+
+
 def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
     # The list call is also the credential check: a bad key is a 401/403 here, before
     # anything is written. (A missing single function is a 401 too, so it cannot be used
@@ -277,12 +286,18 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
                     pending.append("activate")
                 if not p.existing.get("is_global"):
                     pending.append("make global")
+            if f.not_global and p.existing and p.existing.get("is_global"):
+                pending.append("make not global")
             action = p.action
             if opts.dry_run:
                 steps = [*([] if p.action == "unchanged" else [p.action]), *pending]
                 action = f"would {', '.join(steps)}" if steps else "unchanged"
             elif pending:
-                notes = _ensure_global(opts, f.id, p.existing)
+                notes = (
+                    _ensure_global(opts, f.id, p.existing)
+                    if f.want_global
+                    else _ensure_not_global(opts, f.id, p.existing)
+                )
                 action = f"unchanged, {', '.join(notes)}"
             results.append(Result(f.id, f.file, action, type=f.type))
             continue
@@ -296,9 +311,12 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
         }
         if p.action == "update":
             updated = _call(opts, "POST", f"{API}/id/{f.id}/update", form)
+            state = updated if updated is not None else p.existing
             notes = (
-                _ensure_global(opts, f.id, updated if updated is not None else p.existing)
+                _ensure_global(opts, f.id, state)
                 if f.want_global
+                else _ensure_not_global(opts, f.id, state)
+                if f.not_global
                 else []
             )
             results.append(Result(f.id, f.file, ", ".join(["updated", *notes]), type=f.type))
@@ -309,9 +327,10 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
         if not _field(created, "is_active"):
             created = _call(opts, "POST", f"{API}/id/{f.id}/toggle")
             notes.append("activated")
-        if (f.want_global or _field(created, "type") == "filter") and not _field(
-            created, "is_global"
-        ):
+        # A new filter is made global (unattached, it does nothing) unless it says
+        # `global: false`: a toggle that each user switches on.
+        default_global = _field(created, "type") == "filter" and not f.not_global
+        if (f.want_global or default_global) and not _field(created, "is_global"):
             _call(opts, "POST", f"{API}/id/{f.id}/toggle/global")
             notes.append("made global")
         results.append(Result(f.id, f.file, ", ".join(["created", *notes]), type=f.type))

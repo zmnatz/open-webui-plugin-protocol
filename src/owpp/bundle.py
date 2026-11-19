@@ -861,6 +861,7 @@ class FunctionFile:
     type: str = ""
     kind: str = "function"
     want_global: bool = False
+    not_global: bool = False  # `global: false`: never global, kept so on every run
     valves: dict | None = None
     name: str = ""
     description: str = ""
@@ -882,7 +883,8 @@ def _make_item(
             f"{file}: a function defines exactly one of class Pipe, Filter, Action or Event "
             f"(found {', '.join(types) if types else 'none'})"
         )
-    want_global = global_ if global_ is not None else meta.get("global") is True
+    declared = global_ if global_ is not None else meta.get("global")
+    want_global = declared is True
     if want_global and types[0] in ("event", "pipe"):
         raise OwppError(
             f"{file}: `global` only applies to filters and actions, not to {types[0]} functions"
@@ -894,6 +896,7 @@ def _make_item(
         file=file,
         id=id.lower(),
         want_global=want_global,
+        not_global=declared is False,
         content=content,
         valves=valves,
         name=text_of(coalesce(meta.get("title"), id)),

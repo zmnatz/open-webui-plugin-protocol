@@ -29,7 +29,7 @@ Header keys become the docstring Open-WebUI reads as the function's manifest, on
 | Key | Meaning |
 | --- | --- |
 | `title`, `author`, `author_url`, `funding_url`, `version`, `license`, `description`, `required_open_webui_version`, ... | Written into the header verbatim. Every value must fit on one line. |
-| `global` | Read by the deploy script only: keep the function active and global on every run. Filters and actions only; an event or pipe with `global` is refused. |
+| `global` | Read by the deploy script only. `true`: keep the function active and global on every run. `false`: never make it global, and take it out of global on every run: for a filter that each user switches on (a toggle). Left out: a new filter is made global once, on first deploy. Filters and actions only; an event or pipe with `global: true` is refused. |
 | `valves` | `{name: value}` applied after deploy, for the declared keys only. |
 | `file` | With `source:`, take the function from the git repo verbatim, header included. Then no header keys are allowed (they come from the file). |
 
@@ -46,7 +46,7 @@ A function has one type, decided as Open-WebUI decides it, by the class defined 
 | **event** | On Open-WebUI lifecycle events (`system.startup.completed`, `function.enable_started`, `function.valves_updated`, ...), not tied to a chat | **no** | Sync jobs, schedulers, routes, dashboards |
 | **pipe** | Appears as a model | no | Custom model backends |
 
-A new filter is made global on first deploy (a filter that is not attached to a model does nothing); `global: true` additionally re-asserts active+global on every run.
+A new filter is made global on first deploy (a filter that is not attached to a model does nothing), unless it says `global: false`; `global: true` additionally re-asserts active+global on every run, and `global: false` keeps it out of global.
 
 ### `tool:`
 
