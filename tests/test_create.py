@@ -357,7 +357,7 @@ def wizard(directory, answers, preset_id="", resolve=lambda git, ref: SHA, check
     return code, out.getvalue(), read
 
 
-HEADER = [""] * 7  # description, author, version, license, Open-WebUI, icon, pip
+HEADER = [""] * 6  # description, author, version, license, Open-WebUI, pip
 # Enter at every question of the event path: ready, id, title, where, type, the header, the
 # event's three, tool, skills, the four of pages and libraries.
 ALL_DEFAULTS = ["", "", "", "", "", *HEADER, "", "", "", "", "", "", "", "", ""]
@@ -377,7 +377,7 @@ class TestWizard:
     def test_a_filter_with_everything(self, tmp_path):
         answers = [
             *["", "notes", "", "here", "filter"],
-            *["Keeps notes.", "me", "", "", "", "", ""],  # header
+            *["Keeps notes.", "me", "", "", "", ""],  # header
             *["1,3,4", "y", "", "y"],  # hooks inlet, stream, outlet; toggle; file_handler; priority
             *["y", "", "lookup, save", "", "", "y", ""],  # tool: id, methods, title, public, UI
             *["y", "take-notes", "Take notes.", "", ""],  # one skill
