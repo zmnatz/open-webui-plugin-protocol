@@ -35,7 +35,7 @@ Updating a vendored library updates every plugin that includes it on its next de
 - **Someone opening a page with no session is not just turned away.** Many sign-ins happen by themselves when the app's home page loads (a proxy's trusted headers, authentication switched off, an OIDC session at the identity provider), so a person who goes straight to a plugin's address has no cookie yet through no fault of their own. For a browser navigation (a `GET` that asks for HTML) the guard therefore:
   1. **tries the sign-ins that need no input**: it calls Open-WebUI's own sign-in endpoint with empty credentials, carrying the request's headers, exactly as its login page does for trusted-header and no-auth setups. The call runs inside the app (no socket, so no host, port or TLS to get wrong). On success it carries on as that user and hands the session cookie to the browser, so the next request has one;
   2. **else sends the browser to Open-WebUI's login page** (`/auth?redirect=<where they were going>`, query string included, always a plain path on this site), which handles OIDC, LDAP and passwords and brings them back;
-  3. but an **iframe** (the Artifacts panel) is signed in if it can be and otherwise gets a 401, never a redirect, since a login page inside a sandboxed panel is no use; and an **API call or fetch** (anything not asking for HTML) always gets a plain **401** and never has a session minted for it.
+  3. but an **iframe** (the Artifacts panel) is signed in if it can be and otherwise gets a 401, never a redirect, since a login page inside a sandboxed panel is no use. Inside the panel it usually *cannot* be: with Open-WebUI's default settings the panel sends no session at all ([below](#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin)); and an **API call or fetch** (anything not asking for HTML) always gets a plain **401** and never has a session minted for it.
 
   OIDC and LDAP cannot be done silently from here (they need a redirect to the identity provider, or a password), which is why the fall back is the login page rather than a failure.
 - `access` is the mount's level: `"user"` (the default), `"admin"` or `"public"`. Anything else, `"Public"` and `True` included, is a `ValueError`, so a typo can never open a mount. Use `name` for a second mount with a different level.
@@ -81,9 +81,30 @@ Which to use: mark each route that needs more than a signed-in user. If **every*
 
 `await plugin_user(request)`: the signed-in user or `None`, for code that has the request but not a marked parameter. `plugin_user(request, token=None)` also takes a session token to use in place of the request's own. `plugin_guard(access=None)` is the dependency behind the markers and the mount.
 
-**The one exception: `guard=`.** A route that cannot carry an Open-WebUI session, such as an API called from a sandboxed iframe (which sends no cookies), can pass its own FastAPI dependency as `guard`, which replaces the sign-in check for that mount only. It must verify a credential that was **minted from a real login**, so keep the page that mints it behind the normal guard. The function must still be enabled. `guard` and `access` cannot be combined.
+**The one exception: `guard=`.** A route that cannot carry an Open-WebUI session, such as an API called from a sandboxed iframe (which sends no cookies), can pass its own FastAPI dependency as `guard`, which replaces the sign-in check for that mount only. It must verify a credential that was **minted from a real login**, so keep the page that mints it behind the normal guard. That page needs a session of its own, which inside the Artifacts panel it only gets with **iframe Sandbox Allow Same Origin** on ([below](#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin)). The function must still be enabled. `guard` and `access` cannot be combined.
 
 `plugin_token(subject, hours=12)` and `plugin_check_token(token, subject)` are that credential, ready-made: a short-lived signed token for one subject (a chat id, say), stateless so every worker agrees, scoped to this function (another plugin's tokens never validate here) and expiring. Mint one inside the signed-in page that loads the iframe, and have the API's guard call `plugin_check_token`. Excalidraw does exactly that: its page needs a login and a writable chat, and its API takes the token the page was rendered with.
+
+### Pages in the Artifacts panel need "iframe Sandbox Allow Same Origin"
+
+A filter can show a plugin's page in the Artifacts panel by putting an `<iframe>` in a reply, as Excalidraw does. The panel is a **sandboxed iframe**, and what it can do depends on a per-user Open-WebUI setting, **iframe Sandbox Allow Same Origin**, which is **off by default** (v0.13.4):
+
+| Setting | The frame's origin | The page behind the guard | Measured on v0.13.4 |
+| --- | --- | --- | --- |
+| off (default) | opaque | gets no session: the `token` cookie is `SameSite=Lax` and is not sent, so the guard answers **401** | `{"detail":"Sign in to Open-WebUI first."}` |
+| on | Open-WebUI's own | gets the session like any page, and can mint a `plugin_token` for its API | 200 |
+
+So **`guard=` covers the API, not the page.** The page has to be loaded by a signed-in user so it can mint the token, and inside the panel that only happens with the setting on. Nothing in this library can change that: the panel's sandbox is Open-WebUI's.
+
+**What the setting costs.** It applies to every artifact, not only yours. With it on, the script in any HTML a model produces runs with Open-WebUI's origin, so it can read the sign-in token Open-WebUI keeps in `localStorage` and call the API as the user; a prompt injection that gets a model to emit such an artifact would work. It is an Open-WebUI permission that no plugin can narrow. Inline Visualizer needs the same setting for live rendering, and its upstream documents it the same way.
+
+**What a plugin that shows a page in the panel must do:**
+
+- **State the requirement and its cost in its README**, with both ways to turn it on: per user under **Settings > Interface**, or for everyone under **Admin Settings > General > Default Interface Settings** (`DEFAULT_INTERFACE_SETTINGS='{"iframeSandboxAllowSameOrigin": true}'`; a user's own setting still wins). Say it is for instances where what models put into artifacts is trusted. Excalidraw's README is the model.
+- **Keep the page behind the normal guard.** Do not make it `public` or put a token in the iframe's address to get around the setting. Both were considered for Excalidraw and refused: a token in the address is written into the chat's stored HTML, readable by anyone who can read the chat, and has expired by the time an old chat is reopened, unless it lives long enough to be a permanent link; a public page that asks the parent window for a credential over `postMessage` needs Open-WebUI to answer, and it does not ([decisions](decisions.md#examples), [issue #6](https://github.com/zmnatz/open-webui-plugin-protocol/issues/6)).
+- **Serve what the page fetches with care.** With the setting off, files the page loads from another host are cross-origin from an opaque origin, so a self-hosted asset server needs `Access-Control-Allow-Origin: *` (Excalidraw's [self-hosting](examples/excalidraw.md#self-hosting-the-editor) section).
+
+This is revisited if Open-WebUI gives artifacts a way to obtain a scoped credential.
 
 **No way around it in code.** `owpp` refuses a `function.py` that calls `include_router`, `add_api_route`, `add_route` or `mount` on the app (`app`, `__app__`, `request.app`, `app.router`), because that adds a route the guard never sees. Mount with `plugin_mount`.
 

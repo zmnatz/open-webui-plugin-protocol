@@ -39,7 +39,7 @@ A plugin that serves HTTP routes from a **filter** (Excalidraw) mounts them when
 Required headings (`owpp init` writes them; add a test like the example repo's if you want them enforced):
 
 - A description: what it does, which libraries it uses, what it changes in Open-WebUI.
-- Settings: valves and any environment variable or external setup the deploy cannot do.
+- Settings: valves and any environment variable or external setup the deploy cannot do. A plugin that shows a page in the Artifacts panel states that it needs **iframe Sandbox Allow Same Origin**, and what that costs ([libraries](libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin)).
 - **`## Test`**: how to check it offline (`owpp check <id>`, `owpp bundle <id>`), what your tests cover, and the steps to verify it on a live Open-WebUI.
 - **`## Deploy`**: its function type, how it gets deployed (CI on merge, or `owpp deploy --only <id>`), and prerequisites.
 
@@ -54,4 +54,5 @@ For a plugin taken from git, also say where it comes from, the pinned commit, an
 - [ ] `owpp check <id>` passes
 - [ ] README has Test and Deploy sections
 - [ ] data-exposing routes are gated
+- [ ] a page in the Artifacts panel: README states the same-origin requirement and its cost
 - [ ] remote code pinned to a full SHA

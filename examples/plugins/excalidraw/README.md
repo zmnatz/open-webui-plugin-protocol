@@ -13,7 +13,7 @@ A shared Excalidraw drawing per chat, opened in the Artifacts side panel.
 
 The function is global and is the parent of the tool: enabling it installs the `excalidraw` Tool (public), disabling or deleting it removes it. By default the editor's code (React, Excalidraw) loads from esm.sh in the user's browser; to run with nothing from the internet, [host it yourself](#self-hosting-the-editor).
 
-Every route requires a signed-in user (the `routes` library). The editor page opens only for a user who can write to the chat (`chat_id: WritableChat`). Its API is called from the sandboxed panel, which sends no cookies, so it takes a short-lived token that is tied to the chat and handed out only on that signed-in page load; there is no permanent link.
+Every route requires a signed-in user (the `routes` library). The editor page opens only for a user who can write to the chat (`chat_id: WritableChat`). Its API is called from the sandboxed panel, so it does not rely on cookies: it takes a short-lived token that is tied to the chat and handed out only on that signed-in page load; there is no permanent link. The page itself needs the session, which inside the panel means the setting [below](#requirement-iframe-sandbox-allow-same-origin) ([libraries](../../../docs/libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin) explains why for any plugin).
 
 Valve (Admin Panel > Functions > Excalidraw): `SESSION_TOKEN_HOURS`.
 
