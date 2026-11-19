@@ -1,0 +1,132 @@
+{
+  "open_webui": "0.13.4",
+  "taken": "2026-11-19",
+  "commit": "7aec192",
+  "shots": [
+    {
+      "file": "deploy/functions.png",
+      "plugin": "deploy",
+      "caption": "The example plugins after `owpp deploy`: one function each, switched on, each marked as controlled by git.",
+      "illustrates": [],
+      "script": "shots_installed.py::test_the_deployed_functions"
+    },
+    {
+      "file": "excalidraw/editor-in-chat.png",
+      "plugin": "excalidraw",
+      "caption": "The model called show_excalidraw; the filter added the editor to the reply, and it opened in the Artifacts panel with the drawing.",
+      "illustrates": [
+        "test_the_tools_artifact_is_added_to_the_reply_as_an_html_block",
+        "test_show_creates_the_drawing_and_hands_the_filter_an_artifact",
+        "test_the_api_serves_the_drawing_with_the_pages_token"
+      ],
+      "script": "shots_excalidraw.py::test_the_editor_opens_beside_the_reply"
+    },
+    {
+      "file": "excalidraw/editor-without-same-origin.png",
+      "plugin": "excalidraw",
+      "caption": "Known limitation: with \"iframe Sandbox Allow Same Origin\" off, Open-WebUI's default, the editor page gets no session and answers 401.",
+      "illustrates": [],
+      "script": "shots_excalidraw.py::test_without_same_origin_the_editor_is_refused"
+    },
+    {
+      "file": "excalidraw/signed-out-redirect.png",
+      "plugin": "excalidraw",
+      "caption": "Signed out, the editor's address sends the browser to Open-WebUI's sign-in page, with a redirect back to the editor.",
+      "illustrates": [
+        "test_the_page_needs_a_signed_in_user"
+      ],
+      "script": "shots_excalidraw.py::test_signed_out_the_editor_sends_you_to_sign_in"
+    },
+    {
+      "file": "inline_visualizer/disabled.png",
+      "plugin": "inline_visualizer",
+      "caption": "With the function switched off, its tool is gone from Workspace > Tools.",
+      "illustrates": [
+        "test_disabling_removes_both_and_enabling_reinstalls_them"
+      ],
+      "script": "shots_installed.py::test_disabling_the_function_removes_them"
+    },
+    {
+      "file": "inline_visualizer/skills.png",
+      "plugin": "inline_visualizer",
+      "caption": "Workspace > Skills: the visualize skill, fetched from upstream at the pinned commit.",
+      "illustrates": [
+        "test_loading_it_installs_the_tool_and_the_skill_for_everyone"
+      ],
+      "script": "shots_installed.py::test_the_skill_the_function_installed"
+    },
+    {
+      "file": "inline_visualizer/tools.png",
+      "plugin": "inline_visualizer",
+      "caption": "Workspace > Tools: the tools the Excalidraw and Inline Visualizer functions installed.",
+      "illustrates": [
+        "test_loading_it_installs_the_tool_and_the_skill_for_everyone",
+        "test_loading_the_function_installs_the_tool_for_everyone"
+      ],
+      "script": "shots_installed.py::test_the_tools_the_functions_installed"
+    },
+    {
+      "file": "mcpo_sync/tool-servers.png",
+      "plugin": "mcpo_sync",
+      "caption": "Admin Settings > Integrations: the mcpo servers, synced as tool servers. config.yaml renames \"time\" to Clock; \"fetch\" keeps the default name.",
+      "illustrates": [
+        "test_saving_the_valves_syncs_every_mcpo_server_as_a_tool_server",
+        "test_it_applies_the_config_it_ships"
+      ],
+      "script": "shots_installed.py::test_the_tool_servers_mcpo_sync_wrote"
+    },
+    {
+      "file": "page_banners/banner-in-a-chat.png",
+      "plugin": "page_banners",
+      "caption": "An admin banner at the top of an existing chat, where Open-WebUI itself shows none.",
+      "illustrates": [
+        "test_the_script_and_the_stylesheet_are_published_into_the_shared_files",
+        "test_the_valves_reach_the_script_as_its_config"
+      ],
+      "script": "shots_page_banners.py::test_banners_show_in_every_chat"
+    },
+    {
+      "file": "page_banners/collapsed.png",
+      "plugin": "page_banners",
+      "caption": "The banners folded into the pill, which counts them. The choice is remembered.",
+      "illustrates": [],
+      "script": "shots_page_banners.py::test_collapsed_into_a_pill"
+    },
+    {
+      "file": "page_banners/live-update.png",
+      "plugin": "page_banners",
+      "caption": "A second banner, added by an admin while this chat was open, appears without a reload.",
+      "illustrates": [
+        "test_an_admin_edit_is_pushed_to_open_tabs"
+      ],
+      "script": "shots_page_banners.py::test_an_edit_reaches_an_open_tab"
+    },
+    {
+      "file": "page_banners/position-bottom.png",
+      "plugin": "page_banners",
+      "caption": "With the position valve set to bottom, the banner sits above the message input.",
+      "illustrates": [
+        "test_the_valves_reach_the_script_as_its_config"
+      ],
+      "script": "shots_page_banners.py::test_above_the_message_input"
+    },
+    {
+      "file": "stale_data/dashboard.png",
+      "plugin": "stale_data",
+      "caption": "The dashboard as an admin: chats older than the threshold, with owners, flags and age. The fresh chat is not listed.",
+      "illustrates": [
+        "test_it_lists_what_is_older_than_the_threshold_and_not_the_rest"
+      ],
+      "script": "shots_stale_data.py::test_the_dashboard_lists_what_is_old"
+    },
+    {
+      "file": "stale_data/not-an-admin.png",
+      "plugin": "stale_data",
+      "caption": "A user who is not an admin gets 403, \"Admins only.\".",
+      "illustrates": [
+        "test_only_admins_see_it"
+      ],
+      "script": "shots_stale_data.py::test_a_user_is_refused"
+    }
+  ]
+}
