@@ -38,6 +38,8 @@ class TestScaffold:
         assert check_bundle(fn.content, "my_plugin.py") is None
         readme = (tmp_path / "my_plugin" / "README.md").read_text()
         assert "\n## Test" in readme and "\n## Deploy" in readme
+        assert "owpp test my_plugin" in readme
+        assert (tmp_path / "my_plugin" / "tests" / "test_my_plugin.py").is_file()
         with pytest.raises(OwppError, match="already exists"):
             scaffold(tmp_path, "my_plugin", kind)
 
@@ -100,6 +102,48 @@ class TestCommands:
             f for f in load_function_files(EXAMPLES, fake_remote(EXAMPLES)) if f.id == "excalidraw"
         ]
         assert [name for name, _ in bundle_parts(fn)] == ["excalidraw", "tool excalidraw"]
+
+
+class TestTestCommand:
+    """`owpp test` runs in a child process: it starts a pytest run of its own."""
+
+    @staticmethod
+    def owpp_test(directory, *args):
+        return subprocess.run(
+            [sys.executable, "-m", "owpp", "test", "--dir", str(directory), *args],
+            capture_output=True,
+            text=True,
+        )
+
+    def test_every_scaffold_passes_its_own_tests(self, tmp_path):
+        for kind in ("event", "filter", "action", "pipe"):
+            scaffold(tmp_path, f"demo_{kind}", kind)
+        done = self.owpp_test(tmp_path, "--", "-p", "no:cacheprovider")
+        assert done.returncode == 0, done.stdout + done.stderr
+        assert "8 passed" in done.stdout
+
+    def test_a_failing_plugin_test_fails_the_command(self, tmp_path):
+        scaffold(tmp_path, "demo", "event")
+        (tmp_path / "demo" / "tests" / "test_more.py").write_text(
+            "def test_valves(plugin):\n    assert plugin.valves.ENABLE is False\n"
+        )
+        done = self.owpp_test(tmp_path, "demo", "--", "-p", "no:cacheprovider")
+        assert done.returncode == 1 and "1 failed, 2 passed" in done.stdout
+
+    def test_it_runs_only_the_plugins_named_and_notes_those_without_tests(self, tmp_path):
+        scaffold(tmp_path, "a", "event")
+        scaffold(tmp_path, "b", "event")
+        (tmp_path / "b" / "tests" / "test_b.py").unlink()
+        (tmp_path / "b" / "tests").rmdir()
+        done = self.owpp_test(tmp_path, "--", "-p", "no:cacheprovider")
+        assert done.returncode == 0 and "note  no tests/ folder: b" in done.stdout
+        assert self.owpp_test(tmp_path, "b").returncode == 1
+        assert "no plugin nope" in self.owpp_test(tmp_path, "nope").stderr
+
+    def test_arguments_after_the_separator_are_only_for_test(self, capsys):
+        with pytest.raises(SystemExit):
+            main(["list", "--", "-x"], env={})
+        assert "only `owpp test`" in capsys.readouterr().err
 
 
 def test_runs_as_a_module_and_reports_its_version():

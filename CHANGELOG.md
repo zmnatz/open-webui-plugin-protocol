@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- `owpp test [id ...]`: runs each plugin's `tests/` folder with pytest against a mock Open-WebUI (`owpp.testing.MockOpenWebUI`, `docs/testing.md`). The mock covers the function, tool and skill tables, users and auth, chats in SQLite, config, the socket, event sinks and the FastAPI app. The `owui`, `plugin_dir` and `plugin` pytest fixtures are registered wherever owpp is installed. The extra `owpp[test]` brings pytest and the packages Open-WebUI ships.
+- `owpp init` scaffolds a `tests/test_<id>.py` that passes.
+- Every example plugin has unit tests in its own `tests/` folder. The example tests that lived in `tests/test_examples.py` moved there.
+- Every example plugin test has a docstring: what it checks, then `By hand:` steps to repeat it on a live Open-WebUI. `owpp init` scaffolds tests that do the same, and `tests/test_test_docs.py` enforces it.
+- A documentation site (Zensical, `zensical.toml`, built by `tools/build_docs.py`), published to GitHub Pages by `.github/workflows/docs.yml`. It adds pages for review: a test catalogue built from the test docstrings, an audit trail built from `git log`, and how to review and make a change.
+
+- Screenshots on a real Open-WebUI: `tools/screenshots/run.py` starts Open-WebUI v0.13.4, a scripted model and mcpo in Docker, deploys `examples/plugins` with `owpp deploy`, and follows the plugins' By hand steps with Playwright (`docs/screenshots.md`). The screenshots are in `docs/screenshots/`, and the site shows them in the test catalogue, on each example's page and on a page of their own. `.github/workflows/screenshots.yml` takes them on GitHub when run by hand.
+- Excalidraw: fixed. With `EXCALIDRAW_ASSETS_URL` unset (the default), the editor never loaded. A comment in `templates/viewer.html` named the block markers, so dropping the self-hosted block also cut out the esm.sh imports (`convertToExcalidrawElements is not defined`). A new test checks that the page's script imports what it uses, in both modes.
+- Excalidraw: documented that the editor needs **iframe Sandbox Allow Same Origin** in Open-WebUI. Without it, the sandboxed panel sends no session and the page answers 401. The README also says what turning it on costs. A design that does not need it is issue #6.
+- mcpo Sync, Stale Data: the README live checks name the v0.13.4 menus (Admin Settings > Integrations > External Tool Servers), and a signed-out visit to the dashboard goes to the sign-in page, not a 404.
+
 ## 0.1.0 (2026-11-18)
 
 First standalone release, extracted from a working deployment.

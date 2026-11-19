@@ -848,6 +848,11 @@ class TestExamples:
             for heading in ("## Test", "## Deploy"):
                 assert f"\n{heading}" in readme, f'{n}/README.md needs a "{heading}" section'
             assert f"owpp check {n}" in readme, f"{n}/README.md should show `owpp check {n}`"
+            assert f"owpp test {n}" in readme, f"{n}/README.md should show `owpp test {n}`"
+
+    def test_every_example_has_unit_tests(self):
+        for n in self.names:
+            assert list((EXAMPLES / n / "tests").glob("test_*.py")), f"{n}/tests/ has no tests"
 
     def test_the_excalidraw_folder_bundles_into_a_complete_function(self):
         (fn,) = [

@@ -18,6 +18,7 @@ Read the upstream diff between the pinned `ref` and the new commit (this code ru
 
 - `owpp check inline_visualizer` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines (the function and any tool it embeds).
 - `owpp bundle inline_visualizer out.py` writes the deployed code to read or diff.
+- `owpp test inline_visualizer` runs `tests/` against a mock Open-WebUI (docs/testing.md).
 - On a live Open-WebUI: enable the function: the log shows the tool and skill being installed; disable it and they are removed.
 
 ## Deploy

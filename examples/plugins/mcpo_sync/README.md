@@ -14,7 +14,8 @@ Valves: `MCPO_BASE_URL` (default `http://mcpo:8000`), `MCPO_API_KEY` (empty uses
 
 - `owpp check mcpo_sync` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines (the function and any tool it embeds).
 - `owpp bundle mcpo_sync out.py` writes the deployed code to read or diff.
-- On a live Open-WebUI: save the valves, then Admin Panel > Settings > External Tools lists the mcpo servers, and the log shows `mcpo Sync: N server(s) synced`.
+- `owpp test mcpo_sync` runs `tests/` against a mock Open-WebUI (docs/testing.md).
+- On a live Open-WebUI: save the valves, then Admin Settings > Integrations > External Tool Servers lists the mcpo servers, and the log shows `mcpo Sync: N server(s) synced`.
 
 ## Deploy
 
