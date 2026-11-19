@@ -710,7 +710,7 @@ def _summary(p: Prompter, folder: Path, spec: PluginSpec, checked: int | None) -
         p.print(f"   $ {cmd}")
     p.print()
     p.note(f"Open-WebUI's plugin docs: {DOCS}")
-    p.note("This repository's: docs/authoring.md, docs/plugin-format.md, docs/libraries.md")
+    p.note("This repository's: docs/creating.md, docs/authoring.md, docs/plugin-format.md")
     p.print()
 
 

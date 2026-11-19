@@ -72,7 +72,8 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 | | |
 | --- | --- |
 | [Overview](docs/README.md) | concepts, guarantees, status |
-| [Authoring guide](docs/authoring.md) | `owpp create`, function types, conventions, checklist |
+| [Creating a plugin](docs/creating.md) | the `owpp create` wizard: code written here, installers, plugins from git |
+| [Authoring guide](docs/authoring.md) | function types, conventions, checklist |
 | [Plugin format](docs/plugin-format.md) | `plugin.yaml` reference |
 | [Bundling](docs/bundling.md) | exactly what gets deployed; git sources |
 | [Runtime](docs/runtime.md) | install/remove of tools and skills, parent valves |

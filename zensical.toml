@@ -19,6 +19,7 @@ site_dir = "site"
 nav = [
   { "Home" = "README.md" },
   { "Guide" = [
+    { "Creating a plugin" = "creating.md" },
     { "Authoring a plugin" = "authoring.md" },
     { "Plugin format" = "plugin-format.md" },
     { "Bundling" = "bundling.md" },
