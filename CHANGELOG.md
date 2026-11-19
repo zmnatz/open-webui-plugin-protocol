@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: saving a parent function's valves (`INSTALL_TOOLS`, `INSTALL_SKILLS`, `TOOL_VALVES`) now applies them. The runtime resyncs on `function.valves_updated`, which Open-WebUI sends when an admin saves the valves; before, they only took effect on the next enable or update. A user saving their own UserValves (`scope: user`) does not resync.
+
 ## 0.1.0 (2026-11-19)
 
 The first standalone release, extracted from a working deployment. On [PyPI](https://pypi.org/project/owpp/) as `owpp`; the GitHub Action is `zmnatz/open-webui-plugin-protocol@v0.1.0`.

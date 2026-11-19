@@ -107,6 +107,5 @@ def test_switching_tools_off_in_the_valves_removes_only_the_tool(owui, plugin):
     By hand: turn INSTALL_TOOLS off in the function's valves and save. Inline Visualizer is gone
     from Workspace > Tools; visualize is still under Workspace > Skills.
     """
-    owui.set_valves("inline_visualizer", INSTALL_TOOLS=False)
-    owui.emit("function.updated", "inline_visualizer")
+    owui.set_valves("inline_visualizer", INSTALL_TOOLS=False)  # sends function.valves_updated
     assert owui.tools == {} and set(owui.skills) == {"visualize"}

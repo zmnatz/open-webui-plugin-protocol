@@ -269,11 +269,26 @@ class PluginRuntime(unittest.TestCase):
             sink.function_id = "demo"
             await sink.handle_event(None, {"event": "function.enabled", "subject": {"id": "other"}})
             self.assertEqual(self.fake.tools, {})
-            await sink.handle_event(
-                None, {"event": "function.valves_updated", "subject": {"id": "demo"}}
-            )
+            await sink.handle_event(None, {"event": "chat.created", "subject": {"id": "demo"}})
             self.assertEqual(self.fake.tools, {})
             await sink.handle_event(None, {"event": "function.enabled", "subject": {"id": "demo"}})
+            self.assertEqual(len(self.fake.tools), 2)
+
+        asyncio.run(run())
+
+    def test_saving_the_valves_resyncs_but_a_users_own_valves_do_not(self):
+        async def run():
+            sink = self.rt._PluginSink()
+            sink.function_id = "demo"
+            user_scope = {
+                "event": "function.valves_updated",
+                "subject": {"id": "demo"},
+                "data": {"scope": "user"},
+            }
+            await sink.handle_event(None, user_scope)
+            self.assertEqual(self.fake.tools, {})
+            admin = {"event": "function.valves_updated", "subject": {"id": "demo"}, "data": {}}
+            await sink.handle_event(None, admin)
             self.assertEqual(len(self.fake.tools), 2)
 
         asyncio.run(run())
