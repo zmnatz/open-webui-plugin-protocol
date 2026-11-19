@@ -10,11 +10,21 @@ Two settings can come from the Open-WebUI container's environment, written as te
 
 Valves: `MCPO_BASE_URL` (default `http://mcpo:8000`), `MCPO_API_KEY` (empty uses the container's `MCPO_API_KEY` environment variable), `INCLUDE_SERVERS`, `EXCLUDE_SERVERS`, `PRUNE_MANAGED`, `REQUEST_TIMEOUT`, `SYNC_INTERVAL_MINUTES`, `ENABLE`.
 
+**Moving from another sync.** Entries an earlier sync wrote carry its marker, not this function's id, so they are never pruned (only one whose id collides with a synced server is replaced). Name that marker in `plugin.yaml` and deploy, and they are treated as this function's own from the next sync on:
+
+```yaml
+jobs:
+  adopt_markers: [mcpo-sync]   # an earlier sync's managed_by markers
+```
+
+It is part of the plugin's definition, not a valve: which sync this one succeeds is fixed by the deployment, not changed in the UI ([plugin format](../../../docs/plugin-format.md#jobs)).
+
 ## Test
 
 - `owpp check mcpo_sync` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines (the function and any tool it embeds).
 - `owpp bundle mcpo_sync out.py` writes the deployed code to read or diff.
-- On a live Open-WebUI: save the valves, then Admin Panel > Settings > External Tools lists the mcpo servers, and the log shows `mcpo Sync: N server(s) synced`.
+- `owpp test mcpo_sync` runs `tests/` against a mock Open-WebUI (docs/testing.md).
+- On a live Open-WebUI: save the valves, then Admin Settings > Integrations > External Tool Servers lists the mcpo servers, and the log shows `mcpo Sync: N server(s) synced`.
 
 ## Deploy
 

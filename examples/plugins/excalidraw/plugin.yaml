@@ -13,5 +13,4 @@ tool:
   include: [chat_data] # the tool reads and writes the same scene store
   access: public # everyone may use it when first installed; later changes in the UI are kept
 include: [routes, chat_data] # plugin_mount; the scene store the tool shares
-# templates/viewer.html is embedded and rendered by the page (never served raw); config.yaml (assets_url) is
-# read with plugin_config(). Both are picked up automatically.
+# templates/viewer.html is rendered by the page; config.yaml is read with plugin_config().

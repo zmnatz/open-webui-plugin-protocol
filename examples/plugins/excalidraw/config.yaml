@@ -1,3 +1,2 @@
-# Where to find a self-hosted copy of the editor (see self-host/ and the README). Empty loads it from
-# esm.sh. Read from the Open-WebUI container's environment when the plugin loads.
+# URL of a self-hosted editor (self-host/); empty loads it from esm.sh.
 assets_url: ${EXCALIDRAW_ASSETS_URL:-}

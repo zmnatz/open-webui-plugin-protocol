@@ -7,7 +7,7 @@ Enabling the function (it is global) installs the tool `inline_visualizer` and t
 ## Settings the deploy cannot make
 
 - Admin Settings > General > **Skill Read Limit**: raise to 50000 or more (default 20000 can cut the skill short).
-- Each user: Settings > Interface > **iframe Sandbox Allow Same Origin**, or live rendering shows "Streaming visualization unavailable".
+- Each user: Settings > Interface > **iframe Sandbox Allow Same Origin**, or live rendering shows "Streaming visualization unavailable". For everyone at once: Admin Settings > General > Default Interface Settings, or `DEFAULT_INTERFACE_SETTINGS='{"iframeSandboxAllowSameOrigin": true}'`. It lets the script of *any* artifact reach Open-WebUI's origin, the sign-in token included, so turn it on only where you trust what the models produce. Excalidraw needs the same setting ([its README](../excalidraw/README.md#requirement-iframe-sandbox-allow-same-origin)).
 - The tool's valves (`security_level`, `chime`) are changed in Workspace > Tools; the deploy does not set them.
 
 ## Upgrading
@@ -18,6 +18,7 @@ Read the upstream diff between the pinned `ref` and the new commit (this code ru
 
 - `owpp check inline_visualizer` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines (the function and any tool it embeds).
 - `owpp bundle inline_visualizer out.py` writes the deployed code to read or diff.
+- `owpp test inline_visualizer` runs `tests/` against a mock Open-WebUI (docs/testing.md).
 - On a live Open-WebUI: enable the function: the log shows the tool and skill being installed; disable it and they are removed.
 
 ## Deploy

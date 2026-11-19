@@ -1,5 +1,4 @@
-# The Excalidraw tool: lets the model show, read and change the chat's drawing.
-# (Imports and the scene store come from shared.py.)
+# Lets the model show, read and change the chat's drawing. Imports come from shared.py.
 
 ELEMENT_DOC = """\
 Elements use Excalidraw's skeleton format. Every element, arrows included, needs
@@ -47,8 +46,7 @@ class Tools:
             pass_new=True,
         )
         src = f"{PREFIX}/view/{quote(chat_id, safe='')}"
-        # The Filter half of this file appends this to the reply as an
-        # ```html block, which Open-WebUI opens in the Artifacts panel.
+        # The function's outlet adds this to the reply as an ```html block for the Artifacts panel.
         artifact = (
             f'<iframe src="{src}" title="Excalidraw" '
             'style="position:fixed;inset:0;width:100%;height:100%;border:0" '

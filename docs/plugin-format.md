@@ -29,7 +29,7 @@ Header keys become the docstring Open-WebUI reads as the function's manifest, on
 | Key | Meaning |
 | --- | --- |
 | `title`, `author`, `author_url`, `funding_url`, `version`, `license`, `description`, `required_open_webui_version`, ... | Written into the header verbatim. Every value must fit on one line. |
-| `global` | Read by the deploy script only: keep the function active and global on every run. Filters and actions only; an event or pipe with `global` is refused. |
+| `global` | Read by the deploy script only. `true`: keep the function active and global on every run. `false`: never make it global, and take it out of global on every run: for a filter that each user switches on (a toggle). Left out: a new filter is made global once, on first deploy. Filters and actions only; an event or pipe with `global: true` is refused. |
 | `valves` | `{name: value}` applied after deploy, for the declared keys only. |
 | `file` | With `source:`, take the function from the git repo verbatim, header included. Then no header keys are allowed (they come from the file). |
 
@@ -46,7 +46,7 @@ A function has one type, decided as Open-WebUI decides it, by the class defined 
 | **event** | On Open-WebUI lifecycle events (`system.startup.completed`, `function.enable_started`, `function.valves_updated`, ...), not tied to a chat | **no** | Sync jobs, schedulers, routes, dashboards |
 | **pipe** | Appears as a model | no | Custom model backends |
 
-A new filter is made global on first deploy (a filter that is not attached to a model does nothing); `global: true` additionally re-asserts active+global on every run.
+A new filter is made global on first deploy (a filter that is not attached to a model does nothing), unless it says `global: false`; `global: true` additionally re-asserts active+global on every run, and `global: false` keeps it out of global.
 
 ### `tool:`
 
@@ -56,7 +56,7 @@ A new filter is made global on first deploy (a filter that is not attached to a 
 | `title`, `description`, and other header keys | Header of the tool bundle (code in `tool.py`). |
 | `file` | With `source:`, take the tool from the git repo verbatim. |
 | `from: function` | Install the function's own bundle as the tool (one module serving as both). |
-| `access` | `public` makes it available to everyone when first installed; later changes in the UI are kept. |
+| `access` | `public` makes it readable by every signed-in user when first installed (Open-WebUI's `user:*` read grant); later changes in the UI are kept. Without it, only admins can use the tool. |
 | `valves` | `{name: value}` enforced on every sync, for the declared keys only, validated against the tool's `Valves` class (a value it rejects is logged and skipped). |
 | `include` | Libraries for the tool bundle (the function's `include:` does not apply to it). |
 
@@ -69,7 +69,9 @@ skills:
     access: public
 ```
 
-Local skills are the folder `skills/<id>/`. From a `source:` a skill is a `file:` or a `dir:`.
+Local skills are the folder `skills/<id>/`. From a `source:` a skill is a `file:` or a `dir:`. A skill's `access` works like a tool's.
+
+**Earlier copies of the runtime (portainer's, before it moved to owpp) granted `public` items to Open-WebUI's `anyone:*` audience.** That is the no-auth audience Open-WebUI uses for shared chats, and its tool and skill access checks ignore it, so only admins could use them. The runtime now swaps exactly that grant for `user:*` on the next sync of an item it installed, and leaves every other grant as the admin set it.
 
 ### `source:`
 
@@ -91,9 +93,12 @@ Makes `tool: {file}`, `function: {file}` and `skills: {<id>: {file|dir}}` read f
 ```yaml
 jobs:
   sync_every_minutes: ${MCPO_SYNC_MINUTES:-60}   # a number, or an environment template
+  adopt_markers: [mcpo-sync]                     # optional: an earlier sync's markers
 ```
 
-Used with `PluginScheduledSync` (the `jobs` library, which the key brings in). The library adds the `ENABLE` and `SYNC_INTERVAL_MINUTES` valves to the function's `Valves`, and this is the interval's default (`0` repeats nothing: only startup, enable and valve changes). See [libraries: jobs](libraries.md#jobs).
+Used with `PluginScheduledSync` (the `jobs` library, which the key brings in). The library adds the `ENABLE` and `SYNC_INTERVAL_MINUTES` valves to the function's `Valves`, and `sync_every_minutes` is the interval's default (`0` repeats nothing: only startup, enable and valve changes). See [libraries: jobs](libraries.md#jobs).
+
+`adopt_markers` is for **moving from another sync**. A sync marks what it writes with its function id (`managed_by`) and replaces or prunes only entries with that mark, so entries an earlier sync wrote under another marker would be left behind. Listing that marker here makes them count as this sync's own: `plugin_sync_markers()` returns the function id plus these. It is a list of exact markers, checked by `owpp check`; leave it out to adopt nothing. It belongs here, not in a valve, because which sync this one succeeds is decided by the deployment, in git, and a valve is for an admin to change in the UI: a marker typed there by mistake would make the sync prune another sync's entries. Remove it once the old entries have been taken over, or keep it; it does nothing more once none carry the old mark.
 
 ### Environment templates
 

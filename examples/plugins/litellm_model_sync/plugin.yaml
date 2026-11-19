@@ -1,0 +1,10 @@
+function:
+  title: LiteLLM Model Sync
+  author: zmnatz
+  version: 0.2.0
+  required_open_webui_version: 0.10.0
+  license: MIT
+  description: Open-WebUI Event function that syncs LiteLLM gateway model metadata (display names, hidden non-chat models, vision, tags) into Open-WebUI's model configs.
+# Default sync interval; 0 syncs only on startup, enable and valve changes.
+jobs:
+  sync_every_minutes: ${LITELLM_SYNC_MINUTES:-60}

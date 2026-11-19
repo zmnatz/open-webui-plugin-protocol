@@ -227,6 +227,44 @@ class TestDeclaredGlobal:
         assert m.state["demo"]["is_global"] is False
 
 
+class TestDeclaredNotGlobal:
+    """`global: false`: a filter that each user switches on (a toggle) is never made global."""
+
+    TOGGLE = FILTER.replace("author: me\n", "author: me\nglobal: false\n")
+
+    @pytest.fixture
+    def run(self, functions_dir):
+        def go(m, **extra):
+            return deploy(m.options(functions_dir({"demo.py": self.TOGGLE}), **extra))
+
+        return go
+
+    def test_a_new_toggle_is_activated_but_not_made_global(self, mock_server, run):
+        m = mock_server()
+        res = run(m)
+        assert m.calls == [LIST, CREATE, "POST /api/v1/functions/id/demo/toggle"]
+        assert res[0].action == "created, activated"
+        assert m.state["demo"]["is_global"] is False
+
+    def test_a_toggle_someone_made_global_is_taken_out_again(self, mock_server, git_fn, run):
+        m = mock_server(live=[git_fn("demo", self.TOGGLE, is_active=True, is_global=True)])
+        res = run(m)
+        assert res[0].action == "unchanged, made not global"
+        assert m.state["demo"]["is_global"] is False
+
+    def test_dry_run_says_so_and_changes_nothing(self, mock_server, git_fn, run):
+        m = mock_server(live=[git_fn("demo", self.TOGGLE, is_active=True, is_global=True)])
+        res = run(m, dry_run=True)
+        assert res[0].action == "would make not global"
+        assert m.state["demo"]["is_global"] is True
+
+    def test_a_toggle_already_out_of_global_makes_no_call(self, mock_server, git_fn, run):
+        m = mock_server(live=[git_fn("demo", self.TOGGLE, is_active=True, is_global=False)])
+        res = run(m)
+        assert res[0].action == "unchanged"
+        assert not any("toggle" in c for c in m.calls)
+
+
 class TestPruning:
     def test_deletes_a_git_controlled_function_whose_folder_is_gone_and_leaves_hand_made_ones(
         self, mock_server, functions_dir, git_fn

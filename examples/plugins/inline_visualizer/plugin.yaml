@@ -1,7 +1,5 @@
-# Inline Visualizer, taken from git (Classic298/open-webui-plugins). The tool and skill are fetched
-# at deploy time from the pinned commit and embedded in this function, which installs them while it
-# is enabled and removes them when it is not. To upgrade, review the upstream diff, then change `ref`
-# to the new commit SHA; it must be a full SHA, never a branch.
+# Inline Visualizer tool and skill, from Classic298/open-webui-plugins, installed by this function.
+# To upgrade, review the upstream diff and set `ref` to the new full commit SHA.
 source:
   git: https://github.com/Classic298/open-webui-plugins.git
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea

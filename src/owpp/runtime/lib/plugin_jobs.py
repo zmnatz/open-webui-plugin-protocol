@@ -11,8 +11,19 @@ import types as _types
 
 _jlog = _logging.getLogger(__name__ + ".jobs")
 
-# {"sync_every_minutes": 60 | "${NAME:-60}"}, from plugin.yaml's `jobs:`
+# {"sync_every_minutes": 60 | "${NAME:-60}", "adopt_markers": [...]}, from plugin.yaml's `jobs:`
 _JOBS = _json.loads(__JOBS_DATA__)
+
+
+def plugin_sync_markers() -> set:
+    """The `managed_by` markers a sync treats as its own: this function's id, plus the markers
+    of an earlier sync that plugin.yaml's `jobs: adopt_markers` names. Entries carrying one are
+    replaced and pruned like the sync's own; everything else is left alone. Empty when the
+    function id is unknown, so nothing can match by accident."""
+    own = plugin_function_id()
+    if not own:
+        return set()
+    return {own, *_JOBS.get("adopt_markers", [])}
 
 
 def _sync_valves(base):

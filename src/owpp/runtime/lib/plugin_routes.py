@@ -126,7 +126,8 @@ def plugin_guard(access: str = None):
     sign-ins that need no input (trusted headers, auth switched off) are tried first and the session
     is handed to the browser, then, if that did not work, the browser is sent to Open-WebUI's login
     page (which handles OIDC and LDAP) and back. Anything else (an API call, a fetch, an iframe)
-    gets 401."""
+    gets 401. A page in Open-WebUI's Artifacts panel only has a session when the user's "iframe
+    Sandbox Allow Same Origin" setting is on (off by default); see docs/libraries.md."""
     access = _routes_access("user" if access is None else access)
 
     if access == "public":
@@ -218,7 +219,11 @@ def plugin_token(subject: str, hours: float = 12) -> str:
     session and so uses `plugin_mount(guard=...)`. Mint it only inside a route that required a
     signed-in user (the page that loads the sandboxed iframe), never in the chat, and verify it
     with `plugin_check_token`. Stateless, so every worker agrees; it is scoped to this function
-    and to `subject`, and it expires."""
+    and to `subject`, and it expires.
+
+    Do not put it in the iframe's address to avoid needing a session on the page: the address is
+    stored in the chat's HTML. Inside the Artifacts panel the page gets a session only with
+    Open-WebUI's "iframe Sandbox Allow Same Origin" on, which the plugin's README must state."""
     if hours <= 0:
         raise ValueError("a token must last more than zero hours")
     expiry = int(_time.time() + hours * 3600)

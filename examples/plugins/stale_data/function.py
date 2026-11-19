@@ -1,7 +1,4 @@
-# Open-WebUI Event function: a read-only dashboard of chats, notes and files older than
-# a threshold, served at DASHBOARD_PATH (default /stale-data) for admins. It mounts
-# through the `routes` library (plugin.yaml: include), which replaces its own earlier
-# routes on every load and keeps them ahead of the SPA catch-all.
+# Admin-only, read-only dashboard of old chats, notes and files at DASHBOARD_PATH.
 
 from __future__ import annotations
 
@@ -432,8 +429,7 @@ async def _page(user: PluginAdmin):  # admins only: the page lists every user's 
 
 def _ensure_routes(app, valves) -> None:
     router = APIRouter()
-    # `_page` is marked `user: PluginAdmin`, so plugin_mount's guard lets only admins in. Mounting
-    # again replaces the earlier mount, also when DASHBOARD_PATH changed and the path moved.
+    # Admins only (PluginAdmin). Mounting again replaces the earlier mount, even at a new path.
     router.add_api_route(_path(valves), _page, methods=["GET"], include_in_schema=False)
     plugin_mount(app, router, _path(valves))
 
@@ -449,8 +445,7 @@ class Event(PluginEvents):
             description="Show content older than this many hours.",
         )
 
-    # Open-WebUI started, or this function was enabled, updated or had its valves saved
-    # (`own`: not when another function was). Each of those (re)mounts the dashboard route.
+    # Startup, or this function enabled, updated or its valves saved: (re)mount the route.
     @on(
         "system.startup.completed",
         "function.enable_started",

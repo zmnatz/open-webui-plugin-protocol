@@ -1,6 +1,5 @@
-# Shared by the function and the tool (both bundles start with this file): imports,
-# constants, the scene store (a drawing is kept in its chat's metadata), the
-# editor's tokens and the element helpers. The scene store is the chat_data library.
+# Shared by the function and the tool: imports, constants, the scene store, tokens and
+# element helpers.
 
 import json
 import logging
@@ -23,20 +22,18 @@ MARKER = "excalidraw_artifact"
 META_KEY = "excalidraw"
 EXCALIDRAW_VERSION = "0.18.0"
 NO_STORE = {"Cache-Control": "no-store"}
-# The editor runs in Open-WebUI's sandboxed Artifacts iframe, whose origin is
-# opaque ("null"), so its API calls are cross-origin and carry no cookies.
+# The Artifacts iframe has an opaque origin, so API calls are cross-origin and cookie-free.
 CORS = {**NO_STORE, "Access-Control-Allow-Origin": "*"}
 _ID = re.compile(
     r"[A-Za-z0-9_:-]{1,128}"
 )  # chat UUIDs, plus "local:..." temporary chats
 
 
-# A scene is {"version", "writer", "elements", "updated_at"}, kept under
-# chat.meta["excalidraw"] so it lives and dies with its chat. Temporary chats
-# have no row, so theirs are kept in memory until Open-WebUI restarts.
+# A scene is {"version", "writer", "elements", "updated_at"} under chat.meta["excalidraw"].
+# Temporary chats have no row, so theirs live in memory until restart.
 
 
-# The scene store is the `chat_data` library (plugin.yaml: include) under META_KEY.
+# The scene store is the `chat_data` library.
 _NoChat = ChatNotSaved
 
 

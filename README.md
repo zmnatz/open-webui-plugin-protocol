@@ -32,6 +32,7 @@ uvx owpp list
 #  excalidraw              filter (global)
 #  mcpo_sync               event
 uvx owpp check                       # bundle, compile, report undefined names
+uvx --from 'owpp[test]' owpp test    # each plugin's tests/, against a mock Open-WebUI
 uvx owpp deploy --only excalidraw --dry-run
 ```
 
@@ -66,6 +67,8 @@ OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deplo
 
 ## Documentation
 
+Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built from `docs/` (`uv run --group docs python tools/build_docs.py serve` to preview it).
+
 | | |
 | --- | --- |
 | [Overview](docs/README.md) | concepts, guarantees, status |
@@ -74,6 +77,7 @@ OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deplo
 | [Bundling](docs/bundling.md) | exactly what gets deployed; git sources |
 | [Runtime](docs/runtime.md) | install/remove of tools and skills, parent valves |
 | [Libraries](docs/libraries.md) | `core`, `routes`, `jobs`, `events`, `chat_data`, `static`, `templates`, `assets`, Shared Assets |
+| [Testing](docs/testing.md) | unit tests per plugin, the mock Open-WebUI, `owpp test` |
 | [Tooling](docs/tooling.md) | CLI, deploy settings, ownership marker, GitHub Action, tests |
 | [Adopting](docs/adopting.md) | new repositories, migrating existing functions |
 | [Decisions](docs/decisions.md) | the calls made for 0.1.0 and what is not done yet |
@@ -81,17 +85,18 @@ OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deplo
 
 ## Examples
 
-[`examples/plugins/`](examples/plugins): `excalidraw` (filter + tool + page), `mcpo_sync` (scheduled event), `stale_data` (admin dashboard), `inline_visualizer` (third-party tool and skill from a pinned commit), `page_banners` (a variant of Better Banners: its script and stylesheet are files in `assets/`).
+[`examples/plugins/`](examples/plugins): `excalidraw` (filter + tool + page), `mcpo_sync` (scheduled event), `stale_data` (admin dashboard), `inline_visualizer` (third-party tool and skill from a pinned commit), `page_banners` (a variant of Better Banners: its script and stylesheet are files in `assets/`), `litellm_model_sync` (scheduled event that writes Open-WebUI's model configs from a LiteLLM gateway).
 
 ## Status
 
-0.1.0, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules; there is no live end-to-end test yet. See [decisions](docs/decisions.md#not-done-yet).
+0.1.0, released 2026-11-19, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), but that run is started by hand, not part of CI. See [decisions](docs/decisions.md#not-done-yet).
 
 ## Development
 
 ```sh
 uv sync
-uv run pytest
+uv run pytest                        # owpp's tests and every example plugin's tests/
+uv run owpp test --dir examples/plugins
 uv run ruff check . && uv run ruff format --check .
 uv run owpp check --dir examples/plugins
 ```
