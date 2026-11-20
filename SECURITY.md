@@ -26,14 +26,19 @@ about keeping that explicit and narrow, not about making untrusted plugins safe.
 | `assets/loader.js` | JavaScript in **every user's browser, on every page** | It is a fragment of the shared `/static/loader.js`: it can read and change the whole interface, including other users' content and their session. Treat it as full access to the UI. |
 | `assets/custom.css` | CSS on every page | Can restyle or hide anything (a phishing-grade overlay is possible). |
 | `owpp check`, `bundle`, `list` | Your machine | They parse and compile plugin code but never run it. `check` and `list` fetch `source:` files with `git`. |
+| `owpp test` | Your machine / CI | Runs your plugins' tests, which run plugin code. With `--upstream` it also runs the tests of plugins taken whole from git (`source: {plugin: true}`): code from that repository, at the pinned commit. `OPEN_WEBUI_*` variables are removed first, but anything else in the environment is readable, so review a commit's diff before running its tests. |
 | `owpp deploy` | Your machine / CI | Sends code to Open-WebUI with the admin key. |
 
 ## What `owpp` does to limit the damage
 
 - **Pinned third-party code.** A `source:` is a git URL (https or ssh only) and a **full 40-character
   commit SHA**, never a branch or tag; it is fetched by that SHA, shallow, into a scratch repository.
-  Upgrading means reviewing the upstream diff and changing the SHA.
-- **Reproducible bundles.** A bundle depends only on the plugin folder and the pinned commits. In
+  Upgrading means reviewing the upstream diff and changing the SHA. A source written without `ref:`
+  is refused until `owpp sync` pins it, so a deploy never looks up a branch itself. A whole plugin
+  taken from git is only read and bundled by owpp: no script in it (a `build.sh`, `package.json`
+  scripts) is run.
+- **Reproducible bundles.** A bundle depends only on the plugin folder, the pinned commits and the
+  owpp version that builds it. In
   particular **environment variables are never read while bundling or deploying**: `${NAME:-x}` in
   `config.yaml` or `jobs:` is embedded as written and resolved inside the Open-WebUI container when
   the plugin loads, so the machine that deploys cannot change the code or leak its environment into it.
@@ -93,7 +98,7 @@ about keeping that explicit and narrow, not about making untrusted plugins safe.
   leave such an instance reachable.
 - Restrict who can push to the plugins repository (and to any repository a `source:` names). Require
   review for changes to `plugin.yaml`, `assets/` and anything that touches `ref:`.
-- **Pin `owpp`** (`uvx owpp@0.2.0`) and pin the action to a tag or SHA: the runtime and libraries are
+- **Pin `owpp`** (`uvx owpp@0.2.1`) and pin the action to a tag or SHA: the runtime and libraries are
   copied into what you deploy, so an upgrade changes your deployed code.
 - Run `owpp deploy --dry-run` before the first deploy and read the plan; run `owpp check --strict`
   in CI.

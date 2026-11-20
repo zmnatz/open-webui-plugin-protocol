@@ -4,7 +4,7 @@
   owpp check [id ...]                bundle, compile, report undefined names
   owpp bundle <id> [out.py]          print (or write) the exact code that would be deployed
   owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
-  owpp test [id ...] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
+  owpp test [id ...] [--upstream] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
   owpp sync [id ...] [--dry-run] [--bump part]   move plugins taken from git to their latest commit
   owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
   owpp migrate [id ...] [--dry-run]  bring plugin.yaml to the current protocol version
@@ -34,7 +34,8 @@ from .errors import OwppError
 from .lint import lint_notes, lint_plugin
 from .manifest import parse_yaml, read_manifest, read_text
 from .protocol import report as protocol_report
-from .sources import fetch_sources, plugin_folders, source_keys
+from .sources import plugin_folders
+from .upstream import fetch_all, is_plugin_source, root_of
 from .versioning import bump, changelog_problem, check_since, version_of, versions_of
 
 # ---- check --------------------------------------------------------------------
@@ -116,7 +117,7 @@ def scaffold(directory: Path | str, plugin_id: str, type: str = "event") -> Path
 def _load(directory: Path) -> list[FunctionFile]:
     if not directory.exists():
         raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
-    return load_function_files(directory, fetch_sources(source_keys(directory)))
+    return load_function_files(directory, fetch_all(directory))
 
 
 def _cmd_list(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -146,7 +147,8 @@ def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
             print(f"note  {finding}")
         if fn.file.endswith("/"):  # a plugin folder
             name = fn.file.rstrip("/")
-            problem = changelog_problem(directory / fn.id, version_of(fn.content))
+            root = fn.root or directory / name
+            problem = changelog_problem(root, version_of(fn.content))
             if problem:
                 print(f"warn  {fn.id}/{problem}")
                 warnings += 1
@@ -158,7 +160,7 @@ def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
                 warnings += 1
             if note:
                 print(f"note  {note}")
-            for var, default in env_references(directory / fn.id):
+            for var, default in env_references(root):
                 shown = (
                     "no default"
                     if default is None
@@ -259,7 +261,31 @@ def _cmd_test(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
         return 1
     chosen = [folders[i] for i in args.ids] if args.ids else list(folders.values())
     paths = [str(f / "tests") for f in chosen if (f / "tests").is_dir()]
-    untested = [f.name for f in chosen if not (f / "tests").is_dir()]
+    upstream_tested: set[str] = set()
+    whole = [f for f in chosen if is_plugin_source(read_manifest(f))]
+    if args.upstream and whole:
+        remote = fetch_all(directory)
+        for f in whole:
+            tests = root_of(f, remote) / "tests"
+            if tests.is_dir():
+                paths.append(str(tests))
+                upstream_tested.add(f.name)
+                print(
+                    f"note  {f.name}: running the upstream plugin's tests, from the pinned commit"
+                )
+        # This runs code from another repository: leave it nothing to sign in to an instance with.
+        for name in [n for n in os.environ if n.startswith("OPEN_WEBUI_")]:
+            del os.environ[name]
+    elif whole:
+        print(
+            "note  taken whole from git, upstream tests not run (`owpp test --upstream` runs "
+            f"them): {', '.join(f.name for f in whole)}"
+        )
+    untested = [
+        f.name
+        for f in chosen
+        if not (f / "tests").is_dir() and f.name not in upstream_tested and f not in whole
+    ]
     if untested:
         print(f"note  no tests/ folder: {', '.join(untested)}")
     if not paths:
@@ -398,6 +424,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     test = add("test", _cmd_test, "run each plugin's tests/ against a mock Open-WebUI")
     test.add_argument("ids", nargs="*", metavar="id", help="plugins to test (default: all)")
+    test.add_argument(
+        "--upstream",
+        action="store_true",
+        help="also run the tests of plugins taken whole from git, from the pinned commit "
+        "(this runs their code; OPEN_WEBUI_* variables are removed first)",
+    )
     migrate = add("migrate", _cmd_migrate, "bring plugin.yaml to the current protocol version")
     migrate.add_argument("ids", nargs="*", metavar="id", help="plugins to migrate (default: all)")
     migrate.add_argument(

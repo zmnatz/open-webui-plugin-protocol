@@ -616,13 +616,15 @@ class MockOpenWebUI:
         A `source:` plugin's files are fetched from git at the pinned commit, as the deploy
         does (once per run). `sources` stands in for them instead, so a test needs no network:
         {path inside the source's `path`: text}, e.g. {"tool.py": "class Tools: ..."}.
+        For a plugin taken whole from git (`source: {plugin: true}`), they are the upstream
+        folder's files, plugin.yaml included, and the upstream folder is what is bundled.
         Loading the same id again is an update."""
         from ..sources import source_key
+        from ..upstream import plugin_root
 
         folder = Path(folder)
         id = id or folder.name
         manifest = read_manifest(folder)
-        fn = manifest.get("function") or {}
         if sources is None and manifest.get("source"):
             remote = _fetch_pinned(folder.name, manifest)  # from git, at the pinned commit
         else:
@@ -630,8 +632,15 @@ class MockOpenWebUI:
                 source_key(folder.name, manifest.get("source"), rel): text
                 for rel, text in (sources or {}).items()
             }
+        root = plugin_root(folder, manifest, remote)
+        if root != folder:  # the upstream folder, with this one's overrides
+            inner = read_manifest(root)
+            if inner.get("source"):
+                remote = {**remote, **_fetch_pinned(folder.name, inner)}
+            manifest = inner
+        fn = manifest.get("function") or {}
         if content is None:
-            content = bundle_function(folder, remote)
+            content = bundle_function(root, remote)
         if content is None:
             raise ValueError(f"{folder}: no function to load")
         if valves is None:

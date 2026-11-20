@@ -95,6 +95,7 @@ def check_keys(path: Path, manifest: dict) -> None:
                 f"{path}: unknown key `{key}:` (known: {', '.join(MANIFEST_KEYS)}){hint}"
             )
     parse_protocol(manifest.get("protocol"), str(path))
+    check_sourced_plugin(path, manifest)
     requires = manifest.get("requires")
     if requires is not None:
         if not isinstance(requires, dict):
@@ -106,6 +107,41 @@ def check_keys(path: Path, manifest: dict) -> None:
                 )
             if not isinstance(value, bool):
                 raise OwppError(f"{path}: requirement `{key}:` must be true or false")
+
+
+# What a local plugin.yaml may say, besides `protocol:` and `source:`, when its source is a whole
+# plugin folder (`source: {plugin: true}`). Everything else is the upstream's: two manifests merged
+# key by key would be hard to read and to review.
+SOURCED_OVERRIDES = {
+    "function": ("valves", "global"),
+    "tool": ("id", "access", "valves"),
+}
+
+
+def check_sourced_plugin(path: Path | str, manifest: dict) -> None:
+    """Refuse a manifest with a whole-plugin source that says more than it may."""
+    source = manifest.get("source")
+    plugin = source.get("plugin") if isinstance(source, dict) else None
+    if plugin is not None and not isinstance(plugin, bool):
+        raise OwppError(f"{path}: source.plugin must be true or false")
+    if not plugin:
+        return
+    allowed = ", ".join(
+        f"{block}.{key}" for block, keys in SOURCED_OVERRIDES.items() for key in keys
+    )
+    extra: list[str] = []
+    for key, value in manifest.items():
+        if key in ("protocol", "source") or str(key).startswith("x-"):
+            continue
+        if key in SOURCED_OVERRIDES and isinstance(value, dict):
+            extra += [f"{key}.{k}" for k in value if k not in SOURCED_OVERRIDES[key]]
+        else:
+            extra.append(str(key))
+    if extra:
+        raise OwppError(
+            f"{path}: a plugin taken whole from `source:` comes with its own manifest; here only "
+            f"{allowed} can be set (remove {', '.join(extra)})"
+        )
 
 
 def read_manifest(folder: Path | str) -> dict:

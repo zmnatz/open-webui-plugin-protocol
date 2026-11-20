@@ -38,6 +38,10 @@ def source_key(folder: str, src: object, rel: str, directory: bool = False) -> s
     ref = text_of(src.get("ref"))
     if not GIT_URL.fullmatch(git):
         raise OwppError(f"{where}.git must be an https://, ssh:// or user@host:path git URL")
+    if not ref:
+        raise OwppError(
+            f"{where} has no `ref:`; run `owpp sync {folder}` to pin it to the latest commit"
+        )
     if not SHA40.fullmatch(ref):
         raise OwppError(
             f"{where}.ref must be a full 40-character commit SHA, not a branch or tag "
@@ -55,7 +59,10 @@ def source_key(folder: str, src: object, rel: str, directory: bool = False) -> s
 
 
 def _source_files(manifest: dict) -> list[tuple[str, bool]]:
-    """The files (and skill directories) in `source` that a manifest refers to: (path, is_dir)."""
+    """The files (and skill directories) in `source` that a manifest refers to: (path, is_dir).
+    A whole plugin taken from git is one directory: the source's `path`."""
+    if get(manifest.get("source"), "plugin") is True:
+        return [("", True)]
     files: list[tuple[str, bool]] = []
     if get(manifest.get("function"), "file"):
         files.append((manifest["function"]["file"], False))

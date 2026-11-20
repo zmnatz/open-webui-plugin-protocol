@@ -49,6 +49,7 @@ from .manifest import (
     text_of,
 )
 from .sources import Value, file_value, plugin_folders, source_key
+from .upstream import plugin_root
 
 RUNTIME_DIR = Path(__file__).resolve().parent / "runtime"
 RUNTIME = RUNTIME_DIR / "plugin_runtime.py"
@@ -885,6 +886,9 @@ class FunctionFile:
     description: str = ""
     # The git repository the plugin takes code from, and the commit: {"<git>[ <path>]": sha}.
     sources: dict = field(default_factory=dict)
+    # The folder that was bundled: the plugin folder, or for a plugin taken whole from git the
+    # upstream folder as fetched, with the local overrides applied. None for a loose <id>.py.
+    root: Path | None = None
 
 
 def runtime_data(content: str | None) -> dict:
@@ -961,10 +965,12 @@ def load_function_files(
             )
         elif e.name in folders:
             folder = Path(e.path)
-            content = bundle_function(folder, remote)
+            local = read_manifest(folder)
+            root = plugin_root(folder, local, remote or {})
+            content = bundle_function(root, remote)
             if content is None:
                 continue
-            manifest = read_manifest(folder)
+            manifest = read_manifest(root)
             fn = manifest["function"]
             declared = fn.get("global")
             item = _make_item(
@@ -975,8 +981,12 @@ def load_function_files(
                 valves=fn.get("valves"),
                 global_=declared if isinstance(declared, bool) and "file" in fn else None,
             )
-            src = manifest.get("source")
+            item.root = root
+            src = local.get("source")
             if isinstance(src, dict):
                 item.sources = {source_label(src): text_of(src.get("ref"))}
+                inner = manifest.get("source") if root != folder else None
+                if isinstance(inner, dict):  # what the upstream plugin takes from git itself
+                    item.sources[source_label(inner)] = text_of(inner.get("ref"))
             loaded.append(item)
     return loaded
