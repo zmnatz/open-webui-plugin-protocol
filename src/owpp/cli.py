@@ -30,7 +30,7 @@ import yaml
 from . import __version__
 from .bundle import FunctionFile, env_references, load_function_files, runtime_data
 from .create import CLASS, PluginSpec, spec_from_data, write_plugin
-from .deploy import options_from_env, run_deploy
+from .deploy import choices_from_env, instance_from_env, run_deploy
 from .errors import OwppError
 from .lint import lint_notes, lint_plugin
 from .manifest import parse_yaml, plugin_folders, read_manifest, read_text
@@ -238,23 +238,23 @@ def _cmd_build(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
 
 
 def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
-    opts = options_from_env(
+    instance = instance_from_env(
+        env, ca_cert=args.ca_cert, client_cert=args.client_cert, client_key=args.client_key
+    )
+    choices = choices_from_env(
         env,
         dir=directory,
         only=args.only,
-        dry_run=args.dry_run,
-        force_prune=args.force_prune,
-        managed_by=args.managed_by,
-        latest=args.latest,
         sources=args.sources,
         from_dir=args.from_dir,
-        no_prune=args.no_prune,
+        managed_by=args.managed_by,
+        dry_run=args.dry_run,
+        latest=args.latest,
         force=args.force,
-        ca_cert=args.ca_cert,
-        client_cert=args.client_cert,
-        client_key=args.client_key,
+        force_prune=args.force_prune,
+        no_prune=args.no_prune,
     )
-    return run_deploy(opts, env)
+    return run_deploy(instance, choices, env)
 
 
 def _cmd_test(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:

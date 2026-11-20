@@ -244,9 +244,9 @@ class TestCheckSince:
 class TestDowngrade:
     def test_a_dry_run_warns_and_a_deploy_refuses(self, mock_server, plugin):
         m = mock_server()
-        deploy(m.options(plugin))  # 1.0.0 is live
+        deploy(*m.options(plugin))  # 1.0.0 is live
         bump(plugin, "viz", "0.9.0")
-        res = deploy(m.options(plugin, dry_run=True))
+        res = deploy(*m.options(plugin, dry_run=True))
         assert "function: 1.0.0 -> 0.9.0, OLDER than the live version" in res[0].details
         report = render_report(res, True)
         assert (
@@ -256,14 +256,14 @@ class TestDowngrade:
         assert "refuses this without --force" in report
         writes = len(m.calls)
         with pytest.raises(OwppError, match="refusing to deploy older versions.*--force"):
-            deploy(m.options(plugin))
+            deploy(*m.options(plugin))
         assert not any("/update" in c for c in m.calls[writes:])
 
     def test_force_deploys_it(self, mock_server, plugin):
         m = mock_server()
-        deploy(m.options(plugin))
+        deploy(*m.options(plugin))
         bump(plugin, "viz", "0.9.0")
-        res = deploy(m.options(plugin, force=True))
+        res = deploy(*m.options(plugin, force=True))
         assert res[0].action.startswith("updated") and res[0].downgrades == [
             "function 1.0.0 -> 0.9.0"
         ]
@@ -271,7 +271,7 @@ class TestDowngrade:
 
     def test_an_older_tool_counts_too(self, mock_server, plugin):
         m = mock_server()
-        deploy(m.options(plugin))
+        deploy(*m.options(plugin))
         bump(plugin, "viz", "0.5.0", tool=True)
         with pytest.raises(OwppError, match=r"viz \(tool `viz` 1.0.0 -> 0.5.0\)"):
-            deploy(m.options(plugin))
+            deploy(*m.options(plugin))
