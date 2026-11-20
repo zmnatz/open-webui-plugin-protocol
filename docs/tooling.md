@@ -7,6 +7,7 @@
 | [`owpp list`](commands/list.md) | Plugins with their function type. |
 | [`owpp check`](commands/check.md) | Bundle and compile every plugin, report undefined names, warn about valves and tools; `--since` fails on a change without a new version. |
 | [`owpp bundle`](commands/bundle.md) | Print (or write) the code that would be deployed. |
+| [`owpp build`](commands/build.md) | Bundle the plugins into a folder that `owpp deploy --from` deploys elsewhere. |
 | [`owpp deploy`](commands/deploy.md) | Deploy the plugins to an Open-WebUI instance: settings, signing in, the ownership marker, the report. |
 | [`owpp test`](commands/test.md) | Run each plugin's `tests/` against a mock Open-WebUI. |
 | [`owpp pull`](commands/pull.md) | Move plugins taken from git to the latest commit they follow. |
@@ -49,11 +50,12 @@ The action runs `owpp` from its own checkout, so the version you deploy with is 
 | `api-key`, `username`, `password`, `oidc-token`, `oauth-provider` | How the deploy [signs in](commands/deploy.md#signing-in): the [sign-in variables](environment-variables.md#signing-in) (store them as secrets). |
 | `plugins-dir` | The plugins folder, relative to the repository root (default `plugins`): [`OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir). |
 | `managed-by` | The [ownership marker](commands/deploy.md#the-ownership-marker) (default `open-webui-plugin-protocol`): [`OWPP_MANAGED_BY`](environment-variables.md#owpp_managed_by). |
-| `only`, `dry-run`, `latest`, `force` | [`owpp deploy`](commands/deploy.md)'s `--only`, `--dry-run`, `--latest` and `--force` (`"true"` to turn one on). |
+| `only`, `dry-run`, `latest`, `force`, `no-prune` | [`owpp deploy`](commands/deploy.md)'s `--only`, `--dry-run`, `--latest`, `--force` and `--no-prune` (`"true"` to turn one on). |
+| `from` | A folder [`owpp build`](commands/build.md) wrote, to deploy instead of the plugins folder ([deploying a build](commands/deploy.md#deploying-a-build)); it skips `owpp check`, which runs where the build is made. |
 | `check` | `"false"` skips `owpp check` before deploying (default `"true"`). |
 | `since` | [`owpp check --since`](commands/check.md#a-change-needs-a-new-version) this git ref. Needs that ref fetched (`actions/checkout` with `fetch-depth: 0`). |
 
-More CI: a scheduled [dry run at the latest commits](commands/deploy.md#the-report-what-changes-in-versions), and a [pull request for each upgrade](commands/pull.md#a-pull-request-for-each-upgrade).
+More CI: [building in one job and deploying in another](commands/build.md#examples), a scheduled [dry run at the latest commits](commands/deploy.md#the-report-what-changes-in-versions), and a [pull request for each upgrade](commands/pull.md#a-pull-request-for-each-upgrade).
 
 ## Tests (this repository)
 

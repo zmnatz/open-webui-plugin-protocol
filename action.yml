@@ -46,12 +46,18 @@ inputs:
   force:
     description: '"true" deploys even where the instance runs a newer version than the repository (a downgrade).'
     default: "false"
+  no-prune:
+    description: '"true" creates and updates but deletes nothing; the report lists what a full deploy would delete.'
+    default: "false"
+  from:
+    description: 'A folder `owpp build` wrote, to deploy instead of plugins-dir (no checkout or git sources needed). Skips `owpp check`, which belongs where the build is made.'
+    default: ""
 runs:
   using: composite
   steps:
     - uses: astral-sh/setup-uv@v6
     - name: Check plugins
-      if: inputs.check == 'true'
+      if: inputs.check == 'true' && inputs.from == ''
       shell: bash
       env:
         OWPP_PLUGINS_DIR: ${{ inputs.plugins-dir }}
@@ -75,10 +81,14 @@ runs:
         DRY_RUN: ${{ inputs.dry-run }}
         LATEST: ${{ inputs.latest }}
         FORCE: ${{ inputs.force }}
+        NO_PRUNE: ${{ inputs.no-prune }}
+        FROM: ${{ inputs.from }}
       run: |
         args=(deploy)
         if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
         if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
         if [ "$LATEST" = "true" ]; then args+=(--latest); fi
         if [ "$FORCE" = "true" ]; then args+=(--force); fi
+        if [ "$NO_PRUNE" = "true" ]; then args+=(--no-prune); fi
+        if [ -n "$FROM" ]; then args+=(--from "$FROM"); fi
         uvx --from "$GITHUB_ACTION_PATH" owpp "${args[@]}"

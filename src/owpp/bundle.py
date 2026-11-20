@@ -742,6 +742,8 @@ class FunctionFile:
     description: str = ""
     # The git repository the plugin takes code from, and the commit: {"<git>[ <path>]": sha}.
     sources: dict = field(default_factory=dict)
+    # Instance settings the plugin needs (`requires:`), for the deploy's warning.
+    requires: dict = field(default_factory=dict)
     # The folder that was bundled: the plugin folder, or for a plugin taken whole from git the
     # upstream folder as fetched, with the local overrides applied. None for a loose <id>.py.
     root: Path | None = None
@@ -834,5 +836,7 @@ def load_function_files(
             )
             item.root = plugin.root
             item.sources = dict(plugin.pins)
+            requires = plugin.manifest.get("requires")
+            item.requires = dict(requires) if isinstance(requires, dict) else {}
             loaded.append(item)
     return loaded

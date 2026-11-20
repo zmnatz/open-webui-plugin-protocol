@@ -42,6 +42,7 @@ nav = [
     { "owpp list" = "commands/list.md" },
     { "owpp check" = "commands/check.md" },
     { "owpp bundle" = "commands/bundle.md" },
+    { "owpp build" = "commands/build.md" },
     { "owpp deploy" = "commands/deploy.md" },
     { "owpp test" = "commands/test.md" },
     { "owpp pull" = "commands/pull.md" },

@@ -6,7 +6,6 @@ import pytest
 from conftest import embedded, write_tree
 
 from owpp.bundle import load_function_files
-from owpp.deploy import _needing_iframe_sandbox
 from owpp.errors import OwppError
 from owpp.pull import pull
 from owpp.sources import Sources
@@ -222,7 +221,8 @@ def test_a_source_with_no_ref_says_to_run_pull(tmp_path):
 
 def test_its_requirements_are_the_upstream_ones(tmp_path, fetcher):
     write_tree(tmp_path, {"viz/plugin.yaml": local()})
-    assert _needing_iframe_sandbox(tmp_path, sources=Sources(fetcher)) == ["viz"]
+    (item,) = load_function_files(tmp_path, Sources(fetcher))
+    assert item.requires == {"iframe_sandbox_allow_same_origin": True}
 
 
 def test_its_versions_are_the_upstream_ones(tmp_path):

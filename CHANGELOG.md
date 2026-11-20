@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `owpp build` bundles the plugins into a folder that `owpp deploy --from` deploys elsewhere, with no checkout or git sources ([`owpp build`](docs/commands/build.md)).
+- `owpp deploy --no-prune` (the action's `no-prune`) deploys every plugin and deletes nothing.
+- Docs: the home page's reading order is a short "Where to start" table.
+
 ## 0.3.0 (2026-11-20)
 
 - Protocol 0.3: `source: track:` is now `branch:` or `tag:`, which `owpp migrate` rewrites by asking the repository ([upgrading](docs/upgrading.md)).

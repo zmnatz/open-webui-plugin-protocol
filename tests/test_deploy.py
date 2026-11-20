@@ -683,7 +683,14 @@ class TestIframeRequirementWarning:
 
     def test_only_that_excludes_the_plugin_does_not_warn(self, mock_server, functions_dir):
         m = mock_server()
-        assert iframe_sandbox_warning(m.options(self.make(functions_dir), only=["other"])) is None
+        d = functions_dir(
+            {
+                "demo/plugin.yaml": self.PLUGIN,
+                "demo/function.py": "class Event:\n    pass\n",
+                "other.py": FILTER,
+            }
+        )
+        assert iframe_sandbox_warning(m.options(d, only=["other"])) is None
         assert m.calls == []
 
     def test_missing_setting_warns_but_the_deploy_still_writes(

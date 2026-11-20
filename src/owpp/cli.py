@@ -3,7 +3,8 @@
   owpp list                          plugins with their function type
   owpp check [id ...]                bundle, compile, report undefined names
   owpp bundle <id> [out.py]          print (or write) the exact code that would be deployed
-  owpp deploy [--only id,id] [--dry-run [--latest]] [--force] [--force-prune] [--managed-by marker]
+  owpp build [id ...] [--out dist] [--latest]   bundle the plugins into a folder to deploy elsewhere
+  owpp deploy [--from dist] [--only id,id] [--dry-run [--latest]] [--force] [--no-prune | --force-prune] [--managed-by marker]
   owpp test [id ...] [--upstream] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
   owpp pull [id ...] [--dry-run] [--bump part]   move plugins taken from git to their latest commit
   owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
@@ -221,6 +222,21 @@ def _cmd_bundle(args: argparse.Namespace, directory: Path, env: Mapping[str, str
     return 0
 
 
+def _cmd_build(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    from .build import write_build
+    from .deploy import build_plugins
+
+    if not directory.exists():
+        raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
+    built = build_plugins(directory, args.sources, args.ids, latest=args.latest)
+    for path in write_build(built, args.out):
+        print(f"built {path}")
+    what = "every plugin" if built.complete else "only " + ", ".join(args.ids)
+    at = " at the latest commits (deploys only as a dry run)" if built.latest else ""
+    print(f"{len(built.files)} function(s) in {args.out}: {what}{at}")
+    return 0
+
+
 def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
     opts = options_from_env(
         env,
@@ -231,6 +247,8 @@ def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         managed_by=args.managed_by,
         latest=args.latest,
         sources=args.sources,
+        from_dir=args.from_dir,
+        no_prune=args.no_prune,
         force=args.force,
         ca_cert=args.ca_cert,
         client_cert=args.client_cert,
@@ -383,7 +401,28 @@ def build_parser() -> argparse.ArgumentParser:
     bundle = add("bundle", _cmd_bundle, "print (or write) the code that would be deployed")
     bundle.add_argument("id")
     bundle.add_argument("out", nargs="?", metavar="out.py")
+    build = add("build", _cmd_build, "bundle the plugins into a folder that deploy --from deploys")
+    build.add_argument("ids", nargs="*", metavar="id", help="plugins to build (default: all)")
+    build.add_argument(
+        "--out", default="dist", metavar="FOLDER", help="the folder to write (default ./dist)"
+    )
+    build.add_argument(
+        "--latest",
+        action="store_true",
+        help="at the latest commit each git-sourced plugin follows (deploys only as a dry run)",
+    )
     deploy = add("deploy", _cmd_deploy, "deploy the plugins to an Open-WebUI instance")
+    deploy.add_argument(
+        "--from",
+        dest="from_dir",
+        metavar="FOLDER",
+        help="deploy the build in FOLDER (owpp build) instead of the plugins folder",
+    )
+    deploy.add_argument(
+        "--no-prune",
+        action="store_true",
+        help="delete nothing: list the functions a full deploy would delete",
+    )
     deploy.add_argument("--only", metavar="id,id", help="deploy just these (no pruning)")
     deploy.add_argument(
         "--ca-cert",
