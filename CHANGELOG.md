@@ -5,6 +5,7 @@
 - `owpp build` bundles the plugins into a folder that `owpp deploy --from` deploys elsewhere, with no checkout or git sources ([`owpp build`](docs/commands/build.md)).
 - `owpp deploy --no-prune` (the action's `no-prune`) deploys every plugin and deletes nothing.
 - Docs: the home page's reading order is a short "Where to start" table.
+- Python API: `owpp.deploy.Options` is split into `Instance` (where and how to sign in) and `Choices` (what to deploy), and `deploy(instance, choices)` takes both.
 
 ## 0.3.0 (2026-11-20)
 

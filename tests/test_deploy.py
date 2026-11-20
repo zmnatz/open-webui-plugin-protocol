@@ -12,13 +12,16 @@ from conftest import EXAMPLES, FILTER
 from owpp.bundle import FunctionFile
 from owpp.deploy import (
     MANAGED_BY,
+    Choices,
     HttpResponse,
-    Options,
+    Instance,
+    choices_from_env,
     deploy,
     iframe_sandbox_warning,
-    options_from_env,
+    instance_from_env,
     plan_deploy,
     plan_prune,
+    plugins_for,
     render_report,
     run_deploy,
     sign_in,
@@ -36,7 +39,7 @@ class TestDeployAgainstMock:
         self, mock_server, functions_dir
     ):
         m = mock_server()
-        res = deploy(m.options(functions_dir({"demo.py": FILTER})))
+        res = deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert m.calls == [
             LIST,
             CREATE,
@@ -51,7 +54,7 @@ class TestDeployAgainstMock:
         self, mock_server, functions_dir
     ):
         m = mock_server(created_type="event", created_active=True)
-        deploy(m.options(functions_dir({"demo.py": FILTER})))
+        deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert m.calls == [LIST, CREATE]
 
     def test_updates_changed_code_without_touching_active_global_state(
@@ -69,7 +72,7 @@ class TestDeployAgainstMock:
                 }
             ]
         )
-        res = deploy(m.options(functions_dir({"demo.py": FILTER})))
+        res = deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert m.calls == [
             LIST,
             "GET /api/v1/functions/id/demo",
@@ -81,7 +84,7 @@ class TestDeployAgainstMock:
 
     def test_writes_nothing_when_the_code_already_matches(self, mock_server, functions_dir, git_fn):
         m = mock_server(live=[git_fn("demo", FILTER)])
-        res = deploy(m.options(functions_dir({"demo.py": FILTER})))
+        res = deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert m.calls == [LIST, "GET /api/v1/functions/id/demo"]
         assert res[0].action == "unchanged"
 
@@ -89,7 +92,7 @@ class TestDeployAgainstMock:
         self, mock_server, functions_dir, git_fn
     ):
         m = mock_server(live=[git_fn("demo", FILTER), git_fn("other", FILTER)])
-        res = deploy(m.options(functions_dir({"demo.py": FILTER}), force_prune=True))
+        res = deploy(*m.options(functions_dir({"demo.py": FILTER}), force_prune=True))
         # Only the function that has a folder is fetched; the orphan is not.
         assert [c for c in m.calls if c.startswith("GET")] == [
             LIST,
@@ -101,13 +104,13 @@ class TestDeployAgainstMock:
         self, mock_server, functions_dir, git_fn
     ):
         m = mock_server(live=[git_fn("demo", f"{FILTER}from open_webui.config import X\n")])
-        res = deploy(m.options(functions_dir({"demo.py": f"{FILTER}from config import X\n"})))
+        res = deploy(*m.options(functions_dir({"demo.py": f"{FILTER}from config import X\n"})))
         assert res[0].action == "unchanged"
         assert not any("/update" in c for c in m.calls)
 
     def test_dry_run_lists_the_plan_and_writes_nothing(self, mock_server, functions_dir):
         m = mock_server()
-        res = deploy(m.options(functions_dir({"demo.py": FILTER}), dry_run=True))
+        res = deploy(*m.options(functions_dir({"demo.py": FILTER}), dry_run=True))
         assert m.calls == [LIST]
         assert res[0].action == "would create"
         assert render_report(res, True).startswith("Dry run:")
@@ -115,18 +118,18 @@ class TestDeployAgainstMock:
     def test_fails_on_a_bad_key_before_writing_anything(self, mock_server, functions_dir):
         m = mock_server()
         with pytest.raises(OwppError, match="HTTP 401"):
-            deploy(m.options(functions_dir({"demo.py": FILTER}), api_key="sk-wrong"))
+            deploy(*m.options(functions_dir({"demo.py": FILTER}), api_key="sk-wrong"))
         assert m.calls == []
 
     def test_fails_on_an_empty_functions_directory(self, mock_server, functions_dir):
         m = mock_server()
         with pytest.raises(OwppError, match="no functions"):
-            deploy(m.options(functions_dir({"README.md": "none"})))
+            deploy(*m.options(functions_dir({"README.md": "none"})))
 
     def test_waits_for_health_and_gives_up(self, mock_server):
         m = mock_server()
-        wait_for_health(m.options("."), attempts=1, delay=0.001)
-        down = Options(base_url="http://127.0.0.1:1", api_key="k", dir=".")
+        wait_for_health(m.instance(), attempts=1, delay=0.001)
+        down = Instance(base_url="http://127.0.0.1:1", api_key="k")
         with pytest.raises(OwppError, match="did not answer"):
             wait_for_health(down, attempts=2, delay=0.001)
 
@@ -134,7 +137,7 @@ class TestDeployAgainstMock:
         self, mock_server, functions_dir
     ):
         m = mock_server()
-        deploy(m.options(functions_dir({"demo.py": FILTER})))
+        deploy(*m.options(functions_dir({"demo.py": FILTER})))
         meta = m.state["demo"]["meta"]
         assert meta["managed_by"] == MANAGED_BY
         assert meta["description"].startswith("Git-controlled")
@@ -155,7 +158,7 @@ class TestDeployAgainstMock:
                 }
             ]
         )
-        res = deploy(m.options(functions_dir({"demo.py": FILTER})))
+        res = deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert res[0].action == "updated"
         assert m.state["demo"]["meta"]["managed_by"] == MANAGED_BY
         assert m.state["demo"]["is_global"] is True
@@ -167,7 +170,7 @@ class TestDeclaredGlobal:
     @pytest.fixture
     def run(self, functions_dir):
         def go(m, **extra):
-            return deploy(m.options(functions_dir({"demo.py": self.GLOBAL_FILTER}), **extra))
+            return deploy(*m.options(functions_dir({"demo.py": self.GLOBAL_FILTER}), **extra))
 
         return go
 
@@ -226,7 +229,7 @@ class TestDeclaredGlobal:
 
     def test_leaves_a_function_not_declared_global_alone(self, mock_server, git_fn, functions_dir):
         m = mock_server(live=[git_fn("demo", FILTER, is_active=True, is_global=False)])
-        res = deploy(m.options(functions_dir({"demo.py": FILTER})))
+        res = deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert res[0].action == "unchanged"
         assert m.state["demo"]["is_global"] is False
 
@@ -239,7 +242,7 @@ class TestDeclaredNotGlobal:
     @pytest.fixture
     def run(self, functions_dir):
         def go(m, **extra):
-            return deploy(m.options(functions_dir({"demo.py": self.TOGGLE}), **extra))
+            return deploy(*m.options(functions_dir({"demo.py": self.TOGGLE}), **extra))
 
         return go
 
@@ -290,10 +293,10 @@ class TestPruning:
         )
         # 2 of 3 managed would go: over half, so the guard stops it.
         with pytest.raises(OwppError, match="refusing to delete 2 of 3"):
-            deploy(m.options(functions_dir({"demo.py": FILTER})))
+            deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert m.calls == [LIST]
         # one orphan out of three is fine
-        res = deploy(m.options(functions_dir({"demo.py": FILTER, "retired2.py": FILTER})))
+        res = deploy(*m.options(functions_dir({"demo.py": FILTER, "retired2.py": FILTER})))
         assert any(r.id == "retired" and r.action == "deleted" for r in res)
         assert "retired" not in m.state
         assert "handmade" in m.state and "demo" in m.state
@@ -302,19 +305,19 @@ class TestPruning:
         self, mock_server, functions_dir, git_fn
     ):
         m = mock_server(live=[git_fn("retired", FILTER)])
-        deploy(m.options(functions_dir({"demo.py": FILTER})))
+        deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert "retired" not in m.state and "demo" in m.state
 
     def test_force_prune_overrides_the_mass_delete_guard(self, mock_server, functions_dir, git_fn):
         m = mock_server(live=[git_fn("demo", FILTER), git_fn("a", FILTER), git_fn("b", FILTER)])
-        deploy(m.options(functions_dir({"demo.py": FILTER}), force_prune=True))
+        deploy(*m.options(functions_dir({"demo.py": FILTER}), force_prune=True))
         assert list(m.state) == ["demo"]
 
     def test_dry_run_reports_what_it_would_delete_and_deletes_nothing(
         self, mock_server, functions_dir, git_fn
     ):
         m = mock_server(live=[git_fn("demo", FILTER), git_fn("retired", FILTER)])
-        res = deploy(m.options(functions_dir({"demo.py": FILTER}), dry_run=True))
+        res = deploy(*m.options(functions_dir({"demo.py": FILTER}), dry_run=True))
         assert any(r.id == "retired" and r.action == "would delete" for r in res)
         assert "retired" in m.state
         assert m.calls == [LIST, "GET /api/v1/functions/id/demo"]
@@ -324,7 +327,7 @@ class TestPruning:
     ):
         m = mock_server(live=[git_fn("demo", FILTER), git_fn("retired", FILTER)], fail_delete=True)
         with pytest.raises(OwppError, match="not confirmed"):
-            deploy(m.options(functions_dir({"demo.py": FILTER})))
+            deploy(*m.options(functions_dir({"demo.py": FILTER})))
 
     def test_plan_prune_only_returns_marked_functions_that_have_no_folder(self, git_fn):
         live = [
@@ -360,9 +363,9 @@ class TestValves:
             return opts_fetch(method, url, headers, body)
 
         opts = m.options(self.make(functions_dir))
-        opts_fetch = opts.fetch
-        opts.fetch = fetch
-        res = deploy(opts)
+        opts_fetch = opts.instance.fetch
+        opts.instance.fetch = fetch
+        res = deploy(*opts)
         assert sent == [{"LEVEL": "strict", "OTHER": "keep", "N": 2}]
         assert res[0].action == "created, set valves"
 
@@ -378,9 +381,9 @@ class TestValves:
             return opts_fetch(method, url, headers, body)
 
         opts = m.options(self.make(functions_dir))
-        opts_fetch = opts.fetch
-        opts.fetch = fetch
-        res = deploy(opts)
+        opts_fetch = opts.instance.fetch
+        opts.instance.fetch = fetch
+        res = deploy(*opts)
         assert not any(p.endswith("/valves/update") for p in sent)
         assert res[0].action == "created"
 
@@ -399,19 +402,13 @@ class TestOnly:
                 body_out = {"id": "x", "is_active": True, "is_global": False}
             return HttpResponse(200, json.dumps(body_out))
 
-        opts = Options(
-            base_url="http://x",
-            api_key="k",
-            dir=tmp_path,
-            dry_run=True,
-            only=["mcpo_sync"],
-            fetch=fetch,
-        )
-        assert [r.id for r in deploy(opts)] == ["mcpo_sync"]
+        instance = Instance(base_url="http://x", api_key="k", fetch=fetch)
+        choices = Choices(dir=tmp_path, dry_run=True, only=["mcpo_sync"])
+        assert [r.id for r in deploy(instance, choices)] == ["mcpo_sync"]
         assert not any(c.startswith("DELETE") for c in calls)
-        opts.only = ["nope"]
+        choices.only = ["nope"]
         with pytest.raises(OwppError, match="no such plugin function nope"):
-            deploy(opts)
+            deploy(instance, choices)
 
 
 class TestStandaloneUse:
@@ -423,15 +420,15 @@ class TestStandaloneUse:
     }
 
     def test_flags_win_over_the_environment(self):
-        a = options_from_env(self.ENV, only="a,b", dry_run=True)
-        assert a.base_url == "https://chat.example.com"
+        assert instance_from_env(self.ENV).base_url == "https://chat.example.com"
+        a = choices_from_env(self.ENV, only="a,b", dry_run=True)
         assert str(a.dir) == "/srv/p"
         assert a.managed_by == "git:me/repo"
         assert a.only == ["a", "b"]
         assert a.dry_run is True
-        b = options_from_env(self.ENV, dir="/x", managed_by="m")
+        b = choices_from_env(self.ENV, dir="/x", managed_by="m")
         assert str(b.dir) == "/x" and b.managed_by == "m"
-        assert options_from_env({}).managed_by == MANAGED_BY
+        assert choices_from_env({}).managed_by == MANAGED_BY
 
     def test_marks_compares_and_prunes_with_the_configured_marker_only(self):
         files = [FunctionFile(id="a", content="x", description="d")]
@@ -487,13 +484,13 @@ class TestVersionReport:
 
     def deployed(self, mock_server, directory, **kw):
         m = mock_server()
-        deploy(m.options(directory, sources=Sources(repo_fetcher), **kw))
+        deploy(*m.options(directory, sources=Sources(repo_fetcher), **kw))
         return m
 
     def test_a_dry_run_lists_the_versions_that_change(self, mock_server, functions_dir):
         m = self.deployed(mock_server, functions_dir(versioned("1.0.0")))
         newer = functions_dir(versioned("1.1.0", tool_version="2.0", skill="Draw better."))
-        res = deploy(m.options(newer, dry_run=True))
+        res = deploy(*m.options(newer, dry_run=True))
         (r,) = res
         assert r.action == "would update"
         assert r.details == [
@@ -510,28 +507,28 @@ class TestVersionReport:
         m = self.deployed(mock_server, functions_dir(versioned("1.0.0")))
         files = versioned("1.0.0")
         files["viz/function.py"] += "X = 1\n"
-        (r,) = deploy(m.options(functions_dir(files), dry_run=True))
+        (r,) = deploy(*m.options(functions_dir(files), dry_run=True))
         assert r.details == ["function: code changed, still 1.0.0"]
 
     def test_an_unchanged_function_shows_its_version(self, mock_server, functions_dir):
         d = functions_dir(versioned("1.0.0"))
         m = self.deployed(mock_server, d)
-        res = deploy(m.options(d, dry_run=True))
+        res = deploy(*m.options(d, dry_run=True))
         assert res[0].details == []
         assert "`viz` (viz/): unchanged (1.0.0)" in render_report(res, True)
 
     def test_a_new_plugin_lists_everything_it_brings(self, mock_server, functions_dir):
         m = mock_server()
-        (r,) = deploy(m.options(functions_dir(versioned("1.0.0")), dry_run=True))
+        (r,) = deploy(*m.options(functions_dir(versioned("1.0.0")), dry_run=True))
         assert r.details == ["function: new (1.0.0)", "tool `viz`: new (1.0)", "skill `draw`: new"]
 
     def test_the_source_commit_is_recorded_and_reported(self, mock_server, functions_dir):
         m = self.deployed(mock_server, functions_dir(sourced()))
         assert m.state["up"]["meta"]["sources"] == {REPO_GIT: PINNED}
-        again = deploy(m.options(functions_dir(sourced()), sources=Sources(repo_fetcher)))
+        again = deploy(*m.options(functions_dir(sourced()), sources=Sources(repo_fetcher)))
         assert again[0].action == "unchanged" and again[0].details == []
         moved = deploy(
-            m.options(functions_dir(sourced(LATEST)), sources=Sources(repo_fetcher), dry_run=True)
+            *m.options(functions_dir(sourced(LATEST)), sources=Sources(repo_fetcher), dry_run=True)
         )
         assert moved[0].details == [
             "tool `up`: 1.0 -> 2.0",
@@ -546,7 +543,7 @@ class TestVersionReport:
         before = (d / "up" / "plugin.yaml").read_text()
         looked_up = []
         res = deploy(
-            m.options(
+            *m.options(
                 d,
                 sources=Sources(
                     repo_fetcher, lookup=lambda git, ref: looked_up.append((git, ref)) or LATEST
@@ -569,7 +566,7 @@ class TestVersionReport:
     def test_latest_without_a_dry_run_is_refused(self, mock_server, functions_dir):
         m = mock_server()
         with pytest.raises(OwppError, match="only goes with --dry-run"):
-            deploy(m.options(functions_dir(sourced()), latest=True))
+            deploy(*m.options(functions_dir(sourced()), latest=True))
         assert m.calls == []
 
 
@@ -581,14 +578,14 @@ class TestSignIn:
     accounts, then LDAP), with an OIDC token, or with nothing."""
 
     def run(self, m, directory, **creds):
-        opts = m.options(directory, api_key="", **creds)
-        how = sign_in(opts)
-        return how, deploy(opts)
+        target = m.options(directory, api_key="", **creds)
+        how = sign_in(target.instance)
+        return how, deploy(*target)
 
     def test_an_api_key_is_used_as_it_is(self, mock_server, functions_dir):
         m = mock_server()
-        opts = m.options(functions_dir({"demo.py": FILTER}))
-        assert sign_in(opts) == "an API key" and opts.api_key == "sk-good"
+        instance = m.instance()
+        assert sign_in(instance) == "an API key" and instance.api_key == "sk-good"
         assert not any("/auths/" in c for c in m.calls)
 
     def test_user_name_and_password(self, mock_server, functions_dir):
@@ -644,7 +641,7 @@ class TestSignIn:
         assert not any("/functions" in c for c in m.calls)
 
     def test_the_environment_names(self):
-        opts = options_from_env(
+        opts = instance_from_env(
             {
                 "OPEN_WEBUI_URL": "http://x/",
                 "OPEN_WEBUI_API_KEY": "sk-secret-key",
@@ -663,6 +660,10 @@ class TestSignIn:
         assert "secret" not in repr(opts)  # no credential in a log or a traceback
 
 
+def warning_for(target):
+    return iframe_sandbox_warning(target.instance, plugins_for(target.choices))
+
+
 class TestIframeRequirementWarning:
     PLUGIN = "function:\n  title: Demo\nrequires:\n  iframe_sandbox_allow_same_origin: true\n"
 
@@ -673,12 +674,12 @@ class TestIframeRequirementWarning:
 
     def test_no_requirement_never_reads_the_admin_config(self, mock_server, functions_dir):
         m = mock_server()
-        assert iframe_sandbox_warning(m.options(functions_dir({"demo.py": FILTER}))) is None
+        assert warning_for(m.options(functions_dir({"demo.py": FILTER}))) is None
         assert m.calls == []
 
     def test_setting_on_means_no_warning(self, mock_server, functions_dir):
         m = mock_server(interface_settings={"iframeSandboxAllowSameOrigin": True})
-        assert iframe_sandbox_warning(m.options(self.make(functions_dir))) is None
+        assert warning_for(m.options(self.make(functions_dir))) is None
         assert m.calls == ["GET /api/v1/auths/admin/config"]
 
     def test_only_that_excludes_the_plugin_does_not_warn(self, mock_server, functions_dir):
@@ -690,7 +691,7 @@ class TestIframeRequirementWarning:
                 "other.py": FILTER,
             }
         )
-        assert iframe_sandbox_warning(m.options(d, only=["other"])) is None
+        assert warning_for(m.options(d, only=["other"])) is None
         assert m.calls == []
 
     def test_missing_setting_warns_but_the_deploy_still_writes(
@@ -698,7 +699,7 @@ class TestIframeRequirementWarning:
     ):
         m = mock_server(created_type="event", created_active=True)
         opts = m.options(self.make(functions_dir))
-        assert run_deploy(opts, env={}) == 0
+        assert run_deploy(*opts, env={}) == 0
         out = capsys.readouterr().out
         assert "Warning:" in out and "iframe Sandbox Allow Same Origin" in out
         assert "DEFAULT_INTERFACE_SETTINGS" in out and "Deploying anyway." in out
@@ -710,6 +711,6 @@ class TestIframeRequirementWarning:
     ):
         m = mock_server(admin_config_status=403, created_type="event", created_active=True)
         opts = m.options(self.make(functions_dir))
-        warning = iframe_sandbox_warning(opts)
+        warning = warning_for(opts)
         assert warning and "could not be read" in warning
-        assert any(r.action.startswith("created") for r in deploy(opts))
+        assert any(r.action.startswith("created") for r in deploy(*opts))

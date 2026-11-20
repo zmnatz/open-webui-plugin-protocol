@@ -2,17 +2,19 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import NamedTuple
 from urllib.parse import urlsplit
 
 import pytest
 
 from owpp.bundle import load_function_files
-from owpp.deploy import MANAGED_BY, Options
+from owpp.deploy import MANAGED_BY, Choices, Instance
 from owpp.sources import Sources
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples" / "plugins"
@@ -120,6 +122,16 @@ def git_fn(functions_dir):
 
 
 # ---- a stand-in for Open-WebUI's admin API --------------------------------------
+
+
+INSTANCE_FIELDS = {f.name for f in dataclasses.fields(Instance)}
+
+
+class Target(NamedTuple):
+    """Where and what to deploy: `deploy(*target)`."""
+
+    instance: Instance
+    choices: Choices
 
 
 class MockServer:
@@ -259,9 +271,16 @@ class MockServer:
             target=self._server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
         ).start()
 
-    def options(self, directory: Path, **kwargs) -> Options:
+    def instance(self, **kwargs) -> Instance:
+        """This server, signed in with the good key unless told otherwise."""
         kwargs.setdefault("api_key", "sk-good")
-        return Options(base_url=self.base_url, dir=directory, **kwargs)
+        return Instance(base_url=self.base_url, **kwargs)
+
+    def options(self, directory: Path, **kwargs) -> Target:
+        """(instance, choices) for deploying `directory` here: the keyword arguments that are
+        Instance fields go to the instance, the rest to the choices."""
+        connection = {k: kwargs.pop(k) for k in list(kwargs) if k in INSTANCE_FIELDS}
+        return Target(self.instance(**connection), Choices(dir=Path(directory), **kwargs))
 
     def close(self):
         self._server.shutdown()
