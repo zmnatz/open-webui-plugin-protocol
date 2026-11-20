@@ -50,7 +50,7 @@ Open-WebUI stores each function and tool as **one code blob**, edited in the adm
 
 ## Install
 
-Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (for remote sources). Nothing to install: `uvx` runs `owpp` straight from PyPI. To have it on your `PATH`, `uv tool install owpp` (or `pipx install owpp`).
+Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (for remote sources). Nothing to install: `uvx` runs `owpp` straight from PyPI. To have it on your `PATH`, `uv tool install owpp` (or `pipx install owpp`). See [install](docs/install.md) and [getting started](docs/getting-started.md).
 
 ```sh
 uvx owpp create                      # a wizard: asks what the plugin is, writes plugins/<id>/
@@ -75,6 +75,8 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 | | |
 | --- | --- |
+| [Install](docs/install.md) | requirements, uvx, pinning, the test extra |
+| [Getting started](docs/getting-started.md) | from an empty repository to a plugin deployed from CI |
 | [Overview](docs/README.md) | concepts, guarantees, status |
 | [Creating a plugin](docs/creating.md) | the `owpp create` wizard: code written here, installers, plugins from git |
 | [Authoring guide](docs/authoring.md) | function types, conventions, checklist |
