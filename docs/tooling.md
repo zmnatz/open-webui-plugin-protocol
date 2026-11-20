@@ -18,7 +18,7 @@ Pin the version (`uvx owpp@0.2.0 list`, or `uv tool install owpp==0.2.0`): the r
 owpp list                           plugins with their function type
 owpp check [id ...] [--strict]      bundle, compile, report undefined names; warn about valves and tools
 owpp bundle <id> [out.py]           print (or write) the code that would be deployed
-owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
+owpp deploy [--only id,id] [--dry-run [--sync]] [--force-prune] [--managed-by marker]
 owpp test [id ...] [-- pytest args]
 owpp sync [id ...] [--dry-run]
 owpp create [id]
@@ -48,7 +48,8 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
 | `OPEN_WEBUI_API_KEY` | Required. An admin API key (Settings > Account > API keys; the admin setting "Enable API Keys" must be on). Use a dedicated admin user. |
 | `--dir`, `OWPP_PLUGINS_DIR` | The plugins folder (`FUNCTIONS_DIR` is accepted too). |
 | `--managed-by`, `OWPP_MANAGED_BY` | The ownership marker, default `open-webui-plugin-protocol`. See below. |
-| `--dry-run` | List what would change; write nothing. |
+| `--dry-run` | List what would change, with versions; write nothing. |
+| `--sync` | With `--dry-run`: report against the latest commit each git-sourced plugin tracks, as [`owpp sync`](#owpp-sync-moving-a-pinned-commit) would move it, without changing `plugin.yaml`. Refused without `--dry-run`. |
 | `--only a,b` | Deploy just these ids; no pruning. |
 | `--force-prune` | Allow deleting more than half of the managed functions at once. |
 
@@ -68,6 +69,35 @@ Every function the deploy writes gets `meta.managed_by = <marker>` and a note in
 5. Prunes: managed functions whose folder is gone. Deleting more than half of them in one run is refused without `--force-prune`, so a renamed folder cannot wipe them all.
 
 The report names each function with its type, for example ``- event function `mcpo_sync` (mcpo_sync/): unchanged``. In GitHub Actions it is also written to the job summary.
+
+### The report: what changes, in versions
+
+Under each function, the report lists what deploying it changes, compared with what the instance runs now:
+
+```
+Dry run at the latest commits: Open-WebUI functions
+
+- filter function `inline_visualizer` (inline_visualizer/): would update
+  - tool `inline_visualizer`: changed, still 2.2.3
+  - skill `visualize`: changed, still (no version)
+  - source https://github.com/Classic298/open-webui-plugins.git inline-visualizer-v2: f668387 -> 917c88f (latest of the default branch; plugin.yaml pins f668387)
+- event function `stale_data` (stale_data/): unchanged (1.3.0)
+```
+
+- **function**: its `version:` header, `1.0.0 -> 1.1.0`, or `new (1.0.0)`. `code changed, still 1.0.0` means its own code changed and its version did not: bump it.
+- **tool** and **skill**: each one the function installs, read from the code it embeds, so this is what the runtime will install once the new code is deployed. A tool's version is its header's, a skill's is its SKILL.md's `version`, if it has one. Only tools and skills that are new, removed or changed are listed.
+- **source**: the commit of the git repository a plugin takes code from. The deploy records it in the function's meta (`meta.sources`), so the next report can say what it moves from. (A git-sourced function deployed before this was recorded updates once, to record it.)
+
+`owpp deploy --dry-run --sync` is the same report at the commits `owpp sync` would move to: which versions an upgrade brings to the live instance, before anything is changed. The same in CI, on a schedule:
+
+```yaml
+- uses: zmnatz/open-webui-plugin-protocol@v0.2.0
+  with:
+    url: https://chat.example.com
+    api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
+    dry-run: "true"
+    sync: "true"     # the report goes to the job summary
+```
 
 The deploy only ever creates, updates and prunes **functions**. Tools and skills are installed by the runtime inside Open-WebUI, driven by the function.
 

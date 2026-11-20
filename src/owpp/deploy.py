@@ -19,18 +19,28 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shutil
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from .bundle import VALID_ID, FunctionFile, load_function_files
+from .bundle import (
+    VALID_ID,
+    FunctionFile,
+    load_function_files,
+    parse_frontmatter,
+    parse_skill,
+    runtime_data,
+)
 from .errors import OwppError
-from .sources import Fetcher, fetch_sources, git_fetcher, source_keys
+from .sources import Fetcher, fetch_sources, git_fetcher, plugin_folders, source_keys
 
 API = "/api/v1/functions"
 
@@ -76,8 +86,12 @@ class Options:
     force_prune: bool = False
     only: list[str] | None = None
     managed_by: str = MANAGED_BY
+    # With dry_run: report against the latest commit each git-sourced plugin tracks, not the
+    # pinned one (as if `owpp sync` had run), without changing plugin.yaml.
+    sync: bool = False
     fetch: Fetch = field(default=urllib_fetch, repr=False)
     git_fetcher: Fetcher = field(default=git_fetcher, repr=False)
+    resolve: Callable[[str, str], str | None] | None = field(default=None, repr=False)
 
 
 def options_from_env(
@@ -88,6 +102,7 @@ def options_from_env(
     dry_run: bool = False,
     force_prune: bool = False,
     managed_by: str | None = None,
+    sync: bool = False,
 ) -> Options:
     """Flags win over the environment, which wins over the defaults."""
     env = os.environ if env is None else env
@@ -101,6 +116,7 @@ def options_from_env(
         force_prune=force_prune,
         only=[i for i in only.split(",") if i] if only else None,
         managed_by=managed_by or env.get("OWPP_MANAGED_BY") or MANAGED_BY,
+        sync=sync,
     )
 
 
@@ -184,6 +200,7 @@ def plan_deploy(
                 _norm(existing.get("content")) == _norm(replace_imports(f.content))
                 and meta.get("managed_by") == managed_by
                 and (meta.get("description") or "") == f.description
+                and (meta.get("sources") or {}) == f.sources
             )
             plan.append(PlanItem(f, "unchanged" if same else "update", existing))
     return plan
@@ -211,6 +228,84 @@ class Result:
     action: str
     kind: str = "function"
     type: str | None = None
+    version: str = ""  # the function's version, from its header
+    details: list[str] = field(default_factory=list)  # what changes: versions, tools, skills
+
+
+# ---- what changes, in versions ------------------------------------------------
+
+
+def _version(content: str | None) -> str:
+    return str(parse_frontmatter(content or "").get("version") or "")
+
+
+def _own_code(content: str | None) -> str:
+    """The function's code without the tool and skills it embeds, which are reported apart."""
+    return re.sub(r"^_PLUGIN = _json\.loads\(.*\)$", "", _norm(content), flags=re.M)
+
+
+def _from_to(old: str, new: str) -> str:
+    return f"{old or '(no version)'} -> {new or '(no version)'}"
+
+
+def _tools(content: str | None) -> dict[str, dict]:
+    return {t["id"]: t for t in runtime_data(content)["tools"] if not t.get("self")}
+
+
+def _skills(content: str | None) -> dict[str, dict]:
+    return {s["id"]: s for s in runtime_data(content)["skills"]}
+
+
+def _skill_version(skill: dict) -> str:
+    root = next((f for f in skill.get("files", []) if f.get("path") == "SKILL.md"), None)
+    fm, _ = parse_skill(skill["id"], root["content"]) if root and "content" in root else ({}, "")
+    return str(fm.get("version") or "")
+
+
+def _parts(kind: str, old: dict[str, dict], new: dict[str, dict], version) -> list[str]:
+    """One line per tool (or skill) that is added, removed or changed."""
+    out = []
+    for item_id in sorted(set(old) | set(new)):
+        a, b = old.get(item_id), new.get(item_id)
+        if a is None:
+            v = version(b)
+            out.append(f"{kind} `{item_id}`: new{f' ({v})' if v else ''}")
+        elif b is None:
+            out.append(f"{kind} `{item_id}`: removed")
+        elif json.dumps(a, sort_keys=True) != json.dumps(b, sort_keys=True):
+            va, vb = version(a), version(b)
+            out.append(
+                f"{kind} `{item_id}`: {_from_to(va, vb)}"
+                if va != vb
+                else f"{kind} `{item_id}`: changed, still {vb or '(no version)'}"
+            )
+    return out
+
+
+def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, str]) -> list[str]:
+    """What deploying `f` changes, by version: the function, each tool and skill it installs,
+    and the commit of the git repository it takes code from. `existing` is the live function
+    (with its content), or None; `latest` notes which sources were moved to their latest commit."""
+    old = existing.get("content") if existing else None
+    out = []
+    old_v, new_v = _version(old), _version(f.content)
+    if existing is None:
+        out.append(f"function: new{f' ({new_v})' if new_v else ''}")
+    elif old_v != new_v:
+        out.append(f"function: {_from_to(old_v, new_v)}")
+    elif _own_code(old) != _own_code(replace_imports(f.content)):
+        out.append(f"function: code changed, still {new_v or '(no version)'}")
+    out += _parts("tool", _tools(old), _tools(f.content), lambda t: _version(t.get("content")))
+    out += _parts("skill", _skills(old), _skills(f.content), _skill_version)
+    live_sources = ((existing or {}).get("meta") or {}).get("sources") or {}
+    for label, sha in f.sources.items():
+        was = live_sources.get(label)
+        note = f" ({latest[label]})" if label in latest else ""
+        if existing is None:
+            out.append(f"source {label}: {sha[:7]}{note}")
+        elif was != sha:
+            out.append(f"source {label}: {was[:7] if was else '(not recorded)'} -> {sha[:7]}{note}")
+    return out
 
 
 def _with_content(opts: Options, files: list[FunctionFile], live: list[dict]) -> list[dict]:
@@ -247,7 +342,9 @@ def _ensure_not_global(opts: Options, fn_id: str, state: Any) -> list[str]:
     return []
 
 
-def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
+def _deploy_functions(
+    opts: Options, files: list[FunctionFile], latest: dict[str, str] | None = None
+) -> list[Result]:
     # The list call is also the credential check: a bad key is a 401/403 here, before
     # anything is written. (A missing single function is a 401 too, so it cannot be used
     # to tell "absent" from "unauthorised".)
@@ -279,6 +376,8 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
     results: list[Result] = []
     for p in plan:
         f = p.file
+        details = describe_changes(f, p.existing, latest or {})
+        version = _version(f.content)
         if p.action == "unchanged" or opts.dry_run:
             pending = []
             if f.want_global and p.existing:
@@ -299,16 +398,14 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
                     else _ensure_not_global(opts, f.id, p.existing)
                 )
                 action = f"unchanged, {', '.join(notes)}"
-            results.append(Result(f.id, f.file, action, type=f.type))
+            results.append(Result(f.id, f.file, action, f.kind, f.type, version, details))
             continue
 
         # An update replaces meta, so it is always sent whole.
-        form = {
-            "id": f.id,
-            "name": f.name,
-            "content": f.content,
-            "meta": {"description": f.description, "managed_by": managed_by},
-        }
+        meta: dict = {"description": f.description, "managed_by": managed_by}
+        if f.sources:  # the commit it was deployed from, for the next report
+            meta["sources"] = f.sources
+        form = {"id": f.id, "name": f.name, "content": f.content, "meta": meta}
         if p.action == "update":
             updated = _call(opts, "POST", f"{API}/id/{f.id}/update", form)
             state = updated if updated is not None else p.existing
@@ -319,7 +416,11 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
                 if f.not_global
                 else []
             )
-            results.append(Result(f.id, f.file, ", ".join(["updated", *notes]), type=f.type))
+            results.append(
+                Result(
+                    f.id, f.file, ", ".join(["updated", *notes]), f.kind, f.type, version, details
+                )
+            )
             continue
 
         created = _call(opts, "POST", f"{API}/create", form)
@@ -333,7 +434,9 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
         if (f.want_global or default_global) and not _field(created, "is_global"):
             _call(opts, "POST", f"{API}/id/{f.id}/toggle/global")
             notes.append("made global")
-        results.append(Result(f.id, f.file, ", ".join(["created", *notes]), type=f.type))
+        results.append(
+            Result(f.id, f.file, ", ".join(["created", *notes]), f.kind, f.type, version, details)
+        )
 
     _valves_pass(opts, plan, results)
 
@@ -377,7 +480,55 @@ def _valves_pass(opts: Options, plan: list[PlanItem], results: list[Result]) -> 
             row.action = note if row.action == "unchanged" else f"{row.action}, {note}"
 
 
+def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
+    """A copy of the plugins folder in `work` with each git-sourced plugin moved to the latest
+    commit it tracks, as `owpp sync` would, and {source label: note} for the report."""
+    from .bundle import source_label
+    from .manifest import read_manifest, read_text, text_of
+    from .sources import resolve_ref
+    from .sync import rewrite_ref, track_of
+
+    copy = work / opts.dir.name
+    shutil.copytree(
+        opts.dir, copy, symlinks=True, ignore=shutil.ignore_patterns(".git", "node_modules")
+    )
+    notes: dict[str, str] = {}
+    for folder in plugin_folders(copy):
+        src = read_manifest(folder).get("source")
+        if not isinstance(src, dict):
+            continue
+        track = track_of(folder, src)
+        where = "the default branch" if track == "HEAD" else track
+        label, pinned = source_label(src), text_of(src.get("ref"))
+        sha = (opts.resolve or resolve_ref)(text_of(src.get("git")), track)
+        if not sha:
+            notes[label] = f"could not look up {where}: the pinned commit"
+            continue
+        path = folder / "plugin.yaml"
+        if sha != pinned:
+            path.write_bytes(rewrite_ref(read_text(path), pinned, sha).encode("utf-8"))
+        notes[label] = (
+            f"latest of {where}; plugin.yaml pins {pinned[:7]}"
+            if sha != pinned
+            else f"latest of {where}, as pinned"
+        )
+    return copy, notes
+
+
 def deploy(opts: Options) -> list[Result]:
+    if opts.sync and not opts.dry_run:
+        raise OwppError(
+            "--sync only goes with --dry-run: to deploy the latest commits, run `owpp sync`, "
+            "review and commit the change, then deploy"
+        )
+    if not opts.sync:
+        return _deploy(opts)
+    with tempfile.TemporaryDirectory(prefix="owpp-sync-") as work:
+        copy, notes = _latest_copy(opts, Path(work))
+        return _deploy(replace(opts, dir=copy), notes)
+
+
+def _deploy(opts: Options, latest: dict[str, str] | None = None) -> list[Result]:
     remote = fetch_sources(source_keys(opts.dir), opts.git_fetcher)
     files = load_function_files(opts.dir, remote)
     if opts.only:
@@ -393,15 +544,21 @@ def deploy(opts: Options) -> list[Result]:
             "no functions (plugin folders with a function in plugin.yaml, or *.py files) "
             f"in {opts.dir}"
         )
-    return _deploy_functions(opts, files)
+    return _deploy_functions(opts, files, latest)
 
 
-def render_report(results: list[Result], dry_run: bool) -> str:
-    lines = [
-        f"- {f'{r.type} function' if r.type else r.kind} `{r.id}` ({r.file}): {r.action}"
-        for r in results
-    ]
-    return f"{'Dry run: ' if dry_run else ''}Open-WebUI functions\n\n" + "\n".join(lines) + "\n"
+def render_report(results: list[Result], dry_run: bool, sync: bool = False) -> str:
+    lines = []
+    for r in results:
+        what = f"{r.type} function" if r.type else r.kind
+        unchanged = r.action == "unchanged" and r.version
+        action = f"{r.action} ({r.version})" if unchanged else r.action
+        lines.append(f"- {what} `{r.id}` ({r.file}): {action}")
+        lines += [f"  - {d}" for d in r.details]
+    title = "Open-WebUI functions"
+    if dry_run:
+        title = f"Dry run{' at the latest commits' if sync else ''}: {title}"
+    return f"{title}\n\n" + "\n".join(lines) + "\n"
 
 
 def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
@@ -424,7 +581,7 @@ def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
         return 1
     try:
         wait_for_health(opts)
-        report = render_report(deploy(opts), opts.dry_run)
+        report = render_report(deploy(opts), opts.dry_run, opts.sync)
     except OwppError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

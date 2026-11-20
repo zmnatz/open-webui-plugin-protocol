@@ -439,3 +439,130 @@ class TestStandaloneUse:
         assert plan_deploy(files, live, "mine")[0].action == "unchanged"
         assert plan_deploy(files, live)[0].action == "update"  # the default marker does not own it
         assert [f["id"] for f in plan_prune(files, live, "mine")] == ["gone"]
+
+
+# ---- what a deploy reports, in versions ------------------------------------------------
+
+PINNED = "a1" * 20
+LATEST = "b2" * 20
+REPO_GIT = "https://github.com/owner/repo.git"
+
+
+def versioned(version: str, tool_version: str = "1.0", skill: str = "Draw.") -> dict:
+    """A plugin folder with a function, a tool and a skill, each at a version."""
+    return {
+        "viz/plugin.yaml": (
+            f"function:\n  title: Viz\n  version: {version}\n"
+            f"tool:\n  id: viz\n  title: Viz Tool\n  version: '{tool_version}'\n"
+        ),
+        "viz/function.py": "class Filter:\n    pass\n",
+        "viz/tool.py": "class Tools:\n    pass\n",
+        "viz/skills/draw/SKILL.md": f"---\nname: draw\n---\n{skill}\n",
+    }
+
+
+def sourced(ref: str = PINNED) -> dict:
+    return {
+        "up/plugin.yaml": (
+            f"source:\n  git: {REPO_GIT}\n  ref: {ref}\n  path: ''\n  track: main\n"
+            "function:\n  title: Up\n  version: 1.0.0\n  global: true\n"
+            "tool:\n  id: up\n  file: tool.py\n"
+        )
+    }
+
+
+def repo_fetcher(git, ref, paths):
+    """The upstream tool.py: version 1.0 at the pinned commit, 2.0 at the latest."""
+    version = "2.0" if ref == LATEST else "1.0"
+    return {p: f'"""\ntitle: Up\nversion: {version}\n"""\nclass Tools:\n    pass\n' for p in paths}
+
+
+class TestVersionReport:
+    """A deploy (and above all a dry run) says what changes in versions: the function, each
+    tool and skill it installs, and the commit of the repository it takes code from."""
+
+    def deployed(self, mock_server, directory, **kw):
+        m = mock_server()
+        deploy(m.options(directory, git_fetcher=repo_fetcher, **kw))
+        return m
+
+    def test_a_dry_run_lists_the_versions_that_change(self, mock_server, functions_dir):
+        m = self.deployed(mock_server, functions_dir(versioned("1.0.0")))
+        newer = functions_dir(versioned("1.1.0", tool_version="2.0", skill="Draw better."))
+        res = deploy(m.options(newer, dry_run=True))
+        (r,) = res
+        assert r.action == "would update"
+        assert r.details == [
+            "function: 1.0.0 -> 1.1.0",
+            "tool `viz`: 1.0 -> 2.0",
+            "skill `draw`: changed, still (no version)",
+        ]
+        report = render_report(res, True)
+        assert (
+            "- filter function `viz` (viz/): would update\n  - function: 1.0.0 -> 1.1.0" in report
+        )
+
+    def test_code_that_changed_without_a_new_version_is_flagged(self, mock_server, functions_dir):
+        m = self.deployed(mock_server, functions_dir(versioned("1.0.0")))
+        files = versioned("1.0.0")
+        files["viz/function.py"] += "X = 1\n"
+        (r,) = deploy(m.options(functions_dir(files), dry_run=True))
+        assert r.details == ["function: code changed, still 1.0.0"]
+
+    def test_an_unchanged_function_shows_its_version(self, mock_server, functions_dir):
+        d = functions_dir(versioned("1.0.0"))
+        m = self.deployed(mock_server, d)
+        res = deploy(m.options(d, dry_run=True))
+        assert res[0].details == []
+        assert "`viz` (viz/): unchanged (1.0.0)" in render_report(res, True)
+
+    def test_a_new_plugin_lists_everything_it_brings(self, mock_server, functions_dir):
+        m = mock_server()
+        (r,) = deploy(m.options(functions_dir(versioned("1.0.0")), dry_run=True))
+        assert r.details == ["function: new (1.0.0)", "tool `viz`: new (1.0)", "skill `draw`: new"]
+
+    def test_the_source_commit_is_recorded_and_reported(self, mock_server, functions_dir):
+        m = self.deployed(mock_server, functions_dir(sourced()))
+        assert m.state["up"]["meta"]["sources"] == {REPO_GIT: PINNED}
+        again = deploy(m.options(functions_dir(sourced()), git_fetcher=repo_fetcher))
+        assert again[0].action == "unchanged" and again[0].details == []
+        moved = deploy(
+            m.options(functions_dir(sourced(LATEST)), git_fetcher=repo_fetcher, dry_run=True)
+        )
+        assert moved[0].details == [
+            "tool `up`: 1.0 -> 2.0",
+            f"source {REPO_GIT}: {PINNED[:7]} -> {LATEST[:7]}",
+        ]
+
+    def test_sync_reports_against_the_latest_commits_and_changes_no_file(
+        self, mock_server, functions_dir
+    ):
+        d = functions_dir(sourced())
+        m = self.deployed(mock_server, d)
+        before = (d / "up" / "plugin.yaml").read_text()
+        looked_up = []
+        res = deploy(
+            m.options(
+                d,
+                git_fetcher=repo_fetcher,
+                dry_run=True,
+                sync=True,
+                resolve=lambda git, ref: looked_up.append((git, ref)) or LATEST,
+            )
+        )
+        assert looked_up == [(REPO_GIT, "main")]
+        assert res[0].action == "would update"
+        assert res[0].details == [
+            "tool `up`: 1.0 -> 2.0",
+            f"source {REPO_GIT}: {PINNED[:7]} -> {LATEST[:7]} "
+            f"(latest of main; plugin.yaml pins {PINNED[:7]})",
+        ]
+        assert render_report(res, True, sync=True).startswith("Dry run at the latest commits:")
+        assert (d / "up" / "plugin.yaml").read_text() == before
+        assert not any("/update" in c for c in m.calls[-3:])
+
+    def test_sync_without_a_dry_run_is_refused(self, mock_server, functions_dir):
+        m = mock_server()
+        with pytest.raises(OwppError, match="only goes with --dry-run"):
+            deploy(m.options(functions_dir(sourced()), sync=True))
+        assert m.calls == []

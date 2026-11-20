@@ -35,6 +35,7 @@ uvx owpp check                       # bundle, compile, report undefined names
 uvx --from 'owpp[test]' owpp test    # each plugin's tests/, against a mock Open-WebUI
 uvx owpp deploy --only excalidraw --dry-run
 uvx owpp sync                        # move plugins taken from git to their latest commit, for review
+uvx owpp deploy --dry-run --sync     # what that would change on the live instance, by version
 ```
 
 ## Why

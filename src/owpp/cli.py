@@ -17,9 +17,7 @@ from __future__ import annotations
 import argparse
 import ast
 import builtins
-import json
 import os
-import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -27,7 +25,7 @@ from pathlib import Path
 import yaml
 
 from . import __version__
-from .bundle import FunctionFile, env_references, load_function_files
+from .bundle import FunctionFile, env_references, load_function_files, runtime_data
 from .create import CLASS, PluginSpec, write_plugin
 from .deploy import options_from_env, run_deploy
 from .errors import OwppError
@@ -90,8 +88,7 @@ def check_bundle(code: str, name: str = "bundle.py") -> str | None:
 
 def bundle_parts(fn: FunctionFile) -> list[tuple[str, str]]:
     """The function bundle, then each tool bundle the runtime embeds for it."""
-    m = re.search(r'_PLUGIN = _json\.loads\((".*")\)\n', fn.content)
-    tools = json.loads(json.loads(m.group(1))).get("tools", []) if m else []
+    tools = runtime_data(fn.content)["tools"]
     return [(fn.id, fn.content)] + [
         (f"tool {t['id']}", t["content"]) for t in tools if not t.get("self")
     ]
@@ -180,6 +177,7 @@ def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         dry_run=args.dry_run,
         force_prune=args.force_prune,
         managed_by=args.managed_by,
+        sync=args.sync,
     )
     return run_deploy(opts, env)
 
@@ -281,7 +279,14 @@ def build_parser() -> argparse.ArgumentParser:
     bundle.add_argument("out", nargs="?", metavar="out.py")
     deploy = add("deploy", _cmd_deploy, "deploy the plugins to an Open-WebUI instance")
     deploy.add_argument("--only", metavar="id,id", help="deploy just these (no pruning)")
-    deploy.add_argument("--dry-run", action="store_true", help="list what would change")
+    deploy.add_argument(
+        "--dry-run", action="store_true", help="list what would change, with versions"
+    )
+    deploy.add_argument(
+        "--sync",
+        action="store_true",
+        help="with --dry-run: at the latest commit each git-sourced plugin tracks (owpp sync)",
+    )
     deploy.add_argument(
         "--force-prune",
         action="store_true",
