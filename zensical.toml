@@ -5,7 +5,7 @@
 #   uv run --group docs python tools/build_docs.py serve    # preview
 #
 # The script assembles docs/ and the generated pages (test catalogue, examples,
-# changelog) into build/docs/, which is what Zensical builds.
+# changelog, license) into build/docs/, which is what Zensical builds.
 
 [project]
 site_name = "Open-WebUI plugin protocol"
@@ -46,14 +46,15 @@ nav = [
   ] },
   { "Review" = [
     { "Reviewing a change" = "reviewing.md" },
-    { "Making a change" = "contributing.md" },
     { "Test catalogue" = "reference/test-catalogue.md" },
     { "Screenshots" = "reference/screenshots.md" },
     { "Taking screenshots" = "screenshots.md" },
-    { "Changelog" = "project/changelog.md" },
   ] },
   { "Project" = [
+    { "Changelog" = "project/changelog.md" },
+    { "Contributing" = "contributing.md" },
     { "Security" = "project/security.md" },
+    { "License" = "project/license.md" },
     { "Notice" = "project/notice.md" },
   ] },
 ]

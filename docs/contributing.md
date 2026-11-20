@@ -1,4 +1,4 @@
-# Making a change
+# Contributing
 
 What a change to this repository includes, so that the person who [reviews it](reviewing.md) can follow and repeat it.
 
@@ -16,7 +16,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 | Tests | `tests/` for owpp, `examples/plugins/<id>/tests/` for a plugin | They show it works, and keep it working. |
 | A docstring on each plugin test | the test itself: what it checks, then `By hand:` steps ([describe every test](testing.md#describe-every-test)) | A reviewer repeats them on a live Open-WebUI. The [test catalogue](reference/test-catalogue.md) is built from them. |
 | The guide | `docs/*.md` | When behaviour or a command changes. |
-| A changelog entry | `CHANGELOG.md`, in the section of the version being prepared (`## <version> (not released yet)` until it is released) | What users will notice, in one sentence; the details belong in the docs. |
+| A changelog entry | `CHANGELOG.md`, in the section of the version being prepared (`## Unreleased` until it is released) | What users will notice, in one sentence; the details belong in the docs. |
 | A commit message that says why | git | A reviewer reads it with the diff. |
 
 ## Step by step
@@ -33,7 +33,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 
 The site is built with [Zensical](https://zensical.org/), configured in `zensical.toml`. The pages are `docs/*.md`. Build it with `uv run --group docs python tools/build_docs.py` (or `serve` to preview), not `zensical` directly: the script puts `docs/` and the generated pages into `build/docs/`, which is what Zensical builds. Nothing generated is checked in, so none of it can go stale:
 
-- the root `CHANGELOG.md`, `SECURITY.md` and `NOTICE.md`, and each example plugin's `README.md`;
+- the root `CHANGELOG.md`, `SECURITY.md`, `LICENSE` and `NOTICE.md`, and each example plugin's `README.md`;
 - the examples overview, from each `plugin.yaml`;
 - the test catalogue, from the test docstrings.
 
