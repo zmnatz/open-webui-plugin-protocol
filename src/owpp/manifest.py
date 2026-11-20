@@ -1,8 +1,10 @@
-"""Reading plugin.yaml, and the small value helpers the bundler shares."""
+"""Reading plugin.yaml and a plugin's files, and the small value helpers the bundler shares."""
 
 from __future__ import annotations
 
+import base64
 import difflib
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -180,3 +182,55 @@ def text_of(value: Any) -> str:
 
 def omit(obj: dict, keys: list[str]) -> dict:
     return {k: v for k, v in obj.items() if k not in keys}
+
+
+# ---- a plugin's files ---------------------------------------------------------------
+
+# A file's content: text when it is UTF-8, else {"base64": ...} (a skill may ship an image or a font).
+Value = str | dict
+
+
+def file_value(buf: bytes) -> Value:
+    try:
+        return buf.decode("utf-8")
+    except UnicodeDecodeError:
+        return {"base64": base64.b64encode(buf).decode("ascii")}
+
+
+def file_entry(path: str, value: Value) -> dict:
+    """A file as the runtime installs it: {path, content, encoding?}."""
+    if isinstance(value, str):
+        return {"path": path, "content": value}
+    return {"path": path, "content": value["base64"], "encoding": "base64"}
+
+
+def folder_files(directory: Path) -> list[dict]:
+    """Every file under `directory` as [{path, content, encoding?}] sorted by path. Symlinks
+    are never followed, and .DS_Store is skipped."""
+    files: list[dict] = []
+
+    def walk(here: Path, base: str) -> None:
+        with os.scandir(here) as it:
+            entries = sorted(it, key=lambda e: e.name)
+        for e in entries:
+            if e.name == ".DS_Store":
+                continue
+            path = f"{base}/{e.name}" if base else e.name
+            if e.is_dir(follow_symlinks=False):
+                walk(Path(e.path), path)
+            elif e.is_file(follow_symlinks=False):
+                files.append(file_entry(path, file_value(Path(e.path).read_bytes())))
+
+    walk(directory, "")
+    return sorted(files, key=lambda f: f["path"])
+
+
+def plugin_folders(directory: Path | str) -> list[Path]:
+    """Sub-folders of `directory` that hold a plugin.yaml, by name."""
+    with os.scandir(directory) as it:
+        entries = sorted(it, key=lambda e: e.name)
+    return [
+        Path(e.path)
+        for e in entries
+        if e.is_dir(follow_symlinks=False) and (Path(e.path) / "plugin.yaml").exists()
+    ]

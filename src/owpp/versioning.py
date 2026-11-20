@@ -28,8 +28,7 @@ from pathlib import Path
 from .bundle import FunctionFile, load_function_files, parse_frontmatter, parse_skill, runtime_data
 from .errors import OwppError
 from .manifest import get, read_manifest, read_text
-from .sources import Fetcher, git_fetcher
-from .upstream import fetch_all, is_plugin_source
+from .sources import Sources, is_plugin_source
 
 SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 PARTS = ("patch", "minor", "major")
@@ -436,17 +435,18 @@ def check_since(
     directory: Path,
     since: str,
     ids: list[str] | None = None,
-    fetcher: Fetcher = git_fetcher,
+    sources: Sources | None = None,
     new_files: list[FunctionFile] | None = None,
 ) -> list[Finding]:
     """Every plugin in `directory` that changed since git `since` without a new version."""
+    sources = sources if sources is not None else Sources()
     if new_files is None:
-        new_files = load_function_files(directory, fetch_all(directory, fetcher))
+        new_files = load_function_files(directory, sources)
     with tempfile.TemporaryDirectory(prefix="owpp-since-") as work:
         old_dir = tree_at(directory, since, Path(work))
         if old_dir is None or not old_dir.is_dir():
             return []
-        old_files = {f.id: f for f in load_function_files(old_dir, fetch_all(old_dir, fetcher))}
+        old_files = {f.id: f for f in load_function_files(old_dir, sources)}
     findings: list[Finding] = []
     for f in new_files:
         if ids and f.id not in ids:

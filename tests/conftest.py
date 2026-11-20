@@ -13,7 +13,7 @@ import pytest
 
 from owpp.bundle import load_function_files
 from owpp.deploy import MANAGED_BY, Options
-from owpp.sources import source_keys
+from owpp.sources import Sources
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples" / "plugins"
 DOCS = Path(__file__).resolve().parent.parent / "docs"
@@ -59,20 +59,33 @@ def embedded(code: str) -> dict:
     return json.loads(json.loads(m.group(1)))
 
 
-def fake_remote(directory: Path) -> dict:
-    """Stand-ins for the files plugins take from git, so no test needs the network."""
-    out = {}
-    for key in source_keys(directory):
-        if key.endswith("/"):
-            out[f"{key}SKILL.md"] = SKILL_MD
-            out[f"{key}references/a.md"] = "ref\n"
-        else:
-            out[key] = (
-                SKILL_MD
-                if key.endswith(".md")
-                else "class Tools:\n    pass\n\nclass Event:\n    pass\n"
-            )
-    return out
+def fake_fetcher(overrides: dict[str, str] | None = None):
+    """A git that holds a stand-in for every file asked for, so no test needs the network:
+    a SKILL.md and a reference under a folder, else a skill or a tool by the extension.
+    `overrides` holds the content of some paths instead ({path in the repo: text})."""
+
+    def fetcher(git: str, ref: str, paths: list[str]) -> dict:
+        out: dict = {}
+        for path in paths:
+            if path.endswith("/"):
+                out[f"{path}SKILL.md"] = SKILL_MD
+                out[f"{path}references/a.md"] = "ref\n"
+            elif overrides and path in overrides:
+                out[path] = overrides[path]
+            else:
+                out[path] = (
+                    SKILL_MD
+                    if path.endswith(".md")
+                    else "class Tools:\n    pass\n\nclass Event:\n    pass\n"
+                )
+        return out
+
+    return fetcher
+
+
+def fake_sources(overrides: dict[str, str] | None = None) -> Sources:
+    """Sources over fake_fetcher."""
+    return Sources(fake_fetcher(overrides))
 
 
 @pytest.fixture

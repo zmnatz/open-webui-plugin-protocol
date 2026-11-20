@@ -25,6 +25,7 @@ from owpp.deploy import (
     wait_for_health,
 )
 from owpp.errors import OwppError
+from owpp.sources import Sources
 
 LIST = "GET /api/v1/functions/list"
 CREATE = "POST /api/v1/functions/create"
@@ -486,7 +487,7 @@ class TestVersionReport:
 
     def deployed(self, mock_server, directory, **kw):
         m = mock_server()
-        deploy(m.options(directory, git_fetcher=repo_fetcher, **kw))
+        deploy(m.options(directory, sources=Sources(repo_fetcher), **kw))
         return m
 
     def test_a_dry_run_lists_the_versions_that_change(self, mock_server, functions_dir):
@@ -527,10 +528,10 @@ class TestVersionReport:
     def test_the_source_commit_is_recorded_and_reported(self, mock_server, functions_dir):
         m = self.deployed(mock_server, functions_dir(sourced()))
         assert m.state["up"]["meta"]["sources"] == {REPO_GIT: PINNED}
-        again = deploy(m.options(functions_dir(sourced()), git_fetcher=repo_fetcher))
+        again = deploy(m.options(functions_dir(sourced()), sources=Sources(repo_fetcher)))
         assert again[0].action == "unchanged" and again[0].details == []
         moved = deploy(
-            m.options(functions_dir(sourced(LATEST)), git_fetcher=repo_fetcher, dry_run=True)
+            m.options(functions_dir(sourced(LATEST)), sources=Sources(repo_fetcher), dry_run=True)
         )
         assert moved[0].details == [
             "tool `up`: 1.0 -> 2.0",
@@ -547,10 +548,11 @@ class TestVersionReport:
         res = deploy(
             m.options(
                 d,
-                git_fetcher=repo_fetcher,
+                sources=Sources(
+                    repo_fetcher, lookup=lambda git, ref: looked_up.append((git, ref)) or LATEST
+                ),
                 dry_run=True,
                 latest=True,
-                resolve=lambda git, ref: looked_up.append((git, ref)) or LATEST,
             )
         )
         assert looked_up == [(REPO_GIT, "main")]

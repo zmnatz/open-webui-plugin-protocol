@@ -41,15 +41,16 @@ from .errors import OwppError
 from .events import problem_with
 from .manifest import (
     coalesce,
+    folder_files,
     get,
     omit,
     parse_yaml,
+    plugin_folders,
     read_manifest,
     read_text,
     text_of,
 )
-from .sources import Value, file_value, plugin_folders, source_key
-from .upstream import plugin_root
+from .sources import ResolvedPlugin, Sources
 
 RUNTIME_DIR = Path(__file__).resolve().parent / "runtime"
 RUNTIME = RUNTIME_DIR / "plugin_runtime.py"
@@ -189,53 +190,6 @@ def parse_skill(file: str, text: str) -> tuple[dict, str]:
 # ---- reading files and folders ------------------------------------------------
 
 
-def _read_plugin_file(folder: Path, manifest: dict, rel: str, remote: dict[str, Value]) -> str:
-    if not manifest.get("source"):
-        return read_text(folder / rel)
-    url = source_key(folder.name, manifest["source"], rel)
-    text = remote.get(url)
-    if not isinstance(text, str):
-        raise OwppError(f"{folder.name}: {url} was not fetched (call fetch_sources first)")
-    return text
-
-
-def _file_entry(path: str, value: Value) -> dict:
-    if isinstance(value, str):
-        return {"path": path, "content": value}
-    return {"path": path, "content": value["base64"], "encoding": "base64"}
-
-
-def _read_plugin_dir(
-    folder: Path, source: Any, rel: str, remote: dict[str, Value] | None = None
-) -> list[dict]:
-    """A folder's files as [{path, content, encoding?}] sorted by path, from the plugin
-    folder or from `source`. Symlinks are never followed."""
-    files: list[dict] = []
-    if source:
-        prefix = source_key(folder.name, source, rel, True)
-        for key, value in (remote or {}).items():
-            if key.startswith(prefix):
-                files.append(_file_entry(key[len(prefix) :], value))
-        if not files:
-            raise OwppError(f"{folder.name}: {prefix} was not fetched (call fetch_sources first)")
-    else:
-
-        def walk(directory: Path, base: str) -> None:
-            with os.scandir(directory) as it:
-                entries = sorted(it, key=lambda e: e.name)
-            for e in entries:
-                if e.name == ".DS_Store":
-                    continue
-                path = f"{base}/{e.name}" if base else e.name
-                if e.is_dir(follow_symlinks=False):
-                    walk(Path(e.path), path)
-                elif e.is_file(follow_symlinks=False):
-                    files.append(_file_entry(path, file_value(Path(e.path).read_bytes())))
-
-        walk(folder / rel, "")
-    return sorted(files, key=lambda f: f["path"])
-
-
 def _tool_valves(folder: Path, valves: Any) -> dict:
     if valves is None:
         return {}
@@ -250,8 +204,9 @@ def _runtime_source(data: dict) -> str:
     return read_text(RUNTIME).replace("__PLUGIN_DATA__", json_literal(data), 1)
 
 
-def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) -> dict:
+def _plugin_resources(plugin: ResolvedPlugin) -> dict:
     """The tool and skills a plugin declares, as the data the runtime installs."""
+    folder, manifest = plugin.root, plugin.manifest
     tools: list[dict] = []
     tool = manifest.get("tool")
     if isinstance(tool, dict):
@@ -260,7 +215,7 @@ def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) ->
         if is_self:
             content = None
         elif tool.get("file"):
-            content = _read_plugin_file(folder, manifest, tool["file"], remote)
+            content = plugin.read(tool["file"])
         else:
             content = _with_includes(
                 folder,
@@ -314,10 +269,9 @@ def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) ->
     for skill_id, sk in declared.items() if isinstance(declared, dict) else []:
         label = f"{folder.name}/skills.{skill_id}"
         if get(sk, "dir"):
-            files = _read_plugin_dir(folder, manifest.get("source"), sk["dir"], remote)
-            add_skill(label, str(skill_id), files, sk.get("access"))
+            add_skill(label, str(skill_id), plugin.read_dir(sk["dir"]), sk.get("access"))
         elif get(sk, "file"):
-            text = _read_plugin_file(folder, manifest, sk["file"], remote)
+            text = plugin.read(sk["file"])
             add_skill(
                 label, str(skill_id), [{"path": "SKILL.md", "content": text}], sk.get("access")
             )
@@ -332,7 +286,7 @@ def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) ->
             file = f"{folder.name}/skills/{sk.name}/SKILL.md"
             if not (skills_dir / sk.name / "SKILL.md").exists():
                 raise OwppError(f"{file} is missing")
-            add_skill(file, sk.name, _read_plugin_dir(folder, None, f"skills/{sk.name}"))
+            add_skill(file, sk.name, folder_files(skills_dir / sk.name))
 
     # A tool carries the runtime too (with just the ids to remove), so that when it loads
     # after a restart it can notice its function was disabled in the meantime and remove
@@ -380,7 +334,7 @@ def _read_static(folder: Path, manifest: dict) -> dict | None:
     prefix = text_of(coalesce(get(cfg, "prefix"), f"/{folder.name}"))
     if not re.fullmatch(r"/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*", prefix):
         raise OwppError(f"{where}.prefix must be a path such as /name (letters, digits, _ and -)")
-    files = {f["path"]: omit(f, ["path"]) for f in _read_plugin_dir(folder, None, "static")}
+    files = {f["path"]: omit(f, ["path"]) for f in folder_files(folder / "static")}
     if not files:
         raise OwppError(f"{folder.name}: static/ has no files")
     return {"prefix": prefix, "access": access, "files": files}
@@ -391,7 +345,7 @@ def _read_templates(folder: Path) -> dict | None:
     plugin_template_text(). They are never served."""
     if not (folder / "templates").exists():
         return None
-    files = {f["path"]: omit(f, ["path"]) for f in _read_plugin_dir(folder, None, "templates")}
+    files = {f["path"]: omit(f, ["path"]) for f in folder_files(folder / "templates")}
     if not files:
         raise OwppError(f"{folder.name}: templates/ has no files")
     return files
@@ -422,7 +376,7 @@ def _read_assets(folder: Path, manifest: dict) -> dict | None:
     if not isinstance(wrap, bool):
         raise OwppError(f"{where}.wrap must be true or false")
     files = {}
-    for f in _read_plugin_dir(folder, None, "assets"):
+    for f in folder_files(folder / "assets"):
         if f["path"] not in ASSET_FILES:
             raise OwppError(
                 f"{folder.name}: assets/{f['path']}: the protocol has two shared files, "
@@ -774,14 +728,25 @@ def _with_includes(
 # ---- the function bundle --------------------------------------------------------
 
 
-def bundle_function(folder: Path | str, remote: dict[str, Value] | None = None) -> str | None:
+def _offline(git: str, ref: str, paths: list[str]) -> dict:
+    raise OwppError(
+        f"{git} at {ref[:7]}: reading a plugin's `source:` needs a Sources; "
+        "bundle it with bundle_function(Sources().resolve(folder))"
+    )
+
+
+def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
     """The function's bundled code (with the runtime and the embedded tool and skills when
-    the plugin declares them), or None when there is no function section."""
-    folder = Path(folder)
-    remote = remote or {}
-    manifest = read_manifest(folder)
+    the plugin declares them), or None when there is no function section.
+
+    A path is bundled as it is on disk; a plugin that takes files from git must be resolved
+    first (Sources.resolve)."""
+    if not isinstance(plugin, ResolvedPlugin):
+        with Sources(_offline) as offline:
+            return bundle_function(offline.resolve(plugin))
+    folder, manifest = plugin.root, plugin.manifest
     fn = manifest.get("function")
-    res = _plugin_resources(folder, manifest, remote)
+    res = _plugin_resources(plugin)
     has_resources = bool(res["tools"] or res["skills"])
     if not isinstance(fn, dict):
         if has_resources:
@@ -802,7 +767,7 @@ def bundle_function(folder: Path | str, remote: dict[str, Value] | None = None) 
                 f"{folder}/plugin.yaml: with function.file the header comes from the file; "
                 f"remove {', '.join(extra)}"
             )
-        code = _read_plugin_file(folder, manifest, fn["file"], remote)
+        code = plugin.read(fn["file"])
     elif not _has_code(folder, "function") and assets is not None:
         if has_resources:
             raise OwppError(
@@ -901,12 +866,6 @@ def runtime_data(content: str | None) -> dict:
     return {"tools": data.get("tools", []), "skills": data.get("skills", [])}
 
 
-def source_label(source: dict) -> str:
-    """How a `source:` is named in a report and in a deployed function's meta."""
-    path = text_of(source.get("path")).strip("/")
-    return f"{text_of(source.get('git'))}{f' {path}' if path else ''}"
-
-
 def _make_item(
     kind: str,
     id: str,
@@ -945,9 +904,13 @@ def _make_item(
 
 
 def load_function_files(
-    directory: Path | str, remote: dict[str, Value] | None = None
+    directory: Path | str, sources: Sources | None = None
 ) -> list[FunctionFile]:
-    """Every function in the plugins folder: plugin folders and loose <id>.py files."""
+    """Every function in the plugins folder: plugin folders and loose <id>.py files. A plugin
+    that takes files from git is resolved with `sources` (without it, such a plugin is refused)."""
+    if sources is None:
+        with Sources(_offline) as offline:
+            return load_function_files(directory, offline)
     directory = Path(directory)
     with os.scandir(directory) as it:
         entries = sorted(it, key=lambda e: e.name)
@@ -964,14 +927,11 @@ def load_function_files(
                 )
             )
         elif e.name in folders:
-            folder = Path(e.path)
-            local = read_manifest(folder)
-            root = plugin_root(folder, local, remote or {})
-            content = bundle_function(root, remote)
+            plugin = sources.resolve(e.path)
+            content = bundle_function(plugin)
             if content is None:
                 continue
-            manifest = read_manifest(root)
-            fn = manifest["function"]
+            fn = plugin.manifest["function"]
             declared = fn.get("global")
             item = _make_item(
                 "function",
@@ -981,12 +941,7 @@ def load_function_files(
                 valves=fn.get("valves"),
                 global_=declared if isinstance(declared, bool) and "file" in fn else None,
             )
-            item.root = root
-            src = local.get("source")
-            if isinstance(src, dict):
-                item.sources = {source_label(src): text_of(src.get("ref"))}
-                inner = manifest.get("source") if root != folder else None
-                if isinstance(inner, dict):  # what the upstream plugin takes from git itself
-                    item.sources[source_label(inner)] = text_of(inner.get("ref"))
+            item.root = plugin.root
+            item.sources = dict(plugin.pins)
             loaded.append(item)
     return loaded

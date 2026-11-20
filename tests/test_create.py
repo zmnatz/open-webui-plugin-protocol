@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import fake_remote
+from conftest import fake_sources
 
 from owpp.bundle import load_function_files
 from owpp.cli import check_bundle, main
@@ -255,10 +255,9 @@ class TestFromGit:
             assert SHA in readme and "To upgrade" in readme
 
     def test_it_bundles_from_the_pinned_files(self, from_git):
-        remote = fake_remote(from_git)
         # The upstream function is global, so it must be a filter (or an action).
-        remote[f"{GIT}#{SHA}:src/function.py"] = "class Filter:\n    pass\n"
-        functions = {f.id: f for f in load_function_files(from_git, remote)}
+        sources = fake_sources({"src/function.py": "class Filter:\n    pass\n"})
+        functions = {f.id: f for f in load_function_files(from_git, sources)}
         for spec in GIT_SPECS:
             assert check_bundle(functions[spec.id].content) is None, spec.id
 

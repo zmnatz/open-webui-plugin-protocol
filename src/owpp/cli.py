@@ -32,10 +32,9 @@ from .create import CLASS, PluginSpec, spec_from_data, write_plugin
 from .deploy import options_from_env, run_deploy
 from .errors import OwppError
 from .lint import lint_notes, lint_plugin
-from .manifest import parse_yaml, read_manifest, read_text
+from .manifest import parse_yaml, plugin_folders, read_manifest, read_text
 from .protocol import report as protocol_report
-from .sources import plugin_folders
-from .upstream import fetch_all, is_plugin_source, root_of
+from .sources import Sources, is_plugin_source
 from .versioning import bump, changelog_problem, check_since, version_of, versions_of
 
 # ---- check --------------------------------------------------------------------
@@ -114,20 +113,20 @@ def scaffold(directory: Path | str, plugin_id: str, type: str = "event") -> Path
 # ---- commands -----------------------------------------------------------------
 
 
-def _load(directory: Path) -> list[FunctionFile]:
+def _load(args: argparse.Namespace, directory: Path) -> list[FunctionFile]:
     if not directory.exists():
         raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
-    return load_function_files(directory, fetch_all(directory))
+    return load_function_files(directory, args.sources)
 
 
 def _cmd_list(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
-    for f in _load(directory):
+    for f in _load(args, directory):
         print(f"{f.id:<24}{f.type}{' (global)' if f.want_global else ''}")
     return 0
 
 
 def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
-    all_functions = _load(directory)
+    all_functions = _load(args, directory)
     missing = [i for i in args.ids if not any(f.id == i for f in all_functions)]
     if missing:
         print(f"no plugin {', '.join(missing)} in {directory}", file=sys.stderr)
@@ -171,7 +170,8 @@ def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
                 print(f"env   {var} ({shown})")
     if args.since:
         chosen = [f for f in all_functions if not args.ids or f.id in args.ids]
-        for finding in check_since(directory, args.since, args.ids, new_files=chosen):
+        found = check_since(directory, args.since, args.ids, args.sources, new_files=chosen)
+        for finding in found:
             print(f"FAIL  {finding}")
             bad += 1
     if warnings:
@@ -207,7 +207,7 @@ def _cmd_version(args: argparse.Namespace, directory: Path, env: Mapping[str, st
 
 
 def _cmd_bundle(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
-    fn = next((f for f in _load(directory) if f.id == args.id), None)
+    fn = next((f for f in _load(args, directory) if f.id == args.id), None)
     if fn is None:
         print(f'no plugin "{args.id}" in {directory}', file=sys.stderr)
         return 1
@@ -230,6 +230,7 @@ def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         force_prune=args.force_prune,
         managed_by=args.managed_by,
         latest=args.latest,
+        sources=args.sources,
         force=args.force,
         ca_cert=args.ca_cert,
         client_cert=args.client_cert,
@@ -264,9 +265,8 @@ def _cmd_test(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
     upstream_tested: set[str] = set()
     whole = [f for f in chosen if is_plugin_source(read_manifest(f))]
     if args.upstream and whole:
-        remote = fetch_all(directory)
         for f in whole:
-            tests = root_of(f, remote) / "tests"
+            tests = args.sources.resolve(f).root / "tests"
             if tests.is_dir():
                 paths.append(str(tests))
                 upstream_tested.add(f.name)
@@ -323,7 +323,7 @@ def _cmd_pull(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
 
     if not directory.exists():
         raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
-    return pull(directory, args.ids, dry_run=args.dry_run, bump_by=args.bump)
+    return pull(directory, args.ids, dry_run=args.dry_run, sources=args.sources, bump_by=args.bump)
 
 
 def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -484,7 +484,11 @@ def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None
         parser.print_help()
         return 0
     directory = Path(args.dir or env.get("OWPP_PLUGINS_DIR") or "plugins").resolve()
-    return args.handler(args, directory, env)
+    # One Sources for the command: each file from git is fetched once, and the upstream copies of
+    # plugins taken whole from git last until the command (pytest, for `owpp test`) is done.
+    with Sources() as sources:
+        args.sources = sources
+        return args.handler(args, directory, env)
 
 
 def console_main() -> int:

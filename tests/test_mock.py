@@ -89,7 +89,7 @@ def test_model_configs_behave_like_open_webuis():
 def test_a_source_plugin_is_loaded_from_its_pinned_commit(tmp_path, monkeypatch):
     """Without `sources=`, load() fetches what a `source:` plugin takes from git, as the deploy
     does, once per run."""
-    from owpp import sources
+    from owpp.sources import Sources
     from owpp.testing import mock
 
     calls = []
@@ -100,8 +100,7 @@ def test_a_source_plugin_is_loaded_from_its_pinned_commit(tmp_path, monkeypatch)
             p: "class Event:\n    async def event(self, *a, **k):\n        pass\n" for p in paths
         }
 
-    monkeypatch.setattr(sources, "git_fetcher", fetcher)
-    monkeypatch.setattr(mock, "_FETCHED", {})
+    monkeypatch.setattr(mock, "_SESSION", Sources(fetcher))
     folder = tmp_path / "upstream"
     folder.mkdir()
     (folder / "plugin.yaml").write_text(
