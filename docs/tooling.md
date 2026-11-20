@@ -10,7 +10,7 @@ Nothing to install; run it from the repository that holds your plugins:
 uvx owpp list
 ```
 
-Pin the version (`uvx owpp@0.2.0 list`, or `uv tool install owpp==0.2.0`): the runtime and libraries are copied into what you deploy, so an upgrade changes your deployed code ([upgrading](upgrading.md)). To run an unreleased commit: `uvx --from git+https://github.com/zmnatz/open-webui-plugin-protocol@<sha> owpp list`. `pipx install owpp` and `pip install owpp` work too, and `python -m owpp` is the same command.
+Pin the version (`uvx owpp@0.2.1 list`, or `uv tool install owpp==0.2.1`): the runtime and libraries are copied into what you deploy, so an upgrade changes your deployed code ([upgrading](upgrading.md)). To run an unreleased commit: `uvx --from git+https://github.com/zmnatz/open-webui-plugin-protocol@<sha> owpp list`. `pipx install owpp` and `pip install owpp` work too, and `python -m owpp` is the same command.
 
 ## The CLI: `owpp`
 
@@ -19,7 +19,7 @@ owpp list                           plugins with their function type
 owpp check [id ...] [--strict] [--since ref]   bundle, compile, report undefined names; warn about valves and tools
 owpp bundle <id> [out.py]           print (or write) the code that would be deployed
 owpp deploy [--only id,id] [--dry-run [--sync]] [--force] [--force-prune] [--managed-by marker]
-owpp test [id ...] [-- pytest args]
+owpp test [id ...] [--upstream] [-- pytest args]
 owpp sync [id ...] [--dry-run] [--bump patch|minor|major|none]
 owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
 owpp migrate [id ...] [--dry-run]      bring plugin.yaml to the current protocol version
@@ -37,7 +37,7 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
   Warnings read the plugin's own source (`function.py`, `tool.py`, `shared.py`, or a loose `<id>.py`) with real file and line numbers, and skip a plugin that takes its code from a pinned `source:`, which is not yours to lint. They do not change the exit status; **`--strict` makes them fail**, for CI.
 - **`migrate`** brings each `plugin.yaml` written for an older [protocol version](plugin-format.md#protocol) up to the current one. It rewrites only what the version step changes, keeps comments and layout, and points at each file it writes so the change is there to review and commit. With `--dry-run` it says what would change and writes nothing. With ids, it migrates just those plugins; a manifest already at the current version is left alone. `owpp check` warns about a missing `protocol:` key and notes an older one, pointing at this command. The whole upgrade, step by step: [upgrading owpp](upgrading.md).
 - **`bundle`** writes the deployed code, to read or diff.
-- **`test`** runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. It needs the `test` extra: `uvx --from 'owpp[test]' owpp test`. See [testing](testing.md).
+- **`test`** runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. With `--upstream` it also runs the `tests/` of each [plugin taken whole from git](plugin-format.md#a-whole-plugin-from-git), from the pinned commit, against the plugin as built with your overrides. That runs the other repository's code, so it is opt-in and the `OPEN_WEBUI_*` variables are removed from the environment first. It needs the `test` extra: `uvx --from 'owpp[test]' owpp test`. See [testing](testing.md).
 - **`version`** shows the plugins' versions or gives one a new version, and **`check --since <ref>`** fails on a change without one: see [versions](#versions).
 - **`sync`** moves the pinned commit of each plugin taken from git to the latest one: see [below](#owpp-sync-moving-a-pinned-commit).
 - **`create`** is a wizard that scaffolds a plugin: written here (a filter, action, event or pipe with that type's options, a tool, skills, a page and libraries, or an *installer* of a tool and skills with no code of its own), or taken from a git repository pinned to a commit (a branch or tag is resolved to its SHA). It shows the files and writes them only when you say yes, then runs `check --strict` on the result. Pressing Enter all the way makes what `init` makes. See [creating a plugin](creating.md).
@@ -114,7 +114,7 @@ Dry run at the latest commits: Open-WebUI functions
 `owpp deploy --dry-run --sync` is the same report at the commits `owpp sync` would move to: which versions an upgrade brings to the live instance, before anything is changed. The same in CI, on a schedule:
 
 ```yaml
-- uses: zmnatz/open-webui-plugin-protocol@v0.2.0
+- uses: zmnatz/open-webui-plugin-protocol@v0.2.1
   with:
     url: https://chat.example.com
     api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
@@ -142,8 +142,8 @@ For each plugin with a `source:` (or just the ids given), it:
 
 1. looks up the latest commit of the branch or tag in `source: track:`, or of the repository's default branch when there is none, with `git ls-remote`;
 2. fetches the files the plugin takes at the pinned commit and at the latest one, and lists which were **changed**, **added** or **removed** (under a `dir:`, file by file), with a compare link for GitHub;
-3. rewrites the `ref:` line of `plugin.yaml` to the new SHA, keeping every comment and the layout;
-4. when files it takes changed, bumps the plugin's version (`--bump patch`, the default; `minor`, `major`, or `none`) and adds a `CHANGELOG.md` entry naming the commits and the files. A plugin whose function is the upstream's own keeps the upstream's version.
+3. rewrites the `ref:` line of `plugin.yaml` to the new SHA, keeping every comment and the layout, or adds it after `git:` when the source has none yet (a first pin: `pinned to <sha>`, with a link to the files);
+4. when files it takes changed, bumps the plugin's version (`--bump patch`, the default; `minor`, `major`, or `none`) and adds a `CHANGELOG.md` entry naming the commits and the files. A plugin whose function is the upstream's own, or that is a [whole plugin from git](plugin-format.md#a-whole-plugin-from-git), keeps the upstream's version.
 
 It commits nothing and deploys nothing: the change is yours to review and commit, as before. `--dry-run` says what would move and writes nothing. A plugin whose ref cannot be looked up, or whose files are not all there at the new commit, is reported as `FAIL` and left as it was, and the command exits 1.
 
@@ -161,7 +161,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uvx owpp@0.2.0 sync | tee sync.txt
+      - run: uvx owpp@0.2.1 sync | tee sync.txt
       - name: Open a pull request
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
@@ -249,7 +249,7 @@ jobs:
     concurrency: deploy-plugins
     steps:
       - uses: actions/checkout@v5
-      - uses: zmnatz/open-webui-plugin-protocol@v0.2.0
+      - uses: zmnatz/open-webui-plugin-protocol@v0.2.1
         with:
           url: https://chat.example.com
           api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}

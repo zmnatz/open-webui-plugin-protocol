@@ -83,12 +83,48 @@ def _files(folder: Path, source: dict, sha: str, fetcher: Fetcher) -> dict[str, 
     return {k[len(prefix) :]: v for k, v in fetch_sources(keys, fetcher).items()}
 
 
+def tree_url(git: str, sha: str, source: dict) -> str:
+    """A web page of the files at a commit, for the hosts whose URL is known."""
+    m = re.fullmatch(r"(?:https://|git@)(github\.com)[/:]([^/\s]+/[^/\s]+?)(?:\.git)?/?", git)
+    path = text_of(source.get("path")).strip("/")
+    return f"https://{m.group(1)}/{m.group(2)}/tree/{sha}{'/' + path if path else ''}" if m else ""
+
+
 def rewrite_ref(text: str, old: str, new: str) -> str:
     """plugin.yaml with its `ref:` changed from `old` to `new`; comments and layout kept."""
     out, count = re.subn(rf"(\bref:\s*[\"']?){old}\b", rf"\g<1>{new}", text)
     if count != 1:
         raise OwppError(f"found {count} `ref: {old[:7]}...` lines; change it by hand")
     return out
+
+
+def set_ref(text: str, old: str, new: str) -> str:
+    """plugin.yaml pinned to `new`: its `ref:` line changed, or added after `git:` when the
+    source has none yet (`old` is empty). Comments and layout are kept."""
+    if old:
+        return rewrite_ref(text, old, new)
+    flow, count = re.subn(
+        r"(^source:\s*\{[^}]*?\bgit:\s*[^,}\s]+)", rf"\g<1>, ref: {new}", text, flags=re.M
+    )
+    if count == 1:
+        return flow
+    lines = text.splitlines(keepends=True)
+    start = next((i for i, line in enumerate(lines) if re.match(r"source:\s*(#.*)?$", line)), None)
+    if start is not None:
+        for i in range(start + 1, len(lines)):
+            line = lines[i]
+            if line.strip() and not line[0].isspace():
+                break  # the next top-level key: the block ended without a git: line
+            m = re.match(r"(\s+)git:", line)
+            if m:
+                newline = "\r\n" if line.endswith("\r\n") else "\n"
+                if not line.endswith("\n"):
+                    lines[i] = line + newline
+                lines.insert(i + 1, f"{m.group(1)}ref: {new}{newline}")
+                return "".join(lines)
+    raise OwppError(
+        "could not find the `git:` line of `source:` to add `ref:` after; add it by hand"
+    )
 
 
 def sync_plugin(
@@ -104,7 +140,8 @@ def sync_plugin(
     git, old = text_of(source.get("git")), text_of(source.get("ref"))
     track = track_of(folder, source)
     move = Move(folder.name, track, old)
-    source_key(folder.name, source, "")  # the URL and the pinned SHA are valid
+    # The URL and the pinned SHA (if any yet) are valid.
+    source_key(folder.name, source if old else {**source, "ref": "0" * 40}, "")
     new = (resolve or resolve_ref)(git, track)
     if not new or not SHA40.fullmatch(new):
         move.error = f"could not look up {track} in {git}"
@@ -113,7 +150,7 @@ def sync_plugin(
     if new == old:
         return move
     try:
-        before = _files(folder, source, old, fetcher)
+        before = _files(folder, source, old, fetcher) if old else {}
         after = _files(folder, source, new, fetcher)
     except OwppError as e:  # a file the plugin takes is gone at the new commit
         move.error = str(e)
@@ -121,16 +158,23 @@ def sync_plugin(
     move.added = sorted(set(after) - set(before))
     move.removed = sorted(set(before) - set(after))
     move.changed = sorted(p for p in set(before) & set(after) if before[p] != after[p])
-    move.compare = compare_url(git, old, new)
+    move.compare = compare_url(git, old, new) if old else tree_url(git, new, source)
     fn = manifest.get("function") if isinstance(manifest.get("function"), dict) else {}
     # The upstream files changed: a new version of the plugin, unless its function is the
     # upstream's own (whose header, and version, come from its file).
-    if (move.changed or move.added or move.removed) and bump_by != "none" and not fn.get("file"):
+    whole = source.get("plugin") is True  # a whole plugin: its versions are the upstream's
+    if (
+        (move.changed or move.added or move.removed)
+        and bump_by != "none"
+        and not fn.get("file")
+        and not whole
+        and old
+    ):
         current = text_of(fn.get("version"))
         move.version = (current, next_version(current, bump_by))
     if not dry_run:
         path = folder / "plugin.yaml"
-        text = rewrite_ref(read_text(path), old, new)
+        text = set_ref(read_text(path), old, new)
         if move.version:
             text, _ = set_block_version(text, "function", move.version[1])
         path.write_bytes(text.encode("utf-8"))
@@ -177,6 +221,12 @@ def sync(
             out(f"FAIL  {m.id}: {m.error}")
         elif not m.moved:
             out(f"ok    {m.id}: up to date {where}, {m.old[:7]}")
+        elif not m.old:
+            verb = "would pin" if dry_run else "pinned"
+            out(f"new   {m.id}: {verb} to {m.new} {where}")
+            if m.compare:
+                out(f"        {m.compare}")
+            continue
         else:
             verb = "would move" if dry_run else "moved"
             out(f"new   {m.id}: {verb} {m.old[:7]} -> {m.new[:7]} {where}")

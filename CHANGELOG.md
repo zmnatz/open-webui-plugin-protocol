@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 (not released yet)
+
+- `source: {plugin: true}` takes a whole owpp plugin folder from git, such as one of the examples, and bundles it with the owpp reading it ([a whole plugin from git](docs/plugin-format.md#a-whole-plugin-from-git)).
+- `ref:` can be left out of a `source:` until `owpp sync` adds it; `owpp check` and `owpp deploy` refuse an unpinned source.
+- `owpp test --upstream` also runs the tests of plugins taken whole from git, with the `OPEN_WEBUI_*` variables removed.
+- `skills: {<id>: {access}}` in `plugin.yaml` sets the access of a skill in the plugin's own `skills/` folder.
+- Docs: an [upgrading](docs/upgrading.md) page, and one-sentence changelog entries.
+
 ## 0.2.0 (2026-11-19)
 
 - `plugin.yaml` declares its format version with `protocol: "0.2"`; newer versions are refused, and a missing key is read as 0.1 with a warning.

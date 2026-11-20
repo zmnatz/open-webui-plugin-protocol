@@ -49,6 +49,7 @@ from .manifest import (
     text_of,
 )
 from .sources import Value, file_value, plugin_folders, source_key
+from .upstream import plugin_root
 
 RUNTIME_DIR = Path(__file__).resolve().parent / "runtime"
 RUNTIME = RUNTIME_DIR / "plugin_runtime.py"
@@ -310,9 +311,17 @@ def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) ->
         )
 
     declared = manifest.get("skills")
+    local_access: dict[str, Any] = {}  # `skills: {<id>: {access}}` for a skills/<id>/ folder
     for skill_id, sk in declared.items() if isinstance(declared, dict) else []:
         label = f"{folder.name}/skills.{skill_id}"
-        if get(sk, "dir"):
+        if (
+            isinstance(sk, dict)
+            and set(sk) == {"access"}
+            and not manifest.get("source")
+            and (folder / "skills" / str(skill_id) / "SKILL.md").is_file()
+        ):
+            local_access[str(skill_id)] = sk["access"]
+        elif get(sk, "dir"):
             files = _read_plugin_dir(folder, manifest.get("source"), sk["dir"], remote)
             add_skill(label, str(skill_id), files, sk.get("access"))
         elif get(sk, "file"):
@@ -331,7 +340,12 @@ def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) ->
             file = f"{folder.name}/skills/{sk.name}/SKILL.md"
             if not (skills_dir / sk.name / "SKILL.md").exists():
                 raise OwppError(f"{file} is missing")
-            add_skill(file, sk.name, _read_plugin_dir(folder, None, f"skills/{sk.name}"))
+            add_skill(
+                file,
+                sk.name,
+                _read_plugin_dir(folder, None, f"skills/{sk.name}"),
+                local_access.get(sk.name),
+            )
 
     # A tool carries the runtime too (with just the ids to remove), so that when it loads
     # after a restart it can notice its function was disabled in the meantime and remove
@@ -885,6 +899,9 @@ class FunctionFile:
     description: str = ""
     # The git repository the plugin takes code from, and the commit: {"<git>[ <path>]": sha}.
     sources: dict = field(default_factory=dict)
+    # The folder that was bundled: the plugin folder, or for a plugin taken whole from git the
+    # upstream folder as fetched, with the local overrides applied. None for a loose <id>.py.
+    root: Path | None = None
 
 
 def runtime_data(content: str | None) -> dict:
@@ -961,10 +978,12 @@ def load_function_files(
             )
         elif e.name in folders:
             folder = Path(e.path)
-            content = bundle_function(folder, remote)
+            local = read_manifest(folder)
+            root = plugin_root(folder, local, remote or {})
+            content = bundle_function(root, remote)
             if content is None:
                 continue
-            manifest = read_manifest(folder)
+            manifest = read_manifest(root)
             fn = manifest["function"]
             declared = fn.get("global")
             item = _make_item(
@@ -975,8 +994,12 @@ def load_function_files(
                 valves=fn.get("valves"),
                 global_=declared if isinstance(declared, bool) and "file" in fn else None,
             )
-            src = manifest.get("source")
+            item.root = root
+            src = local.get("source")
             if isinstance(src, dict):
                 item.sources = {source_label(src): text_of(src.get("ref"))}
+                inner = manifest.get("source") if root != folder else None
+                if isinstance(inner, dict):  # what the upstream plugin takes from git itself
+                    item.sources[source_label(inner)] = text_of(inner.get("ref"))
             loaded.append(item)
     return loaded

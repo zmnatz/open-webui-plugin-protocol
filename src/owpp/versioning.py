@@ -28,7 +28,8 @@ from pathlib import Path
 from .bundle import FunctionFile, load_function_files, parse_frontmatter, parse_skill, runtime_data
 from .errors import OwppError
 from .manifest import get, read_manifest, read_text
-from .sources import Fetcher, fetch_sources, git_fetcher, source_keys
+from .sources import Fetcher, git_fetcher
+from .upstream import fetch_all, is_plugin_source
 
 SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 PARTS = ("patch", "minor", "major")
@@ -239,6 +240,8 @@ def versions_of(directory: Path, plugin_id: str) -> list[tuple[str, str]]:
     if not (folder / "plugin.yaml").is_file():
         raise OwppError(f"no plugin {plugin_id} in {directory}")
     manifest = read_manifest(folder)
+    if is_plugin_source(manifest):
+        return [("function", UPSTREAM)]
     out = []
     for block in ("function", "tool"):
         section = manifest.get(block)
@@ -290,6 +293,11 @@ def bump(
     if not (folder / "plugin.yaml").is_file():
         raise OwppError(f"no plugin {plugin_id} in {directory}")
     manifest = read_manifest(folder)
+    if is_plugin_source(manifest):
+        raise OwppError(
+            f"{plugin_id} is taken whole from git, so its versions are the upstream's; "
+            f"`owpp sync {plugin_id}` moves it to a newer commit"
+        )
     if skill:
         path = folder / "skills" / skill / "SKILL.md"
         if not path.is_file():
@@ -375,6 +383,8 @@ class Finding:
 
 def _from_source(manifest: dict, kind: str) -> bool:
     """Whether the plugin's function or tool is taken verbatim, so it keeps the upstream's version."""
+    if is_plugin_source(manifest):  # a whole plugin from git: every version is the upstream's
+        return True
     section = manifest.get(kind)
     return isinstance(section, dict) and bool(section.get("file") or section.get("from"))
 
@@ -431,15 +441,12 @@ def check_since(
 ) -> list[Finding]:
     """Every plugin in `directory` that changed since git `since` without a new version."""
     if new_files is None:
-        new_files = load_function_files(directory, fetch_sources(source_keys(directory), fetcher))
+        new_files = load_function_files(directory, fetch_all(directory, fetcher))
     with tempfile.TemporaryDirectory(prefix="owpp-since-") as work:
         old_dir = tree_at(directory, since, Path(work))
         if old_dir is None or not old_dir.is_dir():
             return []
-        old_files = {
-            f.id: f
-            for f in load_function_files(old_dir, fetch_sources(source_keys(old_dir), fetcher))
-        }
+        old_files = {f.id: f for f in load_function_files(old_dir, fetch_all(old_dir, fetcher))}
     findings: list[Finding] = []
     for f in new_files:
         if ids and f.id not in ids:

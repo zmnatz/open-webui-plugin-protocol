@@ -7,7 +7,7 @@ description: Open-WebUI plugins kept in git with owpp, the Open-WebUI plugin pro
 
 A **plugin** is a folder, `plugins/<id>/`, with a `plugin.yaml`: a function (the parent) and, optionally, a tool and skills that the function installs when it is enabled and removes when it is disabled. `owpp` bundles the folder into the single file Open-WebUI stores, tests it against a mock Open-WebUI, and deploys it.
 
-Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.2.0`). `uvx owpp <command> --help` is the reference for every flag. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
+Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.2.1`). `uvx owpp <command> --help` is the reference for every flag. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
 
 Every command takes `--dir`: the plugins folder, default `./plugins`.
 
@@ -47,6 +47,7 @@ Done when `owpp check <id> --strict` and `owpp test <id>` pass, and `uvx owpp ch
 A plugin may take its function, tool or skills from another repository, pinned to a full 40-character commit SHA in `plugin.yaml`'s `source:` (with the files named by `file:` and `dir:` entries). That code runs with admin rights in Open-WebUI, so the commit only ever moves in a reviewed change.
 
 - **To add one**, write a spec with a `source:` ([references/spec.md](references/spec.md#from-git)). Resolve a branch or tag to its SHA first: `git ls-remote <url> <branch>`; put the branch in `track:`.
+- **To take a whole owpp plugin** (a folder with a `plugin.yaml`, such as this repository's examples), write `plugin.yaml` by hand with `source: {git, path, plugin: true}` and no `ref:`, then run `uvx owpp sync <id>` to pin it. The local manifest may only set `function: {valves, global}`, `tool: {id, access, valves}` and `skills: {<id>: {access}}`.
 - **To move it to the latest commit**: `uvx owpp sync <id>`. It rewrites `ref:`, bumps the plugin's version and adds a changelog entry, and lists the upstream files that changed, with a compare link. Show the user that list and link: they review the upstream diff before the change is committed. `uvx owpp deploy --dry-run --sync` shows what the upgrade would change on the instance first, writing nothing.
 
 Done when the user has seen the files that changed, and `owpp check <id> --strict` passes.

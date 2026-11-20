@@ -98,6 +98,32 @@ source:
 
 Makes `tool: {file}`, `function: {file}` and `skills: {<id>: {file|dir}}` read from that repo at that commit. See [bundling](bundling.md#git-sources).
 
+`ref` can be left out while writing the manifest: [`owpp sync`](tooling.md#owpp-sync-moving-a-pinned-commit) looks up the latest commit and adds the line. Until it does, `owpp check` and `owpp deploy` refuse the plugin.
+
+#### A whole plugin from git
+
+When the folder at `path` is an owpp plugin itself (it has a `plugin.yaml`, like the [examples](../examples/plugins)), take all of it with `plugin: true`:
+
+```yaml
+protocol: "0.2"
+source:
+  git: https://github.com/zmnatz/open-webui-plugin-protocol.git
+  path: examples/plugins/excalidraw
+  plugin: true
+# then: owpp sync excalidraw, which adds ref:
+```
+
+owpp fetches the folder at the pinned commit and bundles it like a local plugin, with the upstream's `plugin.yaml`. The local folder's name is the plugin's id. Besides `protocol:` and `source:`, the local manifest can only set:
+
+| Key | Effect |
+| --- | --- |
+| `function: {valves, global}` | `valves` are merged into the upstream's, key by key; `global` replaces it. |
+| `tool: {id, access, valves}` | Each replaces the upstream's. |
+| `skills: {<id>: {access}}` | The access of one of its skills. |
+| a `config.yaml` file | Used instead of the upstream's. |
+
+Anything else is refused. Its versions are the upstream's (`owpp version` refuses to change them), and `owpp sync` moves the commit without bumping one. The upstream manifest's `protocol:` is checked like a local one. An upstream plugin may take files from git itself, which are fetched too, but not a whole plugin. Nothing in the folder is run: no build script, no `package.json` script. Its `tests/` run only with [`owpp test --upstream`](tooling.md#the-cli-owpp).
+
 `track` is read only by [`owpp sync`](tooling.md#owpp-sync-moving-a-pinned-commit), which moves `ref` to the latest commit of that branch or tag. Without it, sync follows the repository's default branch. It never changes what is deployed: only `ref` does.
 
 ### `include:`

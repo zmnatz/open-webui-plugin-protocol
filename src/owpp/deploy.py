@@ -35,7 +35,8 @@ from typing import Any, NamedTuple
 from .bundle import VALID_ID, FunctionFile, load_function_files
 from .errors import OwppError
 from .manifest import read_manifest
-from .sources import Fetcher, fetch_sources, git_fetcher, plugin_folders, source_keys
+from .sources import Fetcher, git_fetcher, plugin_folders
+from .upstream import fetch_all, is_plugin_source, root_of
 from .versioning import (
     is_older,
     own_code,
@@ -698,7 +699,7 @@ def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
     from .bundle import source_label
     from .manifest import read_manifest, read_text, text_of
     from .sources import resolve_ref
-    from .sync import rewrite_ref, track_of
+    from .sync import set_ref, track_of
 
     copy = work / opts.dir.name
     shutil.copytree(
@@ -718,9 +719,11 @@ def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
             continue
         path = folder / "plugin.yaml"
         if sha != pinned:
-            path.write_bytes(rewrite_ref(read_text(path), pinned, sha).encode("utf-8"))
+            path.write_bytes(set_ref(read_text(path), pinned, sha).encode("utf-8"))
         notes[label] = (
-            f"latest of {where}; plugin.yaml pins {pinned[:7]}"
+            f"latest of {where}; plugin.yaml pins nothing yet"
+            if not pinned
+            else f"latest of {where}; plugin.yaml pins {pinned[:7]}"
             if sha != pinned
             else f"latest of {where}, as pinned"
         )
@@ -741,7 +744,7 @@ def deploy(opts: Options) -> list[Result]:
 
 
 def _deploy(opts: Options, latest: dict[str, str] | None = None) -> list[Result]:
-    remote = fetch_sources(source_keys(opts.dir), opts.git_fetcher)
+    remote = fetch_all(opts.dir, opts.git_fetcher)
     files = load_function_files(opts.dir, remote)
     if opts.only:
         missing = [i for i in opts.only if not any(f.id == i for f in files)]
@@ -759,13 +762,18 @@ def _deploy(opts: Options, latest: dict[str, str] | None = None) -> list[Result]
     return _deploy_functions(opts, files, latest)
 
 
-def _needing_iframe_sandbox(directory: Path, only: list[str] | None = None) -> list[str]:
+def _needing_iframe_sandbox(
+    directory: Path, only: list[str] | None = None, fetcher: Fetcher = git_fetcher
+) -> list[str]:
     """Ids of the local plugin folders that declare the iframe requirement in plugin.yaml."""
     ids = []
     for folder in plugin_folders(directory):
         if only and folder.name not in only:
             continue
-        requires = read_manifest(folder).get("requires")
+        manifest = read_manifest(folder)
+        if is_plugin_source(manifest):  # its requirements are the upstream plugin's
+            manifest = read_manifest(root_of(folder, fetch_all(directory, fetcher)))
+        requires = manifest.get("requires")
         if isinstance(requires, dict) and requires.get(IFRAME_REQUIREMENT) is True:
             ids.append(folder.name)
     return ids
@@ -776,7 +784,7 @@ def iframe_sandbox_warning(opts: Options) -> str | None:
     default interface settings do not turn it on. Never changes the instance or stops a deploy:
     a user's own setting can still enable it, and an unreadable admin config is not a reason to
     refuse the rest of the deploy."""
-    ids = _needing_iframe_sandbox(opts.dir, opts.only)
+    ids = _needing_iframe_sandbox(opts.dir, opts.only, opts.git_fetcher)
     if not ids:
         return None
     try:
