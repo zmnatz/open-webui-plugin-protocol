@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- `plugin.yaml` declares which version of the plugin format it was written for: `protocol: "0.2"`. The key must be a quoted major.minor string. A newer version is refused (upgrade owpp first), an older one is accepted with a note, and a manifest with no key is treated as 0.1: `owpp check` warns and `owpp check --strict` fails. `owpp init`, `owpp create` and every example manifest write the key. The known limit "No protocol version in `plugin.yaml`" is gone.
+- `owpp migrate [id ...] [--dry-run]` brings manifests up to the current protocol through a step per version, so each new version can add the migration from the one before it. The 0.1 -> 0.2 step adds `protocol: "0.2"`, keeping comments and layout; `--dry-run` writes nothing. The Excalidraw README now says what Excalidraw is and links to its site, component and docs.
 - Fixed: saving a parent function's valves (`INSTALL_TOOLS`, `INSTALL_SKILLS`, `TOOL_VALVES`) now applies them. The runtime resyncs on `function.valves_updated`, which Open-WebUI sends when an admin saves the valves; before, they only took effect on the next enable or update. A user saving their own UserValves (`scope: user`) does not resync.
 - A plugin can declare `requires: {iframe_sandbox_allow_same_origin: true}` in `plugin.yaml`. `owpp deploy` reads the instance's admin config before writing and **warns** in its report when that setting is missing or unreadable; it never changes the instance or refuses a deploy. Excalidraw and Inline Visualizer now declare it. The published docs site no longer includes the project's own agent-instruction pages, and the sign-in fallbacks verified against Open-WebUI v0.13.4's source are no longer described as untested assumptions.
 

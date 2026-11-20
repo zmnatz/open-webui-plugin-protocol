@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import EXAMPLES, FILTER, fake_remote
+from conftest import EXAMPLES, FILTER, fake_remote, write_tree
 
 from owpp import __version__
 from owpp.bundle import load_function_files
@@ -106,6 +106,42 @@ class TestCommands:
             f for f in load_function_files(EXAMPLES, fake_remote(EXAMPLES)) if f.id == "excalidraw"
         ]
         assert [name for name, _ in bundle_parts(fn)] == ["excalidraw", "tool excalidraw"]
+
+
+class TestCheckProtocol:
+    """A missing protocol is a warning (0.1 plugins predate the key); an older one is a note."""
+
+    def make(self, tmp_path, line=""):
+        write_tree(
+            tmp_path / "p",
+            {
+                "plugin.yaml": f"{line}function: {{title: T}}\n",
+                "function.py": "class Event:\n    pass\n",
+            },
+        )
+
+    def test_a_missing_key_warns(self, tmp_path, capsys):
+        self.make(tmp_path)
+        assert main(["check", "--dir", str(tmp_path)], env={}) == 0
+        out = capsys.readouterr().out
+        assert "warn  p/plugin.yaml: no `protocol:` key" in out
+        assert "owpp migrate" in out and "1 warning(s)" in out
+
+    def test_strict_fails_on_a_missing_key(self, tmp_path):
+        self.make(tmp_path)
+        assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 1
+
+    def test_an_older_protocol_is_a_note_and_still_passes_strict(self, tmp_path, capsys):
+        self.make(tmp_path, 'protocol: "0.1"\n')
+        assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 0
+        out = capsys.readouterr().out
+        assert "note  p/plugin.yaml: protocol 0.1" in out and "owpp migrate" in out
+        assert "warning(s)" not in out
+
+    def test_the_current_protocol_is_quiet(self, tmp_path, capsys):
+        self.make(tmp_path, 'protocol: "0.2"\n')
+        assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 0
+        assert "protocol" not in capsys.readouterr().out
 
 
 class TestTestCommand:

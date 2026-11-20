@@ -997,4 +997,38 @@ class TestUnknownManifestKeys:
             "assets",
             "jobs",
             "requires",
+            "protocol",
         }
+
+
+class TestProtocol:
+    """A manifest says which version of the protocol it was written for."""
+
+    def load(self, tmp_path, manifest):
+        write_tree(
+            tmp_path / "p", {"plugin.yaml": manifest, "function.py": "class Event:\n    pass\n"}
+        )
+        return load_function_files(tmp_path)
+
+    def test_the_current_version_is_accepted(self, tmp_path):
+        assert self.load(tmp_path, 'protocol: "0.2"\nfunction: {title: T}\n')[0].type == "event"
+
+    def test_an_older_version_is_accepted(self, tmp_path):
+        assert self.load(tmp_path, 'protocol: "0.1"\nfunction: {title: T}\n')[0].type == "event"
+
+    def test_a_manifest_without_the_key_still_loads(self, tmp_path):
+        assert self.load(tmp_path, "function: {title: T}\n")[0].type == "event"
+
+    def test_an_unquoted_version_is_refused(self, tmp_path):
+        with pytest.raises(OwppError, match=r"`protocol:` must be a quoted major.minor string"):
+            self.load(tmp_path, "protocol: 0.2\nfunction: {title: T}\n")
+
+    @pytest.mark.parametrize("value", ['"1"', '"0.2.0"', '"protocol"', "true", "[0.2]"])
+    def test_a_malformed_version_is_refused(self, tmp_path, value):
+        with pytest.raises(OwppError, match=r"`protocol:` must be a quoted major.minor string"):
+            self.load(tmp_path, f"protocol: {value}\nfunction: {{title: T}}\n")
+
+    @pytest.mark.parametrize("value", ["0.3", "1.0"])
+    def test_a_newer_version_is_refused(self, tmp_path, value):
+        with pytest.raises(OwppError, match=rf"protocol {value} is newer than owpp supports"):
+            self.load(tmp_path, f'protocol: "{value}"\nfunction: {{title: T}}\n')

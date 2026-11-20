@@ -34,7 +34,7 @@ Open-WebUI stores a function or tool as **one code blob** and cannot import sibl
 
 ```
 plugins/<id>/
-  plugin.yaml      function: (parent) / tool: / skills: / source: / include: / public:
+  plugin.yaml      protocol: / function: (parent) / tool: / skills: / source: / include: / public:
   function.py      the function's code        (a Filter, Event, Action or Pipe)
   tool.py          optional tool code
   shared.py        optional code both need, placed in front of each
@@ -47,6 +47,7 @@ plugins/<id>/
 
 ```yaml
 # plugin.yaml
+protocol: "0.2"
 function:
   title: My Plugin
   author: me
@@ -77,7 +78,6 @@ Written against Open-WebUI **v0.13.4**. API shapes (skills as `files` lists, too
 Known limits:
 
 - **No live test in CI.** Every change is tested against a mock Open-WebUI; a real one is started only by hand (the screenshot run). Planned for 1.0: [issue #14](https://github.com/zmnatz/open-webui-plugin-protocol/issues/14).
-- **No protocol version in `plugin.yaml`.** Planned for 1.0: [issue #15](https://github.com/zmnatz/open-webui-plugin-protocol/issues/15).
 - **Sign-in fallbacks checked against source, not a live instance.** For a page opened with no session, the guard relies on Open-WebUI's `/api/v1/auths/signin` accepting empty credentials when trusted-header sign-in is configured, and on its login page honouring `?redirect=` ([routes](libraries.md#routes)). Verified in the v0.13.4 source: both hold, with no user name or password needed under a trusted header. The signin route needs `ENABLE_PASSWORD_AUTH` (on by default) and the trusted header to be present.
 - **Redis** claims in the `jobs` library are tested with stubs only.
 - **No example serves `static/` files or a public mount** (both example pages are templates the function renders). The `static` library and the `public` access level are tested, and `owpp create` writes both, but no example shows them.

@@ -1,3 +1,4 @@
+protocol: "0.2"
 function:
   title: mcpo Sync
   author: zmnatz

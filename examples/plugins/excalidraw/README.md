@@ -2,6 +2,8 @@
 
 A shared Excalidraw drawing per chat, opened in the Artifacts side panel.
 
+[Excalidraw](https://excalidraw.com/) is an open-source, browser-based whiteboard for sketching diagrams that look hand-drawn: boxes, arrows, text and freehand strokes, stored as a scene you can share or keep in the browser. The editor is published as a [React component](https://github.com/excalidraw/excalidraw) with [documentation](https://docs.excalidraw.com/); this plugin embeds it in Open-WebUI's Artifacts panel and keeps one scene per chat.
+
 | File | What it is |
 |---|---|
 | `function.py` | The Filter: serves the editor at `/excalidraw/view/<chat_id>` (mounted with the `routes` library) and appends it to replies so the panel opens. |
