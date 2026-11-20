@@ -20,7 +20,7 @@ jobs:
         run: uv run owpp test --dir examples/plugins
       - name: Check the examples against their real upstream sources
         run: uv run owpp check --strict --dir examples/plugins
-  build:
+  package:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
