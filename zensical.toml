@@ -34,6 +34,7 @@ nav = [
     { "Tooling and CI" = "tooling.md" },
     { "Adopting it" = "adopting.md" },
     { "Upgrading owpp" = "upgrading.md" },
+    { "Troubleshooting" = "troubleshooting.md" },
   ] },
   { "Commands" = [
     { "owpp list" = "commands/list.md" },
