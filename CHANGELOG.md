@@ -1,11 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 (2026-11-20)
 
 - `owpp build` bundles the plugins into a folder that `owpp deploy --from` deploys elsewhere, with no checkout or git sources ([`owpp build`](docs/commands/build.md)).
 - `owpp deploy --no-prune` (the action's `no-prune`) deploys every plugin and deletes nothing.
 - Docs: the home page's reading order is a short "Where to start" table.
-- Python API: `owpp.deploy.Options` is split into `Instance` (where and how to sign in) and `Choices` (what to deploy), and `deploy(instance, choices)` takes both.
+- Python API (breaking): `owpp.deploy.Options` is gone, split into `Instance` (the instance URL, credentials and TLS) and `Choices` (what to deploy); use `instance_from_env()`/`choices_from_env()` instead of `options_from_env()`, and pass the new inputs to `plugins_for()`, `deploy()`, `iframe_sandbox_warning()` and `run_deploy()` — the CLI and the GitHub Action are unchanged.
 
 ## 0.3.0 (2026-11-20)
 
