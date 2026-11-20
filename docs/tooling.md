@@ -20,6 +20,7 @@ owpp check [id ...] [--strict]      bundle, compile, report undefined names; war
 owpp bundle <id> [out.py]           print (or write) the code that would be deployed
 owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
 owpp test [id ...] [-- pytest args]
+owpp sync [id ...] [--dry-run]
 owpp create [id]
 owpp init <id> [--type event|filter|action|pipe]
 ```
@@ -34,6 +35,7 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
   Warnings read the plugin's own source (`function.py`, `tool.py`, `shared.py`, or a loose `<id>.py`) with real file and line numbers, and skip a plugin that takes its code from a pinned `source:`, which is not yours to lint. They do not change the exit status; **`--strict` makes them fail**, for CI.
 - **`bundle`** writes the deployed code, to read or diff.
 - **`test`** runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. It needs the `test` extra: `uvx --from 'owpp[test]' owpp test`. See [testing](testing.md).
+- **`sync`** moves the pinned commit of each plugin taken from git to the latest one: see [below](#owpp-sync-moving-a-pinned-commit).
 - **`create`** is a wizard that scaffolds a plugin: written here (a filter, action, event or pipe with that type's options, a tool, skills, a page and libraries, or an *installer* of a tool and skills with no code of its own), or taken from a git repository pinned to a commit (a branch or tag is resolved to its SHA). It shows the files and writes them only when you say yes, then runs `check --strict` on the result. Pressing Enter all the way makes what `init` makes. See [creating a plugin](creating.md).
 - **`init`** scaffolds `plugin.yaml`, `function.py`, `tests/test_<id>.py` and a README with Test and Deploy sections. For every type, the scaffold passes both `check` and `test`.
 - **`deploy`** deploys to a running Open-WebUI. With `--only` it deploys just those ids and **never prunes**, so deploying one plugin cannot delete another.
@@ -68,6 +70,56 @@ Every function the deploy writes gets `meta.managed_by = <marker>` and a note in
 The report names each function with its type, for example ``- event function `mcpo_sync` (mcpo_sync/): unchanged``. In GitHub Actions it is also written to the job summary.
 
 The deploy only ever creates, updates and prunes **functions**. Tools and skills are installed by the runtime inside Open-WebUI, driven by the function.
+
+## `owpp sync`: moving a pinned commit
+
+A plugin taken from git (`source:`) is pinned to a full commit SHA, so what is deployed changes only when the SHA moves. `owpp sync` moves it:
+
+```
+$ owpp sync
+new   inline_visualizer: moved f668387 -> 917c88f (default branch)
+        changed inline-visualizer-v2/SKILL.md
+        changed inline-visualizer-v2/tool.py
+        https://github.com/Classic298/open-webui-plugins/compare/f668387...917c88f
+ok    other_plugin: up to date (v2), 3c1e9a0
+1 plugin(s) moved: review the upstream changes, run `owpp check` and `owpp test`, then commit plugin.yaml
+```
+
+For each plugin with a `source:` (or just the ids given), it:
+
+1. looks up the latest commit of the branch or tag in `source: track:`, or of the repository's default branch when there is none, with `git ls-remote`;
+2. fetches the files the plugin takes at the pinned commit and at the latest one, and lists which were **changed**, **added** or **removed** (under a `dir:`, file by file), with a compare link for GitHub;
+3. rewrites the `ref:` line of `plugin.yaml` to the new SHA, keeping every comment and the layout, and changes nothing else.
+
+It commits nothing and deploys nothing: the change is yours to review and commit, as before. `--dry-run` says what would move and writes nothing. A plugin whose ref cannot be looked up, or whose files are not all there at the new commit, is reported as `FAIL` and left as it was, and the command exits 1.
+
+To get a pull request for each upgrade, run it on a schedule:
+
+```yaml
+# .github/workflows/sync-plugins.yml
+on:
+  schedule: [{ cron: "0 6 * * 1" }]   # Mondays
+  workflow_dispatch:
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    permissions: { contents: write, pull-requests: write }
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uvx owpp@0.2.0 sync | tee sync.txt
+      - name: Open a pull request
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          git diff --quiet && exit 0
+          branch="owpp-sync/$(date +%Y-%m-%d)"
+          git switch -c "$branch"
+          git -c user.name=owpp-sync -c user.email=owpp-sync@users.noreply.github.com commit -qam "Sync plugins taken from git"
+          git push -q origin "$branch"
+          gh pr create --title "Sync plugins taken from git" --body-file sync.txt
+```
+
+The pull request is where the upstream diff is reviewed; the deploy runs when it is merged.
 
 ## GitHub Action
 
@@ -105,6 +157,7 @@ The action runs `owpp` from its own checkout, so the version you deploy with is 
 | Git sources (pinned commits, fetching, refusing unsafe URLs) | `tests/test_sources.py` |
 | Deploy against a stand-in Open-WebUI API: create, update, global, prune, valves, `--only` | `tests/test_deploy.py` |
 | CLI commands, `check`, `init` scaffolds | `tests/test_cli.py` |
+| `owpp sync`: moving a pinned commit, the files it lists, refusing what it cannot check | `tests/test_sync.py` |
 | `owpp create`: every combination it writes bundles, passes `check --strict` and its own tests; the wizard, driven by scripted answers | `tests/test_create.py` |
 | Every example plugin bundles, compiles, has unit tests and documents Test and Deploy | `tests/test_bundle.py`, "TestExamples" |
 | Each example plugin's behaviour, against the mock Open-WebUI | `examples/plugins/<id>/tests/` |

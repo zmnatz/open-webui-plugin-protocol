@@ -20,7 +20,7 @@ Then add the [GitHub Action](tooling.md#github-action).
 
 ## Third-party functions
 
-Prefer a pinned `source:` (git URL plus a full commit SHA) over copying the file in: upgrades become a reviewed change of the SHA. Review the upstream diff before moving it; this code runs with admin rights.
+Prefer a pinned `source:` (git URL plus a full commit SHA) over copying the file in: upgrades become a reviewed change of the SHA, which `owpp sync` makes (it lists the files that changed, with a compare link). Review the upstream diff before committing it; this code runs with admin rights.
 
 ## Keep your existing marker
 

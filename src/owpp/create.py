@@ -31,7 +31,7 @@ from pathlib import Path
 from .bundle import VALID_ID, VALID_SKILL_ID
 from .errors import OwppError
 from .events import problem_with
-from .sources import GIT_URL, SHA40
+from .sources import GIT_URL, SHA40, TRACK
 
 CLASS = {"event": "Event", "filter": "Filter", "action": "Action", "pipe": "Pipe"}
 CODE_TYPES = tuple(CLASS)
@@ -94,6 +94,7 @@ class SourceSpec:
     ref: str
     path: str = ""
     function_file: str = ""  # the function itself, taken verbatim (type "upstream")
+    track: str = ""  # the branch or tag `owpp sync` follows; empty: the default branch
 
 
 @dataclass
@@ -267,6 +268,8 @@ def _validate_source(spec: PluginSpec) -> None:
         raise OwppError("the repository must be an https://, ssh:// or user@host:path git URL")
     if not SHA40.fullmatch(src.ref):
         raise OwppError("the commit must be a full 40-character SHA (a branch or tag can move)")
+    if src.track and not TRACK.fullmatch(src.track):
+        raise OwppError("track must be a branch or tag name")
     if src.path:
         _check_repo_path("the folder in the repository", src.path)
     if src.function_file:
@@ -687,11 +690,12 @@ def render_manifest(spec: PluginSpec) -> str:
     src = spec.source
     if src:
         out += [
-            f"# {spec.title} comes from a git repository, pinned to a commit. To upgrade, review the",
-            "# upstream diff, then set `ref` to the new full commit SHA.",
+            f"# {spec.title} comes from a git repository, pinned to a commit. To upgrade: `owpp sync {spec.id}`",
+            "# moves `ref` to the latest commit of `track` (else the default branch); review, then commit.",
             "source:",
             f"  git: {_yaml(src.git)}",
             f"  ref: {src.ref}",
+            *([f"  track: {src.track}"] if src.track else []),
             f"  path: {_yaml(src.path) if src.path else _py('')}",
         ]
     out.append("function:")
@@ -1035,8 +1039,10 @@ def render_readme(spec: PluginSpec) -> str:
             "## Source",
             "",
             f"From {src.git}{f' (`{src.path}`)' if src.path else ''}, pinned to commit `{src.ref}`.",
-            "To upgrade: review the upstream diff from that commit, then set `ref` in plugin.yaml to",
-            "the new full commit SHA. This code runs with admin rights in Open-WebUI.",
+            f"To upgrade: `owpp sync {spec.id}` moves `ref` in plugin.yaml to the latest commit of "
+            + (f"`{src.track}`" if src.track else "the default branch")
+            + " and lists the files that changed.",
+            "Review the upstream diff before committing it: this code runs with admin rights in Open-WebUI.",
         ]
     settings = []
     if spec.has_code:

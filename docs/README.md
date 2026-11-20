@@ -64,7 +64,7 @@ owpp deploy --only my_plugin --dry-run
 ## Guarantees
 
 - **Reproducible.** A bundle depends only on the folder and the pinned git commits it names. Libraries are vendored byte for byte.
-- **Reviewed upgrades.** Remote code is referenced by full commit SHA, never a branch or tag, because it runs inside Open-WebUI with admin rights.
+- **Reviewed upgrades.** Remote code is referenced by full commit SHA, never a branch or tag, because it runs inside Open-WebUI with admin rights. `owpp sync` moves the SHA to the latest commit, as a change to review and commit.
 - **Owned objects only.** The deploy marks what it creates (`meta.managed_by`) and only ever updates or deletes those. Hand-made functions are never touched.
 - **No surprises on disable.** Whatever a function installed (tools, skills, routes, background jobs) goes away or stops when it is disabled.
 

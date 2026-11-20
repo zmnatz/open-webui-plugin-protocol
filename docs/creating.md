@@ -115,7 +115,7 @@ The tool stage defaults to yes for an installer. If it has no tool, the skills s
 | --- | --- |
 | 1. Name the plugin | The id and title |
 | 2. Where the code lives | git |
-| 3. The repository | The URL (https, ssh or `user@host:path`; never a local path). A branch, tag or commit: a branch or tag is looked up with `git ls-remote` and pinned to its full commit SHA, and if that fails (offline, a private repository, no such ref) you type the SHA. The folder in the repository the files are in |
+| 3. The repository | The URL (https, ssh or `user@host:path`; never a local path). A branch, tag or commit: a branch or tag is looked up with `git ls-remote` and pinned to its full commit SHA, and recorded as `track:` for [`owpp sync`](tooling.md#owpp-sync-moving-a-pinned-commit); if the lookup fails (offline, a private repository, no such ref) you type the SHA. The folder in the repository the files are in |
 | 4. What it takes | The function itself (its file, taken verbatim with its header). A tool (its file and id). Skills (each one's id, and its folder or its `SKILL.md`). `access: public` for the tool and each skill |
 | 5. Describe it, or Global? | Without the function, it is an installer and asks for its header. With the function, the header comes from the file, and the only question is whether to make it global (filters and actions only) |
 | 6. Review and write | Yes or no |
@@ -128,6 +128,7 @@ source:
   git: "https://github.com/Classic298/open-webui-plugins.git"
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea
   path: inline-visualizer-v2
+  track: main
 function:
   title: Viz
   ...
@@ -142,7 +143,7 @@ skills:
     access: public
 ```
 
-The README states where the code comes from, the pinned commit and how to upgrade it: review the upstream diff, then set `ref` to the new SHA. The tests fetch the pinned files, so they need the network. The test file says how to load the plugin with stand-ins instead (`owui.load(plugin_dir, sources={...})`), as [`inline_visualizer`](../examples/plugins/inline_visualizer) does. See [bundling: git sources](bundling.md#git-sources).
+The README states where the code comes from, the pinned commit and how to upgrade it: `owpp sync <id>` moves `ref` to the latest commit and lists the files that changed, and you review the diff before committing. The tests fetch the pinned files, so they need the network. The test file says how to load the plugin with stand-ins instead (`owui.load(plugin_dir, sources={...})`), as [`inline_visualizer`](../examples/plugins/inline_visualizer) does. See [bundling: git sources](bundling.md#git-sources).
 
 ## What it writes, in every case
 

@@ -80,9 +80,12 @@ source:
   git: https://github.com/owner/repo.git   # https, ssh, or user@host:path
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea   # full 40-character commit SHA
   path: subfolder                           # "" for the repo root
+  track: main                               # optional: the branch or tag `owpp sync` follows
 ```
 
 Makes `tool: {file}`, `function: {file}` and `skills: {<id>: {file|dir}}` read from that repo at that commit. See [bundling](bundling.md#git-sources).
+
+`track` is read only by [`owpp sync`](tooling.md#owpp-sync-moving-a-pinned-commit), which moves `ref` to the latest commit of that branch or tag. Without it, sync follows the repository's default branch. It never changes what is deployed: only `ref` does.
 
 ### `include:`
 

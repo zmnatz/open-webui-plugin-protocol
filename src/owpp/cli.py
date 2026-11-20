@@ -5,6 +5,7 @@
   owpp bundle <id> [out.py]          print (or write) the exact code that would be deployed
   owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
   owpp test [id ...] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
+  owpp sync [id ...] [--dry-run]     move plugins taken from git to their latest commit
   owpp create [id]                   a wizard: asks what the plugin is, then writes it
   owpp init <id> [--type event|filter|action|pipe]   scaffold a plugin folder
 
@@ -231,6 +232,14 @@ def _cmd_init(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
     return 0
 
 
+def _cmd_sync(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    from .sync import sync
+
+    if not directory.exists():
+        raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
+    return sync(directory, args.ids, dry_run=args.dry_run)
+
+
 def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
     from .wizard import run_wizard
 
@@ -283,6 +292,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     test = add("test", _cmd_test, "run each plugin's tests/ against a mock Open-WebUI")
     test.add_argument("ids", nargs="*", metavar="id", help="plugins to test (default: all)")
+    sync = add("sync", _cmd_sync, "move plugins taken from git to the latest commit they track")
+    sync.add_argument("ids", nargs="*", metavar="id", help="plugins to sync (default: all)")
+    sync.add_argument("--dry-run", action="store_true", help="say what would move; write nothing")
     create = add("create", _cmd_create, "create a plugin, answering a few questions (a wizard)")
     create.add_argument("id", nargs="?", help="the plugin id (asked if left out)")
     init = add("init", _cmd_init, "scaffold a plugin folder")
