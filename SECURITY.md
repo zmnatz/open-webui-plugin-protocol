@@ -6,9 +6,9 @@ Please report it privately, not in a public issue: use GitHub's **Security** tab
 **Report a vulnerability**. If that is not available, open an issue that says only that you have a
 security report and ask for a private channel; leave the details out.
 
-Supported: the latest 0.1.x release. This is pre-1.0 software, written against Open-WebUI v0.13.4
-and **not yet exercised against a live Open-WebUI** (see [decisions](docs/decisions.md#not-done-yet)),
-so treat it accordingly.
+Supported: the latest release. This is pre-1.0 software, written against Open-WebUI v0.13.4 and
+checked on a live Open-WebUI only by hand, not in CI (see
+[status and limits](docs/README.md#status-and-limits)), so treat it accordingly.
 
 ## The trust model, in one paragraph
 

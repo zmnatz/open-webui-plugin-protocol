@@ -10,7 +10,6 @@ is checked in, so none of it can drift from the repository:
 - the root CHANGELOG, SECURITY and NOTICE files, and each example plugin's README;
 - an examples overview, built from each plugin.yaml;
 - the test catalogue, built from the test docstrings (docs/testing.md, "Describe every test");
-- the audit trail, built from `git log`.
 
 Links are written for GitHub, relative to the file they are in. They are rewritten to the page
 that carries the target on the site, or else to the file on GitHub. A link to a file or heading
@@ -91,7 +90,6 @@ def assemble(out: Path = OUT) -> list[str]:
     # Generated pages write their links relative to the repository root.
     pages["examples/index.md"] = ("generated.md", _examples_index())
     pages["reference/test-catalogue.md"] = ("generated.md", _test_catalogue())
-    pages["project/audit-trail.md"] = ("generated.md", _audit_trail())
     pages["reference/screenshots.md"] = ("generated.md", _screenshots_page())
 
     anchors = {uri: _anchors(text) for uri, (_, text) in pages.items()}
@@ -402,72 +400,6 @@ def _library_tests() -> list[str]:
         *rows,
         "",
     ]
-
-
-# ---- audit trail -----------------------------------------------------------------------
-
-
-def _git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout
-
-
-def _audit_trail() -> str:
-    head = [
-        "# Audit trail",
-        "",
-        "Every change to this repository, newest first, as recorded in git: when, by whom, "
-        "why (the commit message), and which files it touched. It is generated from `git log` "
-        "each time the site is built. The [changelog](CHANGELOG.md) says what changed for "
-        "users, and [decisions](docs/decisions.md) why things are the way they are.",
-        "",
-    ]
-    try:
-        if _git("rev-parse", "--is-shallow-repository").strip() == "true":
-            head += [
-                '!!! warning "Shallow clone"',
-                "    Only part of the history was available to this build.",
-                "",
-            ]
-        log = _git("log", "--format=%x1e%H%x1f%h%x1f%an%x1f%ad%x1f%s%x1f%b", "--date=iso-strict")
-    except (OSError, subprocess.CalledProcessError):
-        return "\n".join(head + ["The git history was not available to this build.", ""])
-
-    out = []
-    for record in log.split("\x1e")[1:]:
-        sha, short, author, date, subject, body = record.split("\x1f", 5)
-        stat = _git("show", "--format=", "--numstat", sha).strip().splitlines()
-        changes = []
-        for line in stat:
-            added, removed, path = line.split("\t", 2)
-            changes.append(f"    | `{path}` | {added} | {removed} |")
-        body = re.sub(r"\s*<[^<>\s]+@[^<>\s]+>", "", body)  # never publish an email address
-        lines, trailers = [], []
-        for line in body.strip().splitlines():
-            is_trailer = re.match(r"[\w-]+-by: ", line, re.I)
-            (trailers if is_trailer else lines).append(line)
-        out += [
-            f"## {_text(subject)}",
-            "",
-            f"[`{short}`]({REPO_URL}/commit/{sha}) · {date[:10]} · {author}",
-            "",
-        ]
-        if lines:
-            out += ["\n".join(_text(line) for line in lines).strip(), ""]
-        for trailer in trailers:
-            key, value = trailer.split(":", 1)
-            out += [f"- {key}: {_text(value.strip())}"]
-        if trailers:
-            out += [""]
-        out += [
-            f'??? abstract "{len(changes)} file(s) changed"',
-            "    | File | Added | Removed |",
-            "    | --- | --- | --- |",
-            *changes,
-            "",
-        ]
-    return "\n".join(head + out)
 
 
 if __name__ == "__main__":

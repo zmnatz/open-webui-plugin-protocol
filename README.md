@@ -87,7 +87,6 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 | [Testing](docs/testing.md) | unit tests per plugin, the mock Open-WebUI, `owpp test` |
 | [Tooling](docs/tooling.md) | CLI, deploy settings, ownership marker, GitHub Action, tests |
 | [Adopting](docs/adopting.md) | new repositories, migrating existing functions |
-| [Decisions](docs/decisions.md) | the calls made for 0.1.0 and what is not done yet |
 | [Security](SECURITY.md) | the trust model, what `owpp` limits, known limits, how to report |
 
 ## Examples
@@ -96,7 +95,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ## Status
 
-0.2.0, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), but that run is started by hand, not part of CI. See [decisions](docs/decisions.md#not-done-yet).
+0.2.0, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), but that run is started by hand, not part of CI. See [status and limits](docs/README.md#status-and-limits).
 
 ## Development
 

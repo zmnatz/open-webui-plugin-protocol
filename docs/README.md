@@ -24,10 +24,9 @@ Open-WebUI stores a function or tool as **one code blob** and cannot import sibl
 | Unit-test a plugin against a mock Open-WebUI | [testing](testing.md) |
 | Test, deploy, set up CI | [tooling](tooling.md) |
 | Use it in your repository, or move existing functions over | [adopting](adopting.md) |
-| Know why it is the way it is | [decisions](decisions.md) |
 | Review a change, or repeat the tests by hand | [reviewing](reviewing.md), [test catalogue](reference/test-catalogue.md) |
 | Make a change to this repository | [making a change](contributing.md) |
-| See every change so far | [audit trail](project/audit-trail.md), [changelog](../CHANGELOG.md) |
+| See every change so far | [changelog](../CHANGELOG.md) |
 | Know what you are trusting, and how to report a problem | [security](../SECURITY.md) |
 
 ## At a glance
@@ -72,4 +71,12 @@ owpp deploy --only my_plugin --dry-run
 
 ## Status and limits
 
-Written against Open-WebUI **v0.13.4**. API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) were read from that source, and the libraries are tested against stubbed Open-WebUI modules, not a live instance. Known gaps are collected in [decisions](decisions.md#not-done-yet).
+Written against Open-WebUI **v0.13.4**. API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) were read from that source, and the libraries are tested against stubbed Open-WebUI modules, not a live instance. The examples have been deployed and checked by hand on a real v0.13.4 ([screenshots](screenshots.md)).
+
+Known limits:
+
+- **No live test in CI.** Every change is tested against a mock Open-WebUI; a real one is started only by hand (the screenshot run). Planned for 1.0: [issue #14](https://github.com/zmnatz/open-webui-plugin-protocol/issues/14).
+- **No protocol version in `plugin.yaml`.** Planned for 1.0: [issue #15](https://github.com/zmnatz/open-webui-plugin-protocol/issues/15).
+- **Sign-in fallbacks not checked on a live instance.** For a page opened with no session, the guard relies on Open-WebUI's `/api/v1/auths/signin` accepting empty credentials when trusted-header sign-in is configured, and on its login page honouring `?redirect=` ([routes](libraries.md#routes)).
+- **Redis** claims in the `jobs` library are tested with stubs only.
+- **No example serves `static/` files or a public mount** (both example pages are templates the function renders). The `static` library and the `public` access level are tested, and `owpp create` writes both, but no example shows them.

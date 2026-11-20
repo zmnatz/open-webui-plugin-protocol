@@ -4,7 +4,7 @@
 #   uv run --group docs python tools/build_docs.py          # build into site/
 #   uv run --group docs python tools/build_docs.py serve    # preview
 #
-# The script assembles docs/ and the generated pages (test catalogue, audit trail, examples,
+# The script assembles docs/ and the generated pages (test catalogue, examples,
 # changelog) into build/docs/, which is what Zensical builds.
 
 [project]
@@ -42,14 +42,12 @@ nav = [
     { "Stale Data Dashboard" = "examples/stale_data.md" },
     { "LiteLLM Model Sync" = "examples/litellm_model_sync.md" },
   ] },
-  { "Review and audit" = [
+  { "Review" = [
     { "Reviewing a change" = "reviewing.md" },
     { "Making a change" = "contributing.md" },
     { "Test catalogue" = "reference/test-catalogue.md" },
     { "Screenshots" = "reference/screenshots.md" },
     { "Taking screenshots" = "screenshots.md" },
-    { "Audit trail" = "project/audit-trail.md" },
-    { "Decisions" = "decisions.md" },
     { "Changelog" = "project/changelog.md" },
   ] },
   { "Project" = [
