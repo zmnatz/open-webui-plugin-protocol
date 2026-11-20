@@ -127,11 +127,10 @@ def test_it_is_bundled_as_the_upstream_plugin_with_the_local_id(tmp_path, fetche
     assert item.sources == {f"{REPO} plugins/viz": SHA}
 
 
-def test_the_local_manifest_overrides_valves_global_and_access(tmp_path, fetcher):
+def test_the_local_manifest_overrides_valves_global_and_the_tool(tmp_path, fetcher):
     extra = (
         "function:\n  global: false\n  valves:\n    COLOR: green\n"
         "tool:\n  id: my_tool\n  access: private\n"
-        "skills:\n  drawing:\n    access: private\n"
     )
     write_tree(tmp_path, {"viz/plugin.yaml": local(extra)})
     item = load(tmp_path, fetcher)["viz"]
@@ -139,7 +138,7 @@ def test_the_local_manifest_overrides_valves_global_and_access(tmp_path, fetcher
     assert item.valves == {"COLOR": "green", "SIZE": 3}  # merged, key by key
     data = embedded(item.content)
     assert [(t["id"], t["access"]) for t in data["tools"]] == [("my_tool", "private")]
-    assert [(s["id"], s["access"]) for s in data["skills"]] == [("drawing", "private")]
+    assert [(s["id"], s["access"]) for s in data["skills"]] == [("drawing", "public")]
 
 
 def test_a_local_config_yaml_replaces_the_upstream_one(tmp_path, fetcher):
@@ -155,7 +154,7 @@ def test_a_local_config_yaml_replaces_the_upstream_one(tmp_path, fetcher):
         ("include: [core]\n", "include"),
         ("function:\n  title: Mine\n", "function.title"),
         ("tool:\n  file: tool.py\n", "tool.file"),
-        ("skills:\n  drawing:\n    dir: skills/drawing\n", "skills.drawing.dir"),
+        ("skills:\n  drawing:\n    access: private\n", "skills"),
     ],
 )
 def test_anything_but_the_overrides_is_refused(tmp_path, fetcher, extra, named):

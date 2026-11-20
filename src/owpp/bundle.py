@@ -311,17 +311,9 @@ def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) ->
         )
 
     declared = manifest.get("skills")
-    local_access: dict[str, Any] = {}  # `skills: {<id>: {access}}` for a skills/<id>/ folder
     for skill_id, sk in declared.items() if isinstance(declared, dict) else []:
         label = f"{folder.name}/skills.{skill_id}"
-        if (
-            isinstance(sk, dict)
-            and set(sk) == {"access"}
-            and not manifest.get("source")
-            and (folder / "skills" / str(skill_id) / "SKILL.md").is_file()
-        ):
-            local_access[str(skill_id)] = sk["access"]
-        elif get(sk, "dir"):
+        if get(sk, "dir"):
             files = _read_plugin_dir(folder, manifest.get("source"), sk["dir"], remote)
             add_skill(label, str(skill_id), files, sk.get("access"))
         elif get(sk, "file"):
@@ -340,12 +332,7 @@ def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) ->
             file = f"{folder.name}/skills/{sk.name}/SKILL.md"
             if not (skills_dir / sk.name / "SKILL.md").exists():
                 raise OwppError(f"{file} is missing")
-            add_skill(
-                file,
-                sk.name,
-                _read_plugin_dir(folder, None, f"skills/{sk.name}"),
-                local_access.get(sk.name),
-            )
+            add_skill(file, sk.name, _read_plugin_dir(folder, None, f"skills/{sk.name}"))
 
     # A tool carries the runtime too (with just the ids to remove), so that when it loads
     # after a restart it can notice its function was disabled in the meantime and remove

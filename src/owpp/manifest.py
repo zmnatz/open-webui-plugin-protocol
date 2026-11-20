@@ -127,8 +127,7 @@ def check_sourced_plugin(path: Path | str, manifest: dict) -> None:
     if not plugin:
         return
     allowed = ", ".join(
-        [f"{block}.{key}" for block, keys in SOURCED_OVERRIDES.items() for key in keys]
-        + ["skills.<id>.access"]
+        f"{block}.{key}" for block, keys in SOURCED_OVERRIDES.items() for key in keys
     )
     extra: list[str] = []
     for key, value in manifest.items():
@@ -136,12 +135,6 @@ def check_sourced_plugin(path: Path | str, manifest: dict) -> None:
             continue
         if key in SOURCED_OVERRIDES and isinstance(value, dict):
             extra += [f"{key}.{k}" for k in value if k not in SOURCED_OVERRIDES[key]]
-        elif key == "skills" and isinstance(value, dict):
-            for sid, sk in value.items():
-                if not isinstance(sk, dict):
-                    extra.append(f"skills.{sid}")
-                else:
-                    extra += [f"skills.{sid}.{k}" for k in sk if k != "access"]
         else:
             extra.append(str(key))
     if extra:

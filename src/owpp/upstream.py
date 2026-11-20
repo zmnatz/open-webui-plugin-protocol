@@ -78,13 +78,6 @@ def _merge(upstream: dict, local: dict) -> dict:
             else:
                 section[key] = mine[key]
         merged[block] = section
-    skills = local.get("skills")
-    if isinstance(skills, dict) and skills:
-        declared = dict(merged.get("skills") or {})
-        for sid, sk in skills.items():
-            entry = declared.get(sid)
-            declared[sid] = {**entry, **sk} if isinstance(entry, dict) else dict(sk)
-        merged["skills"] = declared
     return merged
 
 
