@@ -1097,7 +1097,7 @@ def render_readme(spec: PluginSpec) -> str:
     ]
     if spec.type != "upstream":
         sections.append(
-            f"- A change is a new version: `owpp bump {spec.id}` (and say what changed in "
+            f"- A change is a new version: `owpp version {spec.id} patch` (and say what changed in "
             "CHANGELOG.md); `owpp check --since origin/main` fails on a change without one."
         )
     if spec.type == "filter" and spec.global_ is None and not spec.toggle:

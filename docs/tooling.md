@@ -21,7 +21,7 @@ owpp bundle <id> [out.py]           print (or write) the code that would be depl
 owpp deploy [--only id,id] [--dry-run [--sync]] [--force] [--force-prune] [--managed-by marker]
 owpp test [id ...] [-- pytest args]
 owpp sync [id ...] [--dry-run] [--bump patch|minor|major|none]
-owpp bump <id> [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
+owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
 owpp create [id]
 owpp init <id> [--type event|filter|action|pipe]
 ```
@@ -36,7 +36,7 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
   Warnings read the plugin's own source (`function.py`, `tool.py`, `shared.py`, or a loose `<id>.py`) with real file and line numbers, and skip a plugin that takes its code from a pinned `source:`, which is not yours to lint. They do not change the exit status; **`--strict` makes them fail**, for CI.
 - **`bundle`** writes the deployed code, to read or diff.
 - **`test`** runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. It needs the `test` extra: `uvx --from 'owpp[test]' owpp test`. See [testing](testing.md).
-- **`bump`** bumps a version, and **`check --since <ref>`** fails on a change without one: see [versions](#versions).
+- **`version`** shows the plugins' versions or gives one a new version, and **`check --since <ref>`** fails on a change without one: see [versions](#versions).
 - **`sync`** moves the pinned commit of each plugin taken from git to the latest one: see [below](#owpp-sync-moving-a-pinned-commit).
 - **`create`** is a wizard that scaffolds a plugin: written here (a filter, action, event or pipe with that type's options, a tool, skills, a page and libraries, or an *installer* of a tool and skills with no code of its own), or taken from a git repository pinned to a commit (a branch or tag is resolved to its SHA). It shows the files and writes them only when you say yes, then runs `check --strict` on the result. Pressing Enter all the way makes what `init` makes. See [creating a plugin](creating.md).
 - **`init`** scaffolds `plugin.yaml`, `function.py`, `tests/test_<id>.py` and a README with Test and Deploy sections. For every type, the scaffold passes both `check` and `test`.
@@ -159,17 +159,28 @@ The pull request is where the upstream diff is reviewed; the deploy runs when it
 
 A plugin has up to three versions, each where Open-WebUI reads it: the **function's** (`version:` under `function:` in `plugin.yaml`, the plugin's version, which Open-WebUI shows), the **tool's** (`version:` under `tool:`), and each **skill's** (`version:` in its SKILL.md front matter, optional). A loose `<id>.py` has its version in its docstring header.
 
-### `owpp bump`
+### `owpp version`
 
 ```sh
-owpp bump viz                     # the function: 1.0.0 -> 1.0.1, and a CHANGELOG.md entry
-owpp bump viz minor -m "Faster lookups."
-owpp bump viz 2.0.0
-owpp bump viz --tool              # the tool's version
-owpp bump viz --skill draw        # that skill's (added if it had none)
+owpp version                      # every plugin's versions: its own, its tool's, each skill's
+owpp version viz                  # one plugin's
+owpp version viz patch            # a new version: 1.0.0 -> 1.0.1, and a CHANGELOG.md entry
+owpp version viz minor -m "Faster lookups."
+owpp version viz 2.0.0
+owpp version viz patch --tool     # the tool's version
+owpp version viz patch --skill draw   # that skill's (added if it had none)
 ```
 
-It rewrites the one `version:` line, keeping comments and layout (and adds it, after `title:`, when there is none; no version bumps to 0.1.0). A function bump adds a `## <version> (<date>)` entry to the top of the plugin's `CHANGELOG.md`, which it creates if needed: the `-m` text, or a line to replace. Code taken verbatim from a `source:` keeps the upstream's version, so `bump` refuses it.
+```
+$ owpp version
+excalidraw                  3.1.0
+  tool excalidraw           (no version)
+inline_visualizer           1.0.0
+  tool inline_visualizer    (the upstream's)
+  skill visualize           (the upstream's)
+```
+
+Shown versions are read from the files, so a plugin taken from git needs no fetch: what it takes verbatim shows as the upstream's. With a new version, it rewrites the one `version:` line, keeping comments and layout (and adds it, after `title:`, when there is none; no version bumps to 0.1.0). A function bump adds a `## <version> (<date>)` entry to the top of the plugin's `CHANGELOG.md`, which it creates if needed: the `-m` text, or a line to replace. Code taken verbatim from a `source:` keeps the upstream's version, so `owpp version` refuses to change it.
 
 ### `CHANGELOG.md`
 
@@ -179,8 +190,8 @@ It rewrites the one `version:` line, keeping comments and layout (and adds it, a
 
 ```sh
 owpp check --since origin/main
-FAIL  viz: changed since origin/main but its version is still 1.0.0 (run `owpp bump viz`)
-FAIL  tool viz: changed since origin/main but its version is still 1.0.0 (run `owpp bump viz --tool`)
+FAIL  viz: changed since origin/main but its version is still 1.0.0 (run `owpp version viz patch`)
+FAIL  tool viz: changed since origin/main but its version is still 1.0.0 (run `owpp version viz patch --tool`)
 ```
 
 It bundles every plugin as it was at that git ref (with `git archive`) and as it is now, and fails for what changed without a new version:

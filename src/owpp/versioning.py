@@ -7,8 +7,8 @@ A plugin has up to three kinds of version, each where Open-WebUI reads it:
 - the **tool's**, `version:` in plugin.yaml's `tool:` section;
 - each **skill's**, `version:` in its SKILL.md front matter (optional).
 
-`owpp bump` changes one of them in place, keeping comments and layout, and adds an entry to the
-plugin's CHANGELOG.md. `owpp check --since <ref>` fails when something changed since that git ref
+`owpp version` shows them, and changes one in place (keeping comments and layout), adding an
+entry to the plugin's CHANGELOG.md. `owpp check --since <ref>` fails when something changed since that git ref
 but its version did not. Code taken from a git repository (`source:`) carries the upstream's
 versions, which are not ours to bump; a move of its commit counts as a change of the plugin.
 """
@@ -223,7 +223,41 @@ def changelog_problem(folder: Path, version: str) -> str | None:
     return None
 
 
-# ---- owpp bump ---------------------------------------------------------------------------
+# ---- owpp version: showing them ----------------------------------------------------------
+
+
+UPSTREAM = "(the upstream's)"
+
+
+def versions_of(directory: Path, plugin_id: str) -> list[tuple[str, str]]:
+    """A plugin's versions as its files declare them: [(what, version)], the function first.
+    Read from the files, not bundled, so a plugin from git needs no fetch: what it takes verbatim
+    is shown as the upstream's."""
+    folder, loose = directory / plugin_id, directory / f"{plugin_id}.py"
+    if loose.is_file() and not folder.is_dir():
+        return [("function", version_of(read_text(loose)))]
+    if not (folder / "plugin.yaml").is_file():
+        raise OwppError(f"no plugin {plugin_id} in {directory}")
+    manifest = read_manifest(folder)
+    out = []
+    for block in ("function", "tool"):
+        section = manifest.get(block)
+        if not isinstance(section, dict):
+            continue
+        label = block if block == "function" else f"tool {get(section, 'id') or plugin_id}"
+        verbatim = section.get("file") or section.get("from")
+        out.append((label, UPSTREAM if verbatim else str(get(section, "version") or "")))
+    declared = manifest.get("skills")
+    if manifest.get("source") and isinstance(declared, dict):
+        out += [(f"skill {s}", UPSTREAM) for s in declared]
+    skills = folder / "skills"
+    for path in sorted(skills.glob("*/SKILL.md")) if skills.is_dir() else []:
+        fm, _ = parse_skill(str(path), read_text(path))
+        out.append((f"skill {path.parent.name}", str(fm.get("version") or "")))
+    return out
+
+
+# ---- owpp version: changing one ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -351,8 +385,8 @@ def unbumped(old: FunctionFile, new: FunctionFile, manifest: dict, since: str) -
     sourced = bool(manifest.get("source"))
     plugin_changed = own_code(old.content) != own_code(new.content) or old.sources != new.sources
     for kind, items_of, version, fix in (
-        ("tool", tools_of, tool_version, f"owpp bump {new.id} --tool"),
-        ("skill", skills_of, skill_version, f"owpp bump {new.id} --skill {{id}}"),
+        ("tool", tools_of, tool_version, f"owpp version {new.id} patch --tool"),
+        ("skill", skills_of, skill_version, f"owpp version {new.id} patch --skill {{id}}"),
     ):
         a_items, b_items = items_of(old.content), items_of(new.content)
         for item_id in sorted(set(a_items) | set(b_items)):
@@ -382,7 +416,7 @@ def unbumped(old: FunctionFile, new: FunctionFile, manifest: dict, since: str) -
                 new.id,
                 f"changed since {since} but its version is still "
                 f"{version_of(new.content) or '(none)'}",
-                f"owpp bump {new.id}",
+                f"owpp version {new.id} patch",
             ),
         )
     return findings

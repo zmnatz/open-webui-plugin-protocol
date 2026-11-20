@@ -6,7 +6,7 @@
   owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
   owpp test [id ...] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
   owpp sync [id ...] [--dry-run] [--bump part]   move plugins taken from git to their latest commit
-  owpp bump <id> [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
+  owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
   owpp create [id]                   a wizard: asks what the plugin is, then writes it
   owpp init <id> [--type event|filter|action|pipe]   scaffold a plugin folder
 
@@ -32,7 +32,7 @@ from .deploy import options_from_env, run_deploy
 from .errors import OwppError
 from .lint import lint_notes, lint_plugin
 from .sources import fetch_sources, plugin_folders, source_keys
-from .versioning import bump, changelog_problem, check_since, version_of
+from .versioning import bump, changelog_problem, check_since, version_of, versions_of
 
 # ---- check --------------------------------------------------------------------
 
@@ -166,7 +166,25 @@ def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
     return 1 if bad or (args.strict and warnings) else 0
 
 
-def _cmd_bump(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+def _cmd_version(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    if args.how is None:  # show
+        if args.tool or args.skill or args.message:
+            print("--tool, --skill and -m go with a new version: patch, minor, major or X.Y.Z")
+            return 1
+        ids = (
+            [args.id]
+            if args.id
+            else [f.name for f in plugin_folders(directory)]
+            + sorted(p.stem for p in directory.glob("*.py"))
+        )
+        for plugin_id in ids:
+            for i, (what, version) in enumerate(versions_of(directory, plugin_id)):
+                name = plugin_id if i == 0 else f"  {what}"
+                print(f"{name:<28}{version or '(no version)'}")
+        return 0
+    if not args.id:
+        print("say which plugin: owpp version <id> patch|minor|major|X.Y.Z")
+        return 1
     for b in bump(directory, args.id, args.how, args.tool, args.skill, args.message or ""):
         print(f"{b.what}: {b.old or '(no version)'} -> {b.new} ({b.file})")
     changelog = directory / args.id / "CHANGELOG.md"
@@ -340,14 +358,18 @@ def build_parser() -> argparse.ArgumentParser:
         default="patch",
         help="bump a moved plugin's version, with a CHANGELOG.md entry (default patch)",
     )
-    bump_cmd = add("bump", _cmd_bump, "bump a plugin's version (or its tool's or a skill's)")
-    bump_cmd.add_argument("id")
-    bump_cmd.add_argument(
-        "how", nargs="?", default="patch", help="patch (default), minor, major, or a version"
+    version = add(
+        "version", _cmd_version, "show the versions of the plugins, or give one a new version"
     )
-    bump_cmd.add_argument("--tool", action="store_true", help="the tool's version")
-    bump_cmd.add_argument("--skill", metavar="name", help="that skill's version")
-    bump_cmd.add_argument("-m", "--message", help="the CHANGELOG.md entry (function bumps)")
+    version.add_argument("id", nargs="?", help="the plugin (default: every plugin, shown)")
+    version.add_argument(
+        "how", nargs="?", help="the new version: patch, minor, major or X.Y.Z (default: show)"
+    )
+    version.add_argument("--tool", action="store_true", help="the tool's version")
+    version.add_argument("--skill", metavar="name", help="that skill's version")
+    version.add_argument(
+        "-m", "--message", help="the CHANGELOG.md entry (for the plugin's own version)"
+    )
     create = add("create", _cmd_create, "create a plugin, answering a few questions (a wizard)")
     create.add_argument("id", nargs="?", help="the plugin id (asked if left out)")
     init = add("init", _cmd_init, "scaffold a plugin folder")

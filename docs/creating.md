@@ -148,7 +148,7 @@ The README states where the code comes from, the pinned commit and how to upgrad
 ## What it writes, in every case
 
 - **`plugin.yaml`**, with comments that say where each part goes.
-- **`CHANGELOG.md`**, with an entry for the first version (not for an upstream function, whose versions are the upstream's). [`owpp bump`](tooling.md#versions) adds the next ones.
+- **`CHANGELOG.md`**, with an entry for the first version (not for an upstream function, whose versions are the upstream's). [`owpp version`](tooling.md#versions) adds the next ones.
 - **`README.md`**, with the sections the [authoring guide](authoring.md#documentation-the-readme-every-plugin-has) requires: a description, settings, `## Test` and `## Deploy`.
 - **`tests/test_<id>.py`**, with one test per part: the valves, the type's entry point (a chat through the filter, the action's button, the pipe's models, startup), the tool and each method, the skills, the page and who may open it, the config. Each test has the docstring and the `By hand:` steps that [testing](testing.md#describe-every-test) asks for.
 

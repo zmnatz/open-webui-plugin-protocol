@@ -1,4 +1,4 @@
-"""Versions: `owpp bump`, `owpp check --since`, CHANGELOG.md, and deploy's downgrade guard."""
+"""Versions: `owpp version`, `owpp check --since`, CHANGELOG.md, and deploy's downgrade guard."""
 
 from __future__ import annotations
 
@@ -121,12 +121,26 @@ class TestBump:
         assert b.new == "0.1.0"
         assert "version: 0.1.0" in (plugin / "viz" / "skills" / "draw" / "SKILL.md").read_text()
 
-    def test_the_command(self, plugin, capsys):
-        assert main(["bump", "viz", "--dir", str(plugin)], env={}) == 0
+    def test_the_command_shows_versions(self, plugin, capsys):
+        assert main(["version", "--dir", str(plugin)], env={}) == 0
+        assert capsys.readouterr().out.splitlines() == [
+            f"{'viz':<28}1.0.0",
+            f"{'  tool viz':<28}1.0.0",
+            f"{'  skill draw':<28}(no version)",
+        ]
+        before = (plugin / "viz" / "plugin.yaml").read_text()
+        assert main(["version", "viz", "--dir", str(plugin)], env={}) == 0  # shows, changes nothing
+        assert (plugin / "viz" / "plugin.yaml").read_text() == before
+
+    def test_the_command_gives_a_new_version(self, plugin, capsys):
+        assert main(["version", "viz", "patch", "--dir", str(plugin)], env={}) == 0
         out = capsys.readouterr().out
         assert "function: 1.0.0 -> 1.0.1" in out and "say what changed" in out
+        assert main(["version", "viz", "2.0.0", "--tool", "--dir", str(plugin)], env={}) == 0
+        assert read_manifest(plugin / "viz")["tool"]["version"] == "2.0.0"
         with pytest.raises(OwppError, match="no skill nope"):
-            main(["bump", "viz", "--skill", "nope", "--dir", str(plugin)], env={})
+            main(["version", "viz", "patch", "--skill", "nope", "--dir", str(plugin)], env={})
+        assert main(["version", "viz", "--tool", "--dir", str(plugin)], env={}) == 1  # no new one
 
 
 class TestChangelog:
@@ -175,7 +189,7 @@ class TestCheckSince:
         code, out = since(repo, capsys)
         assert code == 1
         assert (
-            "FAIL  viz: changed since main but its version is still 1.0.0 (run `owpp bump viz`)"
+            "FAIL  viz: changed since main but its version is still 1.0.0 (run `owpp version viz patch`)"
             in out
         )
         bump(repo, "viz")
