@@ -4,7 +4,7 @@ Each entry starts with what owpp prints, then explains the cause and the fix, an
 
 ## Signing in
 
-The deploy signs in before it writes anything, so none of these change the instance. Which credentials it tries, in which order, and what each needs on the instance: [signing in](tooling.md#signing-in).
+The deploy signs in before it writes anything, so none of these change the instance. Which credentials it tries, in which order, and what each needs on the instance: [signing in](commands/deploy.md#signing-in).
 
 ### No credentials
 
@@ -72,7 +72,7 @@ An example, for a self-signed certificate:
 error: <url>: TLS failed (certificate verify failed: self-signed certificate: give the CA that signed its certificate with OPEN_WEBUI_CA_CERT (or --ca-cert))
 ```
 
-The instance's certificate is signed by a CA the system does not trust (a private CA, or a self-signed certificate). Pass that CA's PEM as the message says. When the server or a proxy wants a client certificate, the hint names `OPEN_WEBUI_CLIENT_CERT (or --client-cert)` instead. Both are in [deploy settings](tooling.md#deploy-settings).
+The instance's certificate is signed by a CA the system does not trust (a private CA, or a self-signed certificate). Pass that CA's PEM as the message says. When the server or a proxy wants a client certificate, the hint names `OPEN_WEBUI_CLIENT_CERT (or --client-cert)` instead. Both are in [deploy settings](commands/deploy.md#deploy-settings).
 
 ## Code taken from git
 
@@ -92,7 +92,7 @@ A `source:` can be written without a `ref:`, but nothing bundles it until it has
 error: <id>/plugin.yaml: source.ref must be a full 40-character commit SHA, not a branch or tag (those can change under you)
 ```
 
-A branch or a tag can move, and the code runs inside Open-WebUI with admin rights, so `ref:` takes only a full commit SHA. A short SHA is refused too. To follow a branch or tag, put it under `track:` and let [`owpp pull`](tooling.md#owpp-pull-moving-a-pinned-commit) move `ref:` for you.
+A branch or a tag can move, and the code runs inside Open-WebUI with admin rights, so `ref:` takes only a full commit SHA. A short SHA is refused too. To follow a branch or tag, put it under `track:` and let [`owpp pull`](commands/pull.md) move `ref:` for you.
 
 ### The repository cannot be fetched
 
@@ -128,7 +128,7 @@ FAIL  <id>: changed since origin/main but its version is still 1.0.0 (run `owpp 
 FAIL  tool <id>: changed since origin/main but its version is still 1.0.0 (run `owpp version <id> patch --tool`)
 ```
 
-`owpp check --since <ref>` (the action's `since:` input) found a plugin, tool or skill whose code changed since that ref while its version stayed the same. Run the command in brackets and say what changed in the `CHANGELOG.md` entry it adds. Which changes count against which version: [versions](tooling.md#versions). If the plugin has a `CHANGELOG.md` but no entry for its current version, `check` warns `` warn  <id>/CHANGELOG.md has no `## <version>` entry for the current version ``, which fails under `--strict`.
+`owpp check --since <ref>` (the action's `since:` input) found a plugin, tool or skill whose code changed since that ref while its version stayed the same. Run the command in brackets and say what changed in the `CHANGELOG.md` entry it adds. Which changes count against which version: [versions](commands/version.md#versions). If the plugin has a `CHANGELOG.md` but no entry for its current version, `check` warns `` warn  <id>/CHANGELOG.md has no `## <version>` entry for the current version ``, which fails under `--strict`.
 
 A deploy's report shows the same thing as `code changed, still 1.0.0`.
 
@@ -140,7 +140,7 @@ A deploy's report shows the same thing as `code changed, still 1.0.0`.
 error: refusing to delete 3 of 4 git-controlled functions (a, b, c); check the folder names in the plugins folder (the id is the folder name), or re-run with --force-prune
 ```
 
-The deploy deletes every function carrying its [ownership marker](tooling.md#the-ownership-marker) whose plugin folder is gone, but refuses to delete more than half of them in one run, before writing anything. That usually means the folders were renamed (a function's id is its folder name), or the deploy points at the wrong folder: check `--dir` (`plugins-dir:` in the action). If the plugins really were retired, re-run with `--force-prune`. `--only` never prunes.
+The deploy deletes every function carrying its [ownership marker](commands/deploy.md#the-ownership-marker) whose plugin folder is gone, but refuses to delete more than half of them in one run, before writing anything. That usually means the folders were renamed (a function's id is its folder name), or the deploy points at the wrong folder: check `--dir` (`plugins-dir:` in the action). If the plugins really were retired, re-run with `--force-prune`. `--only` never prunes.
 
 ### Functions that are never updated or pruned
 
@@ -152,7 +152,7 @@ There is no error: a function keeps old code, or stays after its folder is delet
 error: refusing to deploy older versions over newer ones on the instance: <id> (function 1.2.0 -> 1.1.0). Check you are deploying the right branch, or re-run with --force
 ```
 
-The instance runs a newer version than the repository, usually because the deploy ran from an old branch. Deploy from the right branch, or pass `--force` for a deliberate rollback: see [deploying an older version](tooling.md#deploying-an-older-version).
+The instance runs a newer version than the repository, usually because the deploy ran from an old branch. Deploy from the right branch, or pass `--force` for a deliberate rollback: see [deploying an older version](commands/deploy.md#deploying-an-older-version).
 
 ### A page in the Artifacts panel answers 401
 
