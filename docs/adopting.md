@@ -17,6 +17,7 @@ Then add the [GitHub Action](tooling.md#github-action).
 2. The id must equal the id the function already has in Open-WebUI, or the deploy will create a second copy. Ids cannot contain hyphens.
 3. The first deploy **updates** a same-id function and marks it as managed. Its valves and active/global state are kept.
 4. Replace copied helpers with libraries (`routes`, `jobs`, `chat_data`, `static`, `templates`) as you go; `owpp check` reports anything left undefined.
+5. Run `uvx owpp migrate` to record `protocol: "0.2"` in each manifest (or add the line yourself). A manifest with no key is treated as 0.1, which `owpp check` warns about and `owpp check --strict` fails on; see [the protocol key](plugin-format.md#protocol).
 
 ## Third-party functions
 

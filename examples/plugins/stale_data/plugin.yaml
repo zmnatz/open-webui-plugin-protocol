@@ -1,3 +1,4 @@
+protocol: "0.2"
 function:
   title: Stale Data Dashboard
   author: zmnatz

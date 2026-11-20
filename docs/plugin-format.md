@@ -20,7 +20,20 @@ A plugin may also be a single `<id>.py` (a function with no tool or skills). The
 
 ## `plugin.yaml`
 
-All sections are optional except that a tool or skills need a `function:` section: the function is the parent.
+All sections are optional except that a tool or skills need a `function:` section: the function is the parent. The current protocol version is `0.2`.
+
+### `protocol:`
+
+```yaml
+protocol: "0.2"   # the version of the plugin format this manifest was written for
+```
+
+A quoted major.minor string that tracks owpp's major.minor. It changes only when a release changes what a manifest key means or takes one away; `owpp init`, `owpp create` and the examples in this repository write `protocol: "0.2"`. It is a manifest key: unlike `function:`'s keys, it is not copied into the deployed header.
+
+- **Write the quotes.** Unquoted `0.2` is a YAML number and is refused, as is a patch version such as `"0.2.0"`.
+- A **newer** version than the owpp reading the manifest is refused: its keys may mean something else. Upgrade owpp first.
+- An **older** version is accepted; `owpp check` prints a note pointing at the migration. A manifest with **no key** is a 0.1 plugin, from before the key existed: `owpp check` warns and `owpp check --strict` fails.
+- `owpp migrate [id ...] [--dry-run]` brings old manifests up to 0.2. It changes only the `protocol:` line, adding it when absent, and keeps comments and layout so the change is there to review and commit. The 0.1 -> 0.2 step has nothing else to do: what 0.2 added is optional. See [the CLI](tooling.md#the-cli-owpp).
 
 ### `function:`
 
@@ -154,6 +167,7 @@ Structured settings that ship with the plugin, read by the function with `plugin
 ## Example: a plugin with every part
 
 ```yaml
+protocol: "0.2"
 function:
   title: Excalidraw
   author: you

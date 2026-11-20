@@ -7,6 +7,7 @@
   owpp test [id ...] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
   owpp sync [id ...] [--dry-run] [--bump part]   move plugins taken from git to their latest commit
   owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
+  owpp migrate [id ...] [--dry-run]  bring plugin.yaml to the current protocol version
   owpp create [id]                   a wizard: asks what the plugin is, then writes it
   owpp init <id> [--type event|filter|action|pipe]   scaffold a plugin folder
 
@@ -31,7 +32,8 @@ from .create import CLASS, PluginSpec, spec_from_data, write_plugin
 from .deploy import options_from_env, run_deploy
 from .errors import OwppError
 from .lint import lint_notes, lint_plugin
-from .manifest import parse_yaml, read_text
+from .manifest import parse_yaml, read_manifest, read_text
+from .protocol import report as protocol_report
 from .sources import fetch_sources, plugin_folders, source_keys
 from .versioning import bump, changelog_problem, check_since, version_of, versions_of
 
@@ -142,12 +144,20 @@ def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
             warnings += 1
         for finding in lint_notes(directory / fn.file.rstrip("/"), fn.file.rstrip("/")):
             print(f"note  {finding}")
-        if fn.file.endswith("/"):
+        if fn.file.endswith("/"):  # a plugin folder
+            name = fn.file.rstrip("/")
             problem = changelog_problem(directory / fn.id, version_of(fn.content))
             if problem:
                 print(f"warn  {fn.id}/{problem}")
                 warnings += 1
-        if fn.file.endswith("/"):  # a plugin folder: say which environment variables it reads
+            warn, note = protocol_report(
+                f"{name}/plugin.yaml", read_manifest(directory / name).get("protocol")
+            )
+            if warn:
+                print(f"warn  {warn}")
+                warnings += 1
+            if note:
+                print(f"note  {note}")
             for var, default in env_references(directory / fn.id):
                 shown = (
                     "no default"
@@ -274,6 +284,14 @@ def _cmd_init(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
     return 0
 
 
+def _cmd_migrate(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    from .migrate import migrate
+
+    if not directory.exists():
+        raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
+    return migrate(directory, args.ids, dry_run=args.dry_run)
+
+
 def _cmd_sync(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
     from .sync import sync
 
@@ -380,6 +398,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     test = add("test", _cmd_test, "run each plugin's tests/ against a mock Open-WebUI")
     test.add_argument("ids", nargs="*", metavar="id", help="plugins to test (default: all)")
+    migrate = add("migrate", _cmd_migrate, "bring plugin.yaml to the current protocol version")
+    migrate.add_argument("ids", nargs="*", metavar="id", help="plugins to migrate (default: all)")
+    migrate.add_argument(
+        "--dry-run", action="store_true", help="say what would change; write nothing"
+    )
     sync = add("sync", _cmd_sync, "move plugins taken from git to the latest commit they track")
     sync.add_argument("ids", nargs="*", metavar="id", help="plugins to sync (default: all)")
     sync.add_argument("--dry-run", action="store_true", help="say what would move; write nothing")

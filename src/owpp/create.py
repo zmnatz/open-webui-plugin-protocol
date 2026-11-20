@@ -32,6 +32,7 @@ from pathlib import Path
 from .bundle import VALID_ID, VALID_SKILL_ID
 from .errors import OwppError
 from .events import problem_with
+from .protocol import VERSION as PROTOCOL_VERSION
 from .sources import GIT_URL, SHA40, TRACK
 from .versioning import changelog_text
 
@@ -688,7 +689,10 @@ def _yaml(value: str) -> str:
 
 
 def render_manifest(spec: PluginSpec) -> str:
-    out = ["# Manifest (docs/plugin-format.md). The function: keys become the docstring header."]
+    out = [
+        "# Manifest (docs/plugin-format.md). The function: keys become the docstring header.",
+        f'protocol: "{PROTOCOL_VERSION}"',
+    ]
     src = spec.source
     if src:
         out += [

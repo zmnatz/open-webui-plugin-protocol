@@ -1,5 +1,6 @@
 # Inline Visualizer tool and skill, from Classic298/open-webui-plugins, installed by this function.
 # To upgrade: `owpp sync inline_visualizer` moves `ref` to the latest commit; review the diff, then commit.
+protocol: "0.2"
 source:
   git: https://github.com/Classic298/open-webui-plugins.git
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea

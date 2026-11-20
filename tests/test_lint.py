@@ -150,7 +150,7 @@ class TestTheCommand:
         write_tree(
             tmp_path / "p",
             {
-                "plugin.yaml": "function:\n  title: T\n",
+                "plugin.yaml": 'protocol: "0.2"\nfunction:\n  title: T\n',
                 "function.py": "from pydantic import BaseModel\n\nclass Event:\n    class Valves(BaseModel):\n        N: int = 3\n",
             },
         )
@@ -169,7 +169,10 @@ class TestTheCommand:
     def test_strict_passes_a_clean_plugin(self, tmp_path, capsys):
         write_tree(
             tmp_path / "p",
-            {"plugin.yaml": "function:\n  title: T\n", "function.py": "class Event:\n    pass\n"},
+            {
+                "plugin.yaml": 'protocol: "0.2"\nfunction:\n  title: T\n',
+                "function.py": "class Event:\n    pass\n",
+            },
         )
         assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 0
         assert "warn" not in capsys.readouterr().out
@@ -239,7 +242,7 @@ class TestPublicNotes:
         write_tree(
             tmp_path / "p",
             {
-                "plugin.yaml": "function:\n  title: T\ninclude: [routes]\n",
+                "plugin.yaml": 'protocol: "0.2"\nfunction:\n  title: T\ninclude: [routes]\n',
                 "function.py": "class Event:\n    def go(self, app, router):\n        plugin_mount(app, router, '/hook', access='public')\n",
             },
         )

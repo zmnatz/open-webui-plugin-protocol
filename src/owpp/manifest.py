@@ -10,6 +10,7 @@ from typing import Any
 import yaml
 
 from .errors import OwppError
+from .protocol import parse as parse_protocol
 
 
 class _Loader(yaml.SafeLoader):
@@ -69,6 +70,7 @@ MANIFEST_KEYS = (
     "assets",
     "jobs",
     "requires",
+    "protocol",
 )
 # Instance settings a plugin can say it needs. `owpp deploy` warns when one is missing; it never
 # changes the instance or refuses the deploy.
@@ -92,6 +94,7 @@ def check_keys(path: Path, manifest: dict) -> None:
             raise OwppError(
                 f"{path}: unknown key `{key}:` (known: {', '.join(MANIFEST_KEYS)}){hint}"
             )
+    parse_protocol(manifest.get("protocol"), str(path))
     requires = manifest.get("requires")
     if requires is not None:
         if not isinstance(requires, dict):

@@ -22,6 +22,7 @@ owpp deploy [--only id,id] [--dry-run [--sync]] [--force] [--force-prune] [--man
 owpp test [id ...] [-- pytest args]
 owpp sync [id ...] [--dry-run] [--bump patch|minor|major|none]
 owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
+owpp migrate [id ...] [--dry-run]      bring plugin.yaml to the current protocol version
 owpp create [id]
 owpp init <id> [--type event|filter|action|pipe]
 ```
@@ -34,6 +35,7 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
   - a tool method with no docstring, a parameter with no type hint, or a parameter the docstring does not describe with `:param name:` (Open-WebUI builds the spec the model reads from those). Injected parameters such as `__user__` and `__metadata__` are ignored.
 
   Warnings read the plugin's own source (`function.py`, `tool.py`, `shared.py`, or a loose `<id>.py`) with real file and line numbers, and skip a plugin that takes its code from a pinned `source:`, which is not yours to lint. They do not change the exit status; **`--strict` makes them fail**, for CI.
+- **`migrate`** brings each `plugin.yaml` written for an older [protocol version](plugin-format.md#protocol) up to the current one. It rewrites only what the version step changes, keeps comments and layout, and points at each file it writes so the change is there to review and commit. With `--dry-run` it says what would change and writes nothing. With ids, it migrates just those plugins; a manifest already at the current version is left alone. `owpp check` warns about a missing `protocol:` key and notes an older one, pointing at this command.
 - **`bundle`** writes the deployed code, to read or diff.
 - **`test`** runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. It needs the `test` extra: `uvx --from 'owpp[test]' owpp test`. See [testing](testing.md).
 - **`version`** shows the plugins' versions or gives one a new version, and **`check --since <ref>`** fails on a change without one: see [versions](#versions).
