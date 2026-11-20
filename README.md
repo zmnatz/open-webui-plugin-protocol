@@ -49,6 +49,8 @@ Open-WebUI stores each function and tool as **one code blob**, edited in the adm
 - **makes the function the parent**: its tool and skills come and go with it;
 - **deploys from git**, updating only what it created (an ownership marker), never hand-made functions.
 
+When it is worth it over pasting functions into the admin UI, and when it is not: [why this](docs/README.md#why-this).
+
 ## Install
 
 Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (for remote sources). Nothing to install: `uvx` runs `owpp` straight from PyPI. To have it on your `PATH`, `uv tool install owpp` (or `pipx install owpp`). See [install](docs/install.md) and [getting started](docs/getting-started.md).
