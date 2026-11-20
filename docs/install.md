@@ -6,7 +6,7 @@
 
 - **[uv](https://docs.astral.sh/uv/getting-started/installation/)**. It brings its own Python, so you need no Python of your own. Without uv, Python 3.10 or newer works with `pip` or `pipx` (below).
 - **`git`**, for plugins that take code from another repository (`source:`), and for `owpp pull` and `owpp check --since`.
-- For a deploy, an **Open-WebUI** instance and a way to sign in as an admin: an API key, a user name and password, an OIDC token, or none where the instance allows it (see [signing in](tooling.md#signing-in)).
+- For a deploy, an **Open-WebUI** instance and a way to sign in as an admin: an API key, a user name and password, an OIDC token, or none where the instance allows it (see [signing in](commands/deploy.md#signing-in)).
 
 ## Run it
 
@@ -15,7 +15,7 @@ uvx owpp --version         # runs the latest release, nothing installed
 uvx owpp@0.2.1 list        # a pinned release (recommended: see below)
 ```
 
-`uvx owpp <command>` works from any folder. Every command reads the plugins folder from `--dir`, else `$OWPP_PLUGINS_DIR`, else `./plugins`.
+`uvx owpp <command>` works from any folder. Every command reads the plugins folder from `--dir`, else [`$OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir), else `./plugins`.
 
 **Pin the version.** The runtime and the libraries are copied into what you deploy, so a new `owpp` changes your deployed code. Use `uvx owpp@0.2.1 ...` in scripts and CI, and move the pin as a reviewed change, the same way you would move any other dependency.
 

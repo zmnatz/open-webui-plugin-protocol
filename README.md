@@ -49,6 +49,8 @@ Open-WebUI stores each function and tool as **one code blob**, edited in the adm
 - **makes the function the parent**: its tool and skills come and go with it;
 - **deploys from git**, updating only what it created (an ownership marker), never hand-made functions.
 
+When it is worth it over pasting functions into the admin UI, and when it is not: [why this](docs/README.md#why-this).
+
 ## Install
 
 Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (for remote sources). Nothing to install: `uvx` runs `owpp` straight from PyPI. To have it on your `PATH`, `uv tool install owpp` (or `pipx install owpp`). See [install](docs/install.md) and [getting started](docs/getting-started.md).
@@ -57,8 +59,10 @@ Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (
 uvx owpp create                      # a wizard: asks what the plugin is, writes plugins/<id>/
 uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
-# or OPEN_WEBUI_USERNAME + OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing: docs/tooling.md#signing-in
+# or OPEN_WEBUI_USERNAME + OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing: docs/commands/deploy.md#signing-in
 ```
+
+The deploy reads the instance and the credentials from the environment: [`OPEN_WEBUI_URL`](docs/environment-variables.md#open_webui_url), then [`OPEN_WEBUI_API_KEY`](docs/environment-variables.md#open_webui_api_key), [`OPEN_WEBUI_USERNAME`](docs/environment-variables.md#open_webui_username) and [`OPEN_WEBUI_PASSWORD`](docs/environment-variables.md#open_webui_password), [`OPEN_WEBUI_OIDC_TOKEN`](docs/environment-variables.md#open_webui_oidc_token), or nothing ([signing in](docs/commands/deploy.md#signing-in)). Every variable: [environment variables](docs/environment-variables.md).
 
 ## Deploy from GitHub Actions
 
@@ -88,7 +92,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 | [Runtime](docs/runtime.md) | install/remove of tools and skills, parent valves |
 | [Libraries](docs/libraries.md) | `core`, `routes`, `jobs`, `events`, `chat_data`, `static`, `templates`, `assets`, Shared Assets |
 | [Testing](docs/testing.md) | unit tests per plugin, the mock Open-WebUI, `owpp test` |
-| [Tooling](docs/tooling.md) | CLI, deploy settings, ownership marker, GitHub Action, tests |
+| [Tooling](docs/tooling.md) | the CLI, a page per command (deploy settings, signing in, `pull`, versions), GitHub Action, tests |
 | [Adopting](docs/adopting.md) | new repositories, migrating existing functions |
 | [Upgrading](docs/upgrading.md) | moving to a new owpp, `owpp migrate`, what changed in 0.2 |
 | [Security](SECURITY.md) | the trust model, what `owpp` limits, known limits, how to report |

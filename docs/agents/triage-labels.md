@@ -13,3 +13,19 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
 Edit the "Label in our tracker" column to match whatever vocabulary you actually use.
+
+## Type labels and commit messages
+
+An issue's type label picks the conventional-commit type of its commit message (also on the [contributing page](../contributing.md#commit-messages)):
+
+| Label | Commit type |
+| --- | --- |
+| `enhancement` | `feat` |
+| `bug` | `fix` |
+| `documentation` (alone) | `docs` |
+| `refactor` | `refactor` |
+| `test` | `test` |
+| `chore` | `chore` / `ci` / `build` |
+| `breaking` | add `!` to the type and a `BREAKING CHANGE:` footer |
+
+`documentation` alongside another type label means the docs review applies (see AGENTS.md), not that the commit is `docs`.

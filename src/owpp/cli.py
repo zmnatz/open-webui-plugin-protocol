@@ -1,9 +1,9 @@
-"""owpp: the Open-WebUI plugin protocol CLI (docs/tooling.md).
+"""owpp: the Open-WebUI plugin protocol CLI (docs/tooling.md, and a page per command in docs/commands/).
 
   owpp list                          plugins with their function type
   owpp check [id ...]                bundle, compile, report undefined names
   owpp bundle <id> [out.py]          print (or write) the exact code that would be deployed
-  owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
+  owpp deploy [--only id,id] [--dry-run [--latest]] [--force] [--force-prune] [--managed-by marker]
   owpp test [id ...] [--upstream] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
   owpp pull [id ...] [--dry-run] [--bump part]   move plugins taken from git to their latest commit
   owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
@@ -351,7 +351,7 @@ def build_parser() -> argparse.ArgumentParser:
         description="Write, test and deploy Open-WebUI plugins from a git repository.",
         epilog="deploy needs OPEN_WEBUI_URL, and signs in with OPEN_WEBUI_API_KEY, "
         "OPEN_WEBUI_USERNAME and OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing. "
-        "Docs: docs/tooling.md#signing-in",
+        "Docs: docs/commands/deploy.md#signing-in",
     )
     parser.add_argument("--version", action="version", version=f"owpp {__version__}")
     common = argparse.ArgumentParser(add_help=False)

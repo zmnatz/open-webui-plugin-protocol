@@ -9,7 +9,7 @@ uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
 ```
 
-Then add the [GitHub Action](tooling.md#github-action).
+The deploy reads the instance and the credentials from [environment variables](environment-variables.md#the-instance). Then add the [GitHub Action](tooling.md#github-action).
 
 ## Existing functions pasted into the UI
 
@@ -33,4 +33,4 @@ If you used this protocol before it had its own repository (the deploy script in
 OWPP_MANAGED_BY='git:owner/repo:path' uvx owpp deploy
 ```
 
-or `managed-by:` in the action. The description note changed to a generic wording, so the first deploy with this package updates each function once; that is expected.
+or `managed-by:` in the action ([`OWPP_MANAGED_BY`](environment-variables.md#owpp_managed_by)). The description note changed to a generic wording, so the first deploy with this package updates each function once; that is expected.

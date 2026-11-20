@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `owpp sync` is now `owpp pull`, and deploy's `--sync` (the action's `sync` input) is now `--latest` (`latest`) ([upgrading](docs/upgrading.md)).
+- Docs: a page for each command, an [environment variables](docs/environment-variables.md) reference, [troubleshooting](docs/troubleshooting.md) and [FAQ](docs/faq.md) pages, a "Why this" section on the home page, and changelog, contributing and license pages under Project.
 
 ## 0.2.1 (2026-11-19)
 

@@ -8,7 +8,7 @@ generated, into build/docs/, then runs Zensical (zensical.toml) on that folder. 
 agent instructions in docs/agents/ stay in the repository but are not published. Nothing generated
 is checked in, so none of it can drift from the repository:
 
-- the root CHANGELOG, SECURITY and NOTICE files, and each example plugin's README;
+- the root CHANGELOG, SECURITY, LICENSE and NOTICE files, and each example plugin's README;
 - an examples overview, built from each plugin.yaml;
 - the test catalogue, built from the test docstrings (docs/testing.md, "Describe every test");
 - the libraries table in docs/libraries.md, built from the library catalogue;
@@ -44,7 +44,7 @@ EXAMPLES = ROOT / "examples" / "plugins"
 REPO_URL = "https://github.com/zmnatz/open-webui-plugin-protocol"
 SITE_URL = "https://zmnatz.github.io/open-webui-plugin-protocol/"
 # The menu sections whose pages go, whole, into llms-full.txt: what someone using owpp reads.
-FULL_TEXT_SECTIONS = ("Getting started", "Guide")
+FULL_TEXT_SECTIONS = ("Getting started", "Guide", "Commands")
 # Link to the commit being built on CI (a pull request's own files), else to main.
 REF = os.environ.get("GITHUB_SHA") or "main"
 
@@ -55,6 +55,7 @@ SHOTS = DOCS / "screenshots" / "screenshots.json"
 COPIED = {
     "CHANGELOG.md": "project/changelog.md",
     "SECURITY.md": "project/security.md",
+    "LICENSE": "project/license.md",  # plain text: given a heading
     "NOTICE.md": "project/notice.md",
 }
 
@@ -91,7 +92,8 @@ def assemble(out: Path = OUT) -> list[str]:
             shutil.copy2(path, out / uri)
     copied = dict(COPIED)
     for path, uri in COPIED.items():
-        pages[uri] = (path, (ROOT / path).read_text())
+        text = (ROOT / path).read_text()
+        pages[uri] = (path, text if path.endswith(".md") else f"# License\n\n{text}")
     for plugin in _plugins():
         rel = plugin.relative_to(ROOT).as_posix()
         copied[f"{rel}/README.md"] = copied[rel] = f"examples/{plugin.name}.md"

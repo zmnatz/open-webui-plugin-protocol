@@ -39,7 +39,7 @@ uv run --group docs python tools/build_docs.py serve   # preview this site (Pyth
 
 The unit tests run against a mock. It covers what plugins call, not Open-WebUI's chat pipeline, sign-in providers, Redis or permission groups ([what it is not](testing.md#what-it-is-not)). So for a change to a plugin:
 
-1. Deploy to a test instance, never production: `owpp deploy --only <id> --dry-run` lists what would change, then run it without `--dry-run` ([tooling](tooling.md)).
+1. Deploy to a test instance, never production: `owpp deploy --only <id> --dry-run` lists what would change, then run it without `--dry-run` ([`owpp deploy`](commands/deploy.md)).
 2. Open the [test catalogue](reference/test-catalogue.md) at that plugin and work through the **By hand** boxes for the tests the change touches. Before a release, work through all of them.
 3. Work through the `## Test` list in the plugin's README.
 4. Disable the function and check that what it installed (tools, skills, routes, files) is gone.

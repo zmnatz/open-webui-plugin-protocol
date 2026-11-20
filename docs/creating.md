@@ -5,8 +5,10 @@
 ```sh
 uvx owpp create              # asks for the id
 uvx owpp create my_plugin    # starts with that id
-uvx owpp create --dir src    # into another plugins folder (default: $OWPP_PLUGINS_DIR, else ./plugins)
+uvx owpp create --dir src    # into another plugins folder than ./plugins
 ```
+
+Its flags, and the default plugins folder ([`OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir)): [`owpp create`](commands/create.md).
 
 - **Every question has a default.** Enter takes it. Pressing Enter all the way makes a minimal event plugin, the same as `owpp init <id>`.
 - **Nothing is written until the last stage.** It lists the files and asks before writing them. Ctrl-C, or the end of input, stops without writing anything. A folder that already exists is never overwritten.
@@ -115,7 +117,7 @@ The tool stage defaults to yes for an installer. If it has no tool, the skills s
 | --- | --- |
 | 1. Name the plugin | The id and title |
 | 2. Where the code lives | git |
-| 3. The repository | The URL (https, ssh or `user@host:path`; never a local path). A branch, tag or commit: a branch or tag is looked up with `git ls-remote` and pinned to its full commit SHA, and recorded as `track:` for [`owpp pull`](tooling.md#owpp-pull-moving-a-pinned-commit); if the lookup fails (offline, a private repository, no such ref) you type the SHA. The folder in the repository the files are in |
+| 3. The repository | The URL (https, ssh or `user@host:path`; never a local path). A branch, tag or commit: a branch or tag is looked up with `git ls-remote` and pinned to its full commit SHA, and recorded as `track:` for [`owpp pull`](commands/pull.md); if the lookup fails (offline, a private repository, no such ref) you type the SHA. The folder in the repository the files are in |
 | 4. What it takes | The function itself (its file, taken verbatim with its header). A tool (its file and id). Skills (each one's id, and its folder or its `SKILL.md`). `access: public` for the tool and each skill |
 | 5. Describe it, or Global? | Without the function, it is an installer and asks for its header. With the function, the header comes from the file, and the only question is whether to make it global (filters and actions only) |
 | 6. Review and write | Yes or no |
@@ -149,7 +151,7 @@ The README states where the code comes from, the pinned commit and how to upgrad
 ## What it writes, in every case
 
 - **`plugin.yaml`**, with comments that say where each part goes.
-- **`CHANGELOG.md`**, with an entry for the first version (not for an upstream function, whose versions are the upstream's). [`owpp version`](tooling.md#versions) adds the next ones.
+- **`CHANGELOG.md`**, with an entry for the first version (not for an upstream function, whose versions are the upstream's). [`owpp version`](commands/version.md) adds the next ones.
 - **`README.md`**, with the sections the [authoring guide](authoring.md#documentation-the-readme-every-plugin-has) requires: a description, settings, `## Test` and `## Deploy`.
 - **`tests/test_<id>.py`**, with one test per part: the valves, the type's entry point (a chat through the filter, the action's button, the pipe's models, startup), the tool and each method, the skills, the page and who may open it, the config. Each test has the docstring and the `By hand:` steps that [testing](testing.md#describe-every-test) asks for.
 
