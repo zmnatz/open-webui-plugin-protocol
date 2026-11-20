@@ -44,7 +44,7 @@ EXAMPLES = ROOT / "examples" / "plugins"
 REPO_URL = "https://github.com/zmnatz/open-webui-plugin-protocol"
 SITE_URL = "https://zmnatz.github.io/open-webui-plugin-protocol/"
 # The menu sections whose pages go, whole, into llms-full.txt: what someone using owpp reads.
-FULL_TEXT_SECTIONS = ("Getting started", "Guide")
+FULL_TEXT_SECTIONS = ("Getting started", "Guide", "Commands")
 # Link to the commit being built on CI (a pull request's own files), else to main.
 REF = os.environ.get("GITHUB_SHA") or "main"
 

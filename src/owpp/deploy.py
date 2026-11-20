@@ -1,5 +1,5 @@
 """Deploys a folder of Open-WebUI plugins into a running Open-WebUI through its admin API
-(docs/tooling.md). Normally run through the CLI (`owpp deploy`).
+(docs/commands/deploy.md). Normally run through the CLI (`owpp deploy`).
 
 The repo is the source of truth: a function whose code differs is updated, one that is
 missing is created, activated and (for a Filter, unless it says `global: false`) made

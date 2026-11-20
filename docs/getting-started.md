@@ -57,7 +57,7 @@ export OPEN_WEBUI_USERNAME=admin@example.com OPEN_WEBUI_PASSWORD=...
 export OPEN_WEBUI_OIDC_TOKEN=... OPEN_WEBUI_OAUTH_PROVIDER=oidc
 ```
 
-With none of them, it tries to sign in without credentials, which works where sign-in is switched off or a proxy adds the trusted email header. See [signing in](tooling.md#signing-in). Use a dedicated admin account for deploys if you can, and keep credentials out of git: environment variables here, secrets in CI.
+With none of them, it tries to sign in without credentials, which works where sign-in is switched off or a proxy adds the trusted email header. See [signing in](commands/deploy.md#signing-in). Use a dedicated admin account for deploys if you can, and keep credentials out of git: environment variables here, secrets in CI.
 
 ## 5. Deploy
 
@@ -100,9 +100,9 @@ uvx owpp version hello minor -m "Says hello in French too."   # plugin.yaml and 
 uvx owpp check --since origin/main                             # fails on a change without a new version
 ```
 
-A deploy refuses to put an older version over a newer one on the instance, unless given `--force`. See [versions](tooling.md#versions).
+A deploy refuses to put an older version over a newer one on the instance, unless given `--force`. See [deploying an older version](commands/deploy.md#deploying-an-older-version).
 
-For a plugin that takes its code from another repository, pinned to a commit, `owpp pull` moves it to the latest commit for you to review, and `owpp deploy --dry-run --latest` shows what that upgrade would change on the instance. See [`owpp pull`](tooling.md#owpp-pull-moving-a-pinned-commit).
+For a plugin that takes its code from another repository, pinned to a commit, `owpp pull` moves it to the latest commit for you to review, and `owpp deploy --dry-run --latest` shows what that upgrade would change on the instance. See [`owpp pull`](commands/pull.md).
 
 ## Where next
 

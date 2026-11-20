@@ -33,7 +33,7 @@ A quoted major.minor string that tracks owpp's major.minor. It changes only when
 - **Write the quotes.** Unquoted `0.2` is a YAML number and is refused, as is a patch version such as `"0.2.0"`.
 - A **newer** version than the owpp reading the manifest is refused: its keys may mean something else. Upgrade owpp first.
 - An **older** version is accepted; `owpp check` prints a note pointing at the migration. A manifest with **no key** is a 0.1 plugin, from before the key existed: `owpp check` warns and `owpp check --strict` fails.
-- `owpp migrate [id ...] [--dry-run]` brings old manifests up to 0.2. It changes only the `protocol:` line, adding it when absent, and keeps comments and layout so the change is there to review and commit. The 0.1 -> 0.2 step has nothing else to do: what 0.2 added is optional. See [the CLI](tooling.md#the-cli-owpp) and [upgrading owpp](upgrading.md).
+- [`owpp migrate`](commands/migrate.md) brings old manifests up to 0.2. The 0.1 -> 0.2 step changes only the `protocol:` line, adding it when absent: what 0.2 added is optional. See [upgrading owpp](upgrading.md).
 
 ### `function:`
 
@@ -98,9 +98,9 @@ source:
 
 Makes `tool: {file}`, `function: {file}` and `skills: {<id>: {file|dir}}` read from that repo at that commit. See [bundling](bundling.md#git-sources).
 
-`ref` can be left out while writing the manifest: [`owpp pull`](tooling.md#owpp-pull-moving-a-pinned-commit) looks up the latest commit and adds the line. Until it does, `owpp check` and `owpp deploy` refuse the plugin.
+`ref` can be left out while writing the manifest: [`owpp pull`](commands/pull.md) looks up the latest commit and adds the line. Until it does, `owpp check` and `owpp deploy` refuse the plugin.
 
-`track` is read only by [`owpp pull`](tooling.md#owpp-pull-moving-a-pinned-commit), which moves `ref` to the latest commit of that branch or tag. Without it, `owpp pull` follows the repository's default branch. It never changes what is deployed: only `ref` does.
+`track` is read only by [`owpp pull`](commands/pull.md), which moves `ref` to the latest commit of that branch or tag. Without it, `owpp pull` follows the repository's default branch. It never changes what is deployed: only `ref` does.
 
 #### A whole plugin from git
 
@@ -123,7 +123,7 @@ owpp fetches the folder at the pinned commit and bundles it like a local plugin,
 | `tool: {id, access, valves}` | Each replaces the upstream's. |
 | a `config.yaml` file | Used instead of the upstream's. |
 
-Anything else is refused, skills included: they are installed as the upstream wrote them. Its versions are the upstream's (`owpp version` refuses to change them), and `owpp pull` moves the commit without bumping one. The upstream manifest's `protocol:` is checked like a local one. An upstream plugin may take files from git itself, which are fetched too, but not a whole plugin. Nothing in the folder is run: no build script, no `package.json` script. Its `tests/` run only with [`owpp test --upstream`](tooling.md#the-cli-owpp).
+Anything else is refused, skills included: they are installed as the upstream wrote them. Its versions are the upstream's (`owpp version` refuses to change them), and `owpp pull` moves the commit without bumping one. The upstream manifest's `protocol:` is checked like a local one. An upstream plugin may take files from git itself, which are fetched too, but not a whole plugin. Nothing in the folder is run: no build script, no `package.json` script. Its `tests/` run only with [`owpp test --upstream`](commands/test.md).
 
 ### `include:`
 

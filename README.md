@@ -57,7 +57,7 @@ Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (
 uvx owpp create                      # a wizard: asks what the plugin is, writes plugins/<id>/
 uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
-# or OPEN_WEBUI_USERNAME + OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing: docs/tooling.md#signing-in
+# or OPEN_WEBUI_USERNAME + OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing: docs/commands/deploy.md#signing-in
 ```
 
 ## Deploy from GitHub Actions
@@ -88,7 +88,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 | [Runtime](docs/runtime.md) | install/remove of tools and skills, parent valves |
 | [Libraries](docs/libraries.md) | `core`, `routes`, `jobs`, `events`, `chat_data`, `static`, `templates`, `assets`, Shared Assets |
 | [Testing](docs/testing.md) | unit tests per plugin, the mock Open-WebUI, `owpp test` |
-| [Tooling](docs/tooling.md) | CLI, deploy settings, ownership marker, GitHub Action, tests |
+| [Tooling](docs/tooling.md) | the CLI, a page per command (deploy settings, signing in, `pull`, versions), GitHub Action, tests |
 | [Adopting](docs/adopting.md) | new repositories, migrating existing functions |
 | [Upgrading](docs/upgrading.md) | moving to a new owpp, `owpp migrate`, what changed in 0.2 |
 | [Security](SECURITY.md) | the trust model, what `owpp` limits, known limits, how to report |

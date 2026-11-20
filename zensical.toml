@@ -35,6 +35,18 @@ nav = [
     { "Adopting it" = "adopting.md" },
     { "Upgrading owpp" = "upgrading.md" },
   ] },
+  { "Commands" = [
+    { "owpp list" = "commands/list.md" },
+    { "owpp check" = "commands/check.md" },
+    { "owpp bundle" = "commands/bundle.md" },
+    { "owpp deploy" = "commands/deploy.md" },
+    { "owpp test" = "commands/test.md" },
+    { "owpp pull" = "commands/pull.md" },
+    { "owpp version" = "commands/version.md" },
+    { "owpp migrate" = "commands/migrate.md" },
+    { "owpp create" = "commands/create.md" },
+    { "owpp init" = "commands/init.md" },
+  ] },
   { "Examples" = [
     { "Overview" = "examples/index.md" },
     { "Excalidraw" = "examples/excalidraw.md" },
