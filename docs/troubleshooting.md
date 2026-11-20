@@ -92,7 +92,7 @@ A `source:` can be written without a `ref:`, but nothing bundles it until it has
 error: <id>/plugin.yaml: source.ref must be a full 40-character commit SHA, not a branch or tag (those can change under you)
 ```
 
-A branch or a tag can move, and the code runs inside Open-WebUI with admin rights, so `ref:` takes only a full commit SHA. A short SHA is refused too. To follow a branch or tag, put it under `track:` and let [`owpp pull`](commands/pull.md) move `ref:` for you.
+A branch or a tag can move, and the code runs inside Open-WebUI with admin rights, so `ref:` takes only a full commit SHA. A short SHA is refused too. To follow a branch or a tag, name it in `branch:` or `tag:` and let [`owpp pull`](commands/pull.md) move `ref:` for you.
 
 ### The repository cannot be fetched
 

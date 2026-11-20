@@ -151,7 +151,7 @@ class Options:
     force_prune: bool = False
     only: list[str] | None = None
     managed_by: str = MANAGED_BY
-    # With dry_run: report against the latest commit each git-sourced plugin tracks, not the
+    # With dry_run: report against the latest commit each git-sourced plugin follows, not the
     # pinned one (as if `owpp pull` had run), without changing plugin.yaml.
     latest: bool = False
     # Deploy even where the live version is newer than the repository's (a downgrade).
@@ -696,7 +696,7 @@ def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
     """A copy of the plugins folder in `work` with each git-sourced plugin moved to the latest
     commit it tracks, as `owpp pull` would, and {source label: note} for the report."""
     from .manifest import read_manifest, read_text, set_key, text_of
-    from .pull import track_of
+    from .pull import followed
     from .sources import source_label
 
     copy = work / opts.dir.name
@@ -708,10 +708,10 @@ def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
         src = read_manifest(folder).get("source")
         if not isinstance(src, dict):
             continue
-        track = track_of(folder, src)
-        where = "the default branch" if track == "HEAD" else track
+        ref, where = followed(folder)
+        where = "the default branch" if where == "default branch" else where
         label, pinned = source_label(src), text_of(src.get("ref"))
-        sha = opts.sources.latest(text_of(src.get("git")), track)
+        sha = opts.sources.latest(text_of(src.get("git")), ref)
         if not sha:
             notes[label] = f"could not look up {where}: the pinned commit"
             continue

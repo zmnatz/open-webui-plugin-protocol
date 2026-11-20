@@ -20,7 +20,7 @@ from ..manifest import (
     text_of,
 )
 from . import _git
-from ._git import GIT_URL, MAX_SOURCE_BYTES, SHA40, TRACK, Fetcher, Lookup
+from ._git import GIT_URL, MAX_SOURCE_BYTES, SHA40, Fetcher, Lookup
 from ._upstream import is_plugin_source, write_upstream
 
 MAX_SKILL_FILES = 1000
@@ -51,9 +51,6 @@ def _key(folder: str, src: object, rel: str, directory: bool = False) -> str:
             f"{where}.ref must be a full 40-character commit SHA, not a branch or tag "
             "(those can change under you)"
         )
-    track = text_of(src.get("track"))
-    if track and not TRACK.fullmatch(track):
-        raise OwppError(f"{where}.track must be a branch or tag name (owpp pull follows it)")
     parts = [p for p in [*text_of(src.get("path")).split("/"), *str(rel).split("/")] if p]
     if any(p in ("..", ".") for p in parts):
         raise OwppError(f"{where}: paths may not contain . or ..")
@@ -169,9 +166,10 @@ class Sources:
         self._made.clear()
         self.closed = True
 
-    def latest(self, git: str, track: str) -> str | None:
-        """The commit a branch or tag (`HEAD`: the default branch) of `git` points at now."""
-        return self._lookup(git, track)
+    def latest(self, git: str, ref: str) -> str | None:
+        """The commit a branch or tag of `git` points at now (`refs/heads/<branch>`,
+        `refs/tags/<tag>`, a name that may be either, or `HEAD`: the default branch)."""
+        return self._lookup(git, ref)
 
     def resolve(self, folder: Path | str, ref: str | None = None) -> ResolvedPlugin:
         """The plugin in `folder`, with what its `source:` takes fetched at the pinned commit,

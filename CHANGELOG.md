@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Protocol 0.3: `source: track:` is now `branch:` or `tag:`, which `owpp migrate` rewrites by asking the repository ([upgrading](docs/upgrading.md)).
 - `owpp sync` is now `owpp pull`, and deploy's `--sync` (the action's `sync` input) is now `--latest` (`latest`) ([upgrading](docs/upgrading.md)).
 - Docs: a page for each command, an [environment variables](docs/environment-variables.md) reference, [troubleshooting](docs/troubleshooting.md) and [FAQ](docs/faq.md) pages, a "Why this" section on the home page, and changelog, contributing and license pages under Project.
 

@@ -135,7 +135,7 @@ class TestCheckProtocol:
         assert "warning(s)" not in out
 
     def test_the_current_protocol_is_quiet(self, tmp_path, capsys):
-        self.make(tmp_path, 'protocol: "0.2"\n')
+        self.make(tmp_path, 'protocol: "0.3"\n')
         assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 0
         assert "protocol" not in capsys.readouterr().out
 

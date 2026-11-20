@@ -35,7 +35,7 @@ inputs:
     description: '"true" lists what would change, with versions, without writing.'
     default: "false"
   latest:
-    description: 'With dry-run: "true" reports against the latest commit each git-sourced plugin tracks (as `owpp pull` would), without changing plugin.yaml.'
+    description: 'With dry-run: "true" reports against the latest commit each git-sourced plugin follows (as `owpp pull` would), without changing plugin.yaml.'
     default: "false"
   check:
     description: '"false" skips `owpp check` before deploying.'

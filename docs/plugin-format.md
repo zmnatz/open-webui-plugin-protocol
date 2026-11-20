@@ -25,15 +25,15 @@ All sections are optional except that a tool or skills need a `function:` sectio
 ### `protocol:`
 
 ```yaml
-protocol: "0.2"   # the version of the plugin format this manifest was written for
+protocol: "0.3"   # the version of the plugin format this manifest was written for
 ```
 
-A quoted major.minor string that tracks owpp's major.minor. It changes only when a release changes what a manifest key means or takes one away; `owpp init`, `owpp create` and the examples in this repository write `protocol: "0.2"`. It is a manifest key: unlike `function:`'s keys, it is not copied into the deployed header.
+A quoted major.minor string that tracks owpp's major.minor. It changes only when a release changes what a manifest key means or takes one away; `owpp init`, `owpp create` and the examples in this repository write `protocol: "0.3"`. It is a manifest key: unlike `function:`'s keys, it is not copied into the deployed header.
 
-- **Write the quotes.** Unquoted `0.2` is a YAML number and is refused, as is a patch version such as `"0.2.0"`.
+- **Write the quotes.** Unquoted `0.3` is a YAML number and is refused, as is a patch version such as `"0.3.0"`.
 - A **newer** version than the owpp reading the manifest is refused: its keys may mean something else. Upgrade owpp first.
 - An **older** version is accepted; `owpp check` prints a note pointing at the migration. A manifest with **no key** is a 0.1 plugin, from before the key existed: `owpp check` warns and `owpp check --strict` fails.
-- [`owpp migrate`](commands/migrate.md) brings old manifests up to 0.2. The 0.1 -> 0.2 step changes only the `protocol:` line, adding it when absent: what 0.2 added is optional. See [upgrading owpp](upgrading.md).
+- [`owpp migrate`](commands/migrate.md) brings old manifests up to 0.3, one version step at a time: 0.1 -> 0.2 adds the `protocol:` line, and 0.2 -> 0.3 turns `source: track:` into `branch:` or `tag:`. See [upgrading owpp](upgrading.md).
 
 ### `function:`
 
@@ -93,21 +93,21 @@ source:
   git: https://github.com/owner/repo.git   # https, ssh, or user@host:path
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea   # full 40-character commit SHA
   path: subfolder                           # "" for the repo root
-  track: main                               # optional: the branch or tag `owpp pull` follows
+  branch: main                              # optional: the branch `owpp pull` follows (or tag:)
 ```
 
 Makes `tool: {file}`, `function: {file}` and `skills: {<id>: {file|dir}}` read from that repo at that commit. See [bundling](bundling.md#git-sources).
 
 `ref` can be left out while writing the manifest: [`owpp pull`](commands/pull.md) looks up the latest commit and adds the line. Until it does, `owpp check` and `owpp deploy` refuse the plugin.
 
-`track` is read only by [`owpp pull`](commands/pull.md), which moves `ref` to the latest commit of that branch or tag. Without it, `owpp pull` follows the repository's default branch. It never changes what is deployed: only `ref` does.
+`branch` or `tag` (one of them, not both) is read only by [`owpp pull`](commands/pull.md), which moves `ref` to the latest commit of that branch, or to the commit of that tag. With neither, `owpp pull` follows the repository's default branch. They never change what is deployed: only `ref` does. A name is a branch or tag name as git allows it, never something git would read as an option.
 
 #### A whole plugin from git
 
 When the folder at `path` is an owpp plugin itself (it has a `plugin.yaml`, like the [examples](../examples/plugins)), take all of it with `plugin: true`:
 
 ```yaml
-protocol: "0.2"
+protocol: "0.3"
 source:
   git: https://github.com/zmnatz/open-webui-plugin-protocol.git
   path: examples/plugins/excalidraw
@@ -192,7 +192,7 @@ Structured settings that ship with the plugin, read by the function with `plugin
 ## Example: a plugin with every part
 
 ```yaml
-protocol: "0.2"
+protocol: "0.3"
 function:
   title: Excalidraw
   author: you

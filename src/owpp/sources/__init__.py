@@ -4,7 +4,17 @@
 `ResolvedPlugin`: the folder to bundle, its manifest, its files and the commits they are
 pinned to. See GLOSSARY.md."""
 
-from ._git import GIT_URL, SHA40, TRACK, Fetcher, Lookup, git_fetcher, resolve_ref
+from ._git import (
+    GIT_URL,
+    SHA40,
+    TRACK,
+    Fetcher,
+    Lookup,
+    git_fetcher,
+    ref_kind,
+    refname,
+    resolve_ref,
+)
 from ._resolve import ResolvedPlugin, Sources, source_label
 from ._upstream import is_plugin_source
 
@@ -18,6 +28,8 @@ __all__ = [
     "Sources",
     "git_fetcher",
     "is_plugin_source",
+    "ref_kind",
+    "refname",
     "resolve_ref",
     "source_label",
 ]

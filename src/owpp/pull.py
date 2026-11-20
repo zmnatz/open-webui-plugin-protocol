@@ -3,8 +3,8 @@
 A plugin's `source:` is pinned to a full commit SHA, so what is deployed changes only when that
 SHA moves, in a change someone reviews. This makes the move easy without making it silent:
 
-1. it looks up the latest commit of the branch or tag the plugin follows (`source: track:`, or
-   the repository's default branch);
+1. it looks up the latest commit of the branch or tag the plugin follows (`source: branch:` or
+   `tag:`, else the repository's default branch);
 2. it fetches the files the plugin takes at both commits, and lists which of them were added,
    changed or removed (and a compare link, for GitHub);
 3. it rewrites the `ref:` line in plugin.yaml, and nothing else, leaving the change to review
@@ -21,8 +21,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .errors import OwppError
-from .manifest import plugin_folders, read_manifest, read_text, set_key, text_of
-from .sources import SHA40, TRACK, Sources, source_label
+from .manifest import follows, plugin_folders, read_manifest, read_text, set_key, text_of
+from .protocol import parse
+from .sources import SHA40, Sources, refname, source_label
 from .versioning import add_changelog_entry, next_version, set_block_version
 
 
@@ -31,7 +32,7 @@ class Move:
     """What pull found for one plugin."""
 
     id: str
-    track: str
+    follows: str  # what it follows, as the report says it: `branch main`, `default branch`
     old: str
     new: str | None = None
     added: list[str] = field(default_factory=list)
@@ -47,12 +48,14 @@ class Move:
         return bool(self.new) and self.new != self.old and not self.error
 
 
-def track_of(folder: Path, source: dict) -> str:
-    """The branch or tag a plugin follows: `source: track:`, else HEAD (the default branch)."""
-    track = text_of(source.get("track")) or "HEAD"
-    if track != "HEAD" and not TRACK.fullmatch(track):
-        raise OwppError(f"{folder.name}/plugin.yaml: source.track must be a branch or tag name")
-    return track
+def followed(folder: Path) -> tuple[str, str]:
+    """What the plugin in `folder` follows: what to look up (refname), and how to say it."""
+    manifest = read_manifest(folder)
+    kind, name = follows(
+        manifest["source"], parse(manifest.get("protocol")), folder / "plugin.yaml"
+    )
+    label = {"default": "default branch", "either": name}.get(kind, f"{kind} {name}")
+    return refname(kind, name), label
 
 
 def compare_url(git: str, old: str, new: str) -> str:
@@ -78,11 +81,11 @@ def pull_plugin(
     manifest = read_manifest(folder)
     source = manifest["source"]
     git, old = text_of(source.get("git")), text_of(source.get("ref"))
-    track = track_of(folder, source)
-    move = Move(folder.name, track, old)
-    new = sources.latest(git, track)
+    ref, label = followed(folder)
+    move = Move(folder.name, label, old)
+    new = sources.latest(git, ref)
     if not new or not SHA40.fullmatch(new):
-        move.error = f"could not look up {track} in {git}"
+        move.error = f"could not look up the {label} of {git}"
         return move
     move.new = new
     if new == old:
@@ -154,7 +157,7 @@ def pull(
     with nullcontext(sources) if sources is not None else Sources() as s:
         moves = [pull_plugin(f, s, dry_run, bump_by, today) for f in sourced]
     for m in moves:
-        where = f"({m.track})" if m.track != "HEAD" else "(default branch)"
+        where = f"({m.follows})"
         if m.error:
             out(f"FAIL  {m.id}: {m.error}")
         elif not m.moved:

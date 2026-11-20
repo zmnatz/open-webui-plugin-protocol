@@ -1,4 +1,4 @@
-protocol: "0.2"
+protocol: "0.3"
 function:
   title: LiteLLM Model Sync
   author: zmnatz

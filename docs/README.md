@@ -70,7 +70,7 @@ plugins/<id>/
 
 ```yaml
 # plugin.yaml
-protocol: "0.2"
+protocol: "0.3"
 function:
   title: My Plugin
   author: me

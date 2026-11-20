@@ -97,7 +97,10 @@ class SourceSpec:
     ref: str
     path: str = ""
     function_file: str = ""  # the function itself, taken verbatim (type "upstream")
-    track: str = ""
+    branch: str = (
+        ""  # what `owpp pull` follows: a branch, or a tag, or neither (the default branch)
+    )
+    tag: str = ""
 
 
 @dataclass
@@ -271,8 +274,11 @@ def _validate_source(spec: PluginSpec) -> None:
         raise OwppError("the repository must be an https://, ssh:// or user@host:path git URL")
     if not SHA40.fullmatch(src.ref):
         raise OwppError("the commit must be a full 40-character SHA (a branch or tag can move)")
-    if src.track and not TRACK.fullmatch(src.track):
-        raise OwppError("track must be a branch or tag name")
+    if src.branch and src.tag:
+        raise OwppError("follow a branch or a tag, not both")
+    for kind, name in (("branch", src.branch), ("tag", src.tag)):
+        if name and not TRACK.fullmatch(name):
+            raise OwppError(f"{kind} must be a branch or tag name")
     if src.path:
         _check_repo_path("the folder in the repository", src.path)
     if src.function_file:
@@ -699,7 +705,8 @@ def render_manifest(spec: PluginSpec) -> str:
             "source:",
             f"  git: {_yaml(src.git)}",
             f"  ref: {src.ref}",
-            *([f"  track: {src.track}"] if src.track else []),
+            *([f"  branch: {src.branch}"] if src.branch else []),
+            *([f"  tag: {src.tag}"] if src.tag else []),
             f"  path: {_yaml(src.path) if src.path else _py('')}",
         ]
     out.append("function:")
@@ -1044,7 +1051,13 @@ def render_readme(spec: PluginSpec) -> str:
             "",
             f"From {src.git}{f' (`{src.path}`)' if src.path else ''}, pinned to commit `{src.ref}`.",
             f"To upgrade: `owpp pull {spec.id}` moves `ref` in plugin.yaml to the latest commit of "
-            + (f"`{src.track}`" if src.track else "the default branch")
+            + (
+                f"branch `{src.branch}`"
+                if src.branch
+                else f"tag `{src.tag}`"
+                if src.tag
+                else "the default branch"
+            )
             + " and lists the files that changed.",
             "Review the upstream diff before committing it: this code runs with admin rights in Open-WebUI.",
         ]
