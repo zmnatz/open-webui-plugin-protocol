@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1 (2026-11-20)
 
 - `owpp build` bundles the plugins into a folder that `owpp deploy --from` deploys elsewhere, with no checkout or git sources ([`owpp build`](docs/commands/build.md)).
 - `owpp deploy --no-prune` (the action's `no-prune`) deploys every plugin and deletes nothing.
