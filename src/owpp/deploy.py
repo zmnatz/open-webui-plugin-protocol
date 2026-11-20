@@ -697,8 +697,8 @@ def _valves_pass(opts: Options, plan: list[PlanItem], results: list[Result]) -> 
 def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
     """A copy of the plugins folder in `work` with each git-sourced plugin moved to the latest
     commit it tracks, as `owpp pull` would, and {source label: note} for the report."""
-    from .manifest import read_manifest, read_text, text_of
-    from .pull import set_ref, track_of
+    from .manifest import read_manifest, read_text, set_key, text_of
+    from .pull import track_of
     from .sources import source_label
 
     copy = work / opts.dir.name
@@ -719,7 +719,8 @@ def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
             continue
         path = folder / "plugin.yaml"
         if sha != pinned:
-            path.write_bytes(set_ref(read_text(path), pinned, sha).encode("utf-8"))
+            text = set_key(read_text(path), "source.ref", sha, after="git")
+            path.write_bytes(text.encode("utf-8"))
         notes[label] = (
             f"latest of {where}; plugin.yaml pins nothing yet"
             if not pinned

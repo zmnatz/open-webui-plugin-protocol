@@ -234,3 +234,167 @@ def plugin_folders(directory: Path | str) -> list[Path]:
         for e in entries
         if e.is_dir(follow_symlinks=False) and (Path(e.path) / "plugin.yaml").exists()
     ]
+
+
+# ---- changing one value in plugin.yaml text --------------------------------------------
+
+_SCALAR = r"""(?P<value>"[^"\n]*"|'[^'\n]*'|[^\s#'"{\[][^#\n]*?)?"""
+_FLOW_ONE_LINE = re.compile(r"\{(?P<body>[^{}]*)\}(?P<trail>\s*(?:#.*)?)$")
+
+
+def _ending(line: str) -> str:
+    return "\r\n" if line.endswith("\r\n") else "\n" if line.endswith("\n") else ""
+
+
+def _quoted_like(old: str | None, value: str) -> str:
+    """`value` in the quotes `old` was written in, unless `value` brings its own."""
+    if old and old[0] in "\"'" and value[:1] not in ("'", '"'):
+        return f"{old[0]}{value}{old[0]}"
+    return value
+
+
+def _set_line(line: str, key: str, value: str) -> str | None:
+    """`line` (`<indent>key: <scalar> [# comment]`) with the scalar replaced, or None when it
+    is not that key. A key whose value is not a plain one-line scalar is refused."""
+    body, end = line[: len(line) - len(_ending(line))], _ending(line)
+    m = re.fullmatch(
+        rf"(?P<lead>\s*{re.escape(key)}:)(?P<gap>[ \t]*){_SCALAR}(?P<trail>\s*(?:#.*)?)", body
+    )
+    if not m:
+        if re.match(rf"\s*{re.escape(key)}:", body):
+            raise OwppError(f"`{key}:` is not a one-line value; edit plugin.yaml by hand")
+        return None
+    gap = m.group("gap") or " "
+    return f"{m.group('lead')}{gap}{_quoted_like(m.group('value'), value)}{m.group('trail')}{end}"
+
+
+def _split_flow(body: str) -> list[str]:
+    """The items of a one-line flow mapping's body, split on the commas outside quotes."""
+    items, current, quote = [], "", ""
+    for ch in body:
+        if quote:
+            quote = "" if ch == quote else quote
+        elif ch in "\"'":
+            quote = ch
+        elif ch == ",":
+            items.append(current)
+            current = ""
+            continue
+        current += ch
+    items.append(current)
+    return items
+
+
+def _set_flow(rest: str, key: str, value: str, after: str | None) -> str:
+    """`rest` (` {a: 1, b: 2} # comment`) with `key` set in the one-line mapping."""
+    ending = _ending(rest)
+    text = rest[: len(rest) - len(ending)]
+    start = text.index("{")
+    m = _FLOW_ONE_LINE.fullmatch(text, start)
+    if not m:
+        raise OwppError("a `{ ... }` mapping over several lines; edit plugin.yaml by hand")
+    body = m.group("body")
+    items = _split_flow(body)
+    for i, item in enumerate(items):
+        found = re.fullmatch(rf"(\s*{re.escape(key)}:\s*)(.*?)(\s*)", item)
+        if found:
+            items[i] = f"{found.group(1)}{_quoted_like(found.group(2), value)}{found.group(3)}"
+            body = ",".join(items)
+            break
+    else:
+        names = [(re.match(r"\s*([^:\s]*)", it).group(1)) for it in items]
+        if not body.strip():
+            body = f"{key}: {value}"
+        elif after in names:
+            at = names.index(after) + 1
+            body = ",".join([*items[:at], f" {key}: {value}", *items[at:]])
+        else:
+            lead = re.match(r"\s*", body).group()
+            body = f"{lead}{key}: {value}, {body[len(lead) :]}"
+    return f"{text[:start]}{{{body}}}{m.group('trail')}{ending}"
+
+
+def set_key(text: str, key: str, value: str, after: str | None = None) -> str:
+    """plugin.yaml `text` with one value set, and nothing else changed: comments, layout,
+    quoting and line endings are kept, so the diff is that one line.
+
+    `key` is a top-level key (`protocol`) or a key in a top-level mapping (`source.ref`), in
+    block style or a one-line `{...}` mapping. `value` is the YAML scalar as it is written;
+    a value that was quoted stays quoted. A missing key is added after the key `after` of the
+    same mapping, else first (a top-level key goes before the first one). Anything else (a
+    mapping over several lines, a value that is not one line, a missing mapping) is refused
+    with an error that says to edit plugin.yaml by hand."""
+    parts = key.split(".")
+    if len(parts) not in (1, 2) or not all(parts):
+        raise OwppError(f"cannot set `{key}`: only `key` or `mapping.key`")
+    lines = text.splitlines(keepends=True)
+    newline = next((_ending(line) for line in lines if _ending(line)), "\n")
+    top = [
+        i
+        for i, line in enumerate(lines)
+        if line.strip() and not line[0].isspace() and line[0] != "#"
+    ]
+
+    def insert(at: int, line: str) -> str:
+        if at > 0 and not _ending(lines[at - 1]):
+            lines[at - 1] += newline
+        lines.insert(at, line + (newline if at < len(lines) or text.endswith(("\n",)) else ""))
+        return "".join(lines)
+
+    if len(parts) == 1:
+        for i in top:
+            changed = _set_line(lines[i], parts[0], value)
+            if changed is not None:
+                lines[i] = changed
+                return "".join(lines)
+        after_line = (
+            next((i for i in top if re.match(rf"{re.escape(after)}:", lines[i])), None)
+            if after
+            else None
+        )
+        at = after_line + 1 if after_line is not None else (top[0] if top else len(lines))
+        return insert(at, f"{parts[0]}: {value}")
+
+    block, child = parts
+    start = next((i for i in top if re.match(rf"{re.escape(block)}:", lines[i])), None)
+    if start is None:
+        raise OwppError(f"plugin.yaml has no `{block}:` section")
+    header = lines[start]
+    rest = header[len(block) + 1 :]
+    if rest.lstrip().startswith("{"):
+        lines[start] = header[: len(block) + 1] + _set_flow(rest, child, value, after)
+        return "".join(lines)
+    if not re.fullmatch(r"[ \t]*(#.*)?", rest.rstrip("\r\n")):
+        raise OwppError(f"`{block}:` is not a mapping; edit plugin.yaml by hand")
+    end = next((i for i in top if i > start), len(lines))
+    children = [
+        i
+        for i in range(start + 1, end)
+        if lines[i].strip() and not lines[i].lstrip().startswith("#")
+    ]
+    indent = re.match(r"[ \t]+", lines[children[0]]).group() if children else "  "
+    own = [i for i in children if re.match(rf"{indent}\S", lines[i])]
+    for i in own:
+        if re.match(rf"{indent}{re.escape(child)}:", lines[i]):
+            following = next((j for j in children if j > i), None)
+            if following is not None and following not in own:  # its value is nested lines
+                raise OwppError(f"`{child}:` is not a one-line value; edit plugin.yaml by hand")
+            changed = _set_line(lines[i], child, value)
+            if changed is not None:
+                lines[i] = changed
+                return "".join(lines)
+    at = start + 1
+    if after:
+        pos = next(
+            (n for n, i in enumerate(own) if re.match(rf"{indent}{re.escape(after)}:", lines[i])),
+            None,
+        )
+        if pos is not None:
+            nxt = own[pos + 1] if pos + 1 < len(own) else None
+            # After that key's own lines (a nested value), before the next key of the mapping.
+            last = max(
+                (i for i in children if i >= own[pos] and (nxt is None or i < nxt)),
+                default=own[pos],
+            )
+            at = last + 1
+    return insert(at, f"{indent}{child}: {value}")

@@ -60,7 +60,7 @@ class TestWritingVersions:
         )
         new, old = set_block_version(text, "function", "1.1.0")
         assert old == "1.0.0"
-        assert new == text.replace('"1.0.0" # bump me', "1.1.0 # bump me")
+        assert new == text.replace('"1.0.0" # bump me', '"1.1.0" # bump me')  # quotes kept
         new, old = set_block_version(text, "tool", "2.1.0")
         assert (old, new.count("2.1.0"), new.count("1.0.0")) == ("2.0.0", 1, 1)
 
@@ -69,6 +69,12 @@ class TestWritingVersions:
             "function:\n  title: Viz\n  license: MIT\n", "function", "0.1.0"
         )
         assert old == "" and new == "function:\n  title: Viz\n  version: 0.1.0\n  license: MIT\n"
+
+    def test_a_one_line_mapping_and_crlf_are_written_in_place(self):
+        new, old = set_block_version("function: {title: Viz}\r\n", "function", "0.1.0")
+        assert old == "" and new == "function: {title: Viz, version: 0.1.0}\r\n"
+        new, old = set_block_version("function:\r\n  version: 1.0.0\r\n", "function", "1.0.1")
+        assert old == "1.0.0" and new == "function:\r\n  version: 1.0.1\r\n"
 
     def test_code_taken_verbatim_keeps_the_upstreams_version(self):
         with pytest.raises(OwppError, match="verbatim"):
@@ -112,6 +118,15 @@ class TestBump:
         assert read_manifest(plugin / "viz")["function"]["version"] == "1.1.0"
         log = (plugin / "viz" / "CHANGELOG.md").read_text()
         assert log.index("## 1.1.0 (2026-11-20)\n\n- Lookups are faster.") < log.index("## 1.0.0")
+
+    def test_a_one_line_function_mapping_is_bumped(self, tmp_path):
+        """It used to say the plugin had no `function:` section."""
+        (tmp_path / "viz").mkdir()
+        (tmp_path / "viz" / "plugin.yaml").write_text("function: {title: Viz, version: 1.0.0}\n")
+        (b,) = bump(tmp_path, "viz", "patch", changelog=False)
+        assert (b.old, b.new) == ("1.0.0", "1.0.1")
+        text = (tmp_path / "viz" / "plugin.yaml").read_text()
+        assert text == "function: {title: Viz, version: 1.0.1}\n"
 
     def test_the_tool_and_a_skill(self, plugin):
         (b,) = bump(plugin, "viz", tool=True)
