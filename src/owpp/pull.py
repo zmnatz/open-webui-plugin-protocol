@@ -201,7 +201,7 @@ def pull(
     bump_by: str = "patch",
     today: str | None = None,
 ) -> int:
-    """`owpp pull`: 0 when every plugin is up to date or was moved, 1 when one could not be."""
+    """0 when every plugin is up to date or was moved, 1 when one could not be."""
     folders = {f.name: f for f in plugin_folders(directory)}
     missing = [i for i in ids or [] if i not in folders]
     if missing:

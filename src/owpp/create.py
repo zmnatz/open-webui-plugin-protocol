@@ -696,8 +696,6 @@ def render_manifest(spec: PluginSpec) -> str:
     src = spec.source
     if src:
         out += [
-            f"# {spec.title} comes from a git repository, pinned to a commit. To upgrade: `owpp pull {spec.id}`",
-            "# moves `ref` to the latest commit of `track` (else the default branch); review, then commit.",
             "source:",
             f"  git: {_yaml(src.git)}",
             f"  ref: {src.ref}",
