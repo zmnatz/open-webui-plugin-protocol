@@ -11,6 +11,7 @@ is checked in, so none of it can drift from the repository:
 - the root CHANGELOG, SECURITY and NOTICE files, and each example plugin's README;
 - an examples overview, built from each plugin.yaml;
 - the test catalogue, built from the test docstrings (docs/testing.md, "Describe every test");
+- the libraries table in docs/libraries.md, built from the library catalogue;
 - llms.txt and llms-full.txt, for language models: the site's pages with their addresses, and
   the text of the guide in one file (https://llmstxt.org/);
 
@@ -81,7 +82,10 @@ def assemble(out: Path = OUT) -> list[str]:
         if path.suffix == ".md":
             if uri.startswith("agents/"):
                 continue  # project/agent instructions: in the repo, not on the site
-            pages[uri] = (f"docs/{uri}", path.read_text())
+            text = path.read_text()
+            if uri == "libraries.md":
+                text = text.replace(LIBRARY_MARKER, _library_table(), 1)
+            pages[uri] = (f"docs/{uri}", text)
         else:
             (out / uri).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(path, out / uri)
@@ -119,6 +123,19 @@ def assemble(out: Path = OUT) -> list[str]:
         (out / uri).write_text("".join(parts))
     _write_llms(out, pages)
     return problems
+
+
+# ---- the library catalogue ----------------------------------------------------------------
+
+LIBRARY_MARKER = "<!-- library catalogue -->"
+
+
+def _library_table() -> str:
+    """docs/libraries.md's table of what each library pulls in, what turns it on and what it
+    carries, from src/owpp/libraries.py."""
+    from owpp.libraries import table
+
+    return table()
 
 
 # ---- llms.txt ------------------------------------------------------------------------------

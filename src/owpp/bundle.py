@@ -6,7 +6,7 @@ header and the code is function.py. A plugin may also have
 
   tool:     `id`, `access: public`, and either `from: function` (the function's own bundle
             is the tool) or its own header keys with code in tool.py
-  include:  built-in libraries (see LIBS)
+  include:  built-in libraries (see libraries.py, the library catalogue)
   skills/<id>/   a skill folder: SKILL.md plus any supporting files
   static/   files served as they are, to signed-in users unless `static:` says otherwise
   templates/   files the function renders itself, embedded and never served (plugin_template_text())
@@ -39,6 +39,7 @@ import yaml
 from . import envtemplate
 from .errors import OwppError
 from .events import problem_with
+from .libraries import BY_NAME, hoist_future, json_literal, link
 from .manifest import (
     coalesce,
     folder_files,
@@ -62,12 +63,6 @@ VALID_ID = re.compile(r"[a-z_][a-z0-9_]*")
 VALID_SKILL_ID = re.compile(r"[a-z0-9_-]+")
 
 _DOCSTRING = re.compile(r'\s*"""\n?([\s\S]*?)"""')
-
-
-def json_literal(data: Any) -> str:
-    """`data` as a Python string literal holding its JSON (compact, non-ASCII kept)."""
-    inner = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    return json.dumps(inner, ensure_ascii=False)
 
 
 # ---- header -----------------------------------------------------------------
@@ -130,20 +125,6 @@ def render_header(folder: Path | str, keys: dict) -> str:
 # ---- function.py / tool.py --------------------------------------------------
 
 
-def _hoist_future(code: str) -> tuple[str, str]:
-    """`from __future__ import ...` must be the first statement after the docstring, so
-    when code is put in front of a file that has one, the line moves to the top."""
-    lines: list[str] = []
-
-    def take(m: re.Match) -> str:
-        if m.group(0) not in lines:
-            lines.append(m.group(0))
-        return ""
-
-    rest = re.sub(r"^from __future__ import [^\n]+\n", take, code, flags=re.MULTILINE)
-    return "".join(lines), rest
-
-
 def _has_code(folder: Path, name: str) -> bool:
     return (folder / f"{name}.py").exists()
 
@@ -158,7 +139,7 @@ def _bundle_code(folder: Path, name: str, keys: dict) -> str:
     shared = read_text(shared_file) if shared_file.exists() else ""
     source = shared + read_text(file)
     if shared:
-        lines, rest = _hoist_future(source)
+        lines, rest = hoist_future(source)
         source = lines + rest
 
     def include(m: re.Match) -> str:
@@ -217,14 +198,14 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
         elif tool.get("file"):
             content = plugin.read(tool["file"])
         else:
-            content = _with_includes(
-                folder,
-                tool.get("include"),
+            content = link(
                 _bundle_code(
                     folder,
                     "tool",
                     omit(tool, ["id", "from", "access", "file", "valves", "include"]),
                 ),
+                tool.get("include"),
+                folder.name,
             )
         tools.append(
             {
@@ -412,7 +393,7 @@ def _read_jobs_interval(folder: Path, manifest: dict) -> dict:
     where = f"{folder.name}/plugin.yaml: jobs"
     cfg = manifest.get("jobs")
     if cfg is None:
-        return dict(DEFAULT_EMBEDDED["jobs"])
+        return dict(BY_NAME["jobs"].default)
     if not isinstance(cfg, dict):
         raise OwppError(f"{where} must be a mapping (sync_every_minutes, adopt_markers)")
     unknown = [str(k) for k in cfg if k not in ("sync_every_minutes", "adopt_markers")]
@@ -420,9 +401,7 @@ def _read_jobs_interval(folder: Path, manifest: dict) -> dict:
         raise OwppError(
             f"{where}: unknown key {', '.join(unknown)} (known: sync_every_minutes, adopt_markers)"
         )
-    minutes = coalesce(
-        cfg.get("sync_every_minutes"), DEFAULT_EMBEDDED["jobs"]["sync_every_minutes"]
-    )
+    minutes = coalesce(cfg.get("sync_every_minutes"), BY_NAME["jobs"].default["sync_every_minutes"])
     if isinstance(minutes, str):  # ${NAME} or ${NAME:-minutes}, resolved in the container
         template = envtemplate.TEMPLATE.fullmatch(minutes)
         default = template.group(2) if template else None
@@ -634,95 +613,11 @@ class Filter:
 '''
 
 
-# ---- built-in libraries -------------------------------------------------------
-
-# (include name, end marker, file in runtime/lib). Inserted as the vendored byte-identical
-# copies right after the function's docstring header, so plugin code can call them without
-# carrying a copy. A library whose end marker is already in the code (an upstream function
-# that ships its own copy) is not inserted twice. live_reload goes first because the
-# protocol wants it above the shared asset block.
-LIBS = [
-    ("live_reload", "end live reload block", "live_reload"),
-    ("shared_assets", "end shared asset block", "shared_assets"),
-    ("core", "end plugin core library", "plugin_core"),
-    ("routes", "end plugin routes library", "plugin_routes"),
-    ("events", "end plugin events library", "plugin_events"),
-    ("jobs", "end plugin jobs library", "plugin_jobs"),
-    ("chat_data", "end plugin chat data library", "plugin_chat_data"),
-    ("static", "end plugin static library", "plugin_static"),
-    ("templates", "end plugin templates library", "plugin_templates"),
-    ("assets", "end plugin assets library", "plugin_assets"),
-    ("config", "end plugin config library", "plugin_config"),
-]
-
-# Libraries that carry data from the plugin: (placeholder in the library, what the plugin must hold,
-# or None when the data always exists).
-EMBEDDED = {
-    "static": ("__STATIC_DATA__", "a static/ folder"),
-    "templates": ("__TEMPLATES_DATA__", "a templates/ folder"),
-    "assets": ("__ASSETS_DATA__", "an assets/ folder"),
-    "config": ("__CONFIG_DATA__", "a config.yaml"),
-    "jobs": ("__JOBS_DATA__", None),
-}
 ACCESS_LEVELS = (
     "user",
     "admin",
     "public",
 )  # signed-in is the default; "public" must be spelled out
-DEFAULT_EMBEDDED = {"jobs": {"sync_every_minutes": 60}}
-
-
-def _lib_text(file: str) -> str:
-    return re.sub(r"\A(#.*\n)+\n?", "", read_text(RUNTIME_DIR / "lib" / f"{file}.py"))
-
-
-def _with_includes(
-    folder: Path, include: Any, code: str, embedded: dict[str, Any] | None = None
-) -> str:
-    """`embedded` is the data of the libraries that carry some: {"static": ..., "templates": ..., "assets": ..., "config": ...}."""
-    embedded = embedded or {}
-    want = coalesce(include, [])
-    if not isinstance(want, list):
-        raise OwppError(f"{folder.name}/plugin.yaml: include must be a list")
-    known = [name for name, _, _ in LIBS]
-    bad = [str(n) for n in want if n not in known]
-    if bad:
-        raise OwppError(
-            f"{folder.name}/plugin.yaml: unknown include {', '.join(bad)} (known: {', '.join(known)})"
-        )
-    header = re.match(r'\s*"""[\s\S]*?"""\n', code)
-    if want and not header:
-        raise OwppError(f"{folder.name}: the function needs a docstring header for include")
-    for name, (_, needs) in EMBEDDED.items():
-        if needs and name in want and embedded.get(name) is None:
-            raise OwppError(
-                f"{folder.name}/plugin.yaml: include: {name} needs {needs} "
-                "(it applies to the function bundle only)"
-            )
-    if any(n in ("jobs", "assets") for n in want):  # their mixins are PluginEvents classes
-        want = list(dict.fromkeys([*want, "events"]))
-    # routes, jobs, public and events build on core (function id, app, is-it-enabled, stored valves).
-    if any(n in ("routes", "jobs", "static", "events", "config") for n in want):
-        want = list(dict.fromkeys([*want, "core"]))
-    if "assets" in want:  # publishes into the shared asset registry; reads its own function id
-        want = list(dict.fromkeys([*want, "shared_assets", "core"]))
-    add = ""
-    for name, end, file in LIBS:
-        if name in want and end not in code:
-            text = _lib_text(file)
-            if name in EMBEDDED:
-                data = embedded.get(name)
-                if data is None:  # a tool bundle has no manifest section: the default
-                    data = DEFAULT_EMBEDDED[name]
-                text = text.replace(EMBEDDED[name][0], json_literal(data), 1)
-            add += "\n" + text
-    out = code
-    if add:
-        lines, rest = _hoist_future(code[header.end() :])
-        out = code[: header.end()] + lines + add + rest
-    if "live_reload" in want and "end shared asset block" not in out:
-        raise OwppError(f"{folder.name}/plugin.yaml: live_reload needs shared_assets too")
-    return out
 
 
 # ---- the function bundle --------------------------------------------------------
@@ -792,29 +687,25 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
     templates = _read_templates(folder)
     config = _read_config(folder)
     jobs = _read_jobs(folder, manifest)
-    include = manifest.get("include")
-    if manifest.get("jobs") is not None:
-        include = list(dict.fromkeys([*coalesce(include, []), "jobs"]))
-    if static:
-        include = list(dict.fromkeys([*coalesce(include, []), "routes", "static"]))
-    if templates is not None:
-        include = list(dict.fromkeys([*coalesce(include, []), "templates"]))
-    if assets is not None:
-        include = list(dict.fromkeys([*coalesce(include, []), "assets"]))
-    if config is not None:
-        include = list(dict.fromkeys([*coalesce(include, []), "config"]))
-    code = _with_includes(
-        folder,
-        include,
-        code,
-        {
-            "static": static,
-            "templates": templates,
-            "assets": assets,
-            "config": config,
-            "jobs": jobs,
-        },
-    )
+    held = {
+        name
+        for name, present in (
+            ("jobs:", manifest.get("jobs") is not None),
+            ("static/", bool(static)),
+            ("templates/", templates is not None),
+            ("assets/", assets is not None),
+            ("config.yaml", config is not None),
+        )
+        if present
+    }
+    data = {
+        "static": static,
+        "templates": templates,
+        "assets": assets,
+        "config": config,
+        "jobs": jobs,
+    }
+    code = link(code, manifest.get("include"), folder.name, held, data)
     if has_resources:
         code += _runtime_source(res)
     return code
