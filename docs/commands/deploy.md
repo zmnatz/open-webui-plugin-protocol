@@ -1,21 +1,24 @@
 # owpp deploy
 
 ```
-owpp deploy [--only id,id] [--dry-run [--latest]] [--force] [--force-prune]
+owpp deploy [--from FOLDER] [--only id,id] [--dry-run [--latest]] [--force]
+            [--no-prune | --force-prune]
             [--managed-by marker] [--ca-cert PEM] [--client-cert PEM] [--client-key PEM]
             [--dir FOLDER]
 ```
 
-Deploys the plugins to a running Open-WebUI: creates, updates or leaves alone one function per plugin, and prunes the functions it deployed whose plugin folder is gone. It only ever writes **functions**; tools and skills are installed by the [runtime](../runtime.md) inside Open-WebUI, driven by the function. With `--only` it deploys just those ids and **never prunes**, so deploying one plugin cannot delete another. With `--dry-run` it writes nothing and [reports](#the-report-what-changes-in-versions) what would change.
+Deploys the plugins to a running Open-WebUI: creates, updates or leaves alone one function per plugin, and prunes the functions it deployed whose plugin folder is gone. It only ever writes **functions**; tools and skills are installed by the [runtime](../runtime.md) inside Open-WebUI, driven by the function. With `--only` it deploys just those ids and **never prunes**, so deploying one plugin cannot delete another. With `--no-prune` it deploys every plugin and deletes nothing. With `--dry-run` it writes nothing and [reports](#the-report-what-changes-in-versions) what would change. With `--from` it deploys a [build](#deploying-a-build) made elsewhere instead of the plugins folder.
 
 ## Options
 
 | Option | Meaning |
 | --- | --- |
+| `--from FOLDER` | Deploy the build in this folder ([`owpp build`](build.md)) instead of bundling the plugins folder: no checkout, `git` or source repositories needed. See [deploying a build](#deploying-a-build). |
 | `--only id,id` | Deploy just these ids; no pruning. |
 | `--dry-run` | List what would change, with versions; write nothing. |
 | `--latest` | With `--dry-run`: report against the latest commit each git-sourced plugin follows, as [`owpp pull`](pull.md) would move it, without changing `plugin.yaml`. Refused without `--dry-run`. |
 | `--force` | Deploy even where the instance runs a newer version than the repository: see [deploying an older version](#deploying-an-older-version). |
+| `--no-prune` | Create and update, but delete nothing: the report lists the functions a full deploy would delete, as `not deleted (--no-prune)`. |
 | `--force-prune` | Allow deleting more than half of the managed functions at once. |
 | `--managed-by marker` | The [ownership marker](#the-ownership-marker). Default [`$OWPP_MANAGED_BY`](../environment-variables.md#owpp_managed_by), else `open-webui-plugin-protocol`. |
 | `--ca-cert PEM` | A PEM of CA certificates to trust besides the system's (a private CA, or a self-signed Open-WebUI). Default [`$OPEN_WEBUI_CA_CERT`](../environment-variables.md#open_webui_ca_cert). |
@@ -101,6 +104,10 @@ Warning: 1 function(s) would go back a version: `viz` (function 1.2.0 -> 1.1.0).
 ```
 
 and a deploy refuses, writing nothing, unless it is given **`--force`** (action input `force: "true"`), for a deliberate rollback. Versions are compared as numbers (`1.10.0` is newer than `1.9.0`); a version that is not dotted numbers is never counted as older. [Versions](version.md) says which versions a plugin has.
+
+## Deploying a build
+
+`owpp deploy --from dist` deploys what [`owpp build`](build.md) wrote, exactly: it bundles nothing and fetches nothing, so the machine that deploys needs only owpp and the instance. Everything else is the same deploy: signing in, the report, the refusals, valves, `global`, and the iframe warning, from the `requires:` the build recorded. A partial build never prunes, a `--latest` build deploys only as a dry run, and a build from another owpp version is refused: [what a build holds](build.md). `--from` with `--latest` is refused, because a build has no sources to look up.
 
 ## Examples
 

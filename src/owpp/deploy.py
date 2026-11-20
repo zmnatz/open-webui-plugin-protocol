@@ -32,10 +32,11 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
+from .build import Build, read_build
 from .bundle import VALID_ID, FunctionFile, load_function_files
 from .errors import OwppError
 from .manifest import plugin_folders, read_manifest
-from .sources import Sources, is_plugin_source
+from .sources import Sources
 from .versioning import (
     is_older,
     own_code,
@@ -156,6 +157,10 @@ class Options:
     latest: bool = False
     # Deploy even where the live version is newer than the repository's (a downgrade).
     force: bool = False
+    # Deploy the build in this folder (`owpp build`) instead of bundling the plugins folder.
+    from_dir: Path | None = None
+    # Create and update, but delete nothing: the functions a full deploy would prune are listed.
+    no_prune: bool = False
     fetch: Fetch = field(default=urllib_fetch, repr=False)
     # What the deploy reads plugin files from git through, and looks up the latest commits with.
     sources: Sources = field(default_factory=Sources, repr=False)
@@ -187,6 +192,8 @@ def options_from_env(
     managed_by: str | None = None,
     latest: bool = False,
     force: bool = False,
+    from_dir: str | os.PathLike | None = None,
+    no_prune: bool = False,
     ca_cert: str | None = None,
     client_cert: str | None = None,
     client_key: str | None = None,
@@ -208,6 +215,8 @@ def options_from_env(
         managed_by=managed_by or env.get("OWPP_MANAGED_BY") or MANAGED_BY,
         latest=latest,
         force=force,
+        from_dir=Path(from_dir).resolve() if from_dir else None,
+        no_prune=no_prune,
         ca_cert=ca_cert or env.get("OPEN_WEBUI_CA_CERT", ""),
         client_cert=client_cert or env.get("OPEN_WEBUI_CLIENT_CERT", ""),
         client_key=client_key or env.get("OPEN_WEBUI_CLIENT_KEY", ""),
@@ -536,9 +545,8 @@ def _ensure_not_global(opts: Options, fn_id: str, state: Any) -> list[str]:
     return []
 
 
-def _deploy_functions(
-    opts: Options, files: list[FunctionFile], latest: dict[str, str] | None = None
-) -> list[Result]:
+def _deploy_functions(opts: Options, plugins: Build) -> list[Result]:
+    files, latest = plugins.files, plugins.latest
     # The list call is also the credential check: a bad key is a 401/403 here, before
     # anything is written. (A missing single function is a 401 too, so it cannot be used
     # to tell "absent" from "unauthorised".)
@@ -555,9 +563,9 @@ def _deploy_functions(
     # Refuse a mass delete before writing anything: it points at renamed folders or an
     # emptied one rather than at functions that were really retired.
     managed_by = opts.managed_by
-    orphans = (
-        [] if opts.only else plan_prune(files, live, managed_by)
-    )  # a partial deploy never prunes
+    # Only a deploy of every plugin prunes: --only, or a partial build, never does.
+    pruned = plan_prune(files, live, managed_by) if plugins.complete and not opts.only else []
+    orphans = [] if opts.no_prune else pruned
     managed = sum(1 for f in live if (f.get("meta") or {}).get("managed_by") == managed_by)
     if len(orphans) > 1 and len(orphans) > managed / 2 and not opts.force_prune:
         raise OwppError(
@@ -567,7 +575,7 @@ def _deploy_functions(
         )
 
     plan = plan_deploy(files, _with_content(opts, files, live), managed_by)
-    changes = {p.file.id: describe_changes(p.file, p.existing, latest or {}) for p in plan}
+    changes = {p.file.id: describe_changes(p.file, p.existing, latest) for p in plan}
     # Going back a version is refused before anything is written, unless forced.
     older = {i: c.downgrades for i, c in changes.items() if c.downgrades}
     if older and not opts.dry_run and not opts.force:
@@ -659,6 +667,9 @@ def _deploy_functions(
         if _call(opts, "DELETE", f"{API}/id/{o['id']}/delete") is not True:
             raise OwppError(f"deleting {o['id']} was not confirmed")
         results.append(Result(o["id"], "(no file)", "deleted"))
+    if opts.no_prune:
+        for o in pruned:
+            results.append(Result(o["id"], "(no file)", "not deleted (--no-prune)"))
     return results
 
 
@@ -692,16 +703,16 @@ def _valves_pass(opts: Options, plan: list[PlanItem], results: list[Result]) -> 
             row.action = note if row.action == "unchanged" else f"{row.action}, {note}"
 
 
-def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
+def latest_copy(directory: Path, sources: Sources, work: Path) -> tuple[Path, dict[str, str]]:
     """A copy of the plugins folder in `work` with each git-sourced plugin moved to the latest
     commit it tracks, as `owpp pull` would, and {source label: note} for the report."""
-    from .manifest import read_manifest, read_text, set_key, text_of
+    from .manifest import read_text, set_key, text_of
     from .pull import followed
     from .sources import source_label
 
-    copy = work / opts.dir.name
+    copy = work / directory.name
     shutil.copytree(
-        opts.dir, copy, symlinks=True, ignore=shutil.ignore_patterns(".git", "node_modules")
+        directory, copy, symlinks=True, ignore=shutil.ignore_patterns(".git", "node_modules")
     )
     notes: dict[str, str] = {}
     for folder in plugin_folders(copy):
@@ -711,7 +722,7 @@ def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
         ref, where = followed(folder)
         where = "the default branch" if where == "default branch" else where
         label, pinned = source_label(src), text_of(src.get("ref"))
-        sha = opts.sources.latest(text_of(src.get("git")), ref)
+        sha = sources.latest(text_of(src.get("git")), ref)
         if not sha:
             notes[label] = f"could not look up {where}: the pinned commit"
             continue
@@ -729,61 +740,77 @@ def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
     return copy, notes
 
 
-def deploy(opts: Options) -> list[Result]:
+def plugins_for(opts: Options) -> Build:
+    """What the deploy writes: the build in `--from`, or the plugins folder bundled now (at the
+    latest commits with `--latest`), narrowed to `--only`."""
     if opts.latest and not opts.dry_run:
         raise OwppError(
             "--latest only goes with --dry-run: to deploy the latest commits, run `owpp pull`, "
             "review and commit the change, then deploy"
         )
-    if not opts.latest:
-        return _deploy(opts)
-    with tempfile.TemporaryDirectory(prefix="owpp-latest-") as work:
-        copy, notes = _latest_copy(opts, Path(work))
-        return _deploy(replace(opts, dir=copy), notes)
-
-
-def _deploy(opts: Options, latest: dict[str, str] | None = None) -> list[Result]:
-    files = load_function_files(opts.dir, opts.sources)
+    if opts.from_dir is not None:
+        if opts.latest:
+            raise OwppError(
+                "--latest needs the sources, which a build does not have: build it with "
+                "`owpp build --latest`, then deploy that with --dry-run"
+            )
+        plugins = read_build(opts.from_dir)
+        if plugins.latest and not opts.dry_run:
+            raise OwppError(
+                f"{opts.from_dir} was built at the latest commits (`owpp build --latest`), so it "
+                "only deploys as a dry run: run `owpp pull`, review and commit the change, then build"
+            )
+        where = f"the build in {opts.from_dir}"
+    else:
+        plugins = build_plugins(opts.dir, opts.sources, latest=opts.latest)
+        where = str(opts.dir)
     if opts.only:
-        missing = [i for i in opts.only if not any(f.id == i for f in files)]
+        missing = [i for i in opts.only if not any(f.id == i for f in plugins.files)]
         if missing:
             raise OwppError(
                 f"--only: no such plugin function {', '.join(missing)} "
-                f"(have {', '.join(f.id for f in files)})"
+                f"(have {', '.join(f.id for f in plugins.files)})"
             )
-        files = [f for f in files if f.id in opts.only]
-    if not files:
+        plugins = replace(plugins, files=[f for f in plugins.files if f.id in opts.only])
+    if not plugins.files:
         raise OwppError(
             "no functions (plugin folders with a function in plugin.yaml, or *.py files) "
-            f"in {opts.dir}"
+            f"in {where}"
         )
-    return _deploy_functions(opts, files, latest)
+    return plugins
 
 
-def _needing_iframe_sandbox(
-    directory: Path, only: list[str] | None = None, sources: Sources | None = None
-) -> list[str]:
-    """Ids of the local plugin folders that declare the iframe requirement in plugin.yaml."""
-    ids = []
-    sources = sources if sources is not None else Sources()
-    for folder in plugin_folders(directory):
-        if only and folder.name not in only:
-            continue
-        manifest = read_manifest(folder)
-        if is_plugin_source(manifest):  # its requirements are the upstream plugin's
-            manifest = sources.resolve(folder).manifest
-        requires = manifest.get("requires")
-        if isinstance(requires, dict) and requires.get(IFRAME_REQUIREMENT) is True:
-            ids.append(folder.name)
-    return ids
+def build_plugins(
+    directory: Path, sources: Sources, ids: list[str] | None = None, latest: bool = False
+) -> Build:
+    """Every plugin in `directory` bundled (or only `ids`, a partial build), at the pinned
+    commits, or with `latest` at the latest commit each git-sourced plugin follows."""
+    if not latest:
+        files, notes = load_function_files(directory, sources), {}
+    else:
+        with tempfile.TemporaryDirectory(prefix="owpp-latest-") as work:
+            copy, notes = latest_copy(directory, sources, Path(work))
+            files = load_function_files(copy, sources)
+    if ids:
+        missing = [i for i in ids if not any(f.id == i for f in files)]
+        if missing:
+            raise OwppError(f"no plugin {', '.join(missing)} in {directory}")
+        files = [f for f in files if f.id in ids]
+    return Build(files, complete=not ids, latest=notes)
 
 
-def iframe_sandbox_warning(opts: Options) -> str | None:
+def deploy(opts: Options, plugins: Build | None = None) -> list[Result]:
+    """Deploy `plugins` (by default: plugins_for(opts)) and report what changed."""
+    return _deploy_functions(opts, plugins if plugins is not None else plugins_for(opts))
+
+
+def iframe_sandbox_warning(opts: Options, plugins: Build | None = None) -> str | None:
     """Warn when a plugin needs Open-WebUI's iframe Sandbox Allow Same Origin but the instance's
     default interface settings do not turn it on. Never changes the instance or stops a deploy:
     a user's own setting can still enable it, and an unreadable admin config is not a reason to
     refuse the rest of the deploy."""
-    ids = _needing_iframe_sandbox(opts.dir, opts.only, opts.sources)
+    plugins = plugins if plugins is not None else plugins_for(opts)
+    ids = [f.id for f in plugins.files if f.requires.get(IFRAME_REQUIREMENT) is True]
     if not ids:
         return None
     try:
@@ -849,8 +876,10 @@ def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
         with opts.sources:  # its upstream copies are deleted once the deploy is done
             wait_for_health(opts)
             how = sign_in(opts)
-            warning = iframe_sandbox_warning(opts)  # before writing anything, never a refusal
-            report = render_report(deploy(opts), opts.dry_run, opts.latest, [warning])
+            plugins = plugins_for(opts)
+            warning = iframe_sandbox_warning(opts, plugins)  # before writing, never a refusal
+            latest = opts.latest or bool(plugins.latest)
+            report = render_report(deploy(opts, plugins), opts.dry_run, latest, [warning])
     except OwppError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

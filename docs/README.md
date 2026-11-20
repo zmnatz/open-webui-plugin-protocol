@@ -27,31 +27,19 @@ It is not worth it when:
 - you want to keep editing in the admin UI: the repository is the source of truth, and the next deploy replaces a managed function's code with the repository's;
 - you cannot deploy as an admin of the instance: the deploy refuses any other account ([signing in](commands/deploy.md#signing-in)).
 
-## Reading order
+## Where to start
 
-| If you want to... | Read |
+| You want to | Start with |
 | --- | --- |
-| Decide whether it is worth it | [why this](#why-this) |
-| Install it | [install](install.md) |
-| Go from nothing to a deployed plugin | [getting started](getting-started.md) |
-| Get a short answer to a common question | [FAQ](faq.md) |
-| Have an AI agent do it | [with an AI agent](ai-agents.md) |
-| Start a plugin with the `owpp create` wizard | [creating a plugin](creating.md) |
-| Write a plugin | [authoring guide](authoring.md), then [plugin format](plugin-format.md) |
-| Know exactly what ends up in the deployed file | [bundling](bundling.md) |
-| Understand install/remove, valves and sync | [runtime](runtime.md) |
-| Use routes, jobs, chat data, static files and templates | [libraries](libraries.md) |
-| Unit-test a plugin against a mock Open-WebUI | [testing](testing.md) |
-| Look up a command and its options, set up CI | [tooling](tooling.md), which links each command's page |
-| Set the instance, the credentials or the plugins folder | [environment variables](environment-variables.md) |
-| Use it in your repository, or move existing functions over | [adopting](adopting.md) |
-| Move to a new owpp version | [upgrading](upgrading.md) |
+| Deploy a first plugin | [getting started](getting-started.md), or [with an AI agent](ai-agents.md) |
+| Write a plugin | [creating a plugin](creating.md), then [authoring](authoring.md) and [plugin format](plugin-format.md) |
+| Bring a repository or existing functions over | [adopting](adopting.md) |
+| Deploy, or set up CI | [tooling](tooling.md) and its command pages |
 | Fix an error owpp printed | [troubleshooting](troubleshooting.md) |
-| Review a change, or repeat the tests by hand | [reviewing](reviewing.md), [test catalogue](reference/test-catalogue.md) |
-| See every change so far | [changelog](../CHANGELOG.md) |
-| Make a change to this repository | [contributing](contributing.md) |
-| Know what you are trusting, and how to report a problem | [security](../SECURITY.md) |
-| Know the terms you may use it under | [license](../LICENSE) |
+| Move to a new owpp version | [upgrading](upgrading.md) |
+| Review or contribute a change | [reviewing](reviewing.md), [contributing](contributing.md) |
+
+Everything else (the libraries, the runtime, testing, the environment variables, the examples and the project pages) is in the menu, and short answers are in the [FAQ](faq.md).
 
 ## At a glance
 
