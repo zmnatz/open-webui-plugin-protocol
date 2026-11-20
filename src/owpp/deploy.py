@@ -13,6 +13,12 @@ function whose folder is gone is removed, and a function without the mark (made 
 the UI) is never touched. Deleting more than half of the marked functions at once is
 refused unless --force-prune is given, so a renamed folder or an emptied one cannot wipe
 them all.
+
+Two inputs, kept apart: an Instance (where Open-WebUI is and how to sign in to it: the URL,
+the credentials, TLS and the HTTP adapter) and the Choices (what to deploy and how: the
+plugins folder or a build, --only, --dry-run, the prune flags, the ownership marker).
+plugins_for(choices) needs no instance; deploy(instance, choices) and
+iframe_sandbox_warning(instance, plugins) use the same signed-in Instance.
 """
 
 from __future__ import annotations
@@ -143,94 +149,106 @@ def tls_context(
 
 
 @dataclass
-class Options:
+class Instance:
+    """How to reach and sign in to an Open-WebUI: its URL, the credentials, TLS, and the HTTP
+    adapter every call goes through. sign_in() replaces the credentials with a session."""
+
     base_url: str
     # An API key, or the session token signing in gave; empty: sign in first. Never shown.
-    api_key: str = field(repr=False)
-    dir: Path
-    dry_run: bool = False
-    force_prune: bool = False
-    only: list[str] | None = None
-    managed_by: str = MANAGED_BY
-    # With dry_run: report against the latest commit each git-sourced plugin follows, not the
-    # pinned one (as if `owpp pull` had run), without changing plugin.yaml.
-    latest: bool = False
-    # Deploy even where the live version is newer than the repository's (a downgrade).
-    force: bool = False
-    # Deploy the build in this folder (`owpp build`) instead of bundling the plugins folder.
-    from_dir: Path | None = None
-    # Create and update, but delete nothing: the functions a full deploy would prune are listed.
-    no_prune: bool = False
-    fetch: Fetch = field(default=urllib_fetch, repr=False)
-    # What the deploy reads plugin files from git through, and looks up the latest commits with.
-    sources: Sources = field(default_factory=Sources, repr=False)
-    # TLS (tls_context): a CA to trust, a client certificate (and key) to present.
-    ca_cert: str = field(default="", repr=False)
-    client_cert: str = field(default="", repr=False)
-    client_key: str = field(default="", repr=False)
-
-    def __post_init__(self) -> None:
-        context = tls_context(self.ca_cert, self.client_cert, self.client_key)
-        if context is not None and self.fetch is urllib_fetch:
-            self.fetch = functools.partial(urllib_fetch, context=context)
-
+    api_key: str = field(default="", repr=False)
     # Without an API key, the deploy signs in (sign_in): with a user name (an email, or an LDAP
     # user) and a password, with an OIDC token for an OAuth provider, or with nothing at all.
     username: str = ""
     password: str = field(default="", repr=False)
     oidc_token: str = field(default="", repr=False)
     oauth_provider: str = "oidc"
+    # TLS (tls_context): a CA to trust, a client certificate (and key) to present.
+    ca_cert: str = field(default="", repr=False)
+    client_cert: str = field(default="", repr=False)
+    client_key: str = field(default="", repr=False)
+    fetch: Fetch = field(default=urllib_fetch, repr=False)
+
+    def __post_init__(self) -> None:
+        context = tls_context(self.ca_cert, self.client_cert, self.client_key)
+        if context is not None and self.fetch is urllib_fetch:
+            self.fetch = functools.partial(urllib_fetch, context=context)
 
 
-def options_from_env(
+@dataclass
+class Choices:
+    """What to deploy, and how: the plugins (a folder, or a build), and the deploy's flags."""
+
+    dir: Path = field(default_factory=lambda: Path("plugins"))
+    # Deploy the build in this folder (`owpp build`) instead of bundling the plugins folder.
+    from_dir: Path | None = None
+    only: list[str] | None = None
+    dry_run: bool = False
+    # With dry_run: report against the latest commit each git-sourced plugin follows, not the
+    # pinned one (as if `owpp pull` had run), without changing plugin.yaml.
+    latest: bool = False
+    # Deploy even where the live version is newer than the repository's (a downgrade).
+    force: bool = False
+    force_prune: bool = False
+    # Create and update, but delete nothing: the functions a full deploy would prune are listed.
+    no_prune: bool = False
+    managed_by: str = MANAGED_BY
+    # What the deploy reads plugin files from git through, and looks up the latest commits with.
+    sources: Sources = field(default_factory=Sources, repr=False)
+
+
+def instance_from_env(
     env: Mapping[str, str] | None = None,
     *,
-    dir: str | os.PathLike | None = None,
-    only: str | None = None,
-    dry_run: bool = False,
-    force_prune: bool = False,
-    managed_by: str | None = None,
-    latest: bool = False,
-    force: bool = False,
-    from_dir: str | os.PathLike | None = None,
-    no_prune: bool = False,
     ca_cert: str | None = None,
     client_cert: str | None = None,
     client_key: str | None = None,
-    sources: Sources | None = None,
-) -> Options:
-    """Flags win over the environment, which wins over the defaults."""
+) -> Instance:
+    """The instance and the credentials, from the environment (OPEN_WEBUI_*); a certificate
+    flag wins over its variable."""
     env = os.environ if env is None else env
-    return Options(
+    return Instance(
         base_url=env.get("OPEN_WEBUI_URL", "").rstrip("/"),
         api_key=env.get("OPEN_WEBUI_API_KEY", ""),
         username=env.get("OPEN_WEBUI_USERNAME", ""),
         password=env.get("OPEN_WEBUI_PASSWORD", ""),
         oidc_token=env.get("OPEN_WEBUI_OIDC_TOKEN", ""),
         oauth_provider=env.get("OPEN_WEBUI_OAUTH_PROVIDER", "") or "oidc",
-        dir=Path(dir or env.get("OWPP_PLUGINS_DIR") or "plugins").resolve(),
-        dry_run=dry_run,
-        force_prune=force_prune,
-        only=[i for i in only.split(",") if i] if only else None,
-        managed_by=managed_by or env.get("OWPP_MANAGED_BY") or MANAGED_BY,
-        latest=latest,
-        force=force,
-        from_dir=Path(from_dir).resolve() if from_dir else None,
-        no_prune=no_prune,
         ca_cert=ca_cert or env.get("OPEN_WEBUI_CA_CERT", ""),
         client_cert=client_cert or env.get("OPEN_WEBUI_CLIENT_CERT", ""),
         client_key=client_key or env.get("OPEN_WEBUI_CLIENT_KEY", ""),
+    )
+
+
+def choices_from_env(
+    env: Mapping[str, str] | None = None,
+    *,
+    dir: str | os.PathLike | None = None,
+    only: str | None = None,
+    sources: Sources | None = None,
+    from_dir: str | os.PathLike | None = None,
+    managed_by: str | None = None,
+    **flags: bool,
+) -> Choices:
+    """The deploy's choices: flags win over the environment (OWPP_*), which wins over the
+    defaults. `flags` are Choices' booleans (dry_run, latest, force, force_prune, no_prune)."""
+    env = os.environ if env is None else env
+    return Choices(
+        dir=Path(dir or env.get("OWPP_PLUGINS_DIR") or "plugins").resolve(),
+        from_dir=Path(from_dir).resolve() if from_dir else None,
+        only=[i for i in only.split(",") if i] if only else None,
+        managed_by=managed_by or env.get("OWPP_MANAGED_BY") or MANAGED_BY,
+        **flags,
         **({"sources": sources} if sources is not None else {}),
     )
 
 
-def _call(opts: Options, method: str, path: str, body: dict | None = None) -> Any:
-    headers = {"Authorization": f"Bearer {opts.api_key}", "Accept": "application/json"}
+def _call(instance: Instance, method: str, path: str, body: dict | None = None) -> Any:
+    headers = {"Authorization": f"Bearer {instance.api_key}", "Accept": "application/json"}
     data = None
     if body is not None:
         headers["Content-Type"] = "application/json"
         data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    res = opts.fetch(method, f"{opts.base_url}{path}", headers, data)
+    res = instance.fetch(method, f"{instance.base_url}{path}", headers, data)
     if not res.ok:
         raise OwppError(f"{method} {path} -> HTTP {res.status}: {res.text[:300]}")
     try:
@@ -251,11 +269,11 @@ IFRAME_SETTING = "iframeSandboxAllowSameOrigin"
 IFRAME_FIX = "DEFAULT_INTERFACE_SETTINGS='{\"iframeSandboxAllowSameOrigin\": true}'"
 
 
-def _post_signin(opts: Options, path: str, body: dict) -> tuple[dict | None, str]:
+def _post_signin(instance: Instance, path: str, body: dict) -> tuple[dict | None, str]:
     """POST to one of Open-WebUI's sign-in endpoints: (its result, "") or (None, why not)."""
-    res = opts.fetch(
+    res = instance.fetch(
         "POST",
-        f"{opts.base_url}{AUTHS}{path}",
+        f"{instance.base_url}{AUTHS}{path}",
         {"Content-Type": "application/json", "Accept": "application/json"},
         json.dumps(body).encode("utf-8"),
     )
@@ -269,7 +287,7 @@ def _post_signin(opts: Options, path: str, body: dict) -> tuple[dict | None, str
     return None, f"HTTP {res.status}{f': {detail}' if detail else ''}"
 
 
-def sign_in(opts: Options) -> str:
+def sign_in(instance: Instance) -> str:
     """The credential the deploy uses, and how it was obtained. An API key is used as it is.
     Otherwise it signs in, as the person opening Open-WebUI would, and uses the session token:
 
@@ -280,33 +298,33 @@ def sign_in(opts: Options) -> str:
     - nothing: an empty sign-in, which Open-WebUI answers when sign-in is switched off
       (WEBUI_AUTH=False) or a proxy in front of it adds the trusted email header.
 
-    The account must be an admin. Sets opts.api_key; raises OwppError when it cannot sign in."""
-    if opts.api_key:
+    The account must be an admin. Sets instance.api_key; raises OwppError when it cannot sign in."""
+    if instance.api_key:
         return "an API key"
-    if bool(opts.username) != bool(opts.password):
+    if bool(instance.username) != bool(instance.password):
         raise OwppError("OPEN_WEBUI_USERNAME and OPEN_WEBUI_PASSWORD go together: set both")
-    if opts.username:
-        how = f"user {opts.username}"
+    if instance.username:
+        how = f"user {instance.username}"
         result, why = _post_signin(
-            opts, "/signin", {"email": opts.username, "password": opts.password}
+            instance, "/signin", {"email": instance.username, "password": instance.password}
         )
         if result is None:
             result, ldap_why = _post_signin(
-                opts, "/ldap", {"user": opts.username, "password": opts.password}
+                instance, "/ldap", {"user": instance.username, "password": instance.password}
             )
             if result is None:
                 raise OwppError(
-                    f"could not sign in as {opts.username}: with a password ({why}), "
+                    f"could not sign in as {instance.username}: with a password ({why}), "
                     f"with LDAP ({ldap_why})"
                 )
-            how = f"LDAP user {opts.username}"
-    elif opts.oidc_token:
-        provider = opts.oauth_provider.strip().lower()
+            how = f"LDAP user {instance.username}"
+    elif instance.oidc_token:
+        provider = instance.oauth_provider.strip().lower()
         if not VALID_ID.fullmatch(provider.replace("-", "_")):
             raise OwppError(f"OPEN_WEBUI_OAUTH_PROVIDER {provider!r} is not a provider name")
         how = f"an OIDC token ({provider})"
         result, why = _post_signin(
-            opts, f"/oauth/{provider}/token/exchange", {"token": opts.oidc_token}
+            instance, f"/oauth/{provider}/token/exchange", {"token": instance.oidc_token}
         )
         if result is None:
             raise OwppError(
@@ -316,7 +334,7 @@ def sign_in(opts: Options) -> str:
             )
     else:
         how = "an open sign-in"
-        result, why = _post_signin(opts, "/signin", {"email": "", "password": ""})
+        result, why = _post_signin(instance, "/signin", {"email": "", "password": ""})
         if result is None:
             raise OwppError(
                 f"no credentials, and Open-WebUI did not sign in without them ({why}). Set "
@@ -327,7 +345,7 @@ def sign_in(opts: Options) -> str:
     if role is not None and role != "admin":
         who = result.get("email") or result.get("name") or "that account"
         raise OwppError(f"signed in with {how} as {who}, who is not an admin (role {role})")
-    opts.api_key = str(result["token"])
+    instance.api_key = str(result["token"])
     return how
 
 
@@ -345,21 +363,21 @@ def _tls_hint(error: ssl.SSLError) -> str:
     return text
 
 
-def wait_for_health(opts: Options, attempts: int = 6, delay: float = 30.0) -> None:
+def wait_for_health(instance: Instance, attempts: int = 6, delay: float = 30.0) -> None:
     """Open-WebUI may still be starting (the stack redeploys on the same push). Six tries
     30 s apart (~3 min); rerun the workflow if a redeploy takes longer."""
     for i in range(attempts):
         try:
-            if opts.fetch("GET", f"{opts.base_url}/health", None, None).ok:
+            if instance.fetch("GET", f"{instance.base_url}/health", None, None).ok:
                 return
         except OSError as e:
             reason = getattr(e, "reason", e)
             if isinstance(reason, ssl.SSLError):  # waiting will not fix a certificate
-                raise OwppError(f"{opts.base_url}: TLS failed ({_tls_hint(reason)})") from e
+                raise OwppError(f"{instance.base_url}: TLS failed ({_tls_hint(reason)})") from e
             # otherwise: not up yet
         if i < attempts - 1:
             time.sleep(delay)
-    raise OwppError(f"{opts.base_url}/health did not answer in time")
+    raise OwppError(f"{instance.base_url}/health did not answer in time")
 
 
 # ---- planning -----------------------------------------------------------------
@@ -511,46 +529,46 @@ def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, s
     return changes
 
 
-def _with_content(opts: Options, files: list[FunctionFile], live: list[dict]) -> list[dict]:
+def _with_content(instance: Instance, files: list[FunctionFile], live: list[dict]) -> list[dict]:
     """GET /functions/list returns no `content`, so the code comes from
     GET /functions/id/<id>, fetched only for functions that have a folder."""
     wanted = {f.id for f in files}
     out = []
     for fn in live:
         if fn["id"] in wanted:
-            full = _call(opts, "GET", f"{API}/id/{fn['id']}")
+            full = _call(instance, "GET", f"{API}/id/{fn['id']}")
             fn = {**fn, "content": _field(full, "content")}
         out.append(fn)
     return out
 
 
-def _ensure_global(opts: Options, fn_id: str, state: Any) -> list[str]:
+def _ensure_global(instance: Instance, fn_id: str, state: Any) -> list[str]:
     """Brings a function declared global to active + global. A toggle is only sent when
     the flag is off, so a run that is already right makes no call."""
     notes = []
     if not _field(state, "is_active"):
-        _call(opts, "POST", f"{API}/id/{fn_id}/toggle")
+        _call(instance, "POST", f"{API}/id/{fn_id}/toggle")
         notes.append("activated")
     if not _field(state, "is_global"):
-        _call(opts, "POST", f"{API}/id/{fn_id}/toggle/global")
+        _call(instance, "POST", f"{API}/id/{fn_id}/toggle/global")
         notes.append("made global")
     return notes
 
 
-def _ensure_not_global(opts: Options, fn_id: str, state: Any) -> list[str]:
+def _ensure_not_global(instance: Instance, fn_id: str, state: Any) -> list[str]:
     """Takes a function declared `global: false` (a toggle) out of global, when it is in."""
     if _field(state, "is_global"):
-        _call(opts, "POST", f"{API}/id/{fn_id}/toggle/global")
+        _call(instance, "POST", f"{API}/id/{fn_id}/toggle/global")
         return ["made not global"]
     return []
 
 
-def _deploy_functions(opts: Options, plugins: Build) -> list[Result]:
+def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> list[Result]:
     files, latest = plugins.files, plugins.latest
     # The list call is also the credential check: a bad key is a 401/403 here, before
     # anything is written. (A missing single function is a 401 too, so it cannot be used
     # to tell "absent" from "unauthorised".)
-    live = _call(opts, "GET", f"{API}/list")
+    live = _call(instance, "GET", f"{API}/list")
     if not isinstance(live, list):
         raise OwppError("GET /functions/list did not return a list")
 
@@ -562,23 +580,23 @@ def _deploy_functions(opts: Options, plugins: Build) -> list[Result]:
 
     # Refuse a mass delete before writing anything: it points at renamed folders or an
     # emptied one rather than at functions that were really retired.
-    managed_by = opts.managed_by
+    managed_by = choices.managed_by
     # Only a deploy of every plugin prunes: --only, or a partial build, never does.
-    pruned = plan_prune(files, live, managed_by) if plugins.complete and not opts.only else []
-    orphans = [] if opts.no_prune else pruned
+    pruned = plan_prune(files, live, managed_by) if plugins.complete and not choices.only else []
+    orphans = [] if choices.no_prune else pruned
     managed = sum(1 for f in live if (f.get("meta") or {}).get("managed_by") == managed_by)
-    if len(orphans) > 1 and len(orphans) > managed / 2 and not opts.force_prune:
+    if len(orphans) > 1 and len(orphans) > managed / 2 and not choices.force_prune:
         raise OwppError(
             f"refusing to delete {len(orphans)} of {managed} git-controlled functions "
             f"({', '.join(o['id'] for o in orphans)}); check the folder names in the plugins "
             "folder (the id is the folder name), or re-run with --force-prune"
         )
 
-    plan = plan_deploy(files, _with_content(opts, files, live), managed_by)
+    plan = plan_deploy(files, _with_content(instance, files, live), managed_by)
     changes = {p.file.id: describe_changes(p.file, p.existing, latest) for p in plan}
     # Going back a version is refused before anything is written, unless forced.
     older = {i: c.downgrades for i, c in changes.items() if c.downgrades}
-    if older and not opts.dry_run and not opts.force:
+    if older and not choices.dry_run and not choices.force:
         raise OwppError(
             "refusing to deploy older versions over newer ones on the instance: "
             + "; ".join(f"{i} ({', '.join(d)})" for i, d in older.items())
@@ -589,7 +607,7 @@ def _deploy_functions(opts: Options, plugins: Build) -> list[Result]:
         f = p.file
         details, downgrades = changes[f.id].details, changes[f.id].downgrades
         version = version_of(f.content)
-        if p.action == "unchanged" or opts.dry_run:
+        if p.action == "unchanged" or choices.dry_run:
             pending = []
             if f.want_global and p.existing:
                 if not p.existing.get("is_active"):
@@ -599,14 +617,14 @@ def _deploy_functions(opts: Options, plugins: Build) -> list[Result]:
             if f.not_global and p.existing and p.existing.get("is_global"):
                 pending.append("make not global")
             action = p.action
-            if opts.dry_run:
+            if choices.dry_run:
                 steps = [*([] if p.action == "unchanged" else [p.action]), *pending]
                 action = f"would {', '.join(steps)}" if steps else "unchanged"
             elif pending:
                 notes = (
-                    _ensure_global(opts, f.id, p.existing)
+                    _ensure_global(instance, f.id, p.existing)
                     if f.want_global
-                    else _ensure_not_global(opts, f.id, p.existing)
+                    else _ensure_not_global(instance, f.id, p.existing)
                 )
                 action = f"unchanged, {', '.join(notes)}"
             results.append(
@@ -620,12 +638,12 @@ def _deploy_functions(opts: Options, plugins: Build) -> list[Result]:
             meta["sources"] = f.sources
         form = {"id": f.id, "name": f.name, "content": f.content, "meta": meta}
         if p.action == "update":
-            updated = _call(opts, "POST", f"{API}/id/{f.id}/update", form)
+            updated = _call(instance, "POST", f"{API}/id/{f.id}/update", form)
             state = updated if updated is not None else p.existing
             notes = (
-                _ensure_global(opts, f.id, state)
+                _ensure_global(instance, f.id, state)
                 if f.want_global
-                else _ensure_not_global(opts, f.id, state)
+                else _ensure_not_global(instance, f.id, state)
                 if f.not_global
                 else []
             )
@@ -643,37 +661,39 @@ def _deploy_functions(opts: Options, plugins: Build) -> list[Result]:
             )
             continue
 
-        created = _call(opts, "POST", f"{API}/create", form)
+        created = _call(instance, "POST", f"{API}/create", form)
         notes = []
         if not _field(created, "is_active"):
-            created = _call(opts, "POST", f"{API}/id/{f.id}/toggle")
+            created = _call(instance, "POST", f"{API}/id/{f.id}/toggle")
             notes.append("activated")
         # A new filter is made global (unattached, it does nothing) unless it says
         # `global: false`: a toggle that each user switches on.
         default_global = _field(created, "type") == "filter" and not f.not_global
         if (f.want_global or default_global) and not _field(created, "is_global"):
-            _call(opts, "POST", f"{API}/id/{f.id}/toggle/global")
+            _call(instance, "POST", f"{API}/id/{f.id}/toggle/global")
             notes.append("made global")
         results.append(
             Result(f.id, f.file, ", ".join(["created", *notes]), f.kind, f.type, version, details)
         )
 
-    _valves_pass(opts, plan, results)
+    _valves_pass(instance, choices, plan, results)
 
     for o in orphans:
-        if opts.dry_run:
+        if choices.dry_run:
             results.append(Result(o["id"], "(no file)", "would delete"))
             continue
-        if _call(opts, "DELETE", f"{API}/id/{o['id']}/delete") is not True:
+        if _call(instance, "DELETE", f"{API}/id/{o['id']}/delete") is not True:
             raise OwppError(f"deleting {o['id']} was not confirmed")
         results.append(Result(o["id"], "(no file)", "deleted"))
-    if opts.no_prune:
+    if choices.no_prune:
         for o in pruned:
             results.append(Result(o["id"], "(no file)", "not deleted (--no-prune)"))
     return results
 
 
-def _valves_pass(opts: Options, plan: list[PlanItem], results: list[Result]) -> None:
+def _valves_pass(
+    instance: Instance, choices: Choices, plan: list[PlanItem], results: list[Result]
+) -> None:
     """A plugin can declare `valves:` for its function. Only the declared keys are written;
     every other valve keeps the value set in the UI. Secrets do not belong here (the file is
     in git): read them from the container environment instead."""
@@ -682,10 +702,10 @@ def _valves_pass(opts: Options, plan: list[PlanItem], results: list[Result]) -> 
         if not f.valves or not isinstance(f.valves, dict):
             continue
         row = next((r for r in results if r.id == f.id and r.kind == f.kind), None)
-        if p.action == "create" and opts.dry_run:
+        if p.action == "create" and choices.dry_run:
             note = "would set valves"
         else:
-            current = _call(opts, "GET", f"{API}/id/{f.id}/valves")
+            current = _call(instance, "GET", f"{API}/id/{f.id}/valves")
             current = current if isinstance(current, dict) else {}
             differs = any(
                 k not in current
@@ -694,10 +714,10 @@ def _valves_pass(opts: Options, plan: list[PlanItem], results: list[Result]) -> 
             )
             if not differs:
                 continue
-            if opts.dry_run:
+            if choices.dry_run:
                 note = "would set valves"
             else:
-                _call(opts, "POST", f"{API}/id/{f.id}/valves/update", {**current, **f.valves})
+                _call(instance, "POST", f"{API}/id/{f.id}/valves/update", {**current, **f.valves})
                 note = "set valves"
         if row:
             row.action = note if row.action == "unchanged" else f"{row.action}, {note}"
@@ -740,38 +760,38 @@ def latest_copy(directory: Path, sources: Sources, work: Path) -> tuple[Path, di
     return copy, notes
 
 
-def plugins_for(opts: Options) -> Build:
+def plugins_for(choices: Choices) -> Build:
     """What the deploy writes: the build in `--from`, or the plugins folder bundled now (at the
     latest commits with `--latest`), narrowed to `--only`."""
-    if opts.latest and not opts.dry_run:
+    if choices.latest and not choices.dry_run:
         raise OwppError(
             "--latest only goes with --dry-run: to deploy the latest commits, run `owpp pull`, "
             "review and commit the change, then deploy"
         )
-    if opts.from_dir is not None:
-        if opts.latest:
+    if choices.from_dir is not None:
+        if choices.latest:
             raise OwppError(
                 "--latest needs the sources, which a build does not have: build it with "
                 "`owpp build --latest`, then deploy that with --dry-run"
             )
-        plugins = read_build(opts.from_dir)
-        if plugins.latest and not opts.dry_run:
+        plugins = read_build(choices.from_dir)
+        if plugins.latest and not choices.dry_run:
             raise OwppError(
-                f"{opts.from_dir} was built at the latest commits (`owpp build --latest`), so it "
+                f"{choices.from_dir} was built at the latest commits (`owpp build --latest`), so it "
                 "only deploys as a dry run: run `owpp pull`, review and commit the change, then build"
             )
-        where = f"the build in {opts.from_dir}"
+        where = f"the build in {choices.from_dir}"
     else:
-        plugins = build_plugins(opts.dir, opts.sources, latest=opts.latest)
-        where = str(opts.dir)
-    if opts.only:
-        missing = [i for i in opts.only if not any(f.id == i for f in plugins.files)]
+        plugins = build_plugins(choices.dir, choices.sources, latest=choices.latest)
+        where = str(choices.dir)
+    if choices.only:
+        missing = [i for i in choices.only if not any(f.id == i for f in plugins.files)]
         if missing:
             raise OwppError(
                 f"--only: no such plugin function {', '.join(missing)} "
                 f"(have {', '.join(f.id for f in plugins.files)})"
             )
-        plugins = replace(plugins, files=[f for f in plugins.files if f.id in opts.only])
+        plugins = replace(plugins, files=[f for f in plugins.files if f.id in choices.only])
     if not plugins.files:
         raise OwppError(
             "no functions (plugin folders with a function in plugin.yaml, or *.py files) "
@@ -799,22 +819,24 @@ def build_plugins(
     return Build(files, complete=not ids, latest=notes)
 
 
-def deploy(opts: Options, plugins: Build | None = None) -> list[Result]:
-    """Deploy `plugins` (by default: plugins_for(opts)) and report what changed."""
-    return _deploy_functions(opts, plugins if plugins is not None else plugins_for(opts))
+def deploy(instance: Instance, choices: Choices, plugins: Build | None = None) -> list[Result]:
+    """Deploy `plugins` (by default: plugins_for(choices)) to the signed-in `instance`, and
+    report what changed."""
+    return _deploy_functions(
+        instance, choices, plugins if plugins is not None else plugins_for(choices)
+    )
 
 
-def iframe_sandbox_warning(opts: Options, plugins: Build | None = None) -> str | None:
+def iframe_sandbox_warning(instance: Instance, plugins: Build) -> str | None:
     """Warn when a plugin needs Open-WebUI's iframe Sandbox Allow Same Origin but the instance's
     default interface settings do not turn it on. Never changes the instance or stops a deploy:
     a user's own setting can still enable it, and an unreadable admin config is not a reason to
     refuse the rest of the deploy."""
-    plugins = plugins if plugins is not None else plugins_for(opts)
     ids = [f.id for f in plugins.files if f.requires.get(IFRAME_REQUIREMENT) is True]
     if not ids:
         return None
     try:
-        config = _call(opts, "GET", f"{AUTHS}/admin/config")
+        config = _call(instance, "GET", f"{AUTHS}/admin/config")
         settings = config.get("DEFAULT_INTERFACE_SETTINGS") if isinstance(config, dict) else None
         if isinstance(settings, dict) and settings.get(IFRAME_SETTING) is True:
             return None
@@ -862,10 +884,11 @@ def render_report(
     return f"{title}\n\n" + "\n".join(lines) + "\n"
 
 
-def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
-    """Health check, deploy, print the report (and append it to the GitHub step summary)."""
+def run_deploy(instance: Instance, choices: Choices, env: Mapping[str, str] | None = None) -> int:
+    """Health check, sign in, deploy, print the report (and append it to the GitHub step
+    summary)."""
     env = os.environ if env is None else env
-    if not opts.base_url:
+    if not instance.base_url:
         print(
             "error: OPEN_WEBUI_URL is not set (the base URL of your Open-WebUI, "
             "e.g. https://chat.example.com)",
@@ -873,13 +896,14 @@ def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
         )
         return 1
     try:
-        with opts.sources:  # its upstream copies are deleted once the deploy is done
-            wait_for_health(opts)
-            how = sign_in(opts)
-            plugins = plugins_for(opts)
-            warning = iframe_sandbox_warning(opts, plugins)  # before writing, never a refusal
-            latest = opts.latest or bool(plugins.latest)
-            report = render_report(deploy(opts, plugins), opts.dry_run, latest, [warning])
+        with choices.sources:  # its upstream copies are deleted once the deploy is done
+            wait_for_health(instance)
+            how = sign_in(instance)
+            plugins = plugins_for(choices)
+            warning = iframe_sandbox_warning(instance, plugins)  # before writing, never a refusal
+            latest = choices.latest or bool(plugins.latest)
+            results = deploy(instance, choices, plugins)
+            report = render_report(results, choices.dry_run, latest, [warning])
     except OwppError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

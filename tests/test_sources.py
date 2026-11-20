@@ -252,7 +252,7 @@ class TestBundling:
                 for p in paths
             }
 
-        res = deploy(m.options(plugin(MANIFEST).parent, sources=Sources(fetcher)))
+        res = deploy(*m.options(plugin(MANIFEST).parent, sources=Sources(fetcher)))
         assert fetched == [(REPO, SHA, "sub/dir/tool.py", "sub/dir/SKILL.md")]
         assert "created" in res[0].action
         assert "_plugin_start()" in m.state["remote"]["content"]

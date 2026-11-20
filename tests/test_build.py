@@ -129,9 +129,9 @@ class TestDeployFrom:
     ):
         out = built(plugins, tmp_path / "dist")
         from_folder, from_build = mock_server(), mock_server()
-        deploy(from_folder.options(plugins, sources=Sources(fake_fetcher())))
+        deploy(*from_folder.options(plugins, sources=Sources(fake_fetcher())))
         res = deploy(
-            from_build.options(tmp_path / "elsewhere", from_dir=out, sources=Sources(no_git))
+            *from_build.options(tmp_path / "elsewhere", from_dir=out, sources=Sources(no_git))
         )
         assert sorted(r.id for r in res) == ["demo", "up"]
         assert from_build.state.keys() == from_folder.state.keys()
@@ -144,17 +144,17 @@ class TestDeployFrom:
     ):
         m = mock_server(live=[git_fn("demo", FILTER), git_fn("retired", FILTER)])
         partial = built(plugins, tmp_path / "some", ["demo"])
-        deploy(m.options(tmp_path, from_dir=partial, sources=Sources(no_git)))
+        deploy(*m.options(tmp_path, from_dir=partial, sources=Sources(no_git)))
         assert "retired" in m.state
         complete = built(plugins, tmp_path / "all")
-        res = deploy(m.options(tmp_path, from_dir=complete, sources=Sources(no_git)))
+        res = deploy(*m.options(tmp_path, from_dir=complete, sources=Sources(no_git)))
         assert any(r.id == "retired" and r.action == "deleted" for r in res)
         assert "retired" not in m.state
 
     def test_only_narrows_the_build(self, plugins, tmp_path, mock_server):
         m = mock_server()
         out = built(plugins, tmp_path / "dist")
-        res = deploy(m.options(tmp_path, from_dir=out, only=["demo"], sources=Sources(no_git)))
+        res = deploy(*m.options(tmp_path, from_dir=out, only=["demo"], sources=Sources(no_git)))
         assert [r.id for r in res] == ["demo"]
 
     def test_a_build_at_the_latest_commits_deploys_only_as_a_dry_run(
@@ -164,16 +164,16 @@ class TestDeployFrom:
         write_build(Build(read_build(built(plugins, out)).files, latest={"x": "y"}), out)
         m = mock_server()
         with pytest.raises(OwppError, match="only deploys as a dry run"):
-            deploy(m.options(tmp_path, from_dir=out, sources=Sources(no_git)))
+            deploy(*m.options(tmp_path, from_dir=out, sources=Sources(no_git)))
         assert m.calls == []
-        res = deploy(m.options(tmp_path, from_dir=out, dry_run=True, sources=Sources(no_git)))
+        res = deploy(*m.options(tmp_path, from_dir=out, dry_run=True, sources=Sources(no_git)))
         assert {r.action for r in res} == {"would create"} and m.state == {}
 
     def test_latest_needs_the_sources(self, plugins, tmp_path, mock_server):
         out = built(plugins, tmp_path / "dist")
         opts = mock_server().options(tmp_path, from_dir=out, dry_run=True, latest=True)
         with pytest.raises(OwppError, match="--latest needs the sources.*owpp build --latest"):
-            plugins_for(opts)
+            plugins_for(opts.choices)
 
 
 class TestNoPrune:
@@ -181,7 +181,7 @@ class TestNoPrune:
         self, mock_server, functions_dir, git_fn
     ):
         m = mock_server(live=[git_fn("demo", FILTER), git_fn("a", FILTER), git_fn("b", FILTER)])
-        res = deploy(m.options(functions_dir({"demo.py": FILTER}), no_prune=True))
+        res = deploy(*m.options(functions_dir({"demo.py": FILTER}), no_prune=True))
         assert {r.id: r.action for r in res if r.id != "demo"} == {
             "a": "not deleted (--no-prune)",
             "b": "not deleted (--no-prune)",
@@ -191,7 +191,7 @@ class TestNoPrune:
 
     def test_the_flags(self, plugins, tmp_path, monkeypatch):
         seen = {}
-        monkeypatch.setattr("owpp.cli.run_deploy", lambda opts, env: seen.update(o=opts) or 0)
+        monkeypatch.setattr("owpp.cli.run_deploy", lambda i, c, env: seen.update(o=c) or 0)
         out = tmp_path / "dist"
         env = {"OPEN_WEBUI_URL": "http://x"}
         assert main(["deploy", "--from", str(out), "--no-prune"], env=env) == 0
