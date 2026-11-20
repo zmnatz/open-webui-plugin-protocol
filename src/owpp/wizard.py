@@ -43,7 +43,7 @@ from .create import (
 )
 from .errors import OwppError
 from .events import KNOWN_EVENTS, problem_with
-from .sources import GIT_URL, SHA40, resolve_ref
+from .sources import GIT_URL, SHA40, ref_kind, resolve_ref
 
 DOCS = "https://docs.openwebui.com/features/extensibility/"
 # (stages, minutes) for each branch; the first two stages are the same in both.
@@ -546,7 +546,11 @@ def stage_libraries(p: Prompter, kind: str) -> dict:
     return out
 
 
-def stage_repository(p: Prompter, resolve: Callable[[str, str], str | None]) -> SourceSpec:
+def stage_repository(
+    p: Prompter,
+    resolve: Callable[[str, str], str | None],
+    kind_of: Callable[[str, str], str | None] = ref_kind,
+) -> SourceSpec:
     p.stage("The repository")
     p.say("The plugin takes its files from this repository at one commit, so what is")
     p.say("deployed never changes until you move the commit yourself.")
@@ -570,8 +574,16 @@ def stage_repository(p: Prompter, resolve: Callable[[str, str], str | None]) -> 
         "Folder in the repository the files are in (Enter for the root)",
         check=lambda t: _repo_path(t) if t else None,
     )
-    track = "" if SHA40.fullmatch(ref) or ref == "HEAD" else ref  # what owpp pull follows
-    return SourceSpec(git, sha, path.strip("/"), track=track)
+    if SHA40.fullmatch(ref) or ref == "HEAD":  # owpp pull follows the default branch
+        return SourceSpec(git, sha, path.strip("/"))
+    kind = kind_of(git, ref)
+    if kind not in ("branch", "tag"):
+        kind = p.choose(
+            f"Is {ref} a branch or a tag? (owpp pull follows it)",
+            [("branch", "a branch"), ("tag", "a tag")],
+            "branch",
+        )
+    return SourceSpec(git, sha, path.strip("/"), **{kind: ref})
 
 
 def stage_take(p: Prompter, plugin_id: str, title: str, src: SourceSpec) -> dict:
@@ -688,12 +700,13 @@ def ask_spec(
     directory: Path,
     preset_id: str = "",
     resolve: Callable[[str, str], str | None] = resolve_ref,
+    kind_of: Callable[[str, str], str | None] = ref_kind,
 ) -> PluginSpec:
     """Every stage but the last: the answers, as a PluginSpec."""
     answers: dict = stage_identity(p, directory, preset_id)
     if stage_origin(p):
         p.total_stages, p.total_minutes = FROM_GIT
-        src = stage_repository(p, resolve)
+        src = stage_repository(p, resolve, kind_of)
         answers |= stage_take(p, answers["id"], answers["title"], src)
         answers |= stage_git_header(p, answers["title"], answers["type"])
         answers["source"] = src
@@ -716,9 +729,11 @@ def run_wizard(
     prompter: Prompter | None = None,
     check: Callable[[Path, str], int] | None = None,
     resolve: Callable[[str, str], str | None] = resolve_ref,
+    kind_of: Callable[[str, str], str | None] = ref_kind,
 ) -> int:
     """`owpp create`. `check(directory, id)` runs `owpp check --strict` on the new plugin;
-    `resolve(git, ref)` turns a branch or tag into a commit SHA."""
+    `resolve(git, ref)` turns a branch or tag into a commit SHA, and `kind_of(git, name)` says
+    whether it is a "branch" or a "tag"."""
     p = prompter or Prompter()
     try:
         p.banner(
@@ -730,7 +745,7 @@ def run_wizard(
                 "Nothing is written until the last stage; Ctrl-C stops.",
             ],
         )
-        spec = ask_spec(p, directory, preset_id, resolve)
+        spec = ask_spec(p, directory, preset_id, resolve, kind_of)
         folder = stage_write(p, directory, spec)
     except Cancelled:
         p.print()

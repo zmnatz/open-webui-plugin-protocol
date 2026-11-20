@@ -152,7 +152,7 @@ class TestWhatItWrites:
     def test_every_generated_manifest_records_the_protocol(self, written, from_git):
         for directory in (written, from_git):
             for folder in directory.iterdir():
-                assert read_manifest(folder)["protocol"] == "0.2", folder
+                assert read_manifest(folder)["protocol"] == "0.3", folder
 
     def test_owpp_check_strict_passes(self, written, capsys):
         assert main(["check", "--strict", "--dir", str(written)], env={}) == 0
@@ -349,7 +349,14 @@ def scripted(answers: list[str]):
     return read
 
 
-def wizard(directory, answers, preset_id="", resolve=lambda git, ref: SHA, check=True):
+def wizard(
+    directory,
+    answers,
+    preset_id="",
+    resolve=lambda git, ref: SHA,
+    check=True,
+    kind_of=lambda git, name: "tag" if name.startswith("v") else "branch",
+):
     read = scripted(answers)
     out = io.StringIO()
     code = run_wizard(
@@ -360,6 +367,7 @@ def wizard(directory, answers, preset_id="", resolve=lambda git, ref: SHA, check
         if check
         else None,
         resolve=resolve,
+        kind_of=kind_of,
     )
     return code, out.getvalue(), read
 
@@ -452,7 +460,7 @@ class TestWizard:
         assert "Stage 6/6 · Review and write" in out and f"v1.2 is commit {SHA}" in out
         m = read_manifest(tmp_path / "viz")
         # The tag it was given is what owpp pull follows.
-        assert m["source"] == {"git": GIT, "ref": SHA, "path": "plugins/viz", "track": "v1.2"}
+        assert m["source"] == {"git": GIT, "ref": SHA, "path": "plugins/viz", "tag": "v1.2"}
         assert m["tool"] == {"id": "viz", "file": "tool.py", "access": "public"}
         assert m["skills"] == {"visualize": {"dir": "skills/visualize", "access": "public"}}
 
@@ -478,6 +486,16 @@ class TestWizard:
         assert code == 0, out
         assert "could not look up main" in out and "40 lowercase hex" in out
         assert read_manifest(tmp_path / "pinned")["source"]["ref"] == SHA
+
+    def test_a_name_it_cannot_tell_is_asked_branch_or_tag(self, tmp_path):
+        answers = [
+            *["", "pinned", "", "git", GIT, "stable", "", "2"],
+            *["y", "", "n", "", "", ""],
+        ]
+        code, out, read = wizard(tmp_path, answers, kind_of=lambda git, name: None, check=False)
+        assert code == 0, out
+        assert "Is stable a branch or a tag?" in out and read.left == []
+        assert read_manifest(tmp_path / "pinned")["source"]["tag"] == "stable"
 
     def test_taking_nothing_from_git_writes_nothing(self, tmp_path):
         answers = ["", "empty", "", "git", GIT, SHA, "", "", "n", ""]
@@ -553,13 +571,13 @@ class TestFromASpec:
             {
                 "id": "viz",
                 "type": "installer",
-                "source": {"git": GIT, "ref": SHA, "path": "v2", "track": "main"},
+                "source": {"git": GIT, "ref": SHA, "path": "v2", "branch": "main"},
                 "tool": {"id": "viz", "file": "tool.py"},
                 "skills": [{"id": "visualize", "path": "SKILL.md", "is_dir": False}],
             }
         )
         m = read_manifest(write_plugin(tmp_path, spec))
-        assert m["source"]["track"] == "main" and m["skills"] == {
+        assert m["source"]["branch"] == "main" and m["skills"] == {
             "visualize": {"file": "SKILL.md", "access": "public"}
         }
 
@@ -576,3 +594,15 @@ class TestFromASpec:
     def test_what_it_refuses(self, data, message):
         with pytest.raises(OwppError, match=message):
             spec_from_data(data)
+
+    def test_a_source_follows_a_branch_or_a_tag_not_both(self, tmp_path):
+        spec = spec_from_data(
+            {
+                "id": "p",
+                "type": "installer",
+                "source": {"git": GIT, "ref": SHA, "branch": "main", "tag": "v1"},
+                "tool": {"id": "t", "file": "t.py"},
+            }
+        )
+        with pytest.raises(OwppError, match="a branch or a tag, not both"):
+            write_plugin(tmp_path, spec)

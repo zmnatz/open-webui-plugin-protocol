@@ -9,7 +9,7 @@
 | [`owpp bundle`](commands/bundle.md) | Print (or write) the code that would be deployed. |
 | [`owpp deploy`](commands/deploy.md) | Deploy the plugins to an Open-WebUI instance: settings, signing in, the ownership marker, the report. |
 | [`owpp test`](commands/test.md) | Run each plugin's `tests/` against a mock Open-WebUI. |
-| [`owpp pull`](commands/pull.md) | Move plugins taken from git to the latest commit they track. |
+| [`owpp pull`](commands/pull.md) | Move plugins taken from git to the latest commit they follow. |
 | [`owpp version`](commands/version.md) | Show the plugins' versions, or give one a new version. |
 | [`owpp migrate`](commands/migrate.md) | Bring `plugin.yaml` to the current protocol version. |
 | [`owpp create`](commands/create.md) | A wizard: asks what the plugin is, then writes it. |

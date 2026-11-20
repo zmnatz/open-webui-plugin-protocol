@@ -11,7 +11,7 @@ import tempfile
 from collections.abc import Callable
 
 from ..errors import OwppError
-from ..manifest import Value, file_value
+from ..manifest import TRACK, Value, file_value
 
 # (git URL, commit SHA, paths) -> {path: content}. A path ending in "/" is a directory: every
 # file under it is returned, keyed by its full path.
@@ -20,8 +20,6 @@ Fetcher = Callable[[str, str, "list[str]"], "dict[str, Value]"]
 Lookup = Callable[[str, str], "str | None"]
 
 SHA40 = re.compile(r"[0-9a-f]{40}")
-# A branch or tag a plugin follows (`source: track:`), as git allows it, never an option.
-TRACK = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._/-]*")
 MAX_SOURCE_BYTES = 2_000_000
 
 # Where a repo can be cloned from: https, ssh or scp-style, never a local path or an
@@ -37,9 +35,28 @@ def pick_sha(ls_remote: str, ref: str) -> str | None:
         for sha, _, name in (line.partition("\t") for line in ls_remote.splitlines())
         if SHA40.fullmatch(sha)
     }
-    names = ["HEAD"] if ref == "HEAD" else []
-    names += [f"refs/tags/{ref}^{{}}", f"refs/tags/{ref}", f"refs/heads/{ref}"]
+    if ref == "HEAD":
+        names = ["HEAD"]
+    elif ref.startswith("refs/"):  # exactly that branch or tag
+        names = [f"{ref}^{{}}", ref]
+    else:
+        names = [f"refs/tags/{ref}^{{}}", f"refs/tags/{ref}", f"refs/heads/{ref}"]
     return next((found[n] for n in names if n in found), None)
+
+
+def refname(kind: str, name: str) -> str:
+    """What to look up for a plugin that follows (kind, name) (see manifest.follows)."""
+    return {"branch": f"refs/heads/{name}", "tag": f"refs/tags/{name}"}.get(kind, name)
+
+
+def kind_in(ls_remote: str, name: str) -> str | None:
+    """ "tag" or "branch": what `name` is in `git ls-remote` output (a tag wins, as in git)."""
+    names = {line.partition("\t")[2] for line in ls_remote.splitlines()}
+    if f"refs/tags/{name}" in names:
+        return "tag"
+    if f"refs/heads/{name}" in names:
+        return "branch"
+    return None
 
 
 def resolve_ref(git: str, ref: str) -> str | None:
@@ -63,6 +80,24 @@ def resolve_ref(git: str, ref: str) -> str | None:
     except (OSError, subprocess.SubprocessError):
         return None
     return pick_sha(done.stdout, ref) if done.returncode == 0 else None
+
+
+def ref_kind(git: str, name: str) -> str | None:
+    """Whether `name` is a "tag" or a "branch" of `git`, asked with `git ls-remote`; None when
+    it is neither, or the repository cannot be reached."""
+    if not GIT_URL.fullmatch(git) or not TRACK.fullmatch(name) or not shutil.which("git"):
+        return None
+    try:
+        done = subprocess.run(
+            ["git", "ls-remote", "--", git, f"refs/heads/{name}", f"refs/tags/{name}"],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={**os.environ, "GIT_ALLOW_PROTOCOL": "https:ssh", "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return kind_in(done.stdout, name) if done.returncode == 0 else None
 
 
 def git_fetcher(

@@ -17,8 +17,9 @@ The runtime and libraries are copied into every bundle, so a new owpp changes th
 4. **Dry run.** `owpp deploy --dry-run` against your instance shows which functions, tools and skills the new bundles would update.
 5. **Commit** the pin and the manifest changes together, and deploy.
 
-## 0.2.1 -> next release
+## 0.2 -> 0.3
 
+- **Manifests:** `source: track:` is now `branch:` or `tag:`, whichever the name is in the repository, as other tools that follow a git ref write it. `owpp migrate` asks the repository (`git ls-remote`) and rewrites the key, keeping its value and comment, and sets `protocol: "0.3"`. When it cannot reach the repository, or the name is neither, it says so and leaves that manifest: write `branch:` or `tag:` yourself. A 0.2 manifest with `track:` still works with owpp 0.3 until it is migrated; a 0.3 manifest with `track:` is refused.
 - **Renamed:** `owpp sync` is now `owpp pull`, and `owpp deploy --dry-run --sync` is now `--dry-run --latest`. The action's `sync` input is now `latest`. The old names are removed, not aliased: change your scripts and workflows.
 
 ## 0.1 -> 0.2

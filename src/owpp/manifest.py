@@ -96,7 +96,9 @@ def check_keys(path: Path, manifest: dict) -> None:
             raise OwppError(
                 f"{path}: unknown key `{key}:` (known: {', '.join(MANIFEST_KEYS)}){hint}"
             )
-    parse_protocol(manifest.get("protocol"), str(path))
+    protocol = parse_protocol(manifest.get("protocol"), str(path))
+    if isinstance(manifest.get("source"), dict):
+        follows(manifest["source"], protocol, path)
     check_sourced_plugin(path, manifest)
     requires = manifest.get("requires")
     if requires is not None:
@@ -109,6 +111,47 @@ def check_keys(path: Path, manifest: dict) -> None:
                 )
             if not isinstance(value, bool):
                 raise OwppError(f"{path}: requirement `{key}:` must be true or false")
+
+
+# A branch or tag a plugin follows (`source: branch:` or `tag:`), as git allows it, never an option.
+TRACK = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._/-]*")
+
+
+def _version(protocol: str) -> tuple[int, ...]:
+    return tuple(int(n) for n in protocol.split("."))
+
+
+def follows(source: dict, protocol: str, path: Path | str) -> tuple[str, str]:
+    """What `owpp pull` moves a `source:` to the latest commit of: ("branch", name),
+    ("tag", name), or ("default", "HEAD") for the repository's default branch. A manifest
+    written for protocol 0.2 may still say `track:` (a branch or a tag, git decides):
+    ("either", name)."""
+    where = f"{path}: source"
+    branch, tag = (text_of(source.get(k)) for k in ("branch", "tag"))
+    if "track" in source:
+        if _version(protocol) >= (0, 3):
+            raise OwppError(
+                f"{where}.track is gone in protocol 0.3: it is `branch:` or `tag:` now "
+                "(`owpp migrate` rewrites it)"
+            )
+        if branch or tag:
+            raise OwppError(f"{where}: `track:` and `branch:`/`tag:` cannot be used together")
+    if branch and tag:
+        raise OwppError(f"{where}: follow a `branch:` or a `tag:`, not both")
+    kind, name = (
+        ("branch", branch)
+        if branch
+        else ("tag", tag)
+        if tag
+        else ("either", text_of(source.get("track")))
+        if text_of(source.get("track"))
+        else ("default", "HEAD")
+    )
+    if kind != "default" and not TRACK.fullmatch(name):
+        raise OwppError(
+            f"{where}.{'track' if kind == 'either' else kind} must be a branch or tag name"
+        )
+    return kind, name
 
 
 # What a local plugin.yaml may say, besides `protocol:` and `source:`, when its source is a whole
@@ -398,3 +441,33 @@ def set_key(text: str, key: str, value: str, after: str | None = None) -> str:
             )
             at = last + 1
     return insert(at, f"{indent}{child}: {value}")
+
+
+def rename_key(text: str, key: str, new: str) -> str:
+    """plugin.yaml `text` with the key `mapping.key` renamed to `new`, its value, comment and
+    the rest of the file kept. Refused (edit by hand) unless the key is there exactly once."""
+    block, child = key.split(".")
+    lines = text.splitlines(keepends=True)
+    top = [
+        i
+        for i, line in enumerate(lines)
+        if line.strip() and not line[0].isspace() and line[0] != "#"
+    ]
+    start = next((i for i in top if re.match(rf"{re.escape(block)}:", lines[i])), None)
+    if start is None:
+        raise OwppError(f"plugin.yaml has no `{block}:` section")
+    if lines[start][len(block) + 1 :].lstrip().startswith("{"):
+        at = [start]
+        pattern = rf"([{{,]\s*){re.escape(child)}(\s*:)"
+    else:
+        end = next((i for i in top if i > start), len(lines))
+        at = list(range(start + 1, end))
+        pattern = rf"^(\s+){re.escape(child)}(\s*:)"
+    found = [(i, m) for i in at for m in [re.search(pattern, lines[i])] if m]
+    if len(found) != 1:
+        raise OwppError(
+            f"found {len(found)} `{child}:` keys in `{block}:`; edit plugin.yaml by hand"
+        )
+    i, m = found[0]
+    lines[i] = lines[i][: m.start()] + m.group(1) + new + m.group(2) + lines[i][m.end() :]
+    return "".join(lines)

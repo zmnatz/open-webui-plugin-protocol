@@ -17,11 +17,12 @@ OLD = "a1" * 20
 NEW = "b2" * 20
 
 MANIFEST = f"""# Pinned: review the upstream diff before moving it.
+protocol: "0.3"
 source:
   git: {GIT}
   ref: {OLD} # reviewed 2026-11-01
   path: viz
-{{track}}function:
+{{follow}}function:
   title: Viz
   global: true
 tool:
@@ -60,9 +61,11 @@ def fetcher(git, ref, paths):
 
 @pytest.fixture
 def plugins(tmp_path):
-    def make(track: str = "", **extra: str):
-        line = f"  track: {track}\n" if track else ""
-        return write_tree(tmp_path, {"viz/plugin.yaml": MANIFEST.replace("{track}", line), **extra})
+    def make(follow: str = "", **extra: str):
+        line = f"  {follow}\n" if follow else ""
+        return write_tree(
+            tmp_path, {"viz/plugin.yaml": MANIFEST.replace("{follow}", line), **extra}
+        )
 
     return make
 
@@ -92,7 +95,7 @@ class TestSync:
         d = plugins()
         code, out, looked_up = run(d)
         assert code == 0
-        assert looked_up == [(GIT, "HEAD")]  # no track: the default branch
+        assert looked_up == [(GIT, "HEAD")]  # no branch: or tag: the default branch
         assert f"new   viz: moved {OLD[:7]} -> {NEW[:7]} (default branch)" in out
         words = " ".join(out.split())
         assert "changed viz/tool.py" in words
@@ -104,7 +107,7 @@ class TestSync:
         assert read_manifest(d / "viz")["source"]["ref"] == NEW
         # The ref moved and, since files it takes changed, the plugin's version (it had none):
         # the comments stay.
-        assert text == MANIFEST.replace("{track}", "").replace(OLD, NEW).replace(
+        assert text == MANIFEST.replace("{follow}", "").replace(OLD, NEW).replace(
             "  title: Viz\n", "  title: Viz\n  version: 0.1.0\n"
         )
         assert "bumped the version (none) -> 0.1.0" in out
@@ -115,7 +118,7 @@ class TestSync:
         d = plugins()
         code, out, _ = run(d, bump_by="none")
         assert code == 0 and "bumped" not in out
-        assert (d / "viz" / "plugin.yaml").read_text() == MANIFEST.replace("{track}", "").replace(
+        assert (d / "viz" / "plugin.yaml").read_text() == MANIFEST.replace("{follow}", "").replace(
             OLD, NEW
         )
         assert not (d / "viz" / "CHANGELOG.md").exists()
@@ -124,11 +127,35 @@ class TestSync:
         _, out, _ = run(plugins(), dry_run=True)
         assert "would bump the version (none) -> 0.1.0" in out
 
-    def test_it_follows_the_branch_or_tag_in_track(self, plugins):
-        d = plugins(track="release/v2")
+    @pytest.mark.parametrize(
+        ("follow", "looked", "shown"),
+        [
+            ("branch: release/v2", "refs/heads/release/v2", "(branch release/v2)"),
+            ("tag: v2.1", "refs/tags/v2.1", "(tag v2.1)"),
+        ],
+    )
+    def test_it_follows_exactly_the_branch_or_the_tag(self, plugins, follow, looked, shown):
+        _, out, looked_up = run(plugins(follow))
+        assert looked_up == [(GIT, looked)] and shown in out
+
+    def test_a_0_2_manifest_still_follows_its_track(self, plugins):
+        d = plugins("track: release/v2")
+        text = (d / "viz" / "plugin.yaml").read_text().replace('"0.3"', '"0.2"')
+        (d / "viz" / "plugin.yaml").write_text(text)
         _, out, looked_up = run(d)
-        assert looked_up == [(GIT, "release/v2")]
-        assert "(release/v2)" in out
+        assert looked_up == [(GIT, "release/v2")] and "(release/v2)" in out
+
+    @pytest.mark.parametrize(
+        ("follow", "message"),
+        [
+            ("track: main", "source.track is gone in protocol 0.3: it is `branch:` or `tag:` now"),
+            ("branch: main\n  tag: v1", "follow a `branch:` or a `tag:`, not both"),
+            ("branch: --upload-pack=x", "source.branch must be a branch or tag name"),
+        ],
+    )
+    def test_refuses_track_both_keys_and_an_option(self, plugins, follow, message):
+        with pytest.raises(OwppError, match=message):
+            run(plugins(follow))
 
     def test_dry_run_writes_nothing(self, plugins):
         d = plugins()
@@ -146,7 +173,7 @@ class TestSync:
     def test_a_ref_it_cannot_look_up_fails_and_writes_nothing(self, plugins):
         d = plugins()
         code, out, _ = run(d, latest=None)
-        assert code == 1 and "FAIL  viz: could not look up HEAD" in out
+        assert code == 1 and "FAIL  viz: could not look up the default branch of" in out
         assert read_manifest(d / "viz")["source"]["ref"] == OLD
 
     def test_a_file_gone_at_the_new_commit_fails_and_writes_nothing(self, plugins, monkeypatch):
@@ -173,6 +200,17 @@ class TestSync:
 
 
 class TestPieces:
+    def test_a_branch_or_a_tag_is_looked_up_exactly_and_told_apart(self):
+        from owpp.sources._git import kind_in
+
+        out = f"{'a' * 40}\trefs/heads/v1\n{'b' * 40}\trefs/tags/v1\n{'c' * 40}\trefs/tags/v1^{{}}"
+        assert pick_sha(out, "refs/heads/v1") == "a" * 40
+        assert pick_sha(out, "refs/tags/v1") == "c" * 40  # the commit an annotated tag points at
+        assert pick_sha(out, "refs/heads/nope") is None
+        assert kind_in(out, "v1") == "tag"  # both: the tag, as git reads the name
+        assert kind_in(f"{'a' * 40}\trefs/heads/main\n", "main") == "branch"
+        assert kind_in("", "main") is None
+
     def test_ls_remote_output_is_read_as_git_does(self):
         out = "\n".join(
             [
@@ -188,11 +226,6 @@ class TestPieces:
         assert pick_sha(out, "main") == "b" * 40
         assert pick_sha(out, "v1") == "d" * 40  # the peeled tag, over the branch
         assert pick_sha(out, "other") is None
-
-    def test_track_must_be_a_branch_or_tag(self, plugins):
-        d = plugins(track="--upload-pack=x")
-        with pytest.raises(OwppError, match="track must be a branch or tag"):
-            run(d)
 
     def test_compare_links_for_github(self):
         assert compare_url("git@github.com:o/r.git", OLD, NEW).startswith(

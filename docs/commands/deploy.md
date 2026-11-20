@@ -14,7 +14,7 @@ Deploys the plugins to a running Open-WebUI: creates, updates or leaves alone on
 | --- | --- |
 | `--only id,id` | Deploy just these ids; no pruning. |
 | `--dry-run` | List what would change, with versions; write nothing. |
-| `--latest` | With `--dry-run`: report against the latest commit each git-sourced plugin tracks, as [`owpp pull`](pull.md) would move it, without changing `plugin.yaml`. Refused without `--dry-run`. |
+| `--latest` | With `--dry-run`: report against the latest commit each git-sourced plugin follows, as [`owpp pull`](pull.md) would move it, without changing `plugin.yaml`. Refused without `--dry-run`. |
 | `--force` | Deploy even where the instance runs a newer version than the repository: see [deploying an older version](#deploying-an-older-version). |
 | `--force-prune` | Allow deleting more than half of the managed functions at once. |
 | `--managed-by marker` | The [ownership marker](#the-ownership-marker). Default [`$OWPP_MANAGED_BY`](../environment-variables.md#owpp_managed_by), else `open-webui-plugin-protocol`. |

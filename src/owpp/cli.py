@@ -412,7 +412,7 @@ def build_parser() -> argparse.ArgumentParser:
     deploy.add_argument(
         "--latest",
         action="store_true",
-        help="with --dry-run: at the latest commit each git-sourced plugin tracks (owpp pull)",
+        help="with --dry-run: at the latest commit each git-sourced plugin follows (owpp pull)",
     )
     deploy.add_argument(
         "--force-prune",
@@ -435,7 +435,7 @@ def build_parser() -> argparse.ArgumentParser:
     migrate.add_argument(
         "--dry-run", action="store_true", help="say what would change; write nothing"
     )
-    pull = add("pull", _cmd_pull, "move plugins taken from git to the latest commit they track")
+    pull = add("pull", _cmd_pull, "move plugins taken from git to the latest commit they follow")
     pull.add_argument("ids", nargs="*", metavar="id", help="plugins to pull (default: all)")
     pull.add_argument("--dry-run", action="store_true", help="say what would move; write nothing")
     pull.add_argument(

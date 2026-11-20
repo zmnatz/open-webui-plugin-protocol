@@ -13,13 +13,39 @@ from pathlib import Path
 from typing import Any
 
 from .errors import OwppError
-from .manifest import plugin_folders, read_manifest, read_text, set_key
+from .manifest import get, parse_yaml, plugin_folders, read_text, rename_key, set_key, text_of
 from .protocol import VERSION, parse
+from .sources import ref_kind
 
 
-def _add_protocol_key(text: str) -> str:
+class Undecided(OwppError):
+    """A step that needs something it could not find out; the manifest is left as it was."""
+
+
+KindOf = Callable[[str, str], "str | None"]
+
+
+def _to_0_2(text: str, manifest: dict, kind_of: KindOf) -> str:
     """0.1 -> 0.2: record the version. Everything 0.2 adds is optional, so nothing else changes."""
-    return set_key(text, "protocol", f'"{VERSION}"')
+    return set_key(text, "protocol", '"0.2"')
+
+
+def _to_0_3(text: str, manifest: dict, kind_of: KindOf) -> str:
+    """0.2 -> 0.3: `source: track:` becomes `branch:` or `tag:`, whichever the name is in the
+    repository (asked with `git ls-remote`)."""
+    source = manifest.get("source")
+    name = text_of(get(source, "track"))
+    if name:
+        git = text_of(source.get("git"))
+        kind = kind_of(git, name)
+        if kind not in ("branch", "tag"):
+            raise Undecided(
+                f"could not tell whether `track: {name}` is a branch or a tag of {git} "
+                "(offline, private, or no such ref): write `branch:` or `tag:` in its place, "
+                'and `protocol: "0.3"`'
+            )
+        text = rename_key(text, "source.track", kind)
+    return set_key(text, "protocol", '"0.3"')
 
 
 @dataclass(frozen=True)
@@ -28,14 +54,17 @@ class Step:
 
     old: str
     new: str
-    apply: Callable[[str], str]
+    apply: Callable[[str, dict, KindOf], str]
 
 
-STEPS = (Step("0.1", VERSION, _add_protocol_key),)
+STEPS = (Step("0.1", "0.2", _to_0_2), Step("0.2", "0.3", _to_0_3))
 
 
-def migrate_text(text: str, value: Any, path: str) -> tuple[str, str, list[str]]:
-    """The manifest text at the current protocol, the version it came from, and the steps it took."""
+def migrate_text(
+    text: str, value: Any, path: str, kind_of: KindOf = ref_kind
+) -> tuple[str, str, list[str]]:
+    """The manifest text at the current protocol, the version it came from, and the steps it
+    took. Raises Undecided when a step cannot be made without the user."""
     version = parse(value, path)
     old = version
     applied: list[str] = []
@@ -43,7 +72,7 @@ def migrate_text(text: str, value: Any, path: str) -> tuple[str, str, list[str]]
         step = next((s for s in STEPS if s.old == version), None)
         if step is None:
             raise OwppError(f"{path}: cannot migrate protocol {version} to {VERSION}")
-        text = step.apply(text)
+        text = step.apply(text, parse_yaml(text) or {}, kind_of)
         applied.append(version)
         version = step.new
     return text, old, applied
@@ -54,8 +83,10 @@ def migrate(
     ids: list[str] | None = None,
     dry_run: bool = False,
     out: Callable[[str], None] = print,
+    kind_of: KindOf = ref_kind,
 ) -> int:
-    """`owpp migrate`: 0 when every plugin is current or was migrated, 1 on an unknown id."""
+    """`owpp migrate`: 0 when every plugin is current or was migrated, 1 when one is left for
+    the user (an unknown id is an error)."""
     folders = {f.name: f for f in plugin_folders(directory)}
     missing = [i for i in ids or [] if i not in folders]
     if missing:
@@ -64,10 +95,18 @@ def migrate(
     if not chosen:
         out("no plugin folders here (`plugin.yaml`); `owpp init` makes one")
         return 1 if ids else 0
+    left = 0
     for folder in chosen:
         path = folder / "plugin.yaml"
-        declared = read_manifest(folder).get("protocol")
-        text, old, steps = migrate_text(read_text(path), declared, str(path))
+        declared = parse_yaml(read_text(path)) or {}
+        try:
+            text, old, steps = migrate_text(
+                read_text(path), get(declared, "protocol"), str(path), kind_of
+            )
+        except Undecided as e:
+            out(f"FAIL  {folder.name}: {e}")
+            left += 1
+            continue
         if not steps:
             out(f"ok    {folder.name}: protocol {VERSION}")
             continue
@@ -77,4 +116,4 @@ def migrate(
         if not dry_run:
             path.write_bytes(text.encode("utf-8"))
             out("        wrote plugin.yaml")
-    return 0
+    return 1 if left else 0

@@ -4,7 +4,7 @@
 owpp pull [id ...] [--dry-run] [--bump patch|minor|major|none] [--dir FOLDER]
 ```
 
-Moves the pinned commit of each plugin taken from git to the latest commit it tracks. A plugin with a `source:` is pinned to a full commit SHA, so what is deployed changes only when the SHA moves, as a change you review and commit. `owpp pull` makes that change:
+Moves the pinned commit of each plugin taken from git to the latest commit of the branch or tag it follows. A plugin with a `source:` is pinned to a full commit SHA, so what is deployed changes only when the SHA moves, as a change you review and commit. `owpp pull` makes that change:
 
 ```
 $ owpp pull
@@ -12,13 +12,13 @@ new   inline_visualizer: moved f668387 -> 917c88f (default branch)
         changed inline-visualizer-v2/SKILL.md
         changed inline-visualizer-v2/tool.py
         https://github.com/Classic298/open-webui-plugins/compare/f668387...917c88f
-ok    other_plugin: up to date (v2), 3c1e9a0
+ok    other_plugin: up to date (branch v2), 3c1e9a0
 1 plugin(s) moved: review the upstream changes, run `owpp check` and `owpp test`, then commit plugin.yaml
 ```
 
 For each plugin with a `source:` (or just the ids given), it:
 
-1. looks up the latest commit of the branch or tag in `source: track:`, or of the repository's default branch when there is none, with `git ls-remote`;
+1. looks up the latest commit of the branch in `source: branch:`, or the commit of the tag in `source: tag:`, or the latest of the repository's default branch when there is neither, with `git ls-remote`;
 2. fetches the files the plugin takes at the pinned commit and at the latest one, and lists which were **changed**, **added** or **removed** (under a `dir:`, file by file), with a compare link for GitHub;
 3. rewrites the `ref:` line of `plugin.yaml` to the new SHA, keeping every comment and the layout, or adds it after `git:` when the source has none yet (a first pin: `pinned to <sha>`, with a link to the files);
 4. when files it takes changed, bumps the plugin's version (`--bump`) and adds a `CHANGELOG.md` entry naming the commits and the files. A plugin whose function is the upstream's own, or that is a [whole plugin from git](../plugin-format.md#a-whole-plugin-from-git), keeps the upstream's version.
@@ -76,5 +76,5 @@ owpp pull inline_visualizer --bump minor
 
 - [`owpp deploy --dry-run --latest`](deploy.md#the-report-what-changes-in-versions): what the move would change on the instance.
 - [`owpp check`](check.md) and [`owpp test`](test.md): run them on the moved code before committing.
-- [Plugin format: `source:`](../plugin-format.md): `ref` and `track`.
+- [Plugin format: `source:`](../plugin-format.md): `ref`, `branch` and `tag`.
 - [Bundling](../bundling.md): why only a full commit SHA is accepted.
