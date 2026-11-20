@@ -16,11 +16,12 @@ Pin the version (`uvx owpp@0.2.0 list`, or `uv tool install owpp==0.2.0`): the r
 
 ```
 owpp list                           plugins with their function type
-owpp check [id ...] [--strict]      bundle, compile, report undefined names; warn about valves and tools
+owpp check [id ...] [--strict] [--since ref]   bundle, compile, report undefined names; warn about valves and tools
 owpp bundle <id> [out.py]           print (or write) the code that would be deployed
-owpp deploy [--only id,id] [--dry-run [--sync]] [--force-prune] [--managed-by marker]
+owpp deploy [--only id,id] [--dry-run [--sync]] [--force] [--force-prune] [--managed-by marker]
 owpp test [id ...] [-- pytest args]
-owpp sync [id ...] [--dry-run]
+owpp sync [id ...] [--dry-run] [--bump patch|minor|major|none]
+owpp bump <id> [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
 owpp create [id]
 owpp init <id> [--type event|filter|action|pipe]
 ```
@@ -35,6 +36,7 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
   Warnings read the plugin's own source (`function.py`, `tool.py`, `shared.py`, or a loose `<id>.py`) with real file and line numbers, and skip a plugin that takes its code from a pinned `source:`, which is not yours to lint. They do not change the exit status; **`--strict` makes them fail**, for CI.
 - **`bundle`** writes the deployed code, to read or diff.
 - **`test`** runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. It needs the `test` extra: `uvx --from 'owpp[test]' owpp test`. See [testing](testing.md).
+- **`bump`** bumps a version, and **`check --since <ref>`** fails on a change without one: see [versions](#versions).
 - **`sync`** moves the pinned commit of each plugin taken from git to the latest one: see [below](#owpp-sync-moving-a-pinned-commit).
 - **`create`** is a wizard that scaffolds a plugin: written here (a filter, action, event or pipe with that type's options, a tool, skills, a page and libraries, or an *installer* of a tool and skills with no code of its own), or taken from a git repository pinned to a commit (a branch or tag is resolved to its SHA). It shows the files and writes them only when you say yes, then runs `check --strict` on the result. Pressing Enter all the way makes what `init` makes. See [creating a plugin](creating.md).
 - **`init`** scaffolds `plugin.yaml`, `function.py`, `tests/test_<id>.py` and a README with Test and Deploy sections. For every type, the scaffold passes both `check` and `test`.
@@ -51,6 +53,7 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
 | `--dry-run` | List what would change, with versions; write nothing. |
 | `--sync` | With `--dry-run`: report against the latest commit each git-sourced plugin tracks, as [`owpp sync`](#owpp-sync-moving-a-pinned-commit) would move it, without changing `plugin.yaml`. Refused without `--dry-run`. |
 | `--only a,b` | Deploy just these ids; no pruning. |
+| `--force` | Deploy even where the instance runs a newer version than the repository: see [versions](#versions). |
 | `--force-prune` | Allow deleting more than half of the managed functions at once. |
 
 ### The ownership marker
@@ -119,7 +122,8 @@ For each plugin with a `source:` (or just the ids given), it:
 
 1. looks up the latest commit of the branch or tag in `source: track:`, or of the repository's default branch when there is none, with `git ls-remote`;
 2. fetches the files the plugin takes at the pinned commit and at the latest one, and lists which were **changed**, **added** or **removed** (under a `dir:`, file by file), with a compare link for GitHub;
-3. rewrites the `ref:` line of `plugin.yaml` to the new SHA, keeping every comment and the layout, and changes nothing else.
+3. rewrites the `ref:` line of `plugin.yaml` to the new SHA, keeping every comment and the layout;
+4. when files it takes changed, bumps the plugin's version (`--bump patch`, the default; `minor`, `major`, or `none`) and adds a `CHANGELOG.md` entry naming the commits and the files. A plugin whose function is the upstream's own keeps the upstream's version.
 
 It commits nothing and deploys nothing: the change is yours to review and commit, as before. `--dry-run` says what would move and writes nothing. A plugin whose ref cannot be looked up, or whose files are not all there at the new commit, is reported as `FAIL` and left as it was, and the command exits 1.
 
@@ -150,6 +154,54 @@ jobs:
 ```
 
 The pull request is where the upstream diff is reviewed; the deploy runs when it is merged.
+
+## Versions
+
+A plugin has up to three versions, each where Open-WebUI reads it: the **function's** (`version:` under `function:` in `plugin.yaml`, the plugin's version, which Open-WebUI shows), the **tool's** (`version:` under `tool:`), and each **skill's** (`version:` in its SKILL.md front matter, optional). A loose `<id>.py` has its version in its docstring header.
+
+### `owpp bump`
+
+```sh
+owpp bump viz                     # the function: 1.0.0 -> 1.0.1, and a CHANGELOG.md entry
+owpp bump viz minor -m "Faster lookups."
+owpp bump viz 2.0.0
+owpp bump viz --tool              # the tool's version
+owpp bump viz --skill draw        # that skill's (added if it had none)
+```
+
+It rewrites the one `version:` line, keeping comments and layout (and adds it, after `title:`, when there is none; no version bumps to 0.1.0). A function bump adds a `## <version> (<date>)` entry to the top of the plugin's `CHANGELOG.md`, which it creates if needed: the `-m` text, or a line to replace. Code taken verbatim from a `source:` keeps the upstream's version, so `bump` refuses it.
+
+### `CHANGELOG.md`
+
+`owpp create` writes one. When a plugin has one, `owpp check` warns if it has no `## <version>` entry for the function's current version (so `--strict` fails on it).
+
+### `owpp check --since <ref>`
+
+```sh
+owpp check --since origin/main
+FAIL  viz: changed since origin/main but its version is still 1.0.0 (run `owpp bump viz`)
+FAIL  tool viz: changed since origin/main but its version is still 1.0.0 (run `owpp bump viz --tool`)
+```
+
+It bundles every plugin as it was at that git ref (with `git archive`) and as it is now, and fails for what changed without a new version:
+
+- a **tool or skill that has a version** must bump its own when it changes;
+- the **plugin** (the function's version) must bump when its own code changed, when a tool or skill without a version changed, was added or was removed, or when the commit of its `source:` moved (`owpp sync` bumps it for you).
+
+A plugin that did not exist at that ref needs nothing. Code taken verbatim from a `source:` (an upstream function, tool or skills) is the upstream's to version: its changes count as the plugin's. In CI, check out with `fetch-depth: 0` and pass the base branch, for example `since: origin/${{ github.base_ref }}` on a pull request.
+
+### Deploying an older version
+
+Before it writes anything, a deploy compares each function, tool and skill version in the repository with the one the instance runs. If any would go **back** a version (`1.2.0` live, `1.1.0` here), the dry run says so:
+
+```
+- filter function `viz` (viz/): would update
+  - function: 1.2.0 -> 1.1.0, OLDER than the live version
+
+Warning: 1 function(s) would go back a version: `viz` (function 1.2.0 -> 1.1.0). The instance has newer versions than this repository: check the branch. A deploy refuses this without --force.
+```
+
+and a deploy refuses, writing nothing, unless it is given **`--force`** (action input `force: "true"`), for a deliberate rollback. Versions are compared as numbers (`1.10.0` is newer than `1.9.0`); a version that is not dotted numbers is never counted as older.
 
 ## GitHub Action
 

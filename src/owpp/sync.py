@@ -13,11 +13,13 @@ SHA moves, in a change someone reviews. This makes the move easy without making 
 
 from __future__ import annotations
 
+import datetime as _dt
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .bundle import source_label
 from .errors import OwppError
 from .manifest import read_manifest, read_text, text_of
 from .sources import (
@@ -31,6 +33,7 @@ from .sources import (
     resolve_ref,
     source_key,
 )
+from .versioning import add_changelog_entry, next_version, set_block_version
 
 Resolver = Callable[[str, str], "str | None"]
 
@@ -49,6 +52,7 @@ class Move:
     error: str = ""
     compare: str = ""
     written: bool = False
+    version: tuple[str, str] | None = None  # the plugin's own version, bumped: (old, new)
 
     @property
     def moved(self) -> bool:
@@ -92,6 +96,8 @@ def sync_plugin(
     dry_run: bool = False,
     resolve: Resolver | None = None,
     fetcher: Fetcher = git_fetcher,
+    bump_by: str = "patch",
+    today: str | None = None,
 ) -> Move:
     manifest = read_manifest(folder)
     source = manifest["source"]
@@ -116,9 +122,27 @@ def sync_plugin(
     move.removed = sorted(set(before) - set(after))
     move.changed = sorted(p for p in set(before) & set(after) if before[p] != after[p])
     move.compare = compare_url(git, old, new)
+    fn = manifest.get("function") if isinstance(manifest.get("function"), dict) else {}
+    # The upstream files changed: a new version of the plugin, unless its function is the
+    # upstream's own (whose header, and version, come from its file).
+    if (move.changed or move.added or move.removed) and bump_by != "none" and not fn.get("file"):
+        current = text_of(fn.get("version"))
+        move.version = (current, next_version(current, bump_by))
     if not dry_run:
         path = folder / "plugin.yaml"
-        path.write_bytes(rewrite_ref(read_text(path), old, new).encode("utf-8"))
+        text = rewrite_ref(read_text(path), old, new)
+        if move.version:
+            text, _ = set_block_version(text, "function", move.version[1])
+        path.write_bytes(text.encode("utf-8"))
+        if move.version:
+            what = ", ".join(move.changed + move.added + move.removed)
+            add_changelog_entry(
+                folder,
+                text_of(fn.get("title")) or folder.name,
+                move.version[1],
+                [f"Upstream {source_label(source)}: {old[:7]} -> {new[:7]} ({what})."],
+                today or _dt.date.today().isoformat(),
+            )
         move.written = True
     return move
 
@@ -130,6 +154,8 @@ def sync(
     resolve: Resolver | None = None,
     fetcher: Fetcher = git_fetcher,
     out: Callable[[str], None] = print,
+    bump_by: str = "patch",
+    today: str | None = None,
 ) -> int:
     """`owpp sync`: 0 when every plugin is up to date or was moved, 1 when one could not be."""
     folders = {f.name: f for f in plugin_folders(directory)}
@@ -144,7 +170,7 @@ def sync(
     if not sourced:
         out("no plugin takes its code from git (`source:` in plugin.yaml)")
         return 1 if ids else 0
-    moves = [sync_plugin(f, dry_run, resolve, fetcher) for f in sourced]
+    moves = [sync_plugin(f, dry_run, resolve, fetcher, bump_by, today) for f in sourced]
     for m in moves:
         where = f"({m.track})" if m.track != "HEAD" else "(default branch)"
         if m.error:
@@ -165,6 +191,9 @@ def sync(
                 out("        no file it takes changed")
             if m.compare:
                 out(f"        {m.compare}")
+            if m.version:
+                verb = "would bump" if dry_run else "bumped"
+                out(f"        {verb} the version {m.version[0] or '(none)'} -> {m.version[1]}")
     moved = [m for m in moves if m.moved]
     if moved and not dry_run:
         out(

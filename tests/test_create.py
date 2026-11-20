@@ -242,7 +242,9 @@ class TestFromGit:
     def test_it_writes_no_code_of_its_own(self, from_git):
         for spec in GIT_SPECS:
             names = {p.name for p in (from_git / spec.id).iterdir()}
-            assert names == {"plugin.yaml", "README.md", "tests"}
+            # An installer's version is ours, so it has a changelog; an upstream function's is not.
+            changelog = {"CHANGELOG.md"} if spec.type == "installer" else set()
+            assert names == {"plugin.yaml", "README.md", "tests"} | changelog
             readme = (from_git / spec.id / "README.md").read_text()
             assert SHA in readme and "To upgrade" in readme
 

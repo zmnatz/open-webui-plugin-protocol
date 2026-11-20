@@ -5,7 +5,8 @@
   owpp bundle <id> [out.py]          print (or write) the exact code that would be deployed
   owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
   owpp test [id ...] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
-  owpp sync [id ...] [--dry-run]     move plugins taken from git to their latest commit
+  owpp sync [id ...] [--dry-run] [--bump part]   move plugins taken from git to their latest commit
+  owpp bump <id> [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
   owpp create [id]                   a wizard: asks what the plugin is, then writes it
   owpp init <id> [--type event|filter|action|pipe]   scaffold a plugin folder
 
@@ -31,6 +32,7 @@ from .deploy import options_from_env, run_deploy
 from .errors import OwppError
 from .lint import lint_notes, lint_plugin
 from .sources import fetch_sources, plugin_folders, source_keys
+from .versioning import bump, changelog_problem, check_since, version_of
 
 # ---- check --------------------------------------------------------------------
 
@@ -139,6 +141,11 @@ def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
             warnings += 1
         for finding in lint_notes(directory / fn.file.rstrip("/"), fn.file.rstrip("/")):
             print(f"note  {finding}")
+        if fn.file.endswith("/"):
+            problem = changelog_problem(directory / fn.id, version_of(fn.content))
+            if problem:
+                print(f"warn  {fn.id}/{problem}")
+                warnings += 1
         if fn.file.endswith("/"):  # a plugin folder: say which environment variables it reads
             for var, default in env_references(directory / fn.id):
                 shown = (
@@ -149,9 +156,23 @@ def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
                     else "default empty"
                 )
                 print(f"env   {var} ({shown})")
+    if args.since:
+        chosen = [f for f in all_functions if not args.ids or f.id in args.ids]
+        for finding in check_since(directory, args.since, args.ids, new_files=chosen):
+            print(f"FAIL  {finding}")
+            bad += 1
     if warnings:
         print(f"{warnings} warning(s){'; failing because of --strict' if args.strict else ''}")
     return 1 if bad or (args.strict and warnings) else 0
+
+
+def _cmd_bump(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    for b in bump(directory, args.id, args.how, args.tool, args.skill, args.message or ""):
+        print(f"{b.what}: {b.old or '(no version)'} -> {b.new} ({b.file})")
+    changelog = directory / args.id / "CHANGELOG.md"
+    if not (args.tool or args.skill or args.message) and changelog.exists():
+        print(f"now say what changed, in the new entry of {changelog}")
+    return 0
 
 
 def _cmd_bundle(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -178,6 +199,7 @@ def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         force_prune=args.force_prune,
         managed_by=args.managed_by,
         sync=args.sync,
+        force=args.force,
     )
     return run_deploy(opts, env)
 
@@ -235,7 +257,7 @@ def _cmd_sync(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
 
     if not directory.exists():
         raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
-    return sync(directory, args.ids, dry_run=args.dry_run)
+    return sync(directory, args.ids, dry_run=args.dry_run, bump_by=args.bump)
 
 
 def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -272,7 +294,14 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument(
         "--strict",
         action="store_true",
-        help="fail on warnings too (valves with no description, poorly described tools)",
+        help="fail on warnings too (valves with no description, poorly described tools, "
+        "a CHANGELOG.md with no entry for the version)",
+    )
+    check.add_argument(
+        "--since",
+        metavar="ref",
+        help="also fail when a plugin changed since this git ref (e.g. origin/main) but its "
+        "version did not",
     )
     bundle = add("bundle", _cmd_bundle, "print (or write) the code that would be deployed")
     bundle.add_argument("id")
@@ -281,6 +310,11 @@ def build_parser() -> argparse.ArgumentParser:
     deploy.add_argument("--only", metavar="id,id", help="deploy just these (no pruning)")
     deploy.add_argument(
         "--dry-run", action="store_true", help="list what would change, with versions"
+    )
+    deploy.add_argument(
+        "--force",
+        action="store_true",
+        help="deploy even where the instance runs a newer version (a downgrade)",
     )
     deploy.add_argument(
         "--sync",
@@ -300,6 +334,20 @@ def build_parser() -> argparse.ArgumentParser:
     sync = add("sync", _cmd_sync, "move plugins taken from git to the latest commit they track")
     sync.add_argument("ids", nargs="*", metavar="id", help="plugins to sync (default: all)")
     sync.add_argument("--dry-run", action="store_true", help="say what would move; write nothing")
+    sync.add_argument(
+        "--bump",
+        choices=["patch", "minor", "major", "none"],
+        default="patch",
+        help="bump a moved plugin's version, with a CHANGELOG.md entry (default patch)",
+    )
+    bump_cmd = add("bump", _cmd_bump, "bump a plugin's version (or its tool's or a skill's)")
+    bump_cmd.add_argument("id")
+    bump_cmd.add_argument(
+        "how", nargs="?", default="patch", help="patch (default), minor, major, or a version"
+    )
+    bump_cmd.add_argument("--tool", action="store_true", help="the tool's version")
+    bump_cmd.add_argument("--skill", metavar="name", help="that skill's version")
+    bump_cmd.add_argument("-m", "--message", help="the CHANGELOG.md entry (function bumps)")
     create = add("create", _cmd_create, "create a plugin, answering a few questions (a wizard)")
     create.add_argument("id", nargs="?", help="the plugin id (asked if left out)")
     init = add("init", _cmd_init, "scaffold a plugin folder")

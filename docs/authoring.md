@@ -64,3 +64,4 @@ For a plugin taken from git, also say where it comes from, the pinned commit, an
 - [ ] data-exposing routes are gated
 - [ ] a page in the Artifacts panel: README states the same-origin requirement and its cost
 - [ ] remote code pinned to a full SHA
+- [ ] a change has a new version (`owpp bump`, and a CHANGELOG.md entry); `owpp check --since origin/main` passes

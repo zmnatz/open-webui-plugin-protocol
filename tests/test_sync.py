@@ -66,7 +66,7 @@ def plugins(tmp_path):
     return make
 
 
-def run(directory, ids=None, dry_run=False, latest=NEW):
+def run(directory, ids=None, dry_run=False, latest=NEW, bump_by="patch"):
     lines: list[str] = []
     looked_up: list[tuple[str, str]] = []
 
@@ -74,7 +74,16 @@ def run(directory, ids=None, dry_run=False, latest=NEW):
         looked_up.append((git, ref))
         return latest
 
-    code = sync(directory, ids, dry_run=dry_run, resolve=resolve, fetcher=fetcher, out=lines.append)
+    code = sync(
+        directory,
+        ids,
+        dry_run=dry_run,
+        resolve=resolve,
+        fetcher=fetcher,
+        out=lines.append,
+        bump_by=bump_by,
+        today="2026-11-20",
+    )
     return code, "\n".join(lines), looked_up
 
 
@@ -93,8 +102,27 @@ class TestSync:
         assert f"https://github.com/owner/repo/compare/{OLD}...{NEW}" in out
         text = (d / "viz" / "plugin.yaml").read_text()
         assert read_manifest(d / "viz")["source"]["ref"] == NEW
-        # Only the ref changed: the comments stay.
-        assert text == MANIFEST.replace("{track}", "").replace(OLD, NEW)
+        # The ref moved and, since files it takes changed, the plugin's version (it had none):
+        # the comments stay.
+        assert text == MANIFEST.replace("{track}", "").replace(OLD, NEW).replace(
+            "  title: Viz\n", "  title: Viz\n  version: 0.1.0\n"
+        )
+        assert "bumped the version (none) -> 0.1.0" in out
+        changelog = (d / "viz" / "CHANGELOG.md").read_text()
+        assert f"## 0.1.0 (2026-11-20)\n\n- Upstream {GIT} viz: {OLD[:7]} -> {NEW[:7]}" in changelog
+
+    def test_bump_none_moves_only_the_ref(self, plugins):
+        d = plugins()
+        code, out, _ = run(d, bump_by="none")
+        assert code == 0 and "bumped" not in out
+        assert (d / "viz" / "plugin.yaml").read_text() == MANIFEST.replace("{track}", "").replace(
+            OLD, NEW
+        )
+        assert not (d / "viz" / "CHANGELOG.md").exists()
+
+    def test_a_dry_run_says_it_would_bump(self, plugins):
+        _, out, _ = run(plugins(), dry_run=True)
+        assert "would bump the version (none) -> 0.1.0" in out
 
     def test_it_follows_the_branch_or_tag_in_track(self, plugins):
         d = plugins(track="release/v2")

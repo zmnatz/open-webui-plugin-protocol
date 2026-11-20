@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import sys
 import tempfile
@@ -31,16 +30,19 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
-from .bundle import (
-    VALID_ID,
-    FunctionFile,
-    load_function_files,
-    parse_frontmatter,
-    parse_skill,
-    runtime_data,
-)
+from .bundle import VALID_ID, FunctionFile, load_function_files
 from .errors import OwppError
 from .sources import Fetcher, fetch_sources, git_fetcher, plugin_folders, source_keys
+from .versioning import (
+    is_older,
+    own_code,
+    same,
+    skill_version,
+    skills_of,
+    tool_version,
+    tools_of,
+    version_of,
+)
 
 API = "/api/v1/functions"
 
@@ -89,6 +91,8 @@ class Options:
     # With dry_run: report against the latest commit each git-sourced plugin tracks, not the
     # pinned one (as if `owpp sync` had run), without changing plugin.yaml.
     sync: bool = False
+    # Deploy even where the live version is newer than the repository's (a downgrade).
+    force: bool = False
     fetch: Fetch = field(default=urllib_fetch, repr=False)
     git_fetcher: Fetcher = field(default=git_fetcher, repr=False)
     resolve: Callable[[str, str], str | None] | None = field(default=None, repr=False)
@@ -103,6 +107,7 @@ def options_from_env(
     force_prune: bool = False,
     managed_by: str | None = None,
     sync: bool = False,
+    force: bool = False,
 ) -> Options:
     """Flags win over the environment, which wins over the defaults."""
     env = os.environ if env is None else env
@@ -117,6 +122,7 @@ def options_from_env(
         only=[i for i in only.split(",") if i] if only else None,
         managed_by=managed_by or env.get("OWPP_MANAGED_BY") or MANAGED_BY,
         sync=sync,
+        force=force,
     )
 
 
@@ -230,82 +236,76 @@ class Result:
     type: str | None = None
     version: str = ""  # the function's version, from its header
     details: list[str] = field(default_factory=list)  # what changes: versions, tools, skills
+    downgrades: list[str] = field(default_factory=list)  # parts older than the live version
 
 
 # ---- what changes, in versions ------------------------------------------------
-
-
-def _version(content: str | None) -> str:
-    return str(parse_frontmatter(content or "").get("version") or "")
-
-
-def _own_code(content: str | None) -> str:
-    """The function's code without the tool and skills it embeds, which are reported apart."""
-    return re.sub(r"^_PLUGIN = _json\.loads\(.*\)$", "", _norm(content), flags=re.M)
 
 
 def _from_to(old: str, new: str) -> str:
     return f"{old or '(no version)'} -> {new or '(no version)'}"
 
 
-def _tools(content: str | None) -> dict[str, dict]:
-    return {t["id"]: t for t in runtime_data(content)["tools"] if not t.get("self")}
+@dataclass
+class Changes:
+    """What deploying a function changes: `details` for the report, and `downgrades`, the
+    parts whose new version is older than the live one."""
+
+    details: list[str] = field(default_factory=list)
+    downgrades: list[str] = field(default_factory=list)
+
+    def version_change(self, label: str, old: str, new: str) -> None:
+        if is_older(new, old):
+            self.downgrades.append(f"{label} {old} -> {new}")
+            self.details.append(f"{label}: {_from_to(old, new)}, OLDER than the live version")
+        else:
+            self.details.append(f"{label}: {_from_to(old, new)}")
 
 
-def _skills(content: str | None) -> dict[str, dict]:
-    return {s["id"]: s for s in runtime_data(content)["skills"]}
-
-
-def _skill_version(skill: dict) -> str:
-    root = next((f for f in skill.get("files", []) if f.get("path") == "SKILL.md"), None)
-    fm, _ = parse_skill(skill["id"], root["content"]) if root and "content" in root else ({}, "")
-    return str(fm.get("version") or "")
-
-
-def _parts(kind: str, old: dict[str, dict], new: dict[str, dict], version) -> list[str]:
+def _parts(changes: Changes, kind: str, old: dict, new: dict, version) -> None:
     """One line per tool (or skill) that is added, removed or changed."""
-    out = []
     for item_id in sorted(set(old) | set(new)):
         a, b = old.get(item_id), new.get(item_id)
+        label = f"{kind} `{item_id}`"
         if a is None:
             v = version(b)
-            out.append(f"{kind} `{item_id}`: new{f' ({v})' if v else ''}")
+            changes.details.append(f"{label}: new{f' ({v})' if v else ''}")
         elif b is None:
-            out.append(f"{kind} `{item_id}`: removed")
-        elif json.dumps(a, sort_keys=True) != json.dumps(b, sort_keys=True):
+            changes.details.append(f"{label}: removed")
+        elif not same(a, b):
             va, vb = version(a), version(b)
-            out.append(
-                f"{kind} `{item_id}`: {_from_to(va, vb)}"
-                if va != vb
-                else f"{kind} `{item_id}`: changed, still {vb or '(no version)'}"
-            )
-    return out
+            if va != vb:
+                changes.version_change(label, va, vb)
+            else:
+                changes.details.append(f"{label}: changed, still {vb or '(no version)'}")
 
 
-def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, str]) -> list[str]:
+def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, str]) -> Changes:
     """What deploying `f` changes, by version: the function, each tool and skill it installs,
     and the commit of the git repository it takes code from. `existing` is the live function
     (with its content), or None; `latest` notes which sources were moved to their latest commit."""
     old = existing.get("content") if existing else None
-    out = []
-    old_v, new_v = _version(old), _version(f.content)
+    changes = Changes()
+    old_v, new_v = version_of(old), version_of(f.content)
     if existing is None:
-        out.append(f"function: new{f' ({new_v})' if new_v else ''}")
+        changes.details.append(f"function: new{f' ({new_v})' if new_v else ''}")
     elif old_v != new_v:
-        out.append(f"function: {_from_to(old_v, new_v)}")
-    elif _own_code(old) != _own_code(replace_imports(f.content)):
-        out.append(f"function: code changed, still {new_v or '(no version)'}")
-    out += _parts("tool", _tools(old), _tools(f.content), lambda t: _version(t.get("content")))
-    out += _parts("skill", _skills(old), _skills(f.content), _skill_version)
+        changes.version_change("function", old_v, new_v)
+    elif own_code(old) != own_code(replace_imports(f.content)):
+        changes.details.append(f"function: code changed, still {new_v or '(no version)'}")
+    _parts(changes, "tool", tools_of(old), tools_of(f.content), tool_version)
+    _parts(changes, "skill", skills_of(old), skills_of(f.content), skill_version)
     live_sources = ((existing or {}).get("meta") or {}).get("sources") or {}
     for label, sha in f.sources.items():
         was = live_sources.get(label)
         note = f" ({latest[label]})" if label in latest else ""
         if existing is None:
-            out.append(f"source {label}: {sha[:7]}{note}")
+            changes.details.append(f"source {label}: {sha[:7]}{note}")
         elif was != sha:
-            out.append(f"source {label}: {was[:7] if was else '(not recorded)'} -> {sha[:7]}{note}")
-    return out
+            changes.details.append(
+                f"source {label}: {was[:7] if was else '(not recorded)'} -> {sha[:7]}{note}"
+            )
+    return changes
 
 
 def _with_content(opts: Options, files: list[FunctionFile], live: list[dict]) -> list[dict]:
@@ -373,11 +373,20 @@ def _deploy_functions(
         )
 
     plan = plan_deploy(files, _with_content(opts, files, live), managed_by)
+    changes = {p.file.id: describe_changes(p.file, p.existing, latest or {}) for p in plan}
+    # Going back a version is refused before anything is written, unless forced.
+    older = {i: c.downgrades for i, c in changes.items() if c.downgrades}
+    if older and not opts.dry_run and not opts.force:
+        raise OwppError(
+            "refusing to deploy older versions over newer ones on the instance: "
+            + "; ".join(f"{i} ({', '.join(d)})" for i, d in older.items())
+            + ". Check you are deploying the right branch, or re-run with --force"
+        )
     results: list[Result] = []
     for p in plan:
         f = p.file
-        details = describe_changes(f, p.existing, latest or {})
-        version = _version(f.content)
+        details, downgrades = changes[f.id].details, changes[f.id].downgrades
+        version = version_of(f.content)
         if p.action == "unchanged" or opts.dry_run:
             pending = []
             if f.want_global and p.existing:
@@ -398,7 +407,9 @@ def _deploy_functions(
                     else _ensure_not_global(opts, f.id, p.existing)
                 )
                 action = f"unchanged, {', '.join(notes)}"
-            results.append(Result(f.id, f.file, action, f.kind, f.type, version, details))
+            results.append(
+                Result(f.id, f.file, action, f.kind, f.type, version, details, downgrades)
+            )
             continue
 
         # An update replaces meta, so it is always sent whole.
@@ -418,7 +429,14 @@ def _deploy_functions(
             )
             results.append(
                 Result(
-                    f.id, f.file, ", ".join(["updated", *notes]), f.kind, f.type, version, details
+                    f.id,
+                    f.file,
+                    ", ".join(["updated", *notes]),
+                    f.kind,
+                    f.type,
+                    version,
+                    details,
+                    downgrades,
                 )
             )
             continue
@@ -556,6 +574,20 @@ def render_report(results: list[Result], dry_run: bool, sync: bool = False) -> s
         lines.append(f"- {what} `{r.id}` ({r.file}): {action}")
         lines += [f"  - {d}" for d in r.details]
     title = "Open-WebUI functions"
+    older = [r for r in results if r.downgrades]
+    if older:
+        forced = any("updated" in r.action for r in older)
+        lines += [
+            "",
+            f"Warning: {len(older)} function(s) would go back a version: "
+            + ", ".join(f"`{r.id}` ({', '.join(r.downgrades)})" for r in older)
+            + (
+                ". Deployed with --force."
+                if forced
+                else ". The instance has newer versions than this repository: check the branch. "
+                "A deploy refuses this without --force."
+            ),
+        ]
     if dry_run:
         title = f"Dry run{' at the latest commits' if sync else ''}: {title}"
     return f"{title}\n\n" + "\n".join(lines) + "\n"

@@ -23,6 +23,7 @@ libraries rather than copies of them, HTML in files rather than in Python string
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import re
 from dataclasses import dataclass, field
@@ -32,6 +33,7 @@ from .bundle import VALID_ID, VALID_SKILL_ID
 from .errors import OwppError
 from .events import problem_with
 from .sources import GIT_URL, SHA40, TRACK
+from .versioning import changelog_text
 
 CLASS = {"event": "Event", "filter": "Filter", "action": "Action", "pipe": "Pipe"}
 CODE_TYPES = tuple(CLASS)
@@ -1093,6 +1095,11 @@ def render_readme(spec: PluginSpec) -> str:
         f"- Function type: **{kind.get(spec.type, spec.type)}**.",
         f"- `owpp deploy --only {spec.id} --dry-run`, then without `--dry-run`.",
     ]
+    if spec.type != "upstream":
+        sections.append(
+            f"- A change is a new version: `owpp bump {spec.id}` (and say what changed in "
+            "CHANGELOG.md); `owpp check --since origin/main` fails on a change without one."
+        )
     if spec.type == "filter" and spec.global_ is None and not spec.toggle:
         sections.append(
             "- A new filter is made global on its first deploy; set `global:` in plugin.yaml to change that."
@@ -1121,10 +1128,14 @@ _PAGE_HTML = """<!doctype html>
 """
 
 
-def render(spec: PluginSpec) -> dict[str, str]:
-    """The plugin folder's files, {path: text}."""
+def render(spec: PluginSpec, today: str | None = None) -> dict[str, str]:
+    """The plugin folder's files, {path: text}. `today` dates the first CHANGELOG.md entry."""
     validate(spec)
     files = {"plugin.yaml": render_manifest(spec)}
+    if spec.type != "upstream":  # an upstream function's versions are the upstream's
+        files["CHANGELOG.md"] = changelog_text(
+            spec.title, spec.version, ["First version."], today or _dt.date.today().isoformat()
+        )
     if spec.has_code:
         files["function.py"] = render_function(spec)
     files["README.md"] = render_readme(spec)
@@ -1167,9 +1178,9 @@ def render(spec: PluginSpec) -> dict[str, str]:
     return files
 
 
-def write_plugin(directory: Path | str, spec: PluginSpec) -> Path:
+def write_plugin(directory: Path | str, spec: PluginSpec, today: str | None = None) -> Path:
     """Write the plugin folder `<directory>/<id>/`. Refuses a folder that exists."""
-    files = render(spec)
+    files = render(spec, today)
     folder = Path(directory) / spec.id
     if folder.exists():
         raise OwppError(f"{folder} already exists")

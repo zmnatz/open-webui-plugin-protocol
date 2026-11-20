@@ -28,6 +28,12 @@ inputs:
   check:
     description: '"false" skips `owpp check` before deploying.'
     default: "true"
+  since:
+    description: 'A git ref (e.g. origin/main): `owpp check` also fails when a plugin changed since it without a new version. Needs that ref fetched (actions/checkout with fetch-depth: 0).'
+    default: ""
+  force:
+    description: '"true" deploys even where the instance runs a newer version than the repository (a downgrade).'
+    default: "false"
 runs:
   using: composite
   steps:
@@ -37,7 +43,11 @@ runs:
       shell: bash
       env:
         OWPP_PLUGINS_DIR: ${{ inputs.plugins-dir }}
-      run: uvx --from "$GITHUB_ACTION_PATH" owpp check
+        SINCE: ${{ inputs.since }}
+      run: |
+        args=(check)
+        if [ -n "$SINCE" ]; then args+=(--since "$SINCE"); fi
+        uvx --from "$GITHUB_ACTION_PATH" owpp "${args[@]}"
     - name: Deploy plugins
       shell: bash
       env:
@@ -48,9 +58,11 @@ runs:
         ONLY: ${{ inputs.only }}
         DRY_RUN: ${{ inputs.dry-run }}
         SYNC: ${{ inputs.sync }}
+        FORCE: ${{ inputs.force }}
       run: |
         args=(deploy)
         if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
         if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
         if [ "$SYNC" = "true" ]; then args+=(--sync); fi
+        if [ "$FORCE" = "true" ]; then args+=(--force); fi
         uvx --from "$GITHUB_ACTION_PATH" owpp "${args[@]}"
