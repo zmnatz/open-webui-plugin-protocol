@@ -173,6 +173,26 @@ owpp deploy --only my_plugin --dry-run          # then without --dry-run
 
 Then follow the [authoring guide](authoring.md): its conventions and its checklist.
 
+## From a spec
+
+`owpp create --spec <file>` asks nothing: the file says what the wizard would have asked, as YAML or JSON (`-` reads it from stdin), and it writes the plugin and checks it. It is for scripts and [AI agents](ai-agents.md). An id on the command line wins over the file's.
+
+```yaml
+id: notes
+type: filter                 # filter | action | event | pipe | installer | upstream
+description: Keeps notes on the chat.
+hooks: [inlet, outlet]
+toggle: false
+tool: {id: notes, methods: [save, search]}
+skills:
+  - {id: take-notes, description: Use when the user asks to remember something.}
+page: rendered
+page_access: admin
+chat_data: true
+```
+
+The keys are those of `PluginSpec` (below), with `tool`, `skills` and `source` as mappings and `buttons` and `models` as lists of ids or `{id, name}`. `global` may be written for `global_`. A key it does not know is refused, so a typo is never a silent default. The full list, with a plugin from git, is in the [owpp skill's spec reference](../skills/owpp/references/spec.md).
+
 ## From code
 
 The wizard only collects answers. `owpp.create` writes the folder from a `PluginSpec`, with no questions asked:

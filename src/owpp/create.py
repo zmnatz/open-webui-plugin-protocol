@@ -26,7 +26,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 from .bundle import VALID_ID, VALID_SKILL_ID
@@ -1176,6 +1176,56 @@ def render(spec: PluginSpec, today: str | None = None) -> dict[str, str]:
             "/* This plugin's part of /static/custom.css, on every page. */\n"
         )
     return files
+
+
+def spec_from_data(data: object, plugin_id: str = "") -> PluginSpec:
+    """A PluginSpec from plain data (a YAML or JSON document): the keys of PluginSpec, with
+    `tool`, `skills` and `source` as mappings of ToolSpec, SkillSpec and SourceSpec, and
+    `buttons` and `models` as lists of {id, name}. `global` may be written for `global_`.
+    Unknown keys are refused, so a typo is not silently a default."""
+    if not isinstance(data, dict):
+        raise OwppError("a plugin spec is a mapping (see docs/creating.md#from-a-spec)")
+    data = dict(data)
+    if "global" in data:
+        data["global_"] = data.pop("global")
+    if plugin_id:
+        data["id"] = plugin_id
+    if not data.get("id"):
+        raise OwppError("the spec needs an id (or give it on the command line)")
+
+    def build(cls, value, label):
+        if not isinstance(value, dict):
+            raise OwppError(f"{label} must be a mapping")
+        known = {f.name for f in fields(cls)}
+        unknown = sorted(set(value) - known)
+        if unknown:
+            shown = ", ".join(sorted(k.rstrip("_") for k in known))
+            raise OwppError(f"{label}: unknown key {', '.join(unknown)} (known: {shown})")
+        return cls(**value)
+
+    def pairs(value, label):
+        out = []
+        for item in value or []:
+            if isinstance(item, dict) and set(item) <= {"id", "name"} and "id" in item:
+                out.append((str(item["id"]), str(item.get("name") or title_of(str(item["id"])))))
+            elif isinstance(item, str):
+                out.append((item, title_of(item)))
+            else:
+                raise OwppError(f"{label}: each entry is an id or {{id, name}}")
+        return out
+
+    if data.get("tool") is not None:
+        data["tool"] = build(ToolSpec, data["tool"], "tool")
+    if data.get("source") is not None:
+        data["source"] = build(SourceSpec, data["source"], "source")
+    data["skills"] = [
+        build(SkillSpec, s if isinstance(s, dict) else {"id": s}, "skills")
+        for s in data.get("skills") or []
+    ]
+    for key in ("buttons", "models"):
+        if key in data:
+            data[key] = pairs(data[key], key)
+    return build(PluginSpec, data, "the spec")
 
 
 def write_plugin(directory: Path | str, spec: PluginSpec, today: str | None = None) -> Path:

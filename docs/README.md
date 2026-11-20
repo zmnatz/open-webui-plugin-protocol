@@ -16,6 +16,7 @@ Open-WebUI stores a function or tool as **one code blob** and cannot import sibl
 | --- | --- |
 | Install it | [install](install.md) |
 | Go from nothing to a deployed plugin | [getting started](getting-started.md) |
+| Have an AI agent do it | [with an AI agent](ai-agents.md) |
 | Start a plugin with the `owpp create` wizard | [creating a plugin](creating.md) |
 | Write a plugin | [authoring guide](authoring.md), then [plugin format](plugin-format.md) |
 | Know exactly what ends up in the deployed file | [bundling](bundling.md) |

@@ -10,6 +10,8 @@ is checked in, so none of it can drift from the repository:
 - the root CHANGELOG, SECURITY and NOTICE files, and each example plugin's README;
 - an examples overview, built from each plugin.yaml;
 - the test catalogue, built from the test docstrings (docs/testing.md, "Describe every test");
+- llms.txt and llms-full.txt, for language models: the site's pages with their addresses, and
+  the text of the guide in one file (https://llmstxt.org/);
 
 Links are written for GitHub, relative to the file they are in. They are rewritten to the page
 that carries the target on the site, or else to the file on GitHub. A link to a file or heading
@@ -38,6 +40,9 @@ DOCS = ROOT / "docs"
 OUT = ROOT / "build" / "docs"  # zensical.toml: docs_dir
 EXAMPLES = ROOT / "examples" / "plugins"
 REPO_URL = "https://github.com/zmnatz/open-webui-plugin-protocol"
+SITE_URL = "https://zmnatz.github.io/open-webui-plugin-protocol/"
+# The menu sections whose pages go, whole, into llms-full.txt: what someone using owpp reads.
+FULL_TEXT_SECTIONS = ("Getting started", "Guide")
 # Link to the commit being built on CI (a pull request's own files), else to main.
 REF = os.environ.get("GITHUB_SHA") or "main"
 
@@ -109,7 +114,87 @@ def assemble(out: Path = OUT) -> list[str]:
             parts[i] = re.sub(r"(\]\()([^)\s]+)(\))", relink, parts[i])
         (out / uri).parent.mkdir(parents=True, exist_ok=True)
         (out / uri).write_text("".join(parts))
+    _write_llms(out, pages)
     return problems
+
+
+# ---- llms.txt ------------------------------------------------------------------------------
+
+
+def _nav() -> list[tuple[str, list[tuple[str, str]]]]:
+    """zensical.toml's menu as [(section, [(title, page)])]; a top-level page is its own section."""
+    import tomllib
+
+    nav = tomllib.loads((ROOT / "zensical.toml").read_text())["project"]["nav"]
+    out = []
+    for entry in nav:
+        ((name, value),) = entry.items()
+        if isinstance(value, str):
+            out.append((name, [(name, value)]))
+            continue
+        flat = []
+        for item in value:
+            ((title, target),) = item.items()
+            if isinstance(target, str):
+                flat.append((title, target))
+            else:  # a nested group: its pages, by name
+                flat += [next(iter(i.items())) for i in target]
+        out.append((name, flat))
+    return out
+
+
+def _page_url(page: str) -> str:
+    return SITE_URL + ("" if page == "README.md" else page.removesuffix(".md") + "/").removesuffix(
+        "index/"
+    )
+
+
+def _summary(text: str) -> str:
+    """A page's first sentence of prose, as one line ("" when it opens with none)."""
+    for para in re.sub(r"\A#[^\n]*\n+", "", text.lstrip()).split("\n\n"):
+        para = para.strip()
+        if not para or para.startswith("#"):
+            continue  # a heading: the prose under it may follow
+        if para.startswith(("```", "|", "!!!", "-", "<")):
+            return ""
+        line = " ".join(re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", para).split())
+        m = re.match(r"(.+?[.:!?])(\s|$)", line)
+        return m.group(1) if m else line
+    return ""
+
+
+def _write_llms(out: Path, pages: dict[str, tuple[str, str]]) -> None:
+    """llms.txt (the pages, with their addresses) and llms-full.txt (the guide's text)."""
+    index = [
+        "# Open-WebUI plugin protocol (owpp)",
+        "",
+        "> Write, test and deploy Open-WebUI plugins (a function plus the tool and skills it "
+        "installs) from a git repository, with the `owpp` CLI (`uvx owpp`). A plugin is a folder "
+        "with a plugin.yaml; owpp bundles it into the single file Open-WebUI stores, tests it "
+        "against a mock Open-WebUI, versions it and deploys it.",
+        "",
+        f"The whole guide as one text file: {SITE_URL}llms-full.txt. An agent skill for working "
+        f"with owpp: {REPO_URL}/tree/main/skills/owpp. Every command's flags: `uvx owpp <command> "
+        "--help`.",
+    ]
+    full = [
+        "# Open-WebUI plugin protocol (owpp): the guide",
+        "",
+        f"The pages of {SITE_URL}, in menu order. Links inside are relative to the repository "
+        f"{REPO_URL}.",
+    ]
+    for section, entries in _nav():
+        index += ["", f"## {section}", ""]
+        for title, page in entries:
+            if page not in pages:
+                continue
+            text = pages[page][1]
+            summary = _summary(text)
+            index.append(f"- [{title}]({_page_url(page)})" + (f": {summary}" if summary else ""))
+            if section in FULL_TEXT_SECTIONS:
+                full += ["", "", f"<!-- {title}: {_page_url(page)} -->", "", text.strip()]
+    (out / "llms.txt").write_text("\n".join(index) + "\n")
+    (out / "llms-full.txt").write_text("\n".join(full) + "\n")
 
 
 def _relink(target, origin, page_uri, pages, copied, anchors) -> str | None:

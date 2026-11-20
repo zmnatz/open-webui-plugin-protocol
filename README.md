@@ -78,6 +78,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 | --- | --- |
 | [Install](docs/install.md) | requirements, uvx, pinning, the test extra |
 | [Getting started](docs/getting-started.md) | from an empty repository to a plugin deployed from CI |
+| [With an AI agent](docs/ai-agents.md) | the owpp agent skill, `owpp create --spec`, llms.txt |
 | [Overview](docs/README.md) | concepts, guarantees, status |
 | [Creating a plugin](docs/creating.md) | the `owpp create` wizard: code written here, installers, plugins from git |
 | [Authoring guide](docs/authoring.md) | function types, conventions, checklist |

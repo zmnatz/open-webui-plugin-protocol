@@ -21,6 +21,7 @@ nav = [
   { "Getting started" = [
     { "Install" = "install.md" },
     { "Your first plugin" = "getting-started.md" },
+    { "With an AI agent" = "ai-agents.md" },
   ] },
   { "Guide" = [
     { "Creating a plugin" = "creating.md" },

@@ -27,10 +27,11 @@ import yaml
 
 from . import __version__
 from .bundle import FunctionFile, env_references, load_function_files, runtime_data
-from .create import CLASS, PluginSpec, write_plugin
+from .create import CLASS, PluginSpec, spec_from_data, write_plugin
 from .deploy import options_from_env, run_deploy
 from .errors import OwppError
 from .lint import lint_notes, lint_plugin
+from .manifest import parse_yaml, read_text
 from .sources import fetch_sources, plugin_folders, source_keys
 from .versioning import bump, changelog_problem, check_since, version_of, versions_of
 
@@ -285,6 +286,15 @@ def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         print()
         return main(["check", plugin_id, "--strict", "--dir", str(folder)], env)
 
+    if args.spec:  # no questions: the plugin described in a file (for scripts and agents)
+        text = sys.stdin.read() if args.spec == "-" else read_text(args.spec)
+        try:
+            data = parse_yaml(text)
+        except yaml.YAMLError as e:
+            raise OwppError(f"{args.spec}: not valid YAML or JSON ({e})") from e
+        folder = write_plugin(directory, spec_from_data(data, args.id or ""))
+        print(f"created {folder}")
+        return check(directory, folder.name)
     return run_wizard(directory, args.id or "", check=check)
 
 
@@ -374,6 +384,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     create = add("create", _cmd_create, "create a plugin, answering a few questions (a wizard)")
     create.add_argument("id", nargs="?", help="the plugin id (asked if left out)")
+    create.add_argument(
+        "--spec",
+        metavar="FILE",
+        help="ask nothing: create the plugin a YAML or JSON file describes (- reads stdin)",
+    )
     init = add("init", _cmd_init, "scaffold a plugin folder")
     init.add_argument("id")
     init.add_argument("--type", choices=list(CLASS), default="event")
