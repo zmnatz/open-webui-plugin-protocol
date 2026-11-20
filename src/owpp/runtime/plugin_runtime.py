@@ -22,6 +22,7 @@ _PLUGIN_EVENTS = {
     "function.enabled",
     "function.disabled",
     "function.updated",
+    "function.valves_updated",  # INSTALL_TOOLS, INSTALL_SKILLS, TOOL_VALVES apply on save
     "function.deleted",
 }
 
@@ -299,7 +300,8 @@ async def _plugin_ensure() -> None:
 class _PluginSink:
     """Open-WebUI stops loading a function once it is disabled, so the function's
     own code never sees that. An event sink is the hook that still runs; it
-    resyncs when this function is enabled, disabled, updated or deleted."""
+    resyncs when this function is enabled, disabled, updated or deleted, or when an
+    admin saves its valves (a user saving their own UserValves is not a reason)."""
 
     function_id: _Optional[str] = None
 
@@ -311,8 +313,11 @@ class _PluginSink:
         get = event.get if isinstance(event, dict) else lambda key: getattr(event, key, None)
         if (get("subject") or {}).get("id") != self.function_id:
             return
-        if get("event") in _PLUGIN_EVENTS:
-            await _plugin_sync(self.function_id)
+        if get("event") not in _PLUGIN_EVENTS:
+            return
+        if (get("data") or {}).get("scope") == "user":
+            return
+        await _plugin_sync(self.function_id)
 
 
 async def _plugin_check_parent() -> None:

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: saving a parent function's valves (`INSTALL_TOOLS`, `INSTALL_SKILLS`, `TOOL_VALVES`) now applies them. The runtime resyncs on `function.valves_updated`, which Open-WebUI sends when an admin saves the valves; before, they only took effect on the next enable or update. A user saving their own UserValves (`scope: user`) does not resync.
+
 ## 0.2.0
 
 - `owpp create [id]`: a wizard that scaffolds a plugin, ready to fill in, with tests and a README. It branches on where the code lives. Written here: a filter, action, event or pipe (with that type's options from Open-WebUI's plugin docs: filter hooks `inlet`, `request`, `stream` and `outlet`, user toggles, `file_handler` and `priority`; several action buttons and an `HTMLResponse` page; manifold and streaming pipes; `@on` handlers and scheduled syncs), with a tool, skills in Open-WebUI's `SKILL.md` layout, a page and libraries; or an **installer**, a plugin with no code of its own that deploys a tool and/or skills through the generated parent function. From a git repository: `source:` pinned to a commit (a branch or tag is resolved with `git ls-remote`), taking the function itself or a tool and skills. Every combination bundles, passes `owpp check --strict` and passes the tests it writes. Nothing is written until the last stage, and Ctrl-C writes nothing.
