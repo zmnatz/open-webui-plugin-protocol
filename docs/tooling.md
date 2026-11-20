@@ -47,7 +47,9 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
 | Setting | Meaning |
 | --- | --- |
 | `OPEN_WEBUI_URL` | Required. Base URL of the Open-WebUI instance. |
-| `OPEN_WEBUI_API_KEY` | Required. An admin API key (Settings > Account > API keys; the admin setting "Enable API Keys" must be on). Use a dedicated admin user. |
+| `OPEN_WEBUI_API_KEY` | An admin API key (Settings > Account > API keys; the admin setting "Enable API Keys" must be on). Optional: see [signing in](#signing-in). |
+| `OPEN_WEBUI_USERNAME`, `OPEN_WEBUI_PASSWORD` | Without an API key: an admin's email and password, or LDAP user name and password. |
+| `OPEN_WEBUI_OIDC_TOKEN`, `OPEN_WEBUI_OAUTH_PROVIDER` | Without either: an OIDC access token, exchanged for a session, and the Open-WebUI OAuth provider it is from (default `oidc`). |
 | `--dir`, `OWPP_PLUGINS_DIR` | The plugins folder (`FUNCTIONS_DIR` is accepted too). |
 | `--managed-by`, `OWPP_MANAGED_BY` | The ownership marker, default `open-webui-plugin-protocol`. See below. |
 | `--dry-run` | List what would change, with versions; write nothing. |
@@ -55,6 +57,19 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
 | `--only a,b` | Deploy just these ids; no pruning. |
 | `--force` | Deploy even where the instance runs a newer version than the repository: see [versions](#versions). |
 | `--force-prune` | Allow deleting more than half of the managed functions at once. |
+
+### Signing in
+
+The deploy needs an **admin** of the instance. It uses the first of these that is set:
+
+| Set | What it does | The instance needs |
+| --- | --- | --- |
+| `OPEN_WEBUI_API_KEY` | Uses the key as it is. | API keys on (Admin Panel > Settings > General > Enable API Keys), and a key from Settings > Account > API keys. |
+| `OPEN_WEBUI_USERNAME` and `OPEN_WEBUI_PASSWORD` | Signs in with them as an Open-WebUI account (the user name is the email, `POST /api/v1/auths/signin`), and if that fails, as an LDAP user (`POST /api/v1/auths/ldap`). | Password sign-in on; LDAP configured for an LDAP user. |
+| `OPEN_WEBUI_OIDC_TOKEN` | Exchanges the token for a session (`POST /api/v1/auths/oauth/<provider>/token/exchange`, the provider from `OPEN_WEBUI_OAUTH_PROVIDER`, default `oidc`). | `ENABLE_OAUTH_TOKEN_EXCHANGE=true`, and that OAuth provider configured. |
+| nothing | Signs in with no credentials, as the browser would. | Sign-in switched off (`WEBUI_AUTH=False`), or a proxy in front of it that adds the trusted email header (`WEBUI_AUTH_TRUSTED_EMAIL_HEADER`). |
+
+The session it gets is used for that run only, and the account must be an admin: otherwise the deploy stops before writing anything, saying who it signed in as. When it cannot sign in, the error says what it tried and why it failed. Credentials come only from the environment (in CI, from secrets through the action's inputs), never from command-line flags, so they stay out of shell history and process lists.
 
 ### The ownership marker
 

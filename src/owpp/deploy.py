@@ -82,7 +82,8 @@ def urllib_fetch(
 @dataclass
 class Options:
     base_url: str
-    api_key: str
+    # An API key, or the session token signing in gave; empty: sign in first. Never shown.
+    api_key: str = field(repr=False)
     dir: Path
     dry_run: bool = False
     force_prune: bool = False
@@ -96,6 +97,12 @@ class Options:
     fetch: Fetch = field(default=urllib_fetch, repr=False)
     git_fetcher: Fetcher = field(default=git_fetcher, repr=False)
     resolve: Callable[[str, str], str | None] | None = field(default=None, repr=False)
+    # Without an API key, the deploy signs in (sign_in): with a user name (an email, or an LDAP
+    # user) and a password, with an OIDC token for an OAuth provider, or with nothing at all.
+    username: str = ""
+    password: str = field(default="", repr=False)
+    oidc_token: str = field(default="", repr=False)
+    oauth_provider: str = "oidc"
 
 
 def options_from_env(
@@ -114,6 +121,10 @@ def options_from_env(
     return Options(
         base_url=env.get("OPEN_WEBUI_URL", "").rstrip("/"),
         api_key=env.get("OPEN_WEBUI_API_KEY", ""),
+        username=env.get("OPEN_WEBUI_USERNAME", ""),
+        password=env.get("OPEN_WEBUI_PASSWORD", ""),
+        oidc_token=env.get("OPEN_WEBUI_OIDC_TOKEN", ""),
+        oauth_provider=env.get("OPEN_WEBUI_OAUTH_PROVIDER", "") or "oidc",
         dir=Path(
             dir or env.get("OWPP_PLUGINS_DIR") or env.get("FUNCTIONS_DIR") or "plugins"
         ).resolve(),
@@ -143,6 +154,91 @@ def _call(opts: Options, method: str, path: str, body: dict | None = None) -> An
 
 def _field(obj: Any, key: str) -> Any:
     return obj.get(key) if isinstance(obj, dict) else None
+
+
+# ---- signing in ---------------------------------------------------------------
+
+AUTHS = "/api/v1/auths"
+
+
+def _post_signin(opts: Options, path: str, body: dict) -> tuple[dict | None, str]:
+    """POST to one of Open-WebUI's sign-in endpoints: (its result, "") or (None, why not)."""
+    res = opts.fetch(
+        "POST",
+        f"{opts.base_url}{AUTHS}{path}",
+        {"Content-Type": "application/json", "Accept": "application/json"},
+        json.dumps(body).encode("utf-8"),
+    )
+    try:
+        data = json.loads(res.text)
+    except ValueError:
+        data = None
+    if res.ok and isinstance(data, dict) and data.get("token"):
+        return data, ""
+    detail = data.get("detail") if isinstance(data, dict) else None
+    return None, f"HTTP {res.status}{f': {detail}' if detail else ''}"
+
+
+def sign_in(opts: Options) -> str:
+    """The credential the deploy uses, and how it was obtained. An API key is used as it is.
+    Otherwise it signs in, as the person opening Open-WebUI would, and uses the session token:
+
+    - a user name and password: Open-WebUI's own accounts (the user name is the email), then,
+      if that fails, LDAP;
+    - an OIDC token: exchanged at /oauth/<provider>/token/exchange, which the instance must
+      allow (ENABLE_OAUTH_TOKEN_EXCHANGE=true);
+    - nothing: an empty sign-in, which Open-WebUI answers when sign-in is switched off
+      (WEBUI_AUTH=False) or a proxy in front of it adds the trusted email header.
+
+    The account must be an admin. Sets opts.api_key; raises OwppError when it cannot sign in."""
+    if opts.api_key:
+        return "an API key"
+    if bool(opts.username) != bool(opts.password):
+        raise OwppError("OPEN_WEBUI_USERNAME and OPEN_WEBUI_PASSWORD go together: set both")
+    if opts.username:
+        how = f"user {opts.username}"
+        result, why = _post_signin(
+            opts, "/signin", {"email": opts.username, "password": opts.password}
+        )
+        if result is None:
+            result, ldap_why = _post_signin(
+                opts, "/ldap", {"user": opts.username, "password": opts.password}
+            )
+            if result is None:
+                raise OwppError(
+                    f"could not sign in as {opts.username}: with a password ({why}), "
+                    f"with LDAP ({ldap_why})"
+                )
+            how = f"LDAP user {opts.username}"
+    elif opts.oidc_token:
+        provider = opts.oauth_provider.strip().lower()
+        if not VALID_ID.fullmatch(provider.replace("-", "_")):
+            raise OwppError(f"OPEN_WEBUI_OAUTH_PROVIDER {provider!r} is not a provider name")
+        how = f"an OIDC token ({provider})"
+        result, why = _post_signin(
+            opts, f"/oauth/{provider}/token/exchange", {"token": opts.oidc_token}
+        )
+        if result is None:
+            raise OwppError(
+                f"could not exchange the OIDC token with provider {provider} ({why}). The "
+                "instance must set ENABLE_OAUTH_TOKEN_EXCHANGE=true and have that provider "
+                "configured; set OPEN_WEBUI_OAUTH_PROVIDER if it is not called oidc"
+            )
+    else:
+        how = "an open sign-in"
+        result, why = _post_signin(opts, "/signin", {"email": "", "password": ""})
+        if result is None:
+            raise OwppError(
+                f"no credentials, and Open-WebUI did not sign in without them ({why}). Set "
+                "OPEN_WEBUI_API_KEY (an admin's API key), OPEN_WEBUI_USERNAME and "
+                "OPEN_WEBUI_PASSWORD, or OPEN_WEBUI_OIDC_TOKEN"
+            )
+    role = result.get("role")
+    if role is not None and role != "admin":
+        who = result.get("email") or result.get("name") or "that account"
+        raise OwppError(f"signed in with {how} as {who}, who is not an admin (role {role})")
+    opts.api_key = str(result["token"])
+    return how
 
 
 def wait_for_health(opts: Options, attempts: int = 6, delay: float = 30.0) -> None:
@@ -603,20 +699,14 @@ def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
-    if not opts.api_key:
-        print(
-            "error: OPEN_WEBUI_API_KEY is not set: create an API key for an admin user in "
-            "Open-WebUI (Settings > Account > API keys; the admin setting 'Enable API Keys' "
-            "must be on)",
-            file=sys.stderr,
-        )
-        return 1
     try:
         wait_for_health(opts)
+        how = sign_in(opts)
         report = render_report(deploy(opts), opts.dry_run, opts.sync)
     except OwppError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    print(f"(signed in with {how})\n")
     print(report)
     if env.get("GITHUB_STEP_SUMMARY"):
         with open(env["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:

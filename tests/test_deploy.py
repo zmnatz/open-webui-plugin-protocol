@@ -19,6 +19,7 @@ from owpp.deploy import (
     plan_deploy,
     plan_prune,
     render_report,
+    sign_in,
     wait_for_health,
 )
 from owpp.errors import OwppError
@@ -566,3 +567,93 @@ class TestVersionReport:
         with pytest.raises(OwppError, match="only goes with --dry-run"):
             deploy(m.options(functions_dir(sourced()), sync=True))
         assert m.calls == []
+
+
+# ---- signing in -----------------------------------------------------------------------
+
+
+class TestSignIn:
+    """Without an API key, the deploy signs in: with a user name and password (Open-WebUI's own
+    accounts, then LDAP), with an OIDC token, or with nothing."""
+
+    def run(self, m, directory, **creds):
+        opts = m.options(directory, api_key="", **creds)
+        how = sign_in(opts)
+        return how, deploy(opts)
+
+    def test_an_api_key_is_used_as_it_is(self, mock_server, functions_dir):
+        m = mock_server()
+        opts = m.options(functions_dir({"demo.py": FILTER}))
+        assert sign_in(opts) == "an API key" and opts.api_key == "sk-good"
+        assert not any("/auths/" in c for c in m.calls)
+
+    def test_user_name_and_password(self, mock_server, functions_dir):
+        m = mock_server(accounts={"admin@example.com": "pw"})
+        how, res = self.run(
+            m, functions_dir({"demo.py": FILTER}), username="admin@example.com", password="pw"
+        )
+        assert how == "user admin@example.com" and res[0].action.startswith("created")
+        assert m.calls[0] == "POST /api/v1/auths/signin"
+
+    def test_ldap_when_the_password_sign_in_fails(self, mock_server, functions_dir):
+        m = mock_server(ldap={"ada": "pw"})
+        how, res = self.run(m, functions_dir({"demo.py": FILTER}), username="ada", password="pw")
+        assert how == "LDAP user ada" and res[0].action.startswith("created")
+        assert m.calls[:2] == ["POST /api/v1/auths/signin", "POST /api/v1/auths/ldap"]
+
+    def test_wrong_credentials_say_what_was_tried(self, mock_server, functions_dir):
+        m = mock_server(accounts={"admin@example.com": "pw"})
+        with pytest.raises(OwppError, match="with a password .*400.*with LDAP .*not enabled"):
+            self.run(
+                m, functions_dir({"demo.py": FILTER}), username="admin@example.com", password="no"
+            )
+
+    def test_half_a_user_name_and_password_is_refused(self, mock_server, functions_dir):
+        with pytest.raises(OwppError, match="go together"):
+            self.run(mock_server(), functions_dir({"demo.py": FILTER}), username="ada")
+
+    def test_an_oidc_token_is_exchanged(self, mock_server, functions_dir):
+        m = mock_server(oidc={"keycloak": "id-token"})
+        how, res = self.run(
+            m, functions_dir({"demo.py": FILTER}), oidc_token="id-token", oauth_provider="Keycloak"
+        )
+        assert how == "an OIDC token (keycloak)" and res[0].action.startswith("created")
+        assert m.calls[0] == "POST /api/v1/auths/oauth/keycloak/token/exchange"
+
+    def test_an_oidc_exchange_the_instance_does_not_allow(self, mock_server, functions_dir):
+        with pytest.raises(OwppError, match="ENABLE_OAUTH_TOKEN_EXCHANGE=true"):
+            self.run(mock_server(), functions_dir({"demo.py": FILTER}), oidc_token="t")
+
+    def test_nothing_signs_in_when_the_instance_allows_it(self, mock_server, functions_dir):
+        m = mock_server(open_signin=True)
+        how, res = self.run(m, functions_dir({"demo.py": FILTER}))
+        assert how == "an open sign-in" and res[0].action.startswith("created")
+
+    def test_nothing_says_what_to_set_when_it_does_not(self, mock_server, functions_dir):
+        with pytest.raises(OwppError, match="OPEN_WEBUI_API_KEY.*OPEN_WEBUI_USERNAME.*OIDC"):
+            self.run(mock_server(), functions_dir({"demo.py": FILTER}))
+
+    def test_the_account_must_be_an_admin(self, mock_server, functions_dir):
+        m = mock_server(open_signin=True, role="user")
+        with pytest.raises(OwppError, match="not an admin"):
+            self.run(m, functions_dir({"demo.py": FILTER}))
+        assert not any("/functions" in c for c in m.calls)
+
+    def test_the_environment_names(self):
+        opts = options_from_env(
+            {
+                "OPEN_WEBUI_URL": "http://x/",
+                "OPEN_WEBUI_API_KEY": "sk-secret-key",
+                "OPEN_WEBUI_USERNAME": "u",
+                "OPEN_WEBUI_PASSWORD": "secret-password",
+                "OPEN_WEBUI_OIDC_TOKEN": "secret-token",
+                "OPEN_WEBUI_OAUTH_PROVIDER": "google",
+            }
+        )
+        assert (opts.base_url, opts.api_key, opts.username) == ("http://x", "sk-secret-key", "u")
+        assert (opts.password, opts.oidc_token, opts.oauth_provider) == (
+            "secret-password",
+            "secret-token",
+            "google",
+        )
+        assert "secret" not in repr(opts)  # no credential in a log or a traceback

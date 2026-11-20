@@ -292,7 +292,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="owpp",
         description="Write, test and deploy Open-WebUI plugins from a git repository.",
-        epilog="deploy needs OPEN_WEBUI_URL and OPEN_WEBUI_API_KEY. Docs: docs/README.md",
+        epilog="deploy needs OPEN_WEBUI_URL, and signs in with OPEN_WEBUI_API_KEY, "
+        "OPEN_WEBUI_USERNAME and OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing. "
+        "Docs: docs/tooling.md#signing-in",
     )
     parser.add_argument("--version", action="version", version=f"owpp {__version__}")
     common = argparse.ArgumentParser(add_help=False)

@@ -8,8 +8,20 @@ inputs:
     description: Base URL of the Open-WebUI instance.
     required: true
   api-key:
-    description: An Open-WebUI admin API key (store it as a secret).
-    required: true
+    description: An Open-WebUI admin API key (store it as a secret). Optional; without it the deploy signs in with the inputs below, or with nothing.
+    default: ""
+  username:
+    description: An admin's email (or LDAP user name), with password, when there is no api-key.
+    default: ""
+  password:
+    description: That admin's password (store it as a secret).
+    default: ""
+  oidc-token:
+    description: An OIDC access token exchanged for an Open-WebUI session (the instance must set ENABLE_OAUTH_TOKEN_EXCHANGE=true).
+    default: ""
+  oauth-provider:
+    description: The Open-WebUI OAuth provider the oidc-token is from.
+    default: oidc
   plugins-dir:
     description: The plugins folder, relative to the repository root.
     default: plugins
@@ -53,6 +65,10 @@ runs:
       env:
         OPEN_WEBUI_URL: ${{ inputs.url }}
         OPEN_WEBUI_API_KEY: ${{ inputs.api-key }}
+        OPEN_WEBUI_USERNAME: ${{ inputs.username }}
+        OPEN_WEBUI_PASSWORD: ${{ inputs.password }}
+        OPEN_WEBUI_OIDC_TOKEN: ${{ inputs.oidc-token }}
+        OPEN_WEBUI_OAUTH_PROVIDER: ${{ inputs.oauth-provider }}
         OWPP_PLUGINS_DIR: ${{ inputs.plugins-dir }}
         OWPP_MANAGED_BY: ${{ inputs.managed-by }}
         ONLY: ${{ inputs.only }}

@@ -41,18 +41,23 @@ Now write the plugin itself: the [authoring guide](authoring.md) has the convent
 
 ## 4. Connect to Open-WebUI
 
-The deploy talks to Open-WebUI's admin API with an API key:
-
-1. In Open-WebUI, as an admin: **Admin Panel > Settings > General > Enable API Keys**, on.
-2. **Settings > Account > API keys > Create new secret key**, and copy it. Use a dedicated admin user for deploys if you can.
-3. Give the deploy the URL and the key:
+The deploy talks to Open-WebUI's admin API as an admin. Give it the URL, and one way to sign in:
 
 ```sh
 export OPEN_WEBUI_URL=https://chat.example.com
+
+# an API key: Admin Panel > Settings > General > Enable API Keys, then
+# Settings > Account > API keys > Create new secret key
 export OPEN_WEBUI_API_KEY=sk-...
+
+# or an admin's email (or LDAP user) and password
+export OPEN_WEBUI_USERNAME=admin@example.com OPEN_WEBUI_PASSWORD=...
+
+# or an OIDC token (the instance must set ENABLE_OAUTH_TOKEN_EXCHANGE=true)
+export OPEN_WEBUI_OIDC_TOKEN=... OPEN_WEBUI_OAUTH_PROVIDER=oidc
 ```
 
-Keep the key out of git: an environment variable here, a secret in CI.
+With none of them, it tries to sign in without credentials, which works where sign-in is switched off or a proxy adds the trusted email header. See [signing in](tooling.md#signing-in). Use a dedicated admin account for deploys if you can, and keep credentials out of git: environment variables here, secrets in CI.
 
 ## 5. Deploy
 
@@ -65,7 +70,7 @@ The deploy creates each function, activates it, and makes a new filter global. I
 
 ## 6. Deploy from CI
 
-Commit the repository, add the API key as a secret (`OPEN_WEBUI_API_KEY`), and deploy on every push to `main`:
+Commit the repository, add the credential as a secret (here `OPEN_WEBUI_API_KEY`; or `username` and `password`, or `oidc-token`, as inputs), and deploy on every push to `main`:
 
 ```yaml
 # .github/workflows/deploy-plugins.yml
