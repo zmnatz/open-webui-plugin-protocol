@@ -10,7 +10,7 @@ Nothing to install; run it from the repository that holds your plugins:
 uvx owpp list
 ```
 
-Pin the version (`uvx owpp@0.2.0 list`, or `uv tool install owpp==0.2.0`): the runtime and libraries are copied into what you deploy, so an upgrade changes your deployed code. To run an unreleased commit: `uvx --from git+https://github.com/zmnatz/open-webui-plugin-protocol@<sha> owpp list`. `pipx install owpp` and `pip install owpp` work too, and `python -m owpp` is the same command.
+Pin the version (`uvx owpp@0.2.0 list`, or `uv tool install owpp==0.2.0`): the runtime and libraries are copied into what you deploy, so an upgrade changes your deployed code ([upgrading](upgrading.md)). To run an unreleased commit: `uvx --from git+https://github.com/zmnatz/open-webui-plugin-protocol@<sha> owpp list`. `pipx install owpp` and `pip install owpp` work too, and `python -m owpp` is the same command.
 
 ## The CLI: `owpp`
 
@@ -35,7 +35,7 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
   - a tool method with no docstring, a parameter with no type hint, or a parameter the docstring does not describe with `:param name:` (Open-WebUI builds the spec the model reads from those). Injected parameters such as `__user__` and `__metadata__` are ignored.
 
   Warnings read the plugin's own source (`function.py`, `tool.py`, `shared.py`, or a loose `<id>.py`) with real file and line numbers, and skip a plugin that takes its code from a pinned `source:`, which is not yours to lint. They do not change the exit status; **`--strict` makes them fail**, for CI.
-- **`migrate`** brings each `plugin.yaml` written for an older [protocol version](plugin-format.md#protocol) up to the current one. It rewrites only what the version step changes, keeps comments and layout, and points at each file it writes so the change is there to review and commit. With `--dry-run` it says what would change and writes nothing. With ids, it migrates just those plugins; a manifest already at the current version is left alone. `owpp check` warns about a missing `protocol:` key and notes an older one, pointing at this command.
+- **`migrate`** brings each `plugin.yaml` written for an older [protocol version](plugin-format.md#protocol) up to the current one. It rewrites only what the version step changes, keeps comments and layout, and points at each file it writes so the change is there to review and commit. With `--dry-run` it says what would change and writes nothing. With ids, it migrates just those plugins; a manifest already at the current version is left alone. `owpp check` warns about a missing `protocol:` key and notes an older one, pointing at this command. The whole upgrade, step by step: [upgrading owpp](upgrading.md).
 - **`bundle`** writes the deployed code, to read or diff.
 - **`test`** runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. It needs the `test` extra: `uvx --from 'owpp[test]' owpp test`. See [testing](testing.md).
 - **`version`** shows the plugins' versions or gives one a new version, and **`check --since <ref>`** fails on a change without one: see [versions](#versions).

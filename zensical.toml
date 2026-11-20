@@ -33,6 +33,7 @@ nav = [
     { "Testing" = "testing.md" },
     { "Tooling and CI" = "tooling.md" },
     { "Adopting it" = "adopting.md" },
+    { "Upgrading owpp" = "upgrading.md" },
   ] },
   { "Examples" = [
     { "Overview" = "examples/index.md" },

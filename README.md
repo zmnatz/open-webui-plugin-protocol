@@ -90,6 +90,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 | [Testing](docs/testing.md) | unit tests per plugin, the mock Open-WebUI, `owpp test` |
 | [Tooling](docs/tooling.md) | CLI, deploy settings, ownership marker, GitHub Action, tests |
 | [Adopting](docs/adopting.md) | new repositories, migrating existing functions |
+| [Upgrading](docs/upgrading.md) | moving to a new owpp, `owpp migrate`, what changed in 0.2 |
 | [Security](SECURITY.md) | the trust model, what `owpp` limits, known limits, how to report |
 
 ## Examples
