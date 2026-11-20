@@ -28,6 +28,12 @@ class TestCheckBundle:
         code = "import a.b as c\ndef f(arg):\n    try:\n        return arg + c\n    except E as err:\n        return err\nclass E(Exception): pass\n"
         assert check_bundle(code) is None
 
+    def test_a_name_used_only_when_globals_has_it_is_fine(self):
+        """The assets library calls live_reload's functions only when that library is there."""
+        code = 'def f():\n    if "reload_active" in globals():\n        return reload_active()\n'
+        assert check_bundle(code) is None
+        assert check_bundle("def f():\n    return reload_active()\n") is not None
+
 
 class TestScaffold:
     @pytest.mark.parametrize("kind", ["event", "filter", "action", "pipe"])
@@ -49,11 +55,9 @@ class TestScaffold:
 
 
 class TestCommands:
-    def test_deploy_refuses_without_a_url_or_a_key(self, capsys):
+    def test_deploy_refuses_without_a_url(self, capsys):
         assert main(["deploy", "--dir", "/nonexistent"], env={}) == 1
         assert "OPEN_WEBUI_URL is not set" in capsys.readouterr().err
-        assert main(["deploy", "--dir", "/nonexistent"], env={"OPEN_WEBUI_URL": "http://x"}) == 1
-        assert "OPEN_WEBUI_API_KEY is not set" in capsys.readouterr().err
 
     def test_list_prints_id_type_and_global(self, functions_dir, capsys):
         d = functions_dir(

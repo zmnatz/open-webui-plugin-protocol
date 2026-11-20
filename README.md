@@ -32,8 +32,12 @@ uvx owpp list
 #  excalidraw              filter (global)
 #  mcpo_sync               event
 uvx owpp check                       # bundle, compile, report undefined names
+uvx owpp version                     # every plugin's versions (and its tool's and skills')
+uvx owpp version excalidraw minor    # a new version, with a CHANGELOG.md entry
 uvx --from 'owpp[test]' owpp test    # each plugin's tests/, against a mock Open-WebUI
 uvx owpp deploy --only excalidraw --dry-run
+uvx owpp sync                        # move plugins taken from git to their latest commit, for review
+uvx owpp deploy --dry-run --sync     # what that would change on the live instance, by version
 ```
 
 ## Why
@@ -46,19 +50,20 @@ Open-WebUI stores each function and tool as **one code blob**, edited in the adm
 
 ## Install
 
-Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (for remote sources). Nothing to install: `uvx` runs `owpp` straight from PyPI. To have it on your `PATH`, `uv tool install owpp` (or `pipx install owpp`).
+Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (for remote sources). Nothing to install: `uvx` runs `owpp` straight from PyPI. To have it on your `PATH`, `uv tool install owpp` (or `pipx install owpp`). See [install](docs/install.md) and [getting started](docs/getting-started.md).
 
 ```sh
-uvx owpp init hello --type event     # scaffold plugins/hello/
+uvx owpp create                      # a wizard: asks what the plugin is, writes plugins/<id>/
 uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
+# or OPEN_WEBUI_USERNAME + OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing: docs/tooling.md#signing-in
 ```
 
 ## Deploy from GitHub Actions
 
 ```yaml
 - uses: actions/checkout@v5
-- uses: zmnatz/open-webui-plugin-protocol@v0.1.0
+- uses: zmnatz/open-webui-plugin-protocol@v0.2.0
   with:
     url: https://chat.example.com
     api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
@@ -71,7 +76,11 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 | | |
 | --- | --- |
+| [Install](docs/install.md) | requirements, uvx, pinning, the test extra |
+| [Getting started](docs/getting-started.md) | from an empty repository to a plugin deployed from CI |
+| [With an AI agent](docs/ai-agents.md) | the owpp agent skill, `owpp create --spec`, llms.txt |
 | [Overview](docs/README.md) | concepts, guarantees, status |
+| [Creating a plugin](docs/creating.md) | the `owpp create` wizard: code written here, installers, plugins from git |
 | [Authoring guide](docs/authoring.md) | function types, conventions, checklist |
 | [Plugin format](docs/plugin-format.md) | `plugin.yaml` reference |
 | [Bundling](docs/bundling.md) | exactly what gets deployed; git sources |
@@ -80,7 +89,6 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 | [Testing](docs/testing.md) | unit tests per plugin, the mock Open-WebUI, `owpp test` |
 | [Tooling](docs/tooling.md) | CLI, deploy settings, ownership marker, GitHub Action, tests |
 | [Adopting](docs/adopting.md) | new repositories, migrating existing functions |
-| [Decisions](docs/decisions.md) | the calls made for 0.1.0 and what is not done yet |
 | [Security](SECURITY.md) | the trust model, what `owpp` limits, known limits, how to report |
 
 ## Examples
@@ -89,7 +97,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ## Status
 
-0.1.0, released 2026-11-19, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), but that run is started by hand, not part of CI. See [decisions](docs/decisions.md#not-done-yet).
+0.2.0, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), but that run is started by hand, not part of CI. See [status and limits](docs/README.md#status-and-limits).
 
 ## Development
 

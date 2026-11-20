@@ -69,7 +69,7 @@ skills:
     access: public
 ```
 
-Local skills are the folder `skills/<id>/`. From a `source:` a skill is a `file:` or a `dir:`. A skill's `access` works like a tool's.
+Local skills are the folder `skills/<id>/`; a local skill sets its `access` in its SKILL.md front matter (`access: public`), as `owpp create` writes it. From a `source:` a skill is a `file:` or a `dir:`. A skill's `access` works like a tool's.
 
 **Earlier copies of the runtime (portainer's, before it moved to owpp) granted `public` items to Open-WebUI's `anyone:*` audience.** That is the no-auth audience Open-WebUI uses for shared chats, and its tool and skill access checks ignore it, so only admins could use them. The runtime now swaps exactly that grant for `user:*` on the next sync of an item it installed, and leaves every other grant as the admin set it.
 
@@ -80,9 +80,12 @@ source:
   git: https://github.com/owner/repo.git   # https, ssh, or user@host:path
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea   # full 40-character commit SHA
   path: subfolder                           # "" for the repo root
+  track: main                               # optional: the branch or tag `owpp sync` follows
 ```
 
 Makes `tool: {file}`, `function: {file}` and `skills: {<id>: {file|dir}}` read from that repo at that commit. See [bundling](bundling.md#git-sources).
+
+`track` is read only by [`owpp sync`](tooling.md#owpp-sync-moving-a-pinned-commit), which moves `ref` to the latest commit of that branch or tag. Without it, sync follows the repository's default branch. It never changes what is deployed: only `ref` does.
 
 ### `include:`
 

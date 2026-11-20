@@ -6,14 +6,14 @@ Please report it privately, not in a public issue: use GitHub's **Security** tab
 **Report a vulnerability**. If that is not available, open an issue that says only that you have a
 security report and ask for a private channel; leave the details out.
 
-Supported: the latest 0.1.x release. This is pre-1.0 software, written against Open-WebUI v0.13.4
-and **not yet exercised against a live Open-WebUI** (see [decisions](docs/decisions.md#not-done-yet)),
-so treat it accordingly.
+Supported: the latest release. This is pre-1.0 software, written against Open-WebUI v0.13.4 and
+checked on a live Open-WebUI only by hand, not in CI (see
+[status and limits](docs/README.md#status-and-limits)), so treat it accordingly.
 
 ## The trust model, in one paragraph
 
-A plugin is **code that runs inside Open-WebUI with admin rights**, and `owpp deploy` uses an **admin
-API key** to put it there. Whoever can change the plugins repository, or the repository a plugin's
+A plugin is **code that runs inside Open-WebUI with admin rights**, and `owpp deploy` signs in **as an admin**
+(an API key, a password, an OIDC token, or an instance that needs none) to put it there. Whoever can change the plugins repository, or the repository a plugin's
 `source:` points at, can therefore run code as an Open-WebUI admin, so a CI job that deploys on push
 makes *write access to that repository* equivalent to *admin on Open-WebUI*. Everything below is
 about keeping that explicit and narrow, not about making untrusted plugins safe.
@@ -84,10 +84,13 @@ about keeping that explicit and narrow, not about making untrusted plugins safe.
 
 ## For people deploying plugins
 
-- Give CI a **dedicated admin user and API key** used for nothing else, stored as a secret, and rotate it.
+- Give CI a **dedicated admin user** used for nothing else, with its API key, password or token
+  stored as a secret, and rotate it. Deploying with no credentials only works on an instance where
+  anyone who can reach it is already an admin (sign-in off) or a proxy vouches for them: do not
+  leave such an instance reachable.
 - Restrict who can push to the plugins repository (and to any repository a `source:` names). Require
   review for changes to `plugin.yaml`, `assets/` and anything that touches `ref:`.
-- **Pin `owpp`** (`uvx owpp@0.1.0`) and pin the action to a tag or SHA: the runtime and libraries are
+- **Pin `owpp`** (`uvx owpp@0.2.0`) and pin the action to a tag or SHA: the runtime and libraries are
   copied into what you deploy, so an upgrade changes your deployed code.
 - Run `owpp deploy --dry-run` before the first deploy and read the plan; run `owpp check --strict`
   in CI.

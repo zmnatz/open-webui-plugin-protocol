@@ -30,7 +30,7 @@ To make it work, turn the setting on:
 
 It is the same setting, and the same cost, as [Inline Visualizer](../inline_visualizer/README.md) (its upstream README says so too): an instance that already runs it for live rendering has already accepted it, and Excalidraw adds nothing to it.
 
-The plugin keeps the requirement on purpose rather than working around it ([decisions](../../../docs/decisions.md#examples), [issue #6](https://github.com/zmnatz/open-webui-plugin-protocol/issues/6)). A token in the iframe's address would be written into the chat's stored HTML and would have expired by the time an old chat is reopened; a public page that asks the parent window for a credential needs Open-WebUI to answer, which it does not today.
+The plugin keeps the requirement on purpose rather than working around it ([issue #6](https://github.com/zmnatz/open-webui-plugin-protocol/issues/6)). A token in the iframe's address would be written into the chat's stored HTML and would have expired by the time an old chat is reopened; a public page that asks the parent window for a credential needs Open-WebUI to answer, which it does not today.
 
 ## Self-hosting the editor
 

@@ -63,7 +63,7 @@ path = "src/owpp/__init__.py"
 packages = ["src/owpp"]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/owpp", "docs", "examples", "tests", "README.md", "LICENSE", "NOTICE.md", "CHANGELOG.md", "SECURITY.md"]
+include = ["src/owpp", "docs", "examples", "skills", "tests", "README.md", "LICENSE", "NOTICE.md", "CHANGELOG.md", "SECURITY.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "examples/plugins"]

@@ -4,7 +4,7 @@
 
 ```sh
 mkdir my-plugins && cd my-plugins && git init
-uvx owpp init hello --type event
+uvx owpp create hello                # the wizard (docs/creating.md), or: uvx owpp init hello --type event
 uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
 ```
@@ -20,7 +20,7 @@ Then add the [GitHub Action](tooling.md#github-action).
 
 ## Third-party functions
 
-Prefer a pinned `source:` (git URL plus a full commit SHA) over copying the file in: upgrades become a reviewed change of the SHA. Review the upstream diff before moving it; this code runs with admin rights.
+Prefer a pinned `source:` (git URL plus a full commit SHA) over copying the file in: upgrades become a reviewed change of the SHA, which `owpp sync` makes (it lists the files that changed, with a compare link). Review the upstream diff before committing it; this code runs with admin rights.
 
 ## Keep your existing marker
 

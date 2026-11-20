@@ -16,8 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0 # the audit trail is built from the whole git history
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --group docs --python 3.13 # Zensical needs 3.11+
       - run: uv run python tools/build_docs.py # fails on a broken link

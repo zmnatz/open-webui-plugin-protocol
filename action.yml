@@ -8,8 +8,20 @@ inputs:
     description: Base URL of the Open-WebUI instance.
     required: true
   api-key:
-    description: An Open-WebUI admin API key (store it as a secret).
-    required: true
+    description: An Open-WebUI admin API key (store it as a secret). Optional; without it the deploy signs in with the inputs below, or with nothing.
+    default: ""
+  username:
+    description: An admin's email (or LDAP user name), with password, when there is no api-key.
+    default: ""
+  password:
+    description: That admin's password (store it as a secret).
+    default: ""
+  oidc-token:
+    description: An OIDC access token exchanged for an Open-WebUI session (the instance must set ENABLE_OAUTH_TOKEN_EXCHANGE=true).
+    default: ""
+  oauth-provider:
+    description: The Open-WebUI OAuth provider the oidc-token is from.
+    default: oidc
   plugins-dir:
     description: The plugins folder, relative to the repository root.
     default: plugins
@@ -20,11 +32,20 @@ inputs:
     description: Comma-separated plugin ids to deploy (no pruning). Empty deploys all.
     default: ""
   dry-run:
-    description: '"true" lists what would change without writing.'
+    description: '"true" lists what would change, with versions, without writing.'
+    default: "false"
+  sync:
+    description: 'With dry-run: "true" reports against the latest commit each git-sourced plugin tracks (as `owpp sync` would), without changing plugin.yaml.'
     default: "false"
   check:
     description: '"false" skips `owpp check` before deploying.'
     default: "true"
+  since:
+    description: 'A git ref (e.g. origin/main): `owpp check` also fails when a plugin changed since it without a new version. Needs that ref fetched (actions/checkout with fetch-depth: 0).'
+    default: ""
+  force:
+    description: '"true" deploys even where the instance runs a newer version than the repository (a downgrade).'
+    default: "false"
 runs:
   using: composite
   steps:
@@ -34,18 +55,30 @@ runs:
       shell: bash
       env:
         OWPP_PLUGINS_DIR: ${{ inputs.plugins-dir }}
-      run: uvx --from "$GITHUB_ACTION_PATH" owpp check
+        SINCE: ${{ inputs.since }}
+      run: |
+        args=(check)
+        if [ -n "$SINCE" ]; then args+=(--since "$SINCE"); fi
+        uvx --from "$GITHUB_ACTION_PATH" owpp "${args[@]}"
     - name: Deploy plugins
       shell: bash
       env:
         OPEN_WEBUI_URL: ${{ inputs.url }}
         OPEN_WEBUI_API_KEY: ${{ inputs.api-key }}
+        OPEN_WEBUI_USERNAME: ${{ inputs.username }}
+        OPEN_WEBUI_PASSWORD: ${{ inputs.password }}
+        OPEN_WEBUI_OIDC_TOKEN: ${{ inputs.oidc-token }}
+        OPEN_WEBUI_OAUTH_PROVIDER: ${{ inputs.oauth-provider }}
         OWPP_PLUGINS_DIR: ${{ inputs.plugins-dir }}
         OWPP_MANAGED_BY: ${{ inputs.managed-by }}
         ONLY: ${{ inputs.only }}
         DRY_RUN: ${{ inputs.dry-run }}
+        SYNC: ${{ inputs.sync }}
+        FORCE: ${{ inputs.force }}
       run: |
         args=(deploy)
         if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
         if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
+        if [ "$SYNC" = "true" ]; then args+=(--sync); fi
+        if [ "$FORCE" = "true" ]; then args+=(--force); fi
         uvx --from "$GITHUB_ACTION_PATH" owpp "${args[@]}"

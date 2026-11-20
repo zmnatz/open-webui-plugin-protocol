@@ -10,7 +10,8 @@ is checked in, so none of it can drift from the repository:
 - the root CHANGELOG, SECURITY and NOTICE files, and each example plugin's README;
 - an examples overview, built from each plugin.yaml;
 - the test catalogue, built from the test docstrings (docs/testing.md, "Describe every test");
-- the audit trail, built from `git log`.
+- llms.txt and llms-full.txt, for language models: the site's pages with their addresses, and
+  the text of the guide in one file (https://llmstxt.org/);
 
 Links are written for GitHub, relative to the file they are in. They are rewritten to the page
 that carries the target on the site, or else to the file on GitHub. A link to a file or heading
@@ -39,6 +40,9 @@ DOCS = ROOT / "docs"
 OUT = ROOT / "build" / "docs"  # zensical.toml: docs_dir
 EXAMPLES = ROOT / "examples" / "plugins"
 REPO_URL = "https://github.com/zmnatz/open-webui-plugin-protocol"
+SITE_URL = "https://zmnatz.github.io/open-webui-plugin-protocol/"
+# The menu sections whose pages go, whole, into llms-full.txt: what someone using owpp reads.
+FULL_TEXT_SECTIONS = ("Getting started", "Guide")
 # Link to the commit being built on CI (a pull request's own files), else to main.
 REF = os.environ.get("GITHUB_SHA") or "main"
 
@@ -91,7 +95,6 @@ def assemble(out: Path = OUT) -> list[str]:
     # Generated pages write their links relative to the repository root.
     pages["examples/index.md"] = ("generated.md", _examples_index())
     pages["reference/test-catalogue.md"] = ("generated.md", _test_catalogue())
-    pages["project/audit-trail.md"] = ("generated.md", _audit_trail())
     pages["reference/screenshots.md"] = ("generated.md", _screenshots_page())
 
     anchors = {uri: _anchors(text) for uri, (_, text) in pages.items()}
@@ -111,7 +114,87 @@ def assemble(out: Path = OUT) -> list[str]:
             parts[i] = re.sub(r"(\]\()([^)\s]+)(\))", relink, parts[i])
         (out / uri).parent.mkdir(parents=True, exist_ok=True)
         (out / uri).write_text("".join(parts))
+    _write_llms(out, pages)
     return problems
+
+
+# ---- llms.txt ------------------------------------------------------------------------------
+
+
+def _nav() -> list[tuple[str, list[tuple[str, str]]]]:
+    """zensical.toml's menu as [(section, [(title, page)])]; a top-level page is its own section."""
+    import tomllib
+
+    nav = tomllib.loads((ROOT / "zensical.toml").read_text())["project"]["nav"]
+    out = []
+    for entry in nav:
+        ((name, value),) = entry.items()
+        if isinstance(value, str):
+            out.append((name, [(name, value)]))
+            continue
+        flat = []
+        for item in value:
+            ((title, target),) = item.items()
+            if isinstance(target, str):
+                flat.append((title, target))
+            else:  # a nested group: its pages, by name
+                flat += [next(iter(i.items())) for i in target]
+        out.append((name, flat))
+    return out
+
+
+def _page_url(page: str) -> str:
+    return SITE_URL + ("" if page == "README.md" else page.removesuffix(".md") + "/").removesuffix(
+        "index/"
+    )
+
+
+def _summary(text: str) -> str:
+    """A page's first sentence of prose, as one line ("" when it opens with none)."""
+    for para in re.sub(r"\A#[^\n]*\n+", "", text.lstrip()).split("\n\n"):
+        para = para.strip()
+        if not para or para.startswith("#"):
+            continue  # a heading: the prose under it may follow
+        if para.startswith(("```", "|", "!!!", "-", "<")):
+            return ""
+        line = " ".join(re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", para).split())
+        m = re.match(r"(.+?[.:!?])(\s|$)", line)
+        return m.group(1) if m else line
+    return ""
+
+
+def _write_llms(out: Path, pages: dict[str, tuple[str, str]]) -> None:
+    """llms.txt (the pages, with their addresses) and llms-full.txt (the guide's text)."""
+    index = [
+        "# Open-WebUI plugin protocol (owpp)",
+        "",
+        "> Write, test and deploy Open-WebUI plugins (a function plus the tool and skills it "
+        "installs) from a git repository, with the `owpp` CLI (`uvx owpp`). A plugin is a folder "
+        "with a plugin.yaml; owpp bundles it into the single file Open-WebUI stores, tests it "
+        "against a mock Open-WebUI, versions it and deploys it.",
+        "",
+        f"The whole guide as one text file: {SITE_URL}llms-full.txt. An agent skill for working "
+        f"with owpp: {REPO_URL}/tree/main/skills/owpp. Every command's flags: `uvx owpp <command> "
+        "--help`.",
+    ]
+    full = [
+        "# Open-WebUI plugin protocol (owpp): the guide",
+        "",
+        f"The pages of {SITE_URL}, in menu order. Links inside are relative to the repository "
+        f"{REPO_URL}.",
+    ]
+    for section, entries in _nav():
+        index += ["", f"## {section}", ""]
+        for title, page in entries:
+            if page not in pages:
+                continue
+            text = pages[page][1]
+            summary = _summary(text)
+            index.append(f"- [{title}]({_page_url(page)})" + (f": {summary}" if summary else ""))
+            if section in FULL_TEXT_SECTIONS:
+                full += ["", "", f"<!-- {title}: {_page_url(page)} -->", "", text.strip()]
+    (out / "llms.txt").write_text("\n".join(index) + "\n")
+    (out / "llms-full.txt").write_text("\n".join(full) + "\n")
 
 
 def _relink(target, origin, page_uri, pages, copied, anchors) -> str | None:
@@ -402,72 +485,6 @@ def _library_tests() -> list[str]:
         *rows,
         "",
     ]
-
-
-# ---- audit trail -----------------------------------------------------------------------
-
-
-def _git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=ROOT, capture_output=True, text=True, check=True
-    ).stdout
-
-
-def _audit_trail() -> str:
-    head = [
-        "# Audit trail",
-        "",
-        "Every change to this repository, newest first, as recorded in git: when, by whom, "
-        "why (the commit message), and which files it touched. It is generated from `git log` "
-        "each time the site is built. The [changelog](CHANGELOG.md) says what changed for "
-        "users, and [decisions](docs/decisions.md) why things are the way they are.",
-        "",
-    ]
-    try:
-        if _git("rev-parse", "--is-shallow-repository").strip() == "true":
-            head += [
-                '!!! warning "Shallow clone"',
-                "    Only part of the history was available to this build.",
-                "",
-            ]
-        log = _git("log", "--format=%x1e%H%x1f%h%x1f%an%x1f%ad%x1f%s%x1f%b", "--date=iso-strict")
-    except (OSError, subprocess.CalledProcessError):
-        return "\n".join(head + ["The git history was not available to this build.", ""])
-
-    out = []
-    for record in log.split("\x1e")[1:]:
-        sha, short, author, date, subject, body = record.split("\x1f", 5)
-        stat = _git("show", "--format=", "--numstat", sha).strip().splitlines()
-        changes = []
-        for line in stat:
-            added, removed, path = line.split("\t", 2)
-            changes.append(f"    | `{path}` | {added} | {removed} |")
-        body = re.sub(r"\s*<[^<>\s]+@[^<>\s]+>", "", body)  # never publish an email address
-        lines, trailers = [], []
-        for line in body.strip().splitlines():
-            is_trailer = re.match(r"[\w-]+-by: ", line, re.I)
-            (trailers if is_trailer else lines).append(line)
-        out += [
-            f"## {_text(subject)}",
-            "",
-            f"[`{short}`]({REPO_URL}/commit/{sha}) · {date[:10]} · {author}",
-            "",
-        ]
-        if lines:
-            out += ["\n".join(_text(line) for line in lines).strip(), ""]
-        for trailer in trailers:
-            key, value = trailer.split(":", 1)
-            out += [f"- {key}: {_text(value.strip())}"]
-        if trailers:
-            out += [""]
-        out += [
-            f'??? abstract "{len(changes)} file(s) changed"',
-            "    | File | Added | Removed |",
-            "    | --- | --- | --- |",
-            *changes,
-            "",
-        ]
-    return "\n".join(head + out)
 
 
 if __name__ == "__main__":

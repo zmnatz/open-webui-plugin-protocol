@@ -113,9 +113,20 @@ class MockServer:
     """Just enough state to see which calls a deploy makes."""
 
     def __init__(
-        self, live=(), key="sk-good", created_type="filter", created_active=False, fail_delete=False
+        self,
+        live=(),
+        key="sk-good",
+        created_type="filter",
+        created_active=False,
+        fail_delete=False,
+        accounts=None,  # {email: password}: /auths/signin
+        ldap=None,  # {user: password}: /auths/ldap
+        oidc=None,  # {provider: token}: /auths/oauth/<provider>/token/exchange
+        open_signin=False,  # an empty sign-in works (WEBUI_AUTH=False, or a trusted header)
+        role="admin",  # of whoever signs in
     ):
         self.calls: list[str] = []
+        accounts, ldap, oidc = accounts or {}, ldap or {}, oidc or {}
         self.state: dict[str, dict] = {f["id"]: dict(f) for f in live}
         outer = self
 
@@ -135,6 +146,35 @@ class MockServer:
                 path = urlsplit(self.path).path
                 if path == "/health":
                     return self._send({"status": True})
+                if path.startswith("/api/v1/auths/"):  # signing in needs no credential
+                    raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                    form = json.loads(raw) if raw else {}
+                    outer.calls.append(f"POST {path}")
+                    signed_in = {"token": key, "role": role, "email": "admin@example.com"}
+                    if path == "/api/v1/auths/signin":
+                        if form.get("email") == "" and form.get("password") == "":
+                            ok = open_signin
+                        else:
+                            ok = accounts.get(form.get("email")) == form.get("password")
+                        if ok:
+                            return self._send(signed_in)
+                        return self._send(
+                            {"detail": "The email or password provided is incorrect."}, 400
+                        )
+                    if path == "/api/v1/auths/ldap":
+                        if not ldap:
+                            return self._send({"detail": "LDAP authentication is not enabled"}, 400)
+                        if ldap.get(form.get("user")) == form.get("password"):
+                            return self._send(signed_in)
+                        return self._send({"detail": "Invalid credentials"}, 400)
+                    exchange = re.fullmatch(r"/api/v1/auths/oauth/([^/]+)/token/exchange", path)
+                    if exchange:
+                        if not oidc:
+                            return self._send({"detail": "Token exchange is disabled"}, 403)
+                        if oidc.get(exchange.group(1)) == form.get("token"):
+                            return self._send(signed_in)
+                        return self._send({"detail": "Invalid token"}, 400)
+                    return self._send({"detail": "not found"}, 404)
                 if self.headers.get("Authorization") != f"Bearer {key}":
                     return self._send({"detail": "nope"}, 401)
                 body = None
