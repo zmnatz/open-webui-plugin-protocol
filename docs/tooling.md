@@ -84,9 +84,10 @@ Every function the deploy writes gets `meta.managed_by = <marker>` and a note in
 
 1. Waits for `GET /health` (the instance may be restarting).
 2. Lists functions (`GET /api/v1/functions/list`), which is also the credential check: a bad key fails here, before anything is written.
-3. Fetches git sources and bundles every plugin.
-4. Creates, updates or leaves each function alone (see [bundling](bundling.md#what-the-deploy-script-does-with-a-bundle)), then applies manifest valves and activates and globalises as declared.
-5. Prunes: managed functions whose folder is gone. Deleting more than half of them in one run is refused without `--force-prune`, so a renamed folder cannot wipe them all.
+3. If a plugin declares a [`requires:`](plugin-format.md#requires) setting, reads the instance's admin config. A setting that is missing — or that cannot be read — is a **warning in the report**, never a refusal: the deploy does not change instance settings.
+4. Fetches git sources and bundles every plugin.
+5. Creates, updates or leaves each function alone (see [bundling](bundling.md#what-the-deploy-script-does-with-a-bundle)), then applies manifest valves and activates and globalises as declared.
+6. Prunes: managed functions whose folder is gone. Deleting more than half of them in one run is refused without `--force-prune`, so a renamed folder cannot wipe them all.
 
 The report names each function with its type, for example ``- event function `mcpo_sync` (mcpo_sync/): unchanged``. In GitHub Actions it is also written to the job summary.
 

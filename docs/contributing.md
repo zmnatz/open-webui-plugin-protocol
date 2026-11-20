@@ -4,7 +4,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 
 ## Before you start
 
-- Find or open an issue on [GitHub Issues](https://github.com/zmnatz/open-webui-plugin-protocol/issues) that says what you are changing and why. Labels are in [triage labels](agents/triage-labels.md).
+- Find or open an issue on [GitHub Issues](https://github.com/zmnatz/open-webui-plugin-protocol/issues) that says what you are changing and why. The triage labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` and `wontfix`.
 - Work on a branch, not `main`.
 - Install the tools: [uv](https://docs.astral.sh/uv/), then `uv sync`. For this site: `uv sync --group docs` (Python 3.11 or newer).
 

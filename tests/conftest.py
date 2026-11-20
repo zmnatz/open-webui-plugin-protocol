@@ -124,8 +124,12 @@ class MockServer:
         oidc=None,  # {provider: token}: /auths/oauth/<provider>/token/exchange
         open_signin=False,  # an empty sign-in works (WEBUI_AUTH=False, or a trusted header)
         role="admin",  # of whoever signs in
+        interface_settings=None,  # DEFAULT_INTERFACE_SETTINGS in the admin config
+        admin_config_status=200,  # 403: a signed-in account that cannot read the admin config
     ):
         self.calls: list[str] = []
+        self.interface_settings = interface_settings or {}
+        self.admin_config_status = admin_config_status
         accounts, ldap, oidc = accounts or {}, ldap or {}, oidc or {}
         self.state: dict[str, dict] = {f["id"]: dict(f) for f in live}
         outer = self
@@ -146,6 +150,11 @@ class MockServer:
                 path = urlsplit(self.path).path
                 if path == "/health":
                     return self._send({"status": True})
+                if path == "/api/v1/auths/admin/config":
+                    outer.calls.append("GET /api/v1/auths/admin/config")
+                    if outer.admin_config_status != 200:
+                        return self._send({"detail": "not allowed"}, outer.admin_config_status)
+                    return self._send({"DEFAULT_INTERFACE_SETTINGS": outer.interface_settings})
                 if path.startswith("/api/v1/auths/"):  # signing in needs no credential
                     raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
                     form = json.loads(raw) if raw else {}

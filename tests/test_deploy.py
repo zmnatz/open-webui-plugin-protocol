@@ -15,10 +15,12 @@ from owpp.deploy import (
     HttpResponse,
     Options,
     deploy,
+    iframe_sandbox_warning,
     options_from_env,
     plan_deploy,
     plan_prune,
     render_report,
+    run_deploy,
     sign_in,
     wait_for_health,
 )
@@ -657,3 +659,48 @@ class TestSignIn:
             "google",
         )
         assert "secret" not in repr(opts)  # no credential in a log or a traceback
+
+
+class TestIframeRequirementWarning:
+    PLUGIN = "function:\n  title: Demo\nrequires:\n  iframe_sandbox_allow_same_origin: true\n"
+
+    def make(self, functions_dir):
+        return functions_dir(
+            {"demo/plugin.yaml": self.PLUGIN, "demo/function.py": "class Event:\n    pass\n"}
+        )
+
+    def test_no_requirement_never_reads_the_admin_config(self, mock_server, functions_dir):
+        m = mock_server()
+        assert iframe_sandbox_warning(m.options(functions_dir({"demo.py": FILTER}))) is None
+        assert m.calls == []
+
+    def test_setting_on_means_no_warning(self, mock_server, functions_dir):
+        m = mock_server(interface_settings={"iframeSandboxAllowSameOrigin": True})
+        assert iframe_sandbox_warning(m.options(self.make(functions_dir))) is None
+        assert m.calls == ["GET /api/v1/auths/admin/config"]
+
+    def test_only_that_excludes_the_plugin_does_not_warn(self, mock_server, functions_dir):
+        m = mock_server()
+        assert iframe_sandbox_warning(m.options(self.make(functions_dir), only=["other"])) is None
+        assert m.calls == []
+
+    def test_missing_setting_warns_but_the_deploy_still_writes(
+        self, mock_server, functions_dir, capsys
+    ):
+        m = mock_server(created_type="event", created_active=True)
+        opts = m.options(self.make(functions_dir))
+        assert run_deploy(opts, env={}) == 0
+        out = capsys.readouterr().out
+        assert "Warning:" in out and "iframe Sandbox Allow Same Origin" in out
+        assert "DEFAULT_INTERFACE_SETTINGS" in out and "Deploying anyway." in out
+        assert m.calls[0] == "GET /api/v1/auths/admin/config"
+        assert "POST /api/v1/functions/create" in m.calls
+
+    def test_unreadable_admin_config_warns_without_stopping_the_deploy(
+        self, mock_server, functions_dir
+    ):
+        m = mock_server(admin_config_status=403, created_type="event", created_active=True)
+        opts = m.options(self.make(functions_dir))
+        warning = iframe_sandbox_warning(opts)
+        assert warning and "could not be read" in warning
+        assert any(r.action.startswith("created") for r in deploy(opts))

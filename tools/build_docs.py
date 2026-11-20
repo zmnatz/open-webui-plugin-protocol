@@ -4,7 +4,8 @@
     uv run --group docs python tools/build_docs.py serve    # preview at http://127.0.0.1:8000
 
 The guides live in docs/. This script puts them, together with what lives elsewhere or has to be
-generated, into build/docs/, then runs Zensical (zensical.toml) on that folder. Nothing generated
+generated, into build/docs/, then runs Zensical (zensical.toml) on that folder. The project's own
+agent instructions in docs/agents/ stay in the repository but are not published. Nothing generated
 is checked in, so none of it can drift from the repository:
 
 - the root CHANGELOG, SECURITY and NOTICE files, and each example plugin's README;
@@ -78,6 +79,8 @@ def assemble(out: Path = OUT) -> list[str]:
             continue
         uri = path.relative_to(DOCS).as_posix()
         if path.suffix == ".md":
+            if uri.startswith("agents/"):
+                continue  # project/agent instructions: in the repo, not on the site
             pages[uri] = (f"docs/{uri}", path.read_text())
         else:
             (out / uri).parent.mkdir(parents=True, exist_ok=True)

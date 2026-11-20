@@ -34,6 +34,7 @@ from typing import Any, NamedTuple
 
 from .bundle import VALID_ID, FunctionFile, load_function_files
 from .errors import OwppError
+from .manifest import read_manifest
 from .sources import Fetcher, fetch_sources, git_fetcher, plugin_folders, source_keys
 from .versioning import (
     is_older,
@@ -236,6 +237,9 @@ def _field(obj: Any, key: str) -> Any:
 # ---- signing in ---------------------------------------------------------------
 
 AUTHS = "/api/v1/auths"
+IFRAME_REQUIREMENT = "iframe_sandbox_allow_same_origin"
+IFRAME_SETTING = "iframeSandboxAllowSameOrigin"
+IFRAME_FIX = "DEFAULT_INTERFACE_SETTINGS='{\"iframeSandboxAllowSameOrigin\": true}'"
 
 
 def _post_signin(opts: Options, path: str, body: dict) -> tuple[dict | None, str]:
@@ -755,7 +759,45 @@ def _deploy(opts: Options, latest: dict[str, str] | None = None) -> list[Result]
     return _deploy_functions(opts, files, latest)
 
 
-def render_report(results: list[Result], dry_run: bool, sync: bool = False) -> str:
+def _needing_iframe_sandbox(directory: Path, only: list[str] | None = None) -> list[str]:
+    """Ids of the local plugin folders that declare the iframe requirement in plugin.yaml."""
+    ids = []
+    for folder in plugin_folders(directory):
+        if only and folder.name not in only:
+            continue
+        requires = read_manifest(folder).get("requires")
+        if isinstance(requires, dict) and requires.get(IFRAME_REQUIREMENT) is True:
+            ids.append(folder.name)
+    return ids
+
+
+def iframe_sandbox_warning(opts: Options) -> str | None:
+    """Warn when a plugin needs Open-WebUI's iframe Sandbox Allow Same Origin but the instance's
+    default interface settings do not turn it on. Never changes the instance or stops a deploy:
+    a user's own setting can still enable it, and an unreadable admin config is not a reason to
+    refuse the rest of the deploy."""
+    ids = _needing_iframe_sandbox(opts.dir, opts.only)
+    if not ids:
+        return None
+    try:
+        config = _call(opts, "GET", f"{AUTHS}/admin/config")
+        settings = config.get("DEFAULT_INTERFACE_SETTINGS") if isinstance(config, dict) else None
+        if isinstance(settings, dict) and settings.get(IFRAME_SETTING) is True:
+            return None
+        why = "it is not on in this instance's default interface settings"
+    except OwppError as e:
+        why = f"its default interface settings could not be read ({e})"
+    return (
+        f"Warning: {', '.join(f'`{i}`' for i in ids)} need Open-WebUI's iframe Sandbox Allow Same "
+        f"Origin, and {why}. Set it with {IFRAME_FIX} or under Admin Settings > General > "
+        "Default Interface Settings (each user can also turn it on in Settings > Interface). "
+        "Deploying anyway."
+    )
+
+
+def render_report(
+    results: list[Result], dry_run: bool, sync: bool = False, warnings: list[str] | None = None
+) -> str:
     lines = []
     for r in results:
         what = f"{r.type} function" if r.type else r.kind
@@ -778,6 +820,9 @@ def render_report(results: list[Result], dry_run: bool, sync: bool = False) -> s
                 "A deploy refuses this without --force."
             ),
         ]
+    extra = [w for w in (warnings or []) if w]
+    if extra:
+        lines += ["", *extra]
     if dry_run:
         title = f"Dry run{' at the latest commits' if sync else ''}: {title}"
     return f"{title}\n\n" + "\n".join(lines) + "\n"
@@ -796,7 +841,8 @@ def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
     try:
         wait_for_health(opts)
         how = sign_in(opts)
-        report = render_report(deploy(opts), opts.dry_run, opts.sync)
+        warning = iframe_sandbox_warning(opts)  # before writing anything, but never a refusal
+        report = render_report(deploy(opts), opts.dry_run, opts.sync, [warning])
     except OwppError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

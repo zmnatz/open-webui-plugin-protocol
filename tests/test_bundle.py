@@ -996,4 +996,5 @@ class TestUnknownManifestKeys:
             "static",
             "assets",
             "jobs",
+            "requires",
         }
