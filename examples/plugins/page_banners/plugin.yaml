@@ -6,5 +6,4 @@ function:
   required_open_webui_version: 0.11.3
   license: MIT
   description: Shows the admin banners in every chat, at the top of the page or above the message input, and keeps open tabs in step. A variant of Better Banners by Classic298.
-# assets/loader.js and assets/custom.css are published into the Shared Assets Protocol by class Event(PluginAssets).
-include: [live_reload] # opt in: a code or valve change, or disabling it, reaches every container within a second (Redis; Open-WebUI 0.11+)
+include: [live_reload]

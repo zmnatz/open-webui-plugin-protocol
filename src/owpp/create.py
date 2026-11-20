@@ -97,7 +97,7 @@ class SourceSpec:
     ref: str
     path: str = ""
     function_file: str = ""  # the function itself, taken verbatim (type "upstream")
-    track: str = ""  # the branch or tag `owpp pull` follows; empty: the default branch
+    track: str = ""
 
 
 @dataclass

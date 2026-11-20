@@ -11,9 +11,8 @@ tool:
   id: excalidraw
   title: Excalidraw
   description: Show, read and change the shared Excalidraw drawing of the chat.
-  include: [chat_data] # the tool reads and writes the same scene store
-  access: public # everyone may use it when first installed; later changes in the UI are kept
-include: [routes, chat_data] # plugin_mount; the scene store the tool shares
+  include: [chat_data]
+  access: public
+include: [routes, chat_data]
 requires:
-  iframe_sandbox_allow_same_origin: true # the Artifacts panel sends no session without it; see README
-# templates/viewer.html is rendered by the page; config.yaml is read with plugin_config().
+  iframe_sandbox_allow_same_origin: true
