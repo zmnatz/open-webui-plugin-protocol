@@ -5,7 +5,7 @@
   owpp bundle <id> [out.py]          print (or write) the exact code that would be deployed
   owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
   owpp test [id ...] [--upstream] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
-  owpp sync [id ...] [--dry-run] [--bump part]   move plugins taken from git to their latest commit
+  owpp pull [id ...] [--dry-run] [--bump part]   move plugins taken from git to their latest commit
   owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
   owpp migrate [id ...] [--dry-run]  bring plugin.yaml to the current protocol version
   owpp create [id]                   a wizard: asks what the plugin is, then writes it
@@ -229,7 +229,7 @@ def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         dry_run=args.dry_run,
         force_prune=args.force_prune,
         managed_by=args.managed_by,
-        sync=args.sync,
+        latest=args.latest,
         force=args.force,
         ca_cert=args.ca_cert,
         client_cert=args.client_cert,
@@ -318,12 +318,12 @@ def _cmd_migrate(args: argparse.Namespace, directory: Path, env: Mapping[str, st
     return migrate(directory, args.ids, dry_run=args.dry_run)
 
 
-def _cmd_sync(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
-    from .sync import sync
+def _cmd_pull(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    from .pull import pull
 
     if not directory.exists():
         raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
-    return sync(directory, args.ids, dry_run=args.dry_run, bump_by=args.bump)
+    return pull(directory, args.ids, dry_run=args.dry_run, bump_by=args.bump)
 
 
 def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -410,9 +410,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="deploy even where the instance runs a newer version (a downgrade)",
     )
     deploy.add_argument(
-        "--sync",
+        "--latest",
         action="store_true",
-        help="with --dry-run: at the latest commit each git-sourced plugin tracks (owpp sync)",
+        help="with --dry-run: at the latest commit each git-sourced plugin tracks (owpp pull)",
     )
     deploy.add_argument(
         "--force-prune",
@@ -435,10 +435,10 @@ def build_parser() -> argparse.ArgumentParser:
     migrate.add_argument(
         "--dry-run", action="store_true", help="say what would change; write nothing"
     )
-    sync = add("sync", _cmd_sync, "move plugins taken from git to the latest commit they track")
-    sync.add_argument("ids", nargs="*", metavar="id", help="plugins to sync (default: all)")
-    sync.add_argument("--dry-run", action="store_true", help="say what would move; write nothing")
-    sync.add_argument(
+    pull = add("pull", _cmd_pull, "move plugins taken from git to the latest commit they track")
+    pull.add_argument("ids", nargs="*", metavar="id", help="plugins to pull (default: all)")
+    pull.add_argument("--dry-run", action="store_true", help="say what would move; write nothing")
+    pull.add_argument(
         "--bump",
         choices=["patch", "minor", "major", "none"],
         default="patch",

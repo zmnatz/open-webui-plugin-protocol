@@ -296,7 +296,7 @@ def bump(
     if is_plugin_source(manifest):
         raise OwppError(
             f"{plugin_id} is taken whole from git, so its versions are the upstream's; "
-            f"`owpp sync {plugin_id}` moves it to a newer commit"
+            f"`owpp pull {plugin_id}` moves it to a newer commit"
         )
     if skill:
         path = folder / "skills" / skill / "SKILL.md"

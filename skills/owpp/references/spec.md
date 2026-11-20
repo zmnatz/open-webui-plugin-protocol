@@ -52,7 +52,7 @@ live_reload: true           # with assets: changes reach every container within 
 
 ## From git
 
-Code from another repository, pinned to a full 40-character commit SHA. Get the SHA of a branch or tag with `git ls-remote <url> <branch>`, and put the branch in `track` so `owpp sync` follows it.
+Code from another repository, pinned to a full 40-character commit SHA. Get the SHA of a branch or tag with `git ls-remote <url> <branch>`, and put the branch in `track` so `owpp pull` follows it.
 
 ```yaml
 id: viz
@@ -61,7 +61,7 @@ source:
   git: https://github.com/owner/repo.git     # https, ssh, or user@host:path
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea
   path: plugins/viz         # the folder the paths below are in; "" for the root
-  track: main               # optional: the branch or tag owpp sync follows
+  track: main               # optional: the branch or tag owpp pull follows
   function_file: ""         # type upstream: the function file, taken with its header
 tool:
   id: viz

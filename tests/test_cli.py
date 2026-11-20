@@ -192,3 +192,13 @@ def test_runs_as_a_module_and_reports_its_version():
     )
     assert done.returncode == 0
     assert done.stdout.strip() == f"owpp {__version__}"
+
+
+@pytest.mark.parametrize("argv", [["sync"], ["deploy", "--dry-run", "--sync"]])
+def test_the_names_from_before_pull_and_latest_are_gone(argv, capsys):
+    """`owpp sync` became `owpp pull`, and deploy's `--sync` became `--latest`: no aliases."""
+    with pytest.raises(SystemExit) as raised:
+        main(argv, env={})
+    assert raised.value.code == 2
+    err = capsys.readouterr().err
+    assert "invalid choice: 'sync'" in err or "unrecognized arguments: --sync" in err

@@ -34,8 +34,8 @@ inputs:
   dry-run:
     description: '"true" lists what would change, with versions, without writing.'
     default: "false"
-  sync:
-    description: 'With dry-run: "true" reports against the latest commit each git-sourced plugin tracks (as `owpp sync` would), without changing plugin.yaml.'
+  latest:
+    description: 'With dry-run: "true" reports against the latest commit each git-sourced plugin tracks (as `owpp pull` would), without changing plugin.yaml.'
     default: "false"
   check:
     description: '"false" skips `owpp check` before deploying.'
@@ -73,12 +73,12 @@ runs:
         OWPP_MANAGED_BY: ${{ inputs.managed-by }}
         ONLY: ${{ inputs.only }}
         DRY_RUN: ${{ inputs.dry-run }}
-        SYNC: ${{ inputs.sync }}
+        LATEST: ${{ inputs.latest }}
         FORCE: ${{ inputs.force }}
       run: |
         args=(deploy)
         if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
         if [ "$DRY_RUN" = "true" ]; then args+=(--dry-run); fi
-        if [ "$SYNC" = "true" ]; then args+=(--sync); fi
+        if [ "$LATEST" = "true" ]; then args+=(--latest); fi
         if [ "$FORCE" = "true" ]; then args+=(--force); fi
         uvx --from "$GITHUB_ACTION_PATH" owpp "${args[@]}"

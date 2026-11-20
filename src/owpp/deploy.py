@@ -153,8 +153,8 @@ class Options:
     only: list[str] | None = None
     managed_by: str = MANAGED_BY
     # With dry_run: report against the latest commit each git-sourced plugin tracks, not the
-    # pinned one (as if `owpp sync` had run), without changing plugin.yaml.
-    sync: bool = False
+    # pinned one (as if `owpp pull` had run), without changing plugin.yaml.
+    latest: bool = False
     # Deploy even where the live version is newer than the repository's (a downgrade).
     force: bool = False
     fetch: Fetch = field(default=urllib_fetch, repr=False)
@@ -186,7 +186,7 @@ def options_from_env(
     dry_run: bool = False,
     force_prune: bool = False,
     managed_by: str | None = None,
-    sync: bool = False,
+    latest: bool = False,
     force: bool = False,
     ca_cert: str | None = None,
     client_cert: str | None = None,
@@ -208,7 +208,7 @@ def options_from_env(
         force_prune=force_prune,
         only=[i for i in only.split(",") if i] if only else None,
         managed_by=managed_by or env.get("OWPP_MANAGED_BY") or MANAGED_BY,
-        sync=sync,
+        latest=latest,
         force=force,
         ca_cert=ca_cert or env.get("OPEN_WEBUI_CA_CERT", ""),
         client_cert=client_cert or env.get("OPEN_WEBUI_CLIENT_CERT", ""),
@@ -695,11 +695,11 @@ def _valves_pass(opts: Options, plan: list[PlanItem], results: list[Result]) -> 
 
 def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
     """A copy of the plugins folder in `work` with each git-sourced plugin moved to the latest
-    commit it tracks, as `owpp sync` would, and {source label: note} for the report."""
+    commit it tracks, as `owpp pull` would, and {source label: note} for the report."""
     from .bundle import source_label
     from .manifest import read_manifest, read_text, text_of
+    from .pull import set_ref, track_of
     from .sources import resolve_ref
-    from .sync import set_ref, track_of
 
     copy = work / opts.dir.name
     shutil.copytree(
@@ -731,14 +731,14 @@ def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
 
 
 def deploy(opts: Options) -> list[Result]:
-    if opts.sync and not opts.dry_run:
+    if opts.latest and not opts.dry_run:
         raise OwppError(
-            "--sync only goes with --dry-run: to deploy the latest commits, run `owpp sync`, "
+            "--latest only goes with --dry-run: to deploy the latest commits, run `owpp pull`, "
             "review and commit the change, then deploy"
         )
-    if not opts.sync:
+    if not opts.latest:
         return _deploy(opts)
-    with tempfile.TemporaryDirectory(prefix="owpp-sync-") as work:
+    with tempfile.TemporaryDirectory(prefix="owpp-latest-") as work:
         copy, notes = _latest_copy(opts, Path(work))
         return _deploy(replace(opts, dir=copy), notes)
 
@@ -804,7 +804,7 @@ def iframe_sandbox_warning(opts: Options) -> str | None:
 
 
 def render_report(
-    results: list[Result], dry_run: bool, sync: bool = False, warnings: list[str] | None = None
+    results: list[Result], dry_run: bool, latest: bool = False, warnings: list[str] | None = None
 ) -> str:
     lines = []
     for r in results:
@@ -832,7 +832,7 @@ def render_report(
     if extra:
         lines += ["", *extra]
     if dry_run:
-        title = f"Dry run{' at the latest commits' if sync else ''}: {title}"
+        title = f"Dry run{' at the latest commits' if latest else ''}: {title}"
     return f"{title}\n\n" + "\n".join(lines) + "\n"
 
 
@@ -850,7 +850,7 @@ def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
         wait_for_health(opts)
         how = sign_in(opts)
         warning = iframe_sandbox_warning(opts)  # before writing anything, but never a refusal
-        report = render_report(deploy(opts), opts.dry_run, opts.sync, [warning])
+        report = render_report(deploy(opts), opts.dry_run, opts.latest, [warning])
     except OwppError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

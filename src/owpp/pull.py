@@ -1,4 +1,4 @@
-"""`owpp sync`: move the pinned commit of each plugin taken from git to the latest one.
+"""`owpp pull`: move the pinned commit of each plugin taken from git to the latest one.
 
 A plugin's `source:` is pinned to a full commit SHA, so what is deployed changes only when that
 SHA moves, in a change someone reviews. This makes the move easy without making it silent:
@@ -40,7 +40,7 @@ Resolver = Callable[[str, str], "str | None"]
 
 @dataclass
 class Move:
-    """What sync found for one plugin."""
+    """What pull found for one plugin."""
 
     id: str
     track: str
@@ -127,7 +127,7 @@ def set_ref(text: str, old: str, new: str) -> str:
     )
 
 
-def sync_plugin(
+def pull_plugin(
     folder: Path,
     dry_run: bool = False,
     resolve: Resolver | None = None,
@@ -191,7 +191,7 @@ def sync_plugin(
     return move
 
 
-def sync(
+def pull(
     directory: Path,
     ids: list[str] | None = None,
     dry_run: bool = False,
@@ -201,7 +201,7 @@ def sync(
     bump_by: str = "patch",
     today: str | None = None,
 ) -> int:
-    """`owpp sync`: 0 when every plugin is up to date or was moved, 1 when one could not be."""
+    """`owpp pull`: 0 when every plugin is up to date or was moved, 1 when one could not be."""
     folders = {f.name: f for f in plugin_folders(directory)}
     missing = [i for i in ids or [] if i not in folders]
     if missing:
@@ -214,7 +214,7 @@ def sync(
     if not sourced:
         out("no plugin takes its code from git (`source:` in plugin.yaml)")
         return 1 if ids else 0
-    moves = [sync_plugin(f, dry_run, resolve, fetcher, bump_by, today) for f in sourced]
+    moves = [pull_plugin(f, dry_run, resolve, fetcher, bump_by, today) for f in sourced]
     for m in moves:
         where = f"({m.track})" if m.track != "HEAD" else "(default branch)"
         if m.error:

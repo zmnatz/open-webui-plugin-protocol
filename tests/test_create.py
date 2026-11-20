@@ -452,7 +452,7 @@ class TestWizard:
         assert read.left == [] and looked_up == [(GIT, "v1.2")]
         assert "Stage 6/6 · Review and write" in out and f"v1.2 is commit {SHA}" in out
         m = read_manifest(tmp_path / "viz")
-        # The tag it was given is what owpp sync follows.
+        # The tag it was given is what owpp pull follows.
         assert m["source"] == {"git": GIT, "ref": SHA, "path": "plugins/viz", "track": "v1.2"}
         assert m["tool"] == {"id": "viz", "file": "tool.py", "access": "public"}
         assert m["skills"] == {"visualize": {"dir": "skills/visualize", "access": "public"}}

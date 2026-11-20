@@ -1,4 +1,4 @@
-"""`owpp sync`: moving a plugin's pinned commit to the latest one of the branch it follows."""
+"""`owpp pull`: moving a plugin's pinned commit to the latest one of the branch it follows."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from conftest import write_tree
 from owpp.cli import main
 from owpp.errors import OwppError
 from owpp.manifest import read_manifest
+from owpp.pull import compare_url, pull, rewrite_ref
 from owpp.sources import pick_sha, source_key
-from owpp.sync import compare_url, rewrite_ref, sync
 
 GIT = "https://github.com/owner/repo.git"
 OLD = "a1" * 20
@@ -74,7 +74,7 @@ def run(directory, ids=None, dry_run=False, latest=NEW, bump_by="patch"):
         looked_up.append((git, ref))
         return latest
 
-    code = sync(
+    code = pull(
         directory,
         ids,
         dry_run=dry_run,
@@ -167,8 +167,8 @@ class TestSync:
 
     def test_the_command(self, plugins, monkeypatch, capsys):
         d = plugins()
-        monkeypatch.setattr("owpp.sync.resolve_ref", lambda git, ref: OLD)
-        assert main(["sync", "--dir", str(d)], env={}) == 0
+        monkeypatch.setattr("owpp.pull.resolve_ref", lambda git, ref: OLD)
+        assert main(["pull", "--dir", str(d)], env={}) == 0
         assert "up to date" in capsys.readouterr().out
 
 

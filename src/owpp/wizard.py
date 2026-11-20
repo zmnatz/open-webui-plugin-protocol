@@ -570,7 +570,7 @@ def stage_repository(p: Prompter, resolve: Callable[[str, str], str | None]) -> 
         "Folder in the repository the files are in (Enter for the root)",
         check=lambda t: _repo_path(t) if t else None,
     )
-    track = "" if SHA40.fullmatch(ref) or ref == "HEAD" else ref  # what owpp sync follows
+    track = "" if SHA40.fullmatch(ref) or ref == "HEAD" else ref  # what owpp pull follows
     return SourceSpec(git, sha, path.strip("/"), track=track)
 
 

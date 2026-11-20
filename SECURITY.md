@@ -34,7 +34,7 @@ about keeping that explicit and narrow, not about making untrusted plugins safe.
 - **Pinned third-party code.** A `source:` is a git URL (https or ssh only) and a **full 40-character
   commit SHA**, never a branch or tag; it is fetched by that SHA, shallow, into a scratch repository.
   Upgrading means reviewing the upstream diff and changing the SHA. A source written without `ref:`
-  is refused until `owpp sync` pins it, so a deploy never looks up a branch itself. A whole plugin
+  is refused until `owpp pull` pins it, so a deploy never looks up a branch itself. A whole plugin
   taken from git is only read and bundled by owpp: no script in it (a `build.sh`, `package.json`
   scripts) is run.
 - **Reproducible bundles.** A bundle depends only on the plugin folder, the pinned commits and the

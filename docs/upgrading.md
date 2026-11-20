@@ -17,6 +17,10 @@ The runtime and libraries are copied into every bundle, so a new owpp changes th
 4. **Dry run.** `owpp deploy --dry-run` against your instance shows which functions, tools and skills the new bundles would update.
 5. **Commit** the pin and the manifest changes together, and deploy.
 
+## 0.2.1 -> next release
+
+- **Renamed:** `owpp sync` is now `owpp pull`, and `owpp deploy --dry-run --sync` is now `--dry-run --latest`. The action's `sync` input is now `latest`. The old names are removed, not aliased: change your scripts and workflows.
+
 ## 0.1 -> 0.2
 
 - **Manifests:** add `protocol: "0.2"`. That is the whole step (`owpp migrate` does it): everything else 0.2 added is optional. A manifest with no key is read as 0.1, so it still deploys, but `owpp check` warns and `owpp check --strict` fails until it has one.

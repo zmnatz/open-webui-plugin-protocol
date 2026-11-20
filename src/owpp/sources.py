@@ -40,7 +40,7 @@ def source_key(folder: str, src: object, rel: str, directory: bool = False) -> s
         raise OwppError(f"{where}.git must be an https://, ssh:// or user@host:path git URL")
     if not ref:
         raise OwppError(
-            f"{where} has no `ref:`; run `owpp sync {folder}` to pin it to the latest commit"
+            f"{where} has no `ref:`; run `owpp pull {folder}` to pin it to the latest commit"
         )
     if not SHA40.fullmatch(ref):
         raise OwppError(
@@ -49,7 +49,7 @@ def source_key(folder: str, src: object, rel: str, directory: bool = False) -> s
         )
     track = text_of(src.get("track"))
     if track and not TRACK.fullmatch(track):
-        raise OwppError(f"{where}.track must be a branch or tag name (owpp sync follows it)")
+        raise OwppError(f"{where}.track must be a branch or tag name (owpp pull follows it)")
     parts = [p for p in [*text_of(src.get("path")).split("/"), *str(rel).split("/")] if p]
     if any(p in ("..", ".") for p in parts):
         raise OwppError(f"{where}: paths may not contain . or ..")

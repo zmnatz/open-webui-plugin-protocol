@@ -537,7 +537,7 @@ class TestVersionReport:
             f"source {REPO_GIT}: {PINNED[:7]} -> {LATEST[:7]}",
         ]
 
-    def test_sync_reports_against_the_latest_commits_and_changes_no_file(
+    def test_latest_reports_against_the_latest_commits_and_changes_no_file(
         self, mock_server, functions_dir
     ):
         d = functions_dir(sourced())
@@ -549,7 +549,7 @@ class TestVersionReport:
                 d,
                 git_fetcher=repo_fetcher,
                 dry_run=True,
-                sync=True,
+                latest=True,
                 resolve=lambda git, ref: looked_up.append((git, ref)) or LATEST,
             )
         )
@@ -560,14 +560,14 @@ class TestVersionReport:
             f"source {REPO_GIT}: {PINNED[:7]} -> {LATEST[:7]} "
             f"(latest of main; plugin.yaml pins {PINNED[:7]})",
         ]
-        assert render_report(res, True, sync=True).startswith("Dry run at the latest commits:")
+        assert render_report(res, True, latest=True).startswith("Dry run at the latest commits:")
         assert (d / "up" / "plugin.yaml").read_text() == before
         assert not any("/update" in c for c in m.calls[-3:])
 
-    def test_sync_without_a_dry_run_is_refused(self, mock_server, functions_dir):
+    def test_latest_without_a_dry_run_is_refused(self, mock_server, functions_dir):
         m = mock_server()
         with pytest.raises(OwppError, match="only goes with --dry-run"):
-            deploy(m.options(functions_dir(sourced()), sync=True))
+            deploy(m.options(functions_dir(sourced()), latest=True))
         assert m.calls == []
 
 

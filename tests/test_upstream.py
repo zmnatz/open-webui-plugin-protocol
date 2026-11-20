@@ -8,8 +8,8 @@ from conftest import embedded, write_tree
 from owpp.bundle import load_function_files
 from owpp.deploy import _needing_iframe_sandbox
 from owpp.errors import OwppError
+from owpp.pull import pull, set_ref
 from owpp.sources import source_keys
-from owpp.sync import set_ref, sync
 from owpp.upstream import fetch_all
 from owpp.versioning import bump, versions_of
 
@@ -198,9 +198,9 @@ def test_what_the_upstream_takes_from_git_itself_is_fetched_too(tmp_path):
     assert item.sources == {f"{REPO} plugins/viz": SHA, f"{INNER} t": NEW}
 
 
-def test_a_source_with_no_ref_says_to_run_sync(tmp_path):
+def test_a_source_with_no_ref_says_to_run_pull(tmp_path):
     write_tree(tmp_path, {"viz/plugin.yaml": local(ref="")})
-    with pytest.raises(OwppError, match=r"has no `ref:`; run `owpp sync viz`"):
+    with pytest.raises(OwppError, match=r"has no `ref:`; run `owpp pull viz`"):
         source_keys(tmp_path)
 
 
@@ -219,7 +219,7 @@ def test_its_versions_are_the_upstream_ones(tmp_path):
 class TestSync:
     def run(self, directory, fetcher, dry_run=False):
         lines: list[str] = []
-        code = sync(
+        code = pull(
             directory,
             dry_run=dry_run,
             resolve=lambda git, ref: NEW,
