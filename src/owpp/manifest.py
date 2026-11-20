@@ -59,7 +59,20 @@ def read_text(path: Path | str) -> str:
 
 # The top-level keys of plugin.yaml. Anything else is refused: a setting that is silently ignored
 # (a typo, or a key that no longer exists) is worst when it is a security one.
-MANIFEST_KEYS = ("function", "tool", "skills", "source", "include", "static", "assets", "jobs")
+MANIFEST_KEYS = (
+    "function",
+    "tool",
+    "skills",
+    "source",
+    "include",
+    "static",
+    "assets",
+    "jobs",
+    "requires",
+)
+# Instance settings a plugin can say it needs. `owpp deploy` warns when one is missing; it never
+# changes the instance or refuses the deploy.
+REQUIREMENT_KEYS = ("iframe_sandbox_allow_same_origin",)
 REMOVED_KEYS = {
     "routes": "is gone. A route is open to any signed-in user; mark one that needs more with "
     "`user: PluginAdmin` (or a chat marker) on its handler, and set the level of the static/ "
@@ -79,6 +92,17 @@ def check_keys(path: Path, manifest: dict) -> None:
             raise OwppError(
                 f"{path}: unknown key `{key}:` (known: {', '.join(MANIFEST_KEYS)}){hint}"
             )
+    requires = manifest.get("requires")
+    if requires is not None:
+        if not isinstance(requires, dict):
+            raise OwppError(f"{path}: `requires:` must be a mapping")
+        for key, value in requires.items():
+            if key not in REQUIREMENT_KEYS:
+                raise OwppError(
+                    f"{path}: unknown requirement `{key}:` (known: {', '.join(REQUIREMENT_KEYS)})"
+                )
+            if not isinstance(value, bool):
+                raise OwppError(f"{path}: requirement `{key}:` must be true or false")
 
 
 def read_manifest(folder: Path | str) -> dict:

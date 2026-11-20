@@ -19,3 +19,5 @@ skills:
   visualize:
     file: SKILL.md
     access: public
+requires:
+  iframe_sandbox_allow_same_origin: true # live rendering needs a session in the Artifacts panel; see README

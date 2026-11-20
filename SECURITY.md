@@ -78,9 +78,12 @@ about keeping that explicit and narrow, not about making untrusted plugins safe.
   self-host it (see its README); either way the code runs in your users' browsers with no integrity
   check.
 - **Not tested against a live Open-WebUI.** The tests use stand-ins for its session check, chat access
-  and function table. Several behaviours are assumptions until verified (that `/api/v1/auths/signin`
-  accepts empty credentials under trusted-header auth, that the login page honours `?redirect=`, the
-  argument names Open-WebUI passes to an Event function's `event()`).
+  and function table. The argument names Open-WebUI passes to an Event function's `event()` remain an
+  assumption. The sign-in and redirect fallbacks were checked against Open-WebUI v0.13.4's source
+  instead: its login page posts the same `{"email": "", "password": ""}` for trusted-header and
+  no-auth setups, and the trusted-header branch of `/api/v1/auths/signin` ignores those fields, so no
+  user name or password is needed there. Caveats: that route is gated by `ENABLE_PASSWORD_AUTH` (on by
+  default), and the trusted header must be present on the request.
 
 ## For people deploying plugins
 
