@@ -109,9 +109,9 @@ error: <path> not found in <git url> at <sha>
 error: no files under <path>/ in <git url> at <sha>
 ```
 
-The file, or the folder of a `dir:` or a [whole plugin](plugin-format.md#a-whole-plugin-from-git), is not in the repository at the pinned commit. Check `path:` against the repository at that commit, not at its latest one. `owpp pull` reports the same thing as `FAIL  <id>: ...` when a file the plugin takes is gone at the new commit, and leaves the pin where it was.
+The file, or the folder of a `dir:` or a [whole plugin](plugin-format.md#a-whole-plugin-from-git), is not in the repository at the pinned commit. Check `path:` against the repository at that commit, not at its latest one. [`owpp pull`](commands/pull.md) reports the same thing as `FAIL  <id>: ...` when a file the plugin takes is gone at the new commit, and leaves the pin where it was.
 
-## `owpp check`
+## [`owpp check`](commands/check.md)
 
 ### Undefined names
 
@@ -128,7 +128,7 @@ FAIL  <id>: changed since origin/main but its version is still 1.0.0 (run `owpp 
 FAIL  tool <id>: changed since origin/main but its version is still 1.0.0 (run `owpp version <id> patch --tool`)
 ```
 
-`owpp check --since <ref>` (the action's `since:` input) found a plugin, tool or skill whose code changed since that ref while its version stayed the same. Run the command in brackets and say what changed in the `CHANGELOG.md` entry it adds. Which changes count against which version: [versions](commands/version.md#versions). If the plugin has a `CHANGELOG.md` but no entry for its current version, `check` warns `` warn  <id>/CHANGELOG.md has no `## <version>` entry for the current version ``, which fails under `--strict`.
+[`owpp check --since <ref>`](commands/check.md) (the action's `since:` input) found a plugin, tool or skill whose code changed since that ref while its version stayed the same. Run the command in brackets and say what changed in the `CHANGELOG.md` entry it adds. Which changes count against which version: [versions](commands/version.md#versions). If the plugin has a `CHANGELOG.md` but no entry for its current version, `check` warns `` warn  <id>/CHANGELOG.md has no `## <version>` entry for the current version ``, which fails under `--strict`.
 
 A deploy's report shows the same thing as `code changed, still 1.0.0`.
 

@@ -136,7 +136,7 @@ requires:
   iframe_sandbox_allow_same_origin: true
 ```
 
-Instance settings the plugin needs but cannot set itself. `owpp deploy` reads the instance's admin config before writing anything and adds a **warning** to its report when one is missing; it never changes the setting or refuses the deploy. `iframe_sandbox_allow_same_origin: true` means Open-WebUI's **iframe Sandbox Allow Same Origin** must be on: without it a sandboxed artifact sends no session to a plugin page. Turn it on for everyone with `DEFAULT_INTERFACE_SETTINGS='{"iframeSandboxAllowSameOrigin": true}'` or under **Admin Settings > General > Default Interface Settings**; each user's own setting still wins. Unknown requirement names and values that are not `true`/`false` are refused. See [libraries: routes](libraries.md#routes) for why it matters.
+Instance settings the plugin needs but cannot set itself. `owpp deploy` reads the instance's admin config before writing anything and adds a **warning** to its report when one is missing; it never changes the setting or refuses the deploy. `iframe_sandbox_allow_same_origin: true` means Open-WebUI's **iframe Sandbox Allow Same Origin** must be on: without it a sandboxed artifact sends no session to a plugin page. Why, what turning it on costs, and how: [pages in the Artifacts panel](libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin). Unknown requirement names and values that are not `true`/`false` are refused.
 
 ### `jobs:`
 

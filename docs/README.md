@@ -15,10 +15,10 @@ Open-WebUI stores a function or tool as **one code blob** and cannot import sibl
 Pasting a function into Open-WebUI's admin UI is the quickest way to run it. owpp is worth the extra step when one of these matters:
 
 - **Version control.** The plugins live in git: each change is a commit someone can review, and an earlier version can be deployed again ([deploying an older version](commands/deploy.md#deploying-an-older-version)). An edit in the admin UI replaces the code and keeps no history.
-- **Reviewed upgrades of third-party code.** Someone else's function, tool or skill is taken from their repository at a pinned commit instead of copied in. `owpp pull` moves the pin and lists the files that changed, so the upgrade is a change you review before it runs with admin rights ([`owpp pull`](commands/pull.md)).
+- **Reviewed upgrades of third-party code.** Someone else's function, tool or skill is taken from their repository at a pinned commit instead of copied in. [`owpp pull`](commands/pull.md) moves the pin and lists the files that changed, so the upgrade is a change you review before it runs with admin rights ([`owpp pull`](commands/pull.md)).
 - **Shared libraries.** Routes, scheduled jobs, per-chat data, static files and templates come from [libraries](libraries.md), not from a copy pasted into each function.
-- **Tests.** `owpp check` finds undefined names before anything is deployed, and `owpp test` runs each plugin's unit tests against a mock Open-WebUI ([testing](testing.md)).
-- **Repeatable deploys.** `owpp deploy`, from a laptop or the [GitHub Action](tooling.md#github-action), makes the instance match the repository, `--dry-run` shows what it would change first, and a plugin that has not changed is left alone ([what a deploy does](commands/deploy.md#what-a-deploy-does)).
+- **Tests.** [`owpp check`](commands/check.md) finds undefined names before anything is deployed, and [`owpp test`](commands/test.md) runs each plugin's unit tests against a mock Open-WebUI ([testing](testing.md)).
+- **Repeatable deploys.** [`owpp deploy`](commands/deploy.md), from a laptop or the [GitHub Action](tooling.md#github-action), makes the instance match the repository, `--dry-run` shows what it would change first, and a plugin that has not changed is left alone ([what a deploy does](commands/deploy.md#what-a-deploy-does)).
 - **A function with a tool and skills.** They are installed and removed together ([runtime](runtime.md)), instead of by hand in three places.
 
 It is not worth it when:
