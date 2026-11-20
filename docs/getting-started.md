@@ -102,7 +102,7 @@ uvx owpp check --since origin/main                             # fails on a chan
 
 A deploy refuses to put an older version over a newer one on the instance, unless given `--force`. See [versions](tooling.md#versions).
 
-For a plugin that takes its code from another repository, pinned to a commit, `owpp sync` moves it to the latest commit for you to review, and `owpp deploy --dry-run --sync` shows what that upgrade would change on the instance. See [`owpp sync`](tooling.md#owpp-sync-moving-a-pinned-commit).
+For a plugin that takes its code from another repository, pinned to a commit, `owpp pull` moves it to the latest commit for you to review, and `owpp deploy --dry-run --latest` shows what that upgrade would change on the instance. See [`owpp pull`](tooling.md#owpp-pull-moving-a-pinned-commit).
 
 ## Where next
 

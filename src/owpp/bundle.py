@@ -6,7 +6,7 @@ header and the code is function.py. A plugin may also have
 
   tool:     `id`, `access: public`, and either `from: function` (the function's own bundle
             is the tool) or its own header keys with code in tool.py
-  include:  built-in libraries (see LIBS)
+  include:  built-in libraries (see libraries.py, the library catalogue)
   skills/<id>/   a skill folder: SKILL.md plus any supporting files
   static/   files served as they are, to signed-in users unless `static:` says otherwise
   templates/   files the function renders itself, embedded and never served (plugin_template_text())
@@ -39,17 +39,19 @@ import yaml
 from . import envtemplate
 from .errors import OwppError
 from .events import problem_with
+from .libraries import BY_NAME, hoist_future, json_literal, link
 from .manifest import (
     coalesce,
+    folder_files,
     get,
     omit,
     parse_yaml,
+    plugin_folders,
     read_manifest,
     read_text,
     text_of,
 )
-from .sources import Value, file_value, plugin_folders, source_key
-from .upstream import plugin_root
+from .sources import ResolvedPlugin, Sources
 
 RUNTIME_DIR = Path(__file__).resolve().parent / "runtime"
 RUNTIME = RUNTIME_DIR / "plugin_runtime.py"
@@ -61,12 +63,6 @@ VALID_ID = re.compile(r"[a-z_][a-z0-9_]*")
 VALID_SKILL_ID = re.compile(r"[a-z0-9_-]+")
 
 _DOCSTRING = re.compile(r'\s*"""\n?([\s\S]*?)"""')
-
-
-def json_literal(data: Any) -> str:
-    """`data` as a Python string literal holding its JSON (compact, non-ASCII kept)."""
-    inner = json.dumps(data, ensure_ascii=False, separators=(",", ":"))
-    return json.dumps(inner, ensure_ascii=False)
 
 
 # ---- header -----------------------------------------------------------------
@@ -129,20 +125,6 @@ def render_header(folder: Path | str, keys: dict) -> str:
 # ---- function.py / tool.py --------------------------------------------------
 
 
-def _hoist_future(code: str) -> tuple[str, str]:
-    """`from __future__ import ...` must be the first statement after the docstring, so
-    when code is put in front of a file that has one, the line moves to the top."""
-    lines: list[str] = []
-
-    def take(m: re.Match) -> str:
-        if m.group(0) not in lines:
-            lines.append(m.group(0))
-        return ""
-
-    rest = re.sub(r"^from __future__ import [^\n]+\n", take, code, flags=re.MULTILINE)
-    return "".join(lines), rest
-
-
 def _has_code(folder: Path, name: str) -> bool:
     return (folder / f"{name}.py").exists()
 
@@ -157,7 +139,7 @@ def _bundle_code(folder: Path, name: str, keys: dict) -> str:
     shared = read_text(shared_file) if shared_file.exists() else ""
     source = shared + read_text(file)
     if shared:
-        lines, rest = _hoist_future(source)
+        lines, rest = hoist_future(source)
         source = lines + rest
 
     def include(m: re.Match) -> str:
@@ -189,53 +171,6 @@ def parse_skill(file: str, text: str) -> tuple[dict, str]:
 # ---- reading files and folders ------------------------------------------------
 
 
-def _read_plugin_file(folder: Path, manifest: dict, rel: str, remote: dict[str, Value]) -> str:
-    if not manifest.get("source"):
-        return read_text(folder / rel)
-    url = source_key(folder.name, manifest["source"], rel)
-    text = remote.get(url)
-    if not isinstance(text, str):
-        raise OwppError(f"{folder.name}: {url} was not fetched (call fetch_sources first)")
-    return text
-
-
-def _file_entry(path: str, value: Value) -> dict:
-    if isinstance(value, str):
-        return {"path": path, "content": value}
-    return {"path": path, "content": value["base64"], "encoding": "base64"}
-
-
-def _read_plugin_dir(
-    folder: Path, source: Any, rel: str, remote: dict[str, Value] | None = None
-) -> list[dict]:
-    """A folder's files as [{path, content, encoding?}] sorted by path, from the plugin
-    folder or from `source`. Symlinks are never followed."""
-    files: list[dict] = []
-    if source:
-        prefix = source_key(folder.name, source, rel, True)
-        for key, value in (remote or {}).items():
-            if key.startswith(prefix):
-                files.append(_file_entry(key[len(prefix) :], value))
-        if not files:
-            raise OwppError(f"{folder.name}: {prefix} was not fetched (call fetch_sources first)")
-    else:
-
-        def walk(directory: Path, base: str) -> None:
-            with os.scandir(directory) as it:
-                entries = sorted(it, key=lambda e: e.name)
-            for e in entries:
-                if e.name == ".DS_Store":
-                    continue
-                path = f"{base}/{e.name}" if base else e.name
-                if e.is_dir(follow_symlinks=False):
-                    walk(Path(e.path), path)
-                elif e.is_file(follow_symlinks=False):
-                    files.append(_file_entry(path, file_value(Path(e.path).read_bytes())))
-
-        walk(folder / rel, "")
-    return sorted(files, key=lambda f: f["path"])
-
-
 def _tool_valves(folder: Path, valves: Any) -> dict:
     if valves is None:
         return {}
@@ -250,8 +185,9 @@ def _runtime_source(data: dict) -> str:
     return read_text(RUNTIME).replace("__PLUGIN_DATA__", json_literal(data), 1)
 
 
-def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) -> dict:
+def _plugin_resources(plugin: ResolvedPlugin) -> dict:
     """The tool and skills a plugin declares, as the data the runtime installs."""
+    folder, manifest = plugin.root, plugin.manifest
     tools: list[dict] = []
     tool = manifest.get("tool")
     if isinstance(tool, dict):
@@ -260,16 +196,16 @@ def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) ->
         if is_self:
             content = None
         elif tool.get("file"):
-            content = _read_plugin_file(folder, manifest, tool["file"], remote)
+            content = plugin.read(tool["file"])
         else:
-            content = _with_includes(
-                folder,
-                tool.get("include"),
+            content = link(
                 _bundle_code(
                     folder,
                     "tool",
                     omit(tool, ["id", "from", "access", "file", "valves", "include"]),
                 ),
+                tool.get("include"),
+                folder.name,
             )
         tools.append(
             {
@@ -314,10 +250,9 @@ def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) ->
     for skill_id, sk in declared.items() if isinstance(declared, dict) else []:
         label = f"{folder.name}/skills.{skill_id}"
         if get(sk, "dir"):
-            files = _read_plugin_dir(folder, manifest.get("source"), sk["dir"], remote)
-            add_skill(label, str(skill_id), files, sk.get("access"))
+            add_skill(label, str(skill_id), plugin.read_dir(sk["dir"]), sk.get("access"))
         elif get(sk, "file"):
-            text = _read_plugin_file(folder, manifest, sk["file"], remote)
+            text = plugin.read(sk["file"])
             add_skill(
                 label, str(skill_id), [{"path": "SKILL.md", "content": text}], sk.get("access")
             )
@@ -332,7 +267,7 @@ def _plugin_resources(folder: Path, manifest: dict, remote: dict[str, Value]) ->
             file = f"{folder.name}/skills/{sk.name}/SKILL.md"
             if not (skills_dir / sk.name / "SKILL.md").exists():
                 raise OwppError(f"{file} is missing")
-            add_skill(file, sk.name, _read_plugin_dir(folder, None, f"skills/{sk.name}"))
+            add_skill(file, sk.name, folder_files(skills_dir / sk.name))
 
     # A tool carries the runtime too (with just the ids to remove), so that when it loads
     # after a restart it can notice its function was disabled in the meantime and remove
@@ -380,7 +315,7 @@ def _read_static(folder: Path, manifest: dict) -> dict | None:
     prefix = text_of(coalesce(get(cfg, "prefix"), f"/{folder.name}"))
     if not re.fullmatch(r"/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*", prefix):
         raise OwppError(f"{where}.prefix must be a path such as /name (letters, digits, _ and -)")
-    files = {f["path"]: omit(f, ["path"]) for f in _read_plugin_dir(folder, None, "static")}
+    files = {f["path"]: omit(f, ["path"]) for f in folder_files(folder / "static")}
     if not files:
         raise OwppError(f"{folder.name}: static/ has no files")
     return {"prefix": prefix, "access": access, "files": files}
@@ -391,7 +326,7 @@ def _read_templates(folder: Path) -> dict | None:
     plugin_template_text(). They are never served."""
     if not (folder / "templates").exists():
         return None
-    files = {f["path"]: omit(f, ["path"]) for f in _read_plugin_dir(folder, None, "templates")}
+    files = {f["path"]: omit(f, ["path"]) for f in folder_files(folder / "templates")}
     if not files:
         raise OwppError(f"{folder.name}: templates/ has no files")
     return files
@@ -422,7 +357,7 @@ def _read_assets(folder: Path, manifest: dict) -> dict | None:
     if not isinstance(wrap, bool):
         raise OwppError(f"{where}.wrap must be true or false")
     files = {}
-    for f in _read_plugin_dir(folder, None, "assets"):
+    for f in folder_files(folder / "assets"):
         if f["path"] not in ASSET_FILES:
             raise OwppError(
                 f"{folder.name}: assets/{f['path']}: the protocol has two shared files, "
@@ -458,7 +393,7 @@ def _read_jobs_interval(folder: Path, manifest: dict) -> dict:
     where = f"{folder.name}/plugin.yaml: jobs"
     cfg = manifest.get("jobs")
     if cfg is None:
-        return dict(DEFAULT_EMBEDDED["jobs"])
+        return dict(BY_NAME["jobs"].default)
     if not isinstance(cfg, dict):
         raise OwppError(f"{where} must be a mapping (sync_every_minutes, adopt_markers)")
     unknown = [str(k) for k in cfg if k not in ("sync_every_minutes", "adopt_markers")]
@@ -466,9 +401,7 @@ def _read_jobs_interval(folder: Path, manifest: dict) -> dict:
         raise OwppError(
             f"{where}: unknown key {', '.join(unknown)} (known: sync_every_minutes, adopt_markers)"
         )
-    minutes = coalesce(
-        cfg.get("sync_every_minutes"), DEFAULT_EMBEDDED["jobs"]["sync_every_minutes"]
-    )
+    minutes = coalesce(cfg.get("sync_every_minutes"), BY_NAME["jobs"].default["sync_every_minutes"])
     if isinstance(minutes, str):  # ${NAME} or ${NAME:-minutes}, resolved in the container
         template = envtemplate.TEMPLATE.fullmatch(minutes)
         default = template.group(2) if template else None
@@ -680,108 +613,35 @@ class Filter:
 '''
 
 
-# ---- built-in libraries -------------------------------------------------------
-
-# (include name, end marker, file in runtime/lib). Inserted as the vendored byte-identical
-# copies right after the function's docstring header, so plugin code can call them without
-# carrying a copy. A library whose end marker is already in the code (an upstream function
-# that ships its own copy) is not inserted twice. live_reload goes first because the
-# protocol wants it above the shared asset block.
-LIBS = [
-    ("live_reload", "end live reload block", "live_reload"),
-    ("shared_assets", "end shared asset block", "shared_assets"),
-    ("core", "end plugin core library", "plugin_core"),
-    ("routes", "end plugin routes library", "plugin_routes"),
-    ("events", "end plugin events library", "plugin_events"),
-    ("jobs", "end plugin jobs library", "plugin_jobs"),
-    ("chat_data", "end plugin chat data library", "plugin_chat_data"),
-    ("static", "end plugin static library", "plugin_static"),
-    ("templates", "end plugin templates library", "plugin_templates"),
-    ("assets", "end plugin assets library", "plugin_assets"),
-    ("config", "end plugin config library", "plugin_config"),
-]
-
-# Libraries that carry data from the plugin: (placeholder in the library, what the plugin must hold,
-# or None when the data always exists).
-EMBEDDED = {
-    "static": ("__STATIC_DATA__", "a static/ folder"),
-    "templates": ("__TEMPLATES_DATA__", "a templates/ folder"),
-    "assets": ("__ASSETS_DATA__", "an assets/ folder"),
-    "config": ("__CONFIG_DATA__", "a config.yaml"),
-    "jobs": ("__JOBS_DATA__", None),
-}
 ACCESS_LEVELS = (
     "user",
     "admin",
     "public",
 )  # signed-in is the default; "public" must be spelled out
-DEFAULT_EMBEDDED = {"jobs": {"sync_every_minutes": 60}}
-
-
-def _lib_text(file: str) -> str:
-    return re.sub(r"\A(#.*\n)+\n?", "", read_text(RUNTIME_DIR / "lib" / f"{file}.py"))
-
-
-def _with_includes(
-    folder: Path, include: Any, code: str, embedded: dict[str, Any] | None = None
-) -> str:
-    """`embedded` is the data of the libraries that carry some: {"static": ..., "templates": ..., "assets": ..., "config": ...}."""
-    embedded = embedded or {}
-    want = coalesce(include, [])
-    if not isinstance(want, list):
-        raise OwppError(f"{folder.name}/plugin.yaml: include must be a list")
-    known = [name for name, _, _ in LIBS]
-    bad = [str(n) for n in want if n not in known]
-    if bad:
-        raise OwppError(
-            f"{folder.name}/plugin.yaml: unknown include {', '.join(bad)} (known: {', '.join(known)})"
-        )
-    header = re.match(r'\s*"""[\s\S]*?"""\n', code)
-    if want and not header:
-        raise OwppError(f"{folder.name}: the function needs a docstring header for include")
-    for name, (_, needs) in EMBEDDED.items():
-        if needs and name in want and embedded.get(name) is None:
-            raise OwppError(
-                f"{folder.name}/plugin.yaml: include: {name} needs {needs} "
-                "(it applies to the function bundle only)"
-            )
-    if any(n in ("jobs", "assets") for n in want):  # their mixins are PluginEvents classes
-        want = list(dict.fromkeys([*want, "events"]))
-    # routes, jobs, public and events build on core (function id, app, is-it-enabled, stored valves).
-    if any(n in ("routes", "jobs", "static", "events", "config") for n in want):
-        want = list(dict.fromkeys([*want, "core"]))
-    if "assets" in want:  # publishes into the shared asset registry; reads its own function id
-        want = list(dict.fromkeys([*want, "shared_assets", "core"]))
-    add = ""
-    for name, end, file in LIBS:
-        if name in want and end not in code:
-            text = _lib_text(file)
-            if name in EMBEDDED:
-                data = embedded.get(name)
-                if data is None:  # a tool bundle has no manifest section: the default
-                    data = DEFAULT_EMBEDDED[name]
-                text = text.replace(EMBEDDED[name][0], json_literal(data), 1)
-            add += "\n" + text
-    out = code
-    if add:
-        lines, rest = _hoist_future(code[header.end() :])
-        out = code[: header.end()] + lines + add + rest
-    if "live_reload" in want and "end shared asset block" not in out:
-        raise OwppError(f"{folder.name}/plugin.yaml: live_reload needs shared_assets too")
-    return out
 
 
 # ---- the function bundle --------------------------------------------------------
 
 
-def bundle_function(folder: Path | str, remote: dict[str, Value] | None = None) -> str | None:
+def _offline(git: str, ref: str, paths: list[str]) -> dict:
+    raise OwppError(
+        f"{git} at {ref[:7]}: reading a plugin's `source:` needs a Sources; "
+        "bundle it with bundle_function(Sources().resolve(folder))"
+    )
+
+
+def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
     """The function's bundled code (with the runtime and the embedded tool and skills when
-    the plugin declares them), or None when there is no function section."""
-    folder = Path(folder)
-    remote = remote or {}
-    manifest = read_manifest(folder)
+    the plugin declares them), or None when there is no function section.
+
+    A path is bundled as it is on disk; a plugin that takes files from git must be resolved
+    first (Sources.resolve)."""
+    if not isinstance(plugin, ResolvedPlugin):
+        with Sources(_offline) as offline:
+            return bundle_function(offline.resolve(plugin))
+    folder, manifest = plugin.root, plugin.manifest
     fn = manifest.get("function")
-    res = _plugin_resources(folder, manifest, remote)
+    res = _plugin_resources(plugin)
     has_resources = bool(res["tools"] or res["skills"])
     if not isinstance(fn, dict):
         if has_resources:
@@ -802,7 +662,7 @@ def bundle_function(folder: Path | str, remote: dict[str, Value] | None = None) 
                 f"{folder}/plugin.yaml: with function.file the header comes from the file; "
                 f"remove {', '.join(extra)}"
             )
-        code = _read_plugin_file(folder, manifest, fn["file"], remote)
+        code = plugin.read(fn["file"])
     elif not _has_code(folder, "function") and assets is not None:
         if has_resources:
             raise OwppError(
@@ -827,29 +687,25 @@ def bundle_function(folder: Path | str, remote: dict[str, Value] | None = None) 
     templates = _read_templates(folder)
     config = _read_config(folder)
     jobs = _read_jobs(folder, manifest)
-    include = manifest.get("include")
-    if manifest.get("jobs") is not None:
-        include = list(dict.fromkeys([*coalesce(include, []), "jobs"]))
-    if static:
-        include = list(dict.fromkeys([*coalesce(include, []), "routes", "static"]))
-    if templates is not None:
-        include = list(dict.fromkeys([*coalesce(include, []), "templates"]))
-    if assets is not None:
-        include = list(dict.fromkeys([*coalesce(include, []), "assets"]))
-    if config is not None:
-        include = list(dict.fromkeys([*coalesce(include, []), "config"]))
-    code = _with_includes(
-        folder,
-        include,
-        code,
-        {
-            "static": static,
-            "templates": templates,
-            "assets": assets,
-            "config": config,
-            "jobs": jobs,
-        },
-    )
+    held = {
+        name
+        for name, present in (
+            ("jobs:", manifest.get("jobs") is not None),
+            ("static/", bool(static)),
+            ("templates/", templates is not None),
+            ("assets/", assets is not None),
+            ("config.yaml", config is not None),
+        )
+        if present
+    }
+    data = {
+        "static": static,
+        "templates": templates,
+        "assets": assets,
+        "config": config,
+        "jobs": jobs,
+    }
+    code = link(code, manifest.get("include"), folder.name, held, data)
     if has_resources:
         code += _runtime_source(res)
     return code
@@ -901,12 +757,6 @@ def runtime_data(content: str | None) -> dict:
     return {"tools": data.get("tools", []), "skills": data.get("skills", [])}
 
 
-def source_label(source: dict) -> str:
-    """How a `source:` is named in a report and in a deployed function's meta."""
-    path = text_of(source.get("path")).strip("/")
-    return f"{text_of(source.get('git'))}{f' {path}' if path else ''}"
-
-
 def _make_item(
     kind: str,
     id: str,
@@ -945,9 +795,13 @@ def _make_item(
 
 
 def load_function_files(
-    directory: Path | str, remote: dict[str, Value] | None = None
+    directory: Path | str, sources: Sources | None = None
 ) -> list[FunctionFile]:
-    """Every function in the plugins folder: plugin folders and loose <id>.py files."""
+    """Every function in the plugins folder: plugin folders and loose <id>.py files. A plugin
+    that takes files from git is resolved with `sources` (without it, such a plugin is refused)."""
+    if sources is None:
+        with Sources(_offline) as offline:
+            return load_function_files(directory, offline)
     directory = Path(directory)
     with os.scandir(directory) as it:
         entries = sorted(it, key=lambda e: e.name)
@@ -964,14 +818,11 @@ def load_function_files(
                 )
             )
         elif e.name in folders:
-            folder = Path(e.path)
-            local = read_manifest(folder)
-            root = plugin_root(folder, local, remote or {})
-            content = bundle_function(root, remote)
+            plugin = sources.resolve(e.path)
+            content = bundle_function(plugin)
             if content is None:
                 continue
-            manifest = read_manifest(root)
-            fn = manifest["function"]
+            fn = plugin.manifest["function"]
             declared = fn.get("global")
             item = _make_item(
                 "function",
@@ -981,12 +832,7 @@ def load_function_files(
                 valves=fn.get("valves"),
                 global_=declared if isinstance(declared, bool) and "file" in fn else None,
             )
-            item.root = root
-            src = local.get("source")
-            if isinstance(src, dict):
-                item.sources = {source_label(src): text_of(src.get("ref"))}
-                inner = manifest.get("source") if root != folder else None
-                if isinstance(inner, dict):  # what the upstream plugin takes from git itself
-                    item.sources[source_label(inner)] = text_of(inner.get("ref"))
+            item.root = plugin.root
+            item.sources = dict(plugin.pins)
             loaded.append(item)
     return loaded

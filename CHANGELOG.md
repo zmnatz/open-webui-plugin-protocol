@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `owpp sync` is now `owpp pull`, and deploy's `--sync` (the action's `sync` input) is now `--latest` (`latest`) ([upgrading](docs/upgrading.md)).
+
 ## 0.2.1 (2026-11-19)
 
 - `source: {plugin: true}` takes a whole owpp plugin folder from git, such as one of the examples, and bundles it with the owpp reading it ([a whole plugin from git](docs/plugin-format.md#a-whole-plugin-from-git)).

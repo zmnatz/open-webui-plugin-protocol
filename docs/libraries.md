@@ -2,18 +2,22 @@
 
 Libraries are plain Python files in `src/owpp/runtime/lib/`, inserted into a bundle by `include:` (see [bundling](bundling.md#order)). They are **vendored**: the bundle contains a byte-identical copy, so a plugin has no runtime dependency on this repository. Public names start with `plugin_`; private helpers start with `_<lib>_` so nothing collides with plugin code. Each file ends with a marker comment (`# end plugin <lib> library`) used to avoid inserting it twice.
 
-| Library | Adds | Needs |
-| --- | --- | --- |
-| [`core`](#core) | function id, app, is-enabled, stored valves | none (added by `routes`, `jobs`, `static`, `events`, `config`) |
-| [`routes`](#routes) | mount a FastAPI router that survives reloads | core |
-| [`jobs`](#jobs) | background and repeating jobs, one worker per period | core |
-| [`chat_data`](#chat_data) | JSON values saved with a chat | none |
-| [`events`](#events) | `@on("event.name")` handlers instead of an `event()` full of `if` checks | core |
-| [`static`](#static) | files from `static/`, served as they are | routes, core |
-| [`templates`](#templates) | files from `templates/`, embedded and rendered by the function, never served | none |
-| [`config`](#config) | a `config.yaml` shipped with the plugin, parsed at bundle time, read with `plugin_config()` | none |
-| [`assets`](#assets) | `assets/loader.js` and `assets/custom.css` published as this plugin's fragments of the Shared Assets Protocol | shared_assets, core |
-| `shared_assets`, `live_reload` | Classic298's Shared Assets Protocol, unmodified | each other |
+| Library | Adds |
+| --- | --- |
+| [`core`](#core) | function id, app, is-enabled, stored valves |
+| [`routes`](#routes) | mount a FastAPI router that survives reloads |
+| [`jobs`](#jobs) | background and repeating jobs, one worker per period |
+| [`chat_data`](#chat_data) | JSON values saved with a chat |
+| [`events`](#events) | `@on("event.name")` handlers instead of an `event()` full of `if` checks |
+| [`static`](#static) | files from `static/`, served as they are |
+| [`templates`](#templates) | files from `templates/`, embedded and rendered by the function, never served |
+| [`config`](#config) | a `config.yaml` shipped with the plugin, parsed at bundle time, read with `plugin_config()` |
+| [`assets`](#assets) | `assets/loader.js` and `assets/custom.css` published as this plugin's fragments of the Shared Assets Protocol |
+| `shared_assets`, `live_reload` | Classic298's Shared Assets Protocol, unmodified |
+
+A library brings in the ones it is built on, and some are turned on by what the plugin holds, without `include:`. The table below is generated from the library catalogue (`src/owpp/libraries.py`) when the site is built:
+
+<!-- library catalogue -->
 
 Updating a vendored library updates every plugin that includes it on its next deploy.
 

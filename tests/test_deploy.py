@@ -25,6 +25,7 @@ from owpp.deploy import (
     wait_for_health,
 )
 from owpp.errors import OwppError
+from owpp.sources import Sources
 
 LIST = "GET /api/v1/functions/list"
 CREATE = "POST /api/v1/functions/create"
@@ -486,7 +487,7 @@ class TestVersionReport:
 
     def deployed(self, mock_server, directory, **kw):
         m = mock_server()
-        deploy(m.options(directory, git_fetcher=repo_fetcher, **kw))
+        deploy(m.options(directory, sources=Sources(repo_fetcher), **kw))
         return m
 
     def test_a_dry_run_lists_the_versions_that_change(self, mock_server, functions_dir):
@@ -527,17 +528,17 @@ class TestVersionReport:
     def test_the_source_commit_is_recorded_and_reported(self, mock_server, functions_dir):
         m = self.deployed(mock_server, functions_dir(sourced()))
         assert m.state["up"]["meta"]["sources"] == {REPO_GIT: PINNED}
-        again = deploy(m.options(functions_dir(sourced()), git_fetcher=repo_fetcher))
+        again = deploy(m.options(functions_dir(sourced()), sources=Sources(repo_fetcher)))
         assert again[0].action == "unchanged" and again[0].details == []
         moved = deploy(
-            m.options(functions_dir(sourced(LATEST)), git_fetcher=repo_fetcher, dry_run=True)
+            m.options(functions_dir(sourced(LATEST)), sources=Sources(repo_fetcher), dry_run=True)
         )
         assert moved[0].details == [
             "tool `up`: 1.0 -> 2.0",
             f"source {REPO_GIT}: {PINNED[:7]} -> {LATEST[:7]}",
         ]
 
-    def test_sync_reports_against_the_latest_commits_and_changes_no_file(
+    def test_latest_reports_against_the_latest_commits_and_changes_no_file(
         self, mock_server, functions_dir
     ):
         d = functions_dir(sourced())
@@ -547,10 +548,11 @@ class TestVersionReport:
         res = deploy(
             m.options(
                 d,
-                git_fetcher=repo_fetcher,
+                sources=Sources(
+                    repo_fetcher, lookup=lambda git, ref: looked_up.append((git, ref)) or LATEST
+                ),
                 dry_run=True,
-                sync=True,
-                resolve=lambda git, ref: looked_up.append((git, ref)) or LATEST,
+                latest=True,
             )
         )
         assert looked_up == [(REPO_GIT, "main")]
@@ -560,14 +562,14 @@ class TestVersionReport:
             f"source {REPO_GIT}: {PINNED[:7]} -> {LATEST[:7]} "
             f"(latest of main; plugin.yaml pins {PINNED[:7]})",
         ]
-        assert render_report(res, True, sync=True).startswith("Dry run at the latest commits:")
+        assert render_report(res, True, latest=True).startswith("Dry run at the latest commits:")
         assert (d / "up" / "plugin.yaml").read_text() == before
         assert not any("/update" in c for c in m.calls[-3:])
 
-    def test_sync_without_a_dry_run_is_refused(self, mock_server, functions_dir):
+    def test_latest_without_a_dry_run_is_refused(self, mock_server, functions_dir):
         m = mock_server()
         with pytest.raises(OwppError, match="only goes with --dry-run"):
-            deploy(m.options(functions_dir(sourced()), sync=True))
+            deploy(m.options(functions_dir(sourced()), latest=True))
         assert m.calls == []
 
 

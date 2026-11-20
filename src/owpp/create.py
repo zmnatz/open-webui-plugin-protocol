@@ -97,7 +97,7 @@ class SourceSpec:
     ref: str
     path: str = ""
     function_file: str = ""  # the function itself, taken verbatim (type "upstream")
-    track: str = ""  # the branch or tag `owpp sync` follows; empty: the default branch
+    track: str = ""
 
 
 @dataclass
@@ -696,8 +696,6 @@ def render_manifest(spec: PluginSpec) -> str:
     src = spec.source
     if src:
         out += [
-            f"# {spec.title} comes from a git repository, pinned to a commit. To upgrade: `owpp sync {spec.id}`",
-            "# moves `ref` to the latest commit of `track` (else the default branch); review, then commit.",
             "source:",
             f"  git: {_yaml(src.git)}",
             f"  ref: {src.ref}",
@@ -1045,7 +1043,7 @@ def render_readme(spec: PluginSpec) -> str:
             "## Source",
             "",
             f"From {src.git}{f' (`{src.path}`)' if src.path else ''}, pinned to commit `{src.ref}`.",
-            f"To upgrade: `owpp sync {spec.id}` moves `ref` in plugin.yaml to the latest commit of "
+            f"To upgrade: `owpp pull {spec.id}` moves `ref` in plugin.yaml to the latest commit of "
             + (f"`{src.track}`" if src.track else "the default branch")
             + " and lists the files that changed.",
             "Review the upstream diff before committing it: this code runs with admin rights in Open-WebUI.",

@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import fake_remote
+from conftest import fake_sources
 
 from owpp.bundle import load_function_files
 from owpp.cli import check_bundle, main
@@ -255,10 +255,9 @@ class TestFromGit:
             assert SHA in readme and "To upgrade" in readme
 
     def test_it_bundles_from_the_pinned_files(self, from_git):
-        remote = fake_remote(from_git)
         # The upstream function is global, so it must be a filter (or an action).
-        remote[f"{GIT}#{SHA}:src/function.py"] = "class Filter:\n    pass\n"
-        functions = {f.id: f for f in load_function_files(from_git, remote)}
+        sources = fake_sources({"src/function.py": "class Filter:\n    pass\n"})
+        functions = {f.id: f for f in load_function_files(from_git, sources)}
         for spec in GIT_SPECS:
             assert check_bundle(functions[spec.id].content) is None, spec.id
 
@@ -452,7 +451,7 @@ class TestWizard:
         assert read.left == [] and looked_up == [(GIT, "v1.2")]
         assert "Stage 6/6 · Review and write" in out and f"v1.2 is commit {SHA}" in out
         m = read_manifest(tmp_path / "viz")
-        # The tag it was given is what owpp sync follows.
+        # The tag it was given is what owpp pull follows.
         assert m["source"] == {"git": GIT, "ref": SHA, "path": "plugins/viz", "track": "v1.2"}
         assert m["tool"] == {"id": "viz", "file": "tool.py", "access": "public"}
         assert m["skills"] == {"visualize": {"dir": "skills/visualize", "access": "public"}}

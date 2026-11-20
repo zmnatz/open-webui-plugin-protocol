@@ -695,9 +695,9 @@ class TestNothingMountsStraightOntoTheApp:
         assert load_function_files(tmp_path)[0].type == "event"
 
     def test_the_examples_comply(self):
-        from conftest import EXAMPLES, fake_remote
+        from conftest import EXAMPLES, fake_sources
 
-        assert len(load_function_files(EXAMPLES, fake_remote(EXAMPLES))) >= 4
+        assert len(load_function_files(EXAMPLES, fake_sources())) >= 4
 
 
 class TestTheExamples:

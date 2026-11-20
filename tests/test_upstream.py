@@ -8,9 +8,8 @@ from conftest import embedded, write_tree
 from owpp.bundle import load_function_files
 from owpp.deploy import _needing_iframe_sandbox
 from owpp.errors import OwppError
-from owpp.sources import source_keys
-from owpp.sync import set_ref, sync
-from owpp.upstream import fetch_all
+from owpp.pull import pull
+from owpp.sources import Sources
 from owpp.versioning import bump, versions_of
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
@@ -103,16 +102,33 @@ def fetcher():
     return make_fetcher({(REPO, SHA): UPSTREAM})
 
 
-def load(directory, fetcher):
-    return {f.id: f for f in load_function_files(directory, fetch_all(directory, fetcher))}
+def load(directory, fetcher_or_sources):
+    sources = (
+        fetcher_or_sources
+        if isinstance(fetcher_or_sources, Sources)
+        else Sources(fetcher_or_sources)
+    )
+    return {f.id: f for f in load_function_files(directory, sources)}
 
 
-def test_the_whole_folder_is_one_key_and_is_fetched_once(tmp_path, fetcher):
+def test_the_whole_folder_is_one_directory_and_is_fetched_once(tmp_path, fetcher):
     write_tree(tmp_path, {"viz/plugin.yaml": local()})
-    assert source_keys(tmp_path) == [f"{REPO}#{SHA}:plugins/viz/"]
-    load(tmp_path, fetcher)
-    load(tmp_path, fetcher)
+    sources = Sources(fetcher)
+    load(tmp_path, sources)
+    load(tmp_path, sources)
     assert fetcher.calls == [(REPO, SHA, ["plugins/viz/"])]
+
+
+def test_its_upstream_copy_is_gone_once_the_sources_is_closed(tmp_path, fetcher):
+    write_tree(tmp_path, {"viz/plugin.yaml": local()})
+    with Sources(fetcher) as sources:
+        resolved = sources.resolve(tmp_path / "viz")
+        root = resolved.root
+        assert (root / "tests" / "test_viz.py").is_file()
+        assert resolved.taken["plugins/viz/tool.py"] == TOOL
+    assert not root.exists()
+    with pytest.raises(OwppError, match="deleted when its Sources was closed"):
+        _ = resolved.root
 
 
 def test_it_is_bundled_as_the_upstream_plugin_with_the_local_id(tmp_path, fetcher):
@@ -198,15 +214,15 @@ def test_what_the_upstream_takes_from_git_itself_is_fetched_too(tmp_path):
     assert item.sources == {f"{REPO} plugins/viz": SHA, f"{INNER} t": NEW}
 
 
-def test_a_source_with_no_ref_says_to_run_sync(tmp_path):
+def test_a_source_with_no_ref_says_to_run_pull(tmp_path):
     write_tree(tmp_path, {"viz/plugin.yaml": local(ref="")})
-    with pytest.raises(OwppError, match=r"has no `ref:`; run `owpp sync viz`"):
-        source_keys(tmp_path)
+    with pytest.raises(OwppError, match=r"has no `ref:`; run `owpp pull viz`"):
+        Sources(make_fetcher({})).resolve(tmp_path / "viz")
 
 
 def test_its_requirements_are_the_upstream_ones(tmp_path, fetcher):
     write_tree(tmp_path, {"viz/plugin.yaml": local()})
-    assert _needing_iframe_sandbox(tmp_path, fetcher=fetcher) == ["viz"]
+    assert _needing_iframe_sandbox(tmp_path, sources=Sources(fetcher)) == ["viz"]
 
 
 def test_its_versions_are_the_upstream_ones(tmp_path):
@@ -219,11 +235,10 @@ def test_its_versions_are_the_upstream_ones(tmp_path):
 class TestSync:
     def run(self, directory, fetcher, dry_run=False):
         lines: list[str] = []
-        code = sync(
+        code = pull(
             directory,
             dry_run=dry_run,
-            resolve=lambda git, ref: NEW,
-            fetcher=fetcher,
+            sources=Sources(fetcher, lookup=lambda git, ref: NEW),
             out=lines.append,
             today="2026-11-20",
         )
@@ -248,32 +263,6 @@ class TestSync:
         assert "bump" not in out
 
 
-@pytest.mark.parametrize(
-    ("before", "after"),
-    [
-        (
-            f"source:\n  git: {REPO}\n  path: p\n",
-            f"source:\n  git: {REPO}\n  ref: {NEW}\n  path: p\n",
-        ),
-        (
-            f"source: {{git: {REPO}, path: p}}\n",
-            f"source: {{git: {REPO}, ref: {NEW}, path: p}}\n",
-        ),
-        (
-            f"source:\r\n    git: {REPO}  # where\r\n",
-            f"source:\r\n    git: {REPO}  # where\r\n    ref: {NEW}\r\n",
-        ),
-    ],
-)
-def test_set_ref_adds_the_line_after_git(before, after):
-    assert set_ref(before, "", NEW) == after
-
-
-def test_set_ref_needs_a_git_line():
-    with pytest.raises(OwppError, match="add it by hand"):
-        set_ref("source:\n  path: p\nfunction: {}\n", "", NEW)
-
-
 def test_the_mock_loads_it_from_stand_ins(tmp_path):
     from owpp.testing import MockOpenWebUI
 
@@ -288,13 +277,13 @@ def test_the_mock_loads_it_from_stand_ins(tmp_path):
 RUN_CLI = """
 import json, sys
 import owpp.cli as cli
-import owpp.upstream as upstream
+from owpp.sources import Sources
 files = json.load(open(sys.argv[1]))
 
 def fetcher(git, ref, paths):
     return {k: v for k, v in files.items() if any(k.startswith(p) for p in paths)}
 
-cli.fetch_all = lambda directory: upstream.fetch_all(directory, fetcher)
+cli.Sources = lambda: Sources(fetcher)
 sys.exit(cli.main(sys.argv[2:]))
 """
 
@@ -334,3 +323,34 @@ class TestOwppTestUpstream:
         assert done.returncode == 0, done.stdout + done.stderr
         assert "viz: running the upstream plugin's tests" in done.stdout
         assert "1 passed" in done.stdout
+
+
+def test_pull_lists_what_the_upstream_takes_from_git_itself(tmp_path):
+    def upstream(ref: str) -> dict[str, str]:
+        manifest = (
+            f'protocol: "0.2"\nsource:\n  git: {INNER}\n  ref: {ref}\n  path: t\n'
+            "function:\n  title: Viz\ntool:\n  id: inner\n  file: tool.py\n"
+        )
+        return {"plugins/viz/plugin.yaml": manifest}
+
+    inner_new = "c" * 40
+    fetcher = make_fetcher(
+        {
+            (REPO, SHA): upstream(NEW),
+            (REPO, NEW): upstream(inner_new),
+            (INNER, NEW): {"t/tool.py": TOOL},
+            (INNER, inner_new): {"t/tool.py": TOOL + "\n# new\n"},
+        }
+    )
+    write_tree(tmp_path, {"viz/plugin.yaml": local()})
+    lines: list[str] = []
+    code = pull(
+        tmp_path,
+        sources=Sources(fetcher, lookup=lambda git, ref: NEW),
+        out=lines.append,
+        today="2026-11-20",
+    )
+    out = "\n".join(lines)
+    assert code == 0, out
+    assert f"changed {INNER} t/tool.py" in out.replace("  ", " ")
+    assert "changed plugins/viz/plugin.yaml" in out.replace("  ", " ")

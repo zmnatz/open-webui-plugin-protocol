@@ -6,7 +6,7 @@ import subprocess
 import sys
 
 import pytest
-from conftest import EXAMPLES, FILTER, fake_remote, write_tree
+from conftest import EXAMPLES, FILTER, fake_sources, write_tree
 
 from owpp import __version__
 from owpp.bundle import load_function_files
@@ -91,9 +91,7 @@ class TestCommands:
     def test_bundle_writes_the_exact_deployed_code(self, tmp_path):
         out = tmp_path / "out.py"
         assert main(["bundle", "mcpo_sync", str(out), "--dir", str(EXAMPLES)], env={}) == 0
-        (fn,) = [
-            f for f in load_function_files(EXAMPLES, fake_remote(EXAMPLES)) if f.id == "mcpo_sync"
-        ]
+        (fn,) = [f for f in load_function_files(EXAMPLES, fake_sources()) if f.id == "mcpo_sync"]
         assert out.read_bytes() == fn.content.encode("utf-8")
 
     def test_init_creates_the_folder(self, tmp_path, capsys):
@@ -102,9 +100,7 @@ class TestCommands:
         assert "created" in capsys.readouterr().out
 
     def test_bundle_parts_lists_the_function_then_its_tools(self):
-        (fn,) = [
-            f for f in load_function_files(EXAMPLES, fake_remote(EXAMPLES)) if f.id == "excalidraw"
-        ]
+        (fn,) = [f for f in load_function_files(EXAMPLES, fake_sources()) if f.id == "excalidraw"]
         assert [name for name, _ in bundle_parts(fn)] == ["excalidraw", "tool excalidraw"]
 
 
@@ -192,3 +188,13 @@ def test_runs_as_a_module_and_reports_its_version():
     )
     assert done.returncode == 0
     assert done.stdout.strip() == f"owpp {__version__}"
+
+
+@pytest.mark.parametrize("argv", [["sync"], ["deploy", "--dry-run", "--sync"]])
+def test_the_names_from_before_pull_and_latest_are_gone(argv, capsys):
+    """`owpp sync` became `owpp pull`, and deploy's `--sync` became `--latest`: no aliases."""
+    with pytest.raises(SystemExit) as raised:
+        main(argv, env={})
+    assert raised.value.code == 2
+    err = capsys.readouterr().err
+    assert "invalid choice: 'sync'" in err or "unrecognized arguments: --sync" in err

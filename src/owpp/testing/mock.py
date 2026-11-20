@@ -197,22 +197,50 @@ class _MissingFinder:
 
 _MISSING_FINDER = _MissingFinder()
 
-# Pinned git sources fetched for `load()` without `sources=`, once per run: {key: content}.
-_FETCHED: dict[str, Any] = {}
+# What `load()` without `sources=` reads git sources through, once per test session: each pinned
+# file is fetched once. The pytest plugin closes it when the session ends.
+_SESSION = None
 
 
-def _fetch_pinned(name: str, manifest: dict) -> dict[str, Any]:
-    """The files a `source:` plugin takes from git, fetched as `owpp deploy` does."""
-    from .. import sources as _sources
-    from ..sources import _source_files, fetch_sources, source_key
+def session_sources():
+    """The test session's Sources (made on first use)."""
+    global _SESSION
+    from ..sources import Sources
 
-    keys = [
-        source_key(name, manifest["source"], rel, is_dir) for rel, is_dir in _source_files(manifest)
-    ]
-    missing = [k for k in keys if k not in _FETCHED]
-    if missing:
-        _FETCHED.update(fetch_sources(missing, fetcher=_sources.git_fetcher))
-    return dict(_FETCHED)  # a folder comes back as one key per file, so hand over all
+    if _SESSION is None or _SESSION.closed:
+        _SESSION = Sources()
+    return _SESSION
+
+
+def close_session_sources() -> None:
+    if _SESSION is not None:
+        _SESSION.close()
+
+
+def _stand_ins(folder: Path, files: dict[str, Any]):
+    """Sources whose git holds `files` ({path inside the source's `path`: text}) at the pinned
+    commit of `folder`'s `source:`. Anything else, such as what a whole plugin's upstream takes
+    from git itself, is fetched from git as the session does."""
+    from ..manifest import get, text_of
+    from ..sources import Sources
+
+    src = read_manifest(folder).get("source")
+    git, ref = text_of(get(src, "git")), text_of(get(src, "ref"))
+    base = "/".join(p for p in text_of(get(src, "path")).split("/") if p)
+    held = {f"{base}/{k}" if base else k: v for k, v in files.items()}
+
+    def fetcher(g: str, r: str, paths: list[str]) -> dict[str, Any]:
+        if (g, r) != (git, ref):
+            return session_sources()._fetcher(g, r, paths)
+        out = {}
+        for path in paths:
+            if path.endswith("/"):
+                out |= {k: v for k, v in held.items() if k.startswith(path)}
+            elif path in held:
+                out[path] = held[path]
+        return out
+
+    return Sources(fetcher)
 
 
 class LoadedPlugin:
@@ -619,28 +647,15 @@ class MockOpenWebUI:
         For a plugin taken whole from git (`source: {plugin: true}`), they are the upstream
         folder's files, plugin.yaml included, and the upstream folder is what is bundled.
         Loading the same id again is an update."""
-        from ..sources import source_key
-        from ..upstream import plugin_root
-
         folder = Path(folder)
         id = id or folder.name
-        manifest = read_manifest(folder)
-        if sources is None and manifest.get("source"):
-            remote = _fetch_pinned(folder.name, manifest)  # from git, at the pinned commit
-        else:
-            remote = {
-                source_key(folder.name, manifest.get("source"), rel): text
-                for rel, text in (sources or {}).items()
-            }
-        root = plugin_root(folder, manifest, remote)
-        if root != folder:  # the upstream folder, with this one's overrides
-            inner = read_manifest(root)
-            if inner.get("source"):
-                remote = {**remote, **_fetch_pinned(folder.name, inner)}
-            manifest = inner
+        # From git at the pinned commit (once per session), or from the stand-ins.
+        reader = session_sources() if sources is None else _stand_ins(folder, sources)
+        plugin = reader.resolve(folder)
+        manifest = plugin.manifest
         fn = manifest.get("function") or {}
         if content is None:
-            content = bundle_function(root, remote)
+            content = bundle_function(plugin)
         if content is None:
             raise ValueError(f"{folder}: no function to load")
         if valves is None:

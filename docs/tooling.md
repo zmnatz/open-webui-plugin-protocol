@@ -18,9 +18,9 @@ Pin the version (`uvx owpp@0.2.1 list`, or `uv tool install owpp==0.2.1`): the r
 owpp list                           plugins with their function type
 owpp check [id ...] [--strict] [--since ref]   bundle, compile, report undefined names; warn about valves and tools
 owpp bundle <id> [out.py]           print (or write) the code that would be deployed
-owpp deploy [--only id,id] [--dry-run [--sync]] [--force] [--force-prune] [--managed-by marker]
+owpp deploy [--only id,id] [--dry-run [--latest]] [--force] [--force-prune] [--managed-by marker]
 owpp test [id ...] [--upstream] [-- pytest args]
-owpp sync [id ...] [--dry-run] [--bump patch|minor|major|none]
+owpp pull [id ...] [--dry-run] [--bump patch|minor|major|none]
 owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
 owpp migrate [id ...] [--dry-run]      bring plugin.yaml to the current protocol version
 owpp create [id]
@@ -39,7 +39,7 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
 - **`bundle`** writes the deployed code, to read or diff.
 - **`test`** runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. With `--upstream` it also runs the `tests/` of each [plugin taken whole from git](plugin-format.md#a-whole-plugin-from-git), from the pinned commit, against the plugin as built with your overrides. That runs the other repository's code, so it is opt-in and the `OPEN_WEBUI_*` variables are removed from the environment first. It needs the `test` extra: `uvx --from 'owpp[test]' owpp test`. See [testing](testing.md).
 - **`version`** shows the plugins' versions or gives one a new version, and **`check --since <ref>`** fails on a change without one: see [versions](#versions).
-- **`sync`** moves the pinned commit of each plugin taken from git to the latest one: see [below](#owpp-sync-moving-a-pinned-commit).
+- **`pull`** moves the pinned commit of each plugin taken from git to the latest one: see [below](#owpp-pull-moving-a-pinned-commit).
 - **`create`** is a wizard that scaffolds a plugin: written here (a filter, action, event or pipe with that type's options, a tool, skills, a page and libraries, or an *installer* of a tool and skills with no code of its own), or taken from a git repository pinned to a commit (a branch or tag is resolved to its SHA). It shows the files and writes them only when you say yes, then runs `check --strict` on the result. Pressing Enter all the way makes what `init` makes. See [creating a plugin](creating.md).
 - **`init`** scaffolds `plugin.yaml`, `function.py`, `tests/test_<id>.py` and a README with Test and Deploy sections. For every type, the scaffold passes both `check` and `test`.
 - **`deploy`** deploys to a running Open-WebUI. With `--only` it deploys just those ids and **never prunes**, so deploying one plugin cannot delete another.
@@ -57,7 +57,7 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
 | `--dir`, `OWPP_PLUGINS_DIR` | The plugins folder (`FUNCTIONS_DIR` is accepted too). |
 | `--managed-by`, `OWPP_MANAGED_BY` | The ownership marker, default `open-webui-plugin-protocol`. See below. |
 | `--dry-run` | List what would change, with versions; write nothing. |
-| `--sync` | With `--dry-run`: report against the latest commit each git-sourced plugin tracks, as [`owpp sync`](#owpp-sync-moving-a-pinned-commit) would move it, without changing `plugin.yaml`. Refused without `--dry-run`. |
+| `--latest` | With `--dry-run`: report against the latest commit each git-sourced plugin tracks, as [`owpp pull`](#owpp-pull-moving-a-pinned-commit) would move it, without changing `plugin.yaml`. Refused without `--dry-run`. |
 | `--only a,b` | Deploy just these ids; no pruning. |
 | `--force` | Deploy even where the instance runs a newer version than the repository: see [versions](#versions). |
 | `--force-prune` | Allow deleting more than half of the managed functions at once. |
@@ -111,7 +111,7 @@ Dry run at the latest commits: Open-WebUI functions
 - **tool** and **skill**: each one the function installs, read from the code it embeds, so this is what the runtime will install once the new code is deployed. A tool's version is its header's, a skill's is its SKILL.md's `version`, if it has one. Only tools and skills that are new, removed or changed are listed.
 - **source**: the commit of the git repository a plugin takes code from. The deploy records it in the function's meta (`meta.sources`), so the next report can say what it moves from. (A git-sourced function deployed before this was recorded updates once, to record it.)
 
-`owpp deploy --dry-run --sync` is the same report at the commits `owpp sync` would move to: which versions an upgrade brings to the live instance, before anything is changed. The same in CI, on a schedule:
+`owpp deploy --dry-run --latest` is the same report at the commits `owpp pull` would move to: which versions an upgrade brings to the live instance, before anything is changed. The same in CI, on a schedule:
 
 ```yaml
 - uses: zmnatz/open-webui-plugin-protocol@v0.2.1
@@ -119,17 +119,17 @@ Dry run at the latest commits: Open-WebUI functions
     url: https://chat.example.com
     api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
     dry-run: "true"
-    sync: "true"     # the report goes to the job summary
+    latest: "true"   # the report goes to the job summary
 ```
 
 The deploy only ever creates, updates and prunes **functions**. Tools and skills are installed by the runtime inside Open-WebUI, driven by the function.
 
-## `owpp sync`: moving a pinned commit
+## `owpp pull`: moving a pinned commit
 
-A plugin taken from git (`source:`) is pinned to a full commit SHA, so what is deployed changes only when the SHA moves. `owpp sync` moves it:
+A plugin taken from git (`source:`) is pinned to a full commit SHA, so what is deployed changes only when the SHA moves. `owpp pull` moves it:
 
 ```
-$ owpp sync
+$ owpp pull
 new   inline_visualizer: moved f668387 -> 917c88f (default branch)
         changed inline-visualizer-v2/SKILL.md
         changed inline-visualizer-v2/tool.py
@@ -150,27 +150,27 @@ It commits nothing and deploys nothing: the change is yours to review and commit
 To get a pull request for each upgrade, run it on a schedule:
 
 ```yaml
-# .github/workflows/sync-plugins.yml
+# .github/workflows/pull-plugins.yml
 on:
   schedule: [{ cron: "0 6 * * 1" }]   # Mondays
   workflow_dispatch:
 jobs:
-  sync:
+  pull:
     runs-on: ubuntu-latest
     permissions: { contents: write, pull-requests: write }
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uvx owpp@0.2.1 sync | tee sync.txt
+      - run: uvx owpp@0.2.1 pull | tee pull.txt
       - name: Open a pull request
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
           git diff --quiet && exit 0
-          branch="owpp-sync/$(date +%Y-%m-%d)"
+          branch="owpp-pull/$(date +%Y-%m-%d)"
           git switch -c "$branch"
-          git -c user.name=owpp-sync -c user.email=owpp-sync@users.noreply.github.com commit -qam "Sync plugins taken from git"
+          git -c user.name=owpp-pull -c user.email=owpp-pull@users.noreply.github.com commit -qam "Pull plugins taken from git"
           git push -q origin "$branch"
-          gh pr create --title "Sync plugins taken from git" --body-file sync.txt
+          gh pr create --title "Pull plugins taken from git" --body-file pull.txt
 ```
 
 The pull request is where the upstream diff is reviewed; the deploy runs when it is merged.
@@ -217,7 +217,7 @@ FAIL  tool viz: changed since origin/main but its version is still 1.0.0 (run `o
 It bundles every plugin as it was at that git ref (with `git archive`) and as it is now, and fails for what changed without a new version:
 
 - a **tool or skill that has a version** must bump its own when it changes;
-- the **plugin** (the function's version) must bump when its own code changed, when a tool or skill without a version changed, was added or was removed, or when the commit of its `source:` moved (`owpp sync` bumps it for you).
+- the **plugin** (the function's version) must bump when its own code changed, when a tool or skill without a version changed, was added or was removed, or when the commit of its `source:` moved (`owpp pull` bumps it for you).
 
 A plugin that did not exist at that ref needs nothing. Code taken verbatim from a `source:` (an upstream function, tool or skills) is the upstream's to version: its changes count as the plugin's. In CI, check out with `fetch-depth: 0` and pass the base branch, for example `since: origin/${{ github.base_ref }}` on a pull request.
 
@@ -270,7 +270,7 @@ The action runs `owpp` from its own checkout, so the version you deploy with is 
 | Git sources (pinned commits, fetching, refusing unsafe URLs) | `tests/test_sources.py` |
 | Deploy against a stand-in Open-WebUI API: create, update, global, prune, valves, `--only` | `tests/test_deploy.py` |
 | CLI commands, `check`, `init` scaffolds | `tests/test_cli.py` |
-| `owpp sync`: moving a pinned commit, the files it lists, refusing what it cannot check | `tests/test_sync.py` |
+| `owpp pull`: moving a pinned commit, the files it lists, refusing what it cannot check | `tests/test_pull.py` |
 | `owpp create`: every combination it writes bundles, passes `check --strict` and its own tests; the wizard, driven by scripted answers | `tests/test_create.py` |
 | Every example plugin bundles, compiles, has unit tests and documents Test and Deploy | `tests/test_bundle.py`, "TestExamples" |
 | Each example plugin's behaviour, against the mock Open-WebUI | `examples/plugins/<id>/tests/` |

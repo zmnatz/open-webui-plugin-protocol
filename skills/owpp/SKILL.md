@@ -47,8 +47,8 @@ Done when `owpp check <id> --strict` and `owpp test <id>` pass, and `uvx owpp ch
 A plugin may take its function, tool or skills from another repository, pinned to a full 40-character commit SHA in `plugin.yaml`'s `source:` (with the files named by `file:` and `dir:` entries). That code runs with admin rights in Open-WebUI, so the commit only ever moves in a reviewed change.
 
 - **To add one**, write a spec with a `source:` ([references/spec.md](references/spec.md#from-git)). Resolve a branch or tag to its SHA first: `git ls-remote <url> <branch>`; put the branch in `track:`.
-- **To take a whole owpp plugin** (a folder with a `plugin.yaml`, such as this repository's examples), write `plugin.yaml` by hand with `source: {git, path, plugin: true}` and no `ref:`, then run `uvx owpp sync <id>` to pin it. The local manifest may only set `function: {valves, global}` and `tool: {id, access, valves}`; skills are the upstream's.
-- **To move it to the latest commit**: `uvx owpp sync <id>`. It rewrites `ref:`, bumps the plugin's version and adds a changelog entry, and lists the upstream files that changed, with a compare link. Show the user that list and link: they review the upstream diff before the change is committed. `uvx owpp deploy --dry-run --sync` shows what the upgrade would change on the instance first, writing nothing.
+- **To take a whole owpp plugin** (a folder with a `plugin.yaml`, such as this repository's examples), write `plugin.yaml` by hand with `source: {git, path, plugin: true}` and no `ref:`, then run `uvx owpp pull <id>` to pin it. The local manifest may only set `function: {valves, global}` and `tool: {id, access, valves}`; skills are the upstream's.
+- **To move it to the latest commit**: `uvx owpp pull <id>`. It rewrites `ref:`, bumps the plugin's version and adds a changelog entry, and lists the upstream files that changed, with a compare link. Show the user that list and link: they review the upstream diff before the change is committed. `uvx owpp deploy --dry-run --latest` shows what the upgrade would change on the instance first, writing nothing.
 
 Done when the user has seen the files that changed, and `owpp check <id> --strict` passes.
 
@@ -58,7 +58,7 @@ Done when the user has seen the files that changed, and `owpp check <id> --stric
 2. **Dry run**: `uvx owpp deploy --dry-run` (add `--only <id>` for one plugin). Read the report to the user: what is created or updated, each version change, and every warning.
 3. **Deploy** only once the user says to: `uvx owpp deploy` (with the same `--only`).
    - A **downgrade warning** (the instance runs a newer version than the repository) means the wrong branch, most of the time: stop and ask. `--force` is for a rollback the user asks for by name.
-   - `--sync` goes with `--dry-run` only: the latest upstream commits reach an instance through `owpp sync` and a reviewed commit.
+   - `--latest` goes with `--dry-run` only: the latest upstream commits reach an instance through `owpp pull` and a reviewed commit.
 
 Done when the deploy's report lists every plugin as the user expected, and the README's `## Test` steps are handed to the user for the checks on the live instance.
 

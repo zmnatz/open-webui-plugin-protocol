@@ -12,7 +12,7 @@ Enabling the function (it is global) installs the tool `inline_visualizer` and t
 
 ## Upgrading
 
-`owpp sync inline_visualizer` moves `ref` in `plugin.yaml` to the latest commit of the upstream default branch, and lists which of the files it takes changed, with a link to the diff. Read that diff before committing the change: this code runs in Open-WebUI with admin rights.
+`owpp pull inline_visualizer` moves `ref` in `plugin.yaml` to the latest commit of the upstream default branch, and lists which of the files it takes changed, with a link to the diff. Read that diff before committing the change: this code runs in Open-WebUI with admin rights.
 
 ## Test
 

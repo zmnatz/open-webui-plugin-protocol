@@ -21,9 +21,9 @@ Then add the [GitHub Action](tooling.md#github-action).
 
 ## Third-party functions
 
-Prefer a pinned `source:` (git URL plus a full commit SHA) over copying the file in: upgrades become a reviewed change of the SHA, which `owpp sync` makes (it lists the files that changed, with a compare link). Review the upstream diff before committing it; this code runs with admin rights.
+Prefer a pinned `source:` (git URL plus a full commit SHA) over copying the file in: upgrades become a reviewed change of the SHA, which `owpp pull` makes (it lists the files that changed, with a compare link). Review the upstream diff before committing it; this code runs with admin rights.
 
-To use someone's owpp plugin (one of [the examples](../examples/plugins), say) without copying it, take the [whole plugin from git](plugin-format.md#a-whole-plugin-from-git): a `plugin.yaml` with `source: {git, path, plugin: true}`, then `owpp sync <id>` to pin it.
+To use someone's owpp plugin (one of [the examples](../examples/plugins), say) without copying it, take the [whole plugin from git](plugin-format.md#a-whole-plugin-from-git): a `plugin.yaml` with `source: {git, path, plugin: true}`, then `owpp pull <id>` to pin it.
 
 ## Keep your existing marker
 

@@ -7,34 +7,19 @@ A manifest with no `protocol:` was written for 0.1, before the key existed.
 
 from __future__ import annotations
 
-import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from .errors import OwppError
-from .manifest import read_manifest, read_text
+from .manifest import plugin_folders, read_manifest, read_text, set_key
 from .protocol import VERSION, parse
-from .sources import plugin_folders
-
-_KEY_LINE = re.compile(r"""^(protocol\s*:\s*)(?:"[^"]*"|'[^']*'|[^\s#\r\n]+)""", re.MULTILINE)
 
 
 def _add_protocol_key(text: str) -> str:
     """0.1 -> 0.2: record the version. Everything 0.2 adds is optional, so nothing else changes."""
-    line = f'protocol: "{VERSION}"'
-    found, count = _KEY_LINE.subn(lambda m: f'{m.group(1)}"{VERSION}"', text, count=1)
-    if count:
-        return found
-    newline = "\r\n" if "\r\n" in text else "\n"
-    lines = text.splitlines(keepends=True)
-    first = next(
-        (i for i, line in enumerate(lines) if line.strip() and not line.lstrip().startswith("#")),
-        len(lines),
-    )
-    lines.insert(first, line + newline)
-    return "".join(lines)
+    return set_key(text, "protocol", f'"{VERSION}"')
 
 
 @dataclass(frozen=True)

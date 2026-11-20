@@ -34,9 +34,8 @@ from typing import Any, NamedTuple
 
 from .bundle import VALID_ID, FunctionFile, load_function_files
 from .errors import OwppError
-from .manifest import read_manifest
-from .sources import Fetcher, git_fetcher, plugin_folders
-from .upstream import fetch_all, is_plugin_source, root_of
+from .manifest import plugin_folders, read_manifest
+from .sources import Sources, is_plugin_source
 from .versioning import (
     is_older,
     own_code,
@@ -153,13 +152,13 @@ class Options:
     only: list[str] | None = None
     managed_by: str = MANAGED_BY
     # With dry_run: report against the latest commit each git-sourced plugin tracks, not the
-    # pinned one (as if `owpp sync` had run), without changing plugin.yaml.
-    sync: bool = False
+    # pinned one (as if `owpp pull` had run), without changing plugin.yaml.
+    latest: bool = False
     # Deploy even where the live version is newer than the repository's (a downgrade).
     force: bool = False
     fetch: Fetch = field(default=urllib_fetch, repr=False)
-    git_fetcher: Fetcher = field(default=git_fetcher, repr=False)
-    resolve: Callable[[str, str], str | None] | None = field(default=None, repr=False)
+    # What the deploy reads plugin files from git through, and looks up the latest commits with.
+    sources: Sources = field(default_factory=Sources, repr=False)
     # TLS (tls_context): a CA to trust, a client certificate (and key) to present.
     ca_cert: str = field(default="", repr=False)
     client_cert: str = field(default="", repr=False)
@@ -186,11 +185,12 @@ def options_from_env(
     dry_run: bool = False,
     force_prune: bool = False,
     managed_by: str | None = None,
-    sync: bool = False,
+    latest: bool = False,
     force: bool = False,
     ca_cert: str | None = None,
     client_cert: str | None = None,
     client_key: str | None = None,
+    sources: Sources | None = None,
 ) -> Options:
     """Flags win over the environment, which wins over the defaults."""
     env = os.environ if env is None else env
@@ -208,11 +208,12 @@ def options_from_env(
         force_prune=force_prune,
         only=[i for i in only.split(",") if i] if only else None,
         managed_by=managed_by or env.get("OWPP_MANAGED_BY") or MANAGED_BY,
-        sync=sync,
+        latest=latest,
         force=force,
         ca_cert=ca_cert or env.get("OPEN_WEBUI_CA_CERT", ""),
         client_cert=client_cert or env.get("OPEN_WEBUI_CLIENT_CERT", ""),
         client_key=client_key or env.get("OPEN_WEBUI_CLIENT_KEY", ""),
+        **({"sources": sources} if sources is not None else {}),
     )
 
 
@@ -695,11 +696,10 @@ def _valves_pass(opts: Options, plan: list[PlanItem], results: list[Result]) -> 
 
 def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
     """A copy of the plugins folder in `work` with each git-sourced plugin moved to the latest
-    commit it tracks, as `owpp sync` would, and {source label: note} for the report."""
-    from .bundle import source_label
-    from .manifest import read_manifest, read_text, text_of
-    from .sources import resolve_ref
-    from .sync import set_ref, track_of
+    commit it tracks, as `owpp pull` would, and {source label: note} for the report."""
+    from .manifest import read_manifest, read_text, set_key, text_of
+    from .pull import track_of
+    from .sources import source_label
 
     copy = work / opts.dir.name
     shutil.copytree(
@@ -713,13 +713,14 @@ def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
         track = track_of(folder, src)
         where = "the default branch" if track == "HEAD" else track
         label, pinned = source_label(src), text_of(src.get("ref"))
-        sha = (opts.resolve or resolve_ref)(text_of(src.get("git")), track)
+        sha = opts.sources.latest(text_of(src.get("git")), track)
         if not sha:
             notes[label] = f"could not look up {where}: the pinned commit"
             continue
         path = folder / "plugin.yaml"
         if sha != pinned:
-            path.write_bytes(set_ref(read_text(path), pinned, sha).encode("utf-8"))
+            text = set_key(read_text(path), "source.ref", sha, after="git")
+            path.write_bytes(text.encode("utf-8"))
         notes[label] = (
             f"latest of {where}; plugin.yaml pins nothing yet"
             if not pinned
@@ -731,21 +732,20 @@ def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
 
 
 def deploy(opts: Options) -> list[Result]:
-    if opts.sync and not opts.dry_run:
+    if opts.latest and not opts.dry_run:
         raise OwppError(
-            "--sync only goes with --dry-run: to deploy the latest commits, run `owpp sync`, "
+            "--latest only goes with --dry-run: to deploy the latest commits, run `owpp pull`, "
             "review and commit the change, then deploy"
         )
-    if not opts.sync:
+    if not opts.latest:
         return _deploy(opts)
-    with tempfile.TemporaryDirectory(prefix="owpp-sync-") as work:
+    with tempfile.TemporaryDirectory(prefix="owpp-latest-") as work:
         copy, notes = _latest_copy(opts, Path(work))
         return _deploy(replace(opts, dir=copy), notes)
 
 
 def _deploy(opts: Options, latest: dict[str, str] | None = None) -> list[Result]:
-    remote = fetch_all(opts.dir, opts.git_fetcher)
-    files = load_function_files(opts.dir, remote)
+    files = load_function_files(opts.dir, opts.sources)
     if opts.only:
         missing = [i for i in opts.only if not any(f.id == i for f in files)]
         if missing:
@@ -763,16 +763,17 @@ def _deploy(opts: Options, latest: dict[str, str] | None = None) -> list[Result]
 
 
 def _needing_iframe_sandbox(
-    directory: Path, only: list[str] | None = None, fetcher: Fetcher = git_fetcher
+    directory: Path, only: list[str] | None = None, sources: Sources | None = None
 ) -> list[str]:
     """Ids of the local plugin folders that declare the iframe requirement in plugin.yaml."""
     ids = []
+    sources = sources if sources is not None else Sources()
     for folder in plugin_folders(directory):
         if only and folder.name not in only:
             continue
         manifest = read_manifest(folder)
         if is_plugin_source(manifest):  # its requirements are the upstream plugin's
-            manifest = read_manifest(root_of(folder, fetch_all(directory, fetcher)))
+            manifest = sources.resolve(folder).manifest
         requires = manifest.get("requires")
         if isinstance(requires, dict) and requires.get(IFRAME_REQUIREMENT) is True:
             ids.append(folder.name)
@@ -784,7 +785,7 @@ def iframe_sandbox_warning(opts: Options) -> str | None:
     default interface settings do not turn it on. Never changes the instance or stops a deploy:
     a user's own setting can still enable it, and an unreadable admin config is not a reason to
     refuse the rest of the deploy."""
-    ids = _needing_iframe_sandbox(opts.dir, opts.only, opts.git_fetcher)
+    ids = _needing_iframe_sandbox(opts.dir, opts.only, opts.sources)
     if not ids:
         return None
     try:
@@ -804,7 +805,7 @@ def iframe_sandbox_warning(opts: Options) -> str | None:
 
 
 def render_report(
-    results: list[Result], dry_run: bool, sync: bool = False, warnings: list[str] | None = None
+    results: list[Result], dry_run: bool, latest: bool = False, warnings: list[str] | None = None
 ) -> str:
     lines = []
     for r in results:
@@ -832,7 +833,7 @@ def render_report(
     if extra:
         lines += ["", *extra]
     if dry_run:
-        title = f"Dry run{' at the latest commits' if sync else ''}: {title}"
+        title = f"Dry run{' at the latest commits' if latest else ''}: {title}"
     return f"{title}\n\n" + "\n".join(lines) + "\n"
 
 
@@ -847,10 +848,11 @@ def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
         )
         return 1
     try:
-        wait_for_health(opts)
-        how = sign_in(opts)
-        warning = iframe_sandbox_warning(opts)  # before writing anything, but never a refusal
-        report = render_report(deploy(opts), opts.dry_run, opts.sync, [warning])
+        with opts.sources:  # its upstream copies are deleted once the deploy is done
+            wait_for_health(opts)
+            how = sign_in(opts)
+            warning = iframe_sandbox_warning(opts)  # before writing anything, never a refusal
+            report = render_report(deploy(opts), opts.dry_run, opts.latest, [warning])
     except OwppError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1

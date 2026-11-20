@@ -6,7 +6,7 @@ import json
 import re
 
 import pytest
-from conftest import DOCS, EXAMPLES, FILTER, embedded, fake_remote, write_tree
+from conftest import DOCS, EXAMPLES, FILTER, embedded, fake_sources, write_tree
 
 from owpp.bundle import (
     FunctionFile,
@@ -47,7 +47,7 @@ class TestFrontmatterAndIds:
         check_frontmatter("x.py", FILTER)  # no error
 
     def test_every_example_header_is_on_one_line(self):
-        files = load_function_files(EXAMPLES, fake_remote(EXAMPLES))
+        files = load_function_files(EXAMPLES, fake_sources())
         assert len(files) >= 3
         for f in files:
             assert len(f.description) > 20, f"{f.file} has a description"
@@ -737,9 +737,7 @@ class TestConfig:
         assert "plugin_config" not in embedded(fn.content)["tools"][0]["content"]
 
     def test_an_example_that_ships_one_bundles_it(self):
-        (fn,) = [
-            f for f in load_function_files(EXAMPLES, fake_remote(EXAMPLES)) if f.id == "mcpo_sync"
-        ]
+        (fn,) = [f for f in load_function_files(EXAMPLES, fake_sources()) if f.id == "mcpo_sync"]
         m = re.search(r'_CONFIG = _json\.loads\((".*")\)\n', fn.content)
         assert "servers" in json.loads(json.loads(m.group(1)))
 
@@ -821,7 +819,7 @@ class TestExamples:
     names = sorted(p.name for p in EXAMPLES.iterdir())
 
     def test_bundle_and_compile_without_undefined_names_when_the_code_is_local(self):
-        files = {f.id: f for f in load_function_files(EXAMPLES, fake_remote(EXAMPLES))}
+        files = {f.id: f for f in load_function_files(EXAMPLES, fake_sources())}
         assert sorted(files) == self.names
         for n in self.names:
             if re.search(r"^source:", (EXAMPLES / n / "plugin.yaml").read_text(), re.MULTILINE):
@@ -855,9 +853,7 @@ class TestExamples:
             assert list((EXAMPLES / n / "tests").glob("test_*.py")), f"{n}/tests/ has no tests"
 
     def test_the_excalidraw_folder_bundles_into_a_complete_function(self):
-        (fn,) = [
-            f for f in load_function_files(EXAMPLES, fake_remote(EXAMPLES)) if f.id == "excalidraw"
-        ]
+        (fn,) = [f for f in load_function_files(EXAMPLES, fake_sources()) if f.id == "excalidraw"]
         assert fn.want_global is True
         for needle in (
             "class Filter:",
@@ -937,7 +933,7 @@ class TestFunctionTypes:
             load_function_files(tmp_path / "glob")
 
     def test_reports_the_type_of_each_example_events_never_global(self):
-        types = {f.id: f.type for f in load_function_files(EXAMPLES, fake_remote(EXAMPLES))}
+        types = {f.id: f.type for f in load_function_files(EXAMPLES, fake_sources())}
         assert types["mcpo_sync"] == "event"
         assert types["stale_data"] == "event"
         assert types["inline_visualizer"] == "filter"

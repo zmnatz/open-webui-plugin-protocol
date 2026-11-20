@@ -5,7 +5,7 @@
 ## Requirements
 
 - **[uv](https://docs.astral.sh/uv/getting-started/installation/)**. It brings its own Python, so you need no Python of your own. Without uv, Python 3.10 or newer works with `pip` or `pipx` (below).
-- **`git`**, for plugins that take code from another repository (`source:`), and for `owpp sync` and `owpp check --since`.
+- **`git`**, for plugins that take code from another repository (`source:`), and for `owpp pull` and `owpp check --since`.
 - For a deploy, an **Open-WebUI** instance and a way to sign in as an admin: an API key, a user name and password, an OIDC token, or none where the instance allows it (see [signing in](tooling.md#signing-in)).
 
 ## Run it
