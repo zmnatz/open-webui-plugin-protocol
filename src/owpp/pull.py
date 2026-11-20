@@ -16,26 +16,14 @@ from __future__ import annotations
 import datetime as _dt
 import re
 from collections.abc import Callable
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .bundle import source_label
 from .errors import OwppError
-from .manifest import read_manifest, read_text, text_of
-from .sources import (
-    SHA40,
-    TRACK,
-    Fetcher,
-    _source_files,
-    fetch_sources,
-    git_fetcher,
-    plugin_folders,
-    resolve_ref,
-    source_key,
-)
+from .manifest import plugin_folders, read_manifest, read_text, text_of
+from .sources import SHA40, TRACK, Sources, source_label
 from .versioning import add_changelog_entry, next_version, set_block_version
-
-Resolver = Callable[[str, str], "str | None"]
 
 
 @dataclass
@@ -71,16 +59,6 @@ def compare_url(git: str, old: str, new: str) -> str:
     """A web page of the changes between two commits, for the hosts whose URL is known."""
     m = re.fullmatch(r"(?:https://|git@)(github\.com)[/:]([^/\s]+/[^/\s]+?)(?:\.git)?/?", git)
     return f"https://{m.group(1)}/{m.group(2)}/compare/{old}...{new}" if m else ""
-
-
-def _files(folder: Path, source: dict, sha: str, fetcher: Fetcher) -> dict[str, object]:
-    """The files the plugin takes from its source at `sha`: {path in the repo: content}."""
-    pinned = {**source, "ref": sha}
-    keys = [
-        source_key(folder.name, pinned, rel, d) for rel, d in _source_files(read_manifest(folder))
-    ]
-    prefix = f"{text_of(source.get('git'))}#{sha}:"
-    return {k[len(prefix) :]: v for k, v in fetch_sources(keys, fetcher).items()}
 
 
 def tree_url(git: str, sha: str, source: dict) -> str:
@@ -129,9 +107,8 @@ def set_ref(text: str, old: str, new: str) -> str:
 
 def pull_plugin(
     folder: Path,
+    sources: Sources,
     dry_run: bool = False,
-    resolve: Resolver | None = None,
-    fetcher: Fetcher = git_fetcher,
     bump_by: str = "patch",
     today: str | None = None,
 ) -> Move:
@@ -140,9 +117,7 @@ def pull_plugin(
     git, old = text_of(source.get("git")), text_of(source.get("ref"))
     track = track_of(folder, source)
     move = Move(folder.name, track, old)
-    # The URL and the pinned SHA (if any yet) are valid.
-    source_key(folder.name, source if old else {**source, "ref": "0" * 40}, "")
-    new = (resolve or resolve_ref)(git, track)
+    new = sources.latest(git, track)
     if not new or not SHA40.fullmatch(new):
         move.error = f"could not look up {track} in {git}"
         return move
@@ -150,8 +125,8 @@ def pull_plugin(
     if new == old:
         return move
     try:
-        before = _files(folder, source, old, fetcher) if old else {}
-        after = _files(folder, source, new, fetcher)
+        before = sources.resolve(folder).taken if old else {}
+        after = sources.resolve(folder, ref=new).taken
     except OwppError as e:  # a file the plugin takes is gone at the new commit
         move.error = str(e)
         return move
@@ -195,8 +170,7 @@ def pull(
     directory: Path,
     ids: list[str] | None = None,
     dry_run: bool = False,
-    resolve: Resolver | None = None,
-    fetcher: Fetcher = git_fetcher,
+    sources: Sources | None = None,
     out: Callable[[str], None] = print,
     bump_by: str = "patch",
     today: str | None = None,
@@ -214,7 +188,8 @@ def pull(
     if not sourced:
         out("no plugin takes its code from git (`source:` in plugin.yaml)")
         return 1 if ids else 0
-    moves = [pull_plugin(f, dry_run, resolve, fetcher, bump_by, today) for f in sourced]
+    with nullcontext(sources) if sources is not None else Sources() as s:
+        moves = [pull_plugin(f, s, dry_run, bump_by, today) for f in sourced]
     for m in moves:
         where = f"({m.track})" if m.track != "HEAD" else "(default branch)"
         if m.error:

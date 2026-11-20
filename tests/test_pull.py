@@ -9,7 +9,8 @@ from owpp.cli import main
 from owpp.errors import OwppError
 from owpp.manifest import read_manifest
 from owpp.pull import compare_url, pull, rewrite_ref
-from owpp.sources import pick_sha, source_key
+from owpp.sources import Sources
+from owpp.sources._git import pick_sha
 
 GIT = "https://github.com/owner/repo.git"
 OLD = "a1" * 20
@@ -78,8 +79,7 @@ def run(directory, ids=None, dry_run=False, latest=NEW, bump_by="patch"):
         directory,
         ids,
         dry_run=dry_run,
-        resolve=resolve,
-        fetcher=fetcher,
+        sources=Sources(fetcher, lookup=resolve),
         out=lines.append,
         bump_by=bump_by,
         today="2026-11-20",
@@ -167,7 +167,7 @@ class TestSync:
 
     def test_the_command(self, plugins, monkeypatch, capsys):
         d = plugins()
-        monkeypatch.setattr("owpp.pull.resolve_ref", lambda git, ref: OLD)
+        monkeypatch.setattr("owpp.cli.Sources", lambda: Sources(fetcher, lookup=lambda g, r: OLD))
         assert main(["pull", "--dir", str(d)], env={}) == 0
         assert "up to date" in capsys.readouterr().out
 
@@ -189,10 +189,10 @@ class TestPieces:
         assert pick_sha(out, "v1") == "d" * 40  # the peeled tag, over the branch
         assert pick_sha(out, "other") is None
 
-    def test_track_must_be_a_branch_or_tag(self):
-        src = {"git": GIT, "ref": OLD, "path": "", "track": "--upload-pack=x"}
+    def test_track_must_be_a_branch_or_tag(self, plugins):
+        d = plugins(track="--upload-pack=x")
         with pytest.raises(OwppError, match="track must be a branch or tag"):
-            source_key("viz", src, "tool.py")
+            run(d)
 
     def test_rewrite_ref_needs_exactly_one_ref_line(self):
         assert rewrite_ref(f'ref: "{OLD}"\n', OLD, NEW) == f'ref: "{NEW}"\n'

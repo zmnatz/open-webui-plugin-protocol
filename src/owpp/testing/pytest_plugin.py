@@ -4,12 +4,25 @@
 - `plugin_dir`: the plugin folder the test file is in (the nearest plugin.yaml above it).
 - `plugin`: that plugin, loaded into `owui` (enabled, with the manifest's valves).
 
+What `owui.load()` fetched from git for the session is deleted when the session ends.
+
 Imports are deferred so that loading this plugin costs nothing in a run that never uses them.
 """
 
 from __future__ import annotations
 
+import sys
+
 import pytest
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _owpp_session_sources():
+    """Close the Sources `owui.load()` fetches through, once the session is done."""
+    yield
+    mock = sys.modules.get("owpp.testing.mock")  # never imported: nothing was fetched
+    if mock is not None:
+        mock.close_session_sources()
 
 
 @pytest.fixture

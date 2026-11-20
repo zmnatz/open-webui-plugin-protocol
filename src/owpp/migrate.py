@@ -14,9 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from .errors import OwppError
-from .manifest import read_manifest, read_text
+from .manifest import plugin_folders, read_manifest, read_text
 from .protocol import VERSION, parse
-from .sources import plugin_folders
 
 _KEY_LINE = re.compile(r"""^(protocol\s*:\s*)(?:"[^"]*"|'[^']*'|[^\s#\r\n]+)""", re.MULTILINE)
 
