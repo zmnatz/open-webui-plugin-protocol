@@ -8,7 +8,7 @@ from conftest import write_tree
 from owpp.cli import main
 from owpp.errors import OwppError
 from owpp.manifest import read_manifest
-from owpp.pull import compare_url, pull, rewrite_ref
+from owpp.pull import compare_url, pull
 from owpp.sources import Sources
 from owpp.sources._git import pick_sha
 
@@ -193,12 +193,6 @@ class TestPieces:
         d = plugins(track="--upload-pack=x")
         with pytest.raises(OwppError, match="track must be a branch or tag"):
             run(d)
-
-    def test_rewrite_ref_needs_exactly_one_ref_line(self):
-        assert rewrite_ref(f'ref: "{OLD}"\n', OLD, NEW) == f'ref: "{NEW}"\n'
-        assert rewrite_ref(f"source: {{git: x, ref: {OLD}}}\n", OLD, NEW).count(NEW) == 1
-        with pytest.raises(OwppError, match="by hand"):
-            rewrite_ref(f"ref: {OLD}\nref: {OLD}\n", OLD, NEW)
 
     def test_compare_links_for_github(self):
         assert compare_url("git@github.com:o/r.git", OLD, NEW).startswith(

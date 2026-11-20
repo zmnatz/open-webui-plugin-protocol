@@ -21,7 +21,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .errors import OwppError
-from .manifest import plugin_folders, read_manifest, read_text, text_of
+from .manifest import plugin_folders, read_manifest, read_text, set_key, text_of
 from .sources import SHA40, TRACK, Sources, source_label
 from .versioning import add_changelog_entry, next_version, set_block_version
 
@@ -68,43 +68,6 @@ def tree_url(git: str, sha: str, source: dict) -> str:
     return f"https://{m.group(1)}/{m.group(2)}/tree/{sha}{'/' + path if path else ''}" if m else ""
 
 
-def rewrite_ref(text: str, old: str, new: str) -> str:
-    """plugin.yaml with its `ref:` changed from `old` to `new`; comments and layout kept."""
-    out, count = re.subn(rf"(\bref:\s*[\"']?){old}\b", rf"\g<1>{new}", text)
-    if count != 1:
-        raise OwppError(f"found {count} `ref: {old[:7]}...` lines; change it by hand")
-    return out
-
-
-def set_ref(text: str, old: str, new: str) -> str:
-    """plugin.yaml pinned to `new`: its `ref:` line changed, or added after `git:` when the
-    source has none yet (`old` is empty). Comments and layout are kept."""
-    if old:
-        return rewrite_ref(text, old, new)
-    flow, count = re.subn(
-        r"(^source:\s*\{[^}]*?\bgit:\s*[^,}\s]+)", rf"\g<1>, ref: {new}", text, flags=re.M
-    )
-    if count == 1:
-        return flow
-    lines = text.splitlines(keepends=True)
-    start = next((i for i, line in enumerate(lines) if re.match(r"source:\s*(#.*)?$", line)), None)
-    if start is not None:
-        for i in range(start + 1, len(lines)):
-            line = lines[i]
-            if line.strip() and not line[0].isspace():
-                break  # the next top-level key: the block ended without a git: line
-            m = re.match(r"(\s+)git:", line)
-            if m:
-                newline = "\r\n" if line.endswith("\r\n") else "\n"
-                if not line.endswith("\n"):
-                    lines[i] = line + newline
-                lines.insert(i + 1, f"{m.group(1)}ref: {new}{newline}")
-                return "".join(lines)
-    raise OwppError(
-        "could not find the `git:` line of `source:` to add `ref:` after; add it by hand"
-    )
-
-
 def pull_plugin(
     folder: Path,
     sources: Sources,
@@ -149,7 +112,7 @@ def pull_plugin(
         move.version = (current, next_version(current, bump_by))
     if not dry_run:
         path = folder / "plugin.yaml"
-        text = set_ref(read_text(path), old, new)
+        text = set_key(read_text(path), "source.ref", new, after="git")
         if move.version:
             text, _ = set_block_version(text, "function", move.version[1])
         path.write_bytes(text.encode("utf-8"))

@@ -27,7 +27,7 @@ from pathlib import Path
 
 from .bundle import FunctionFile, load_function_files, parse_frontmatter, parse_skill, runtime_data
 from .errors import OwppError
-from .manifest import get, read_manifest, read_text
+from .manifest import get, parse_yaml, read_manifest, read_text, set_key, text_of
 from .sources import Sources, is_plugin_source
 
 SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
@@ -121,34 +121,14 @@ def next_version(current: str, how: str = "patch") -> str:
 
 
 def set_block_version(text: str, block: str, version: str) -> tuple[str, str]:
-    """plugin.yaml with `version:` of the top-level `block:` mapping set, comments kept: the
-    new text and the old version ("" when it had none, and the line is added)."""
-    lines = text.split("\n")
-    start = next(
-        (i for i, line in enumerate(lines) if re.match(rf"{block}:\s*(#.*)?$", line)), None
-    )
-    if start is None:
-        raise OwppError(f"plugin.yaml has no `{block}:` section")
-    end = next(
-        (
-            i
-            for i in range(start + 1, len(lines))
-            if lines[i] and not lines[i][0].isspace() and not lines[i].startswith("#")
-        ),
-        len(lines),
-    )
-    children = [i for i in range(start + 1, end) if re.match(r"\s+\S", lines[i])]
-    indent = re.match(r"\s+", lines[children[0]]).group() if children else "  "
-    for i in children:
-        m = re.match(rf"({indent}version:\s*)([\"']?)([^\"'#\s]*)\2(\s*#.*)?$", lines[i])
-        if m:
-            lines[i] = f"{m.group(1)}{version}{m.group(4) or ''}"
-            return "\n".join(lines), m.group(3)
-    if any(re.match(rf"{indent}file:", lines[i]) for i in children):
+    """plugin.yaml with `version:` of the top-level `block:` mapping set (added after `title:`
+    when it has none), comments and layout kept: the new text and the old version ("" when it
+    had none)."""
+    section = get(parse_yaml(text), block)
+    if isinstance(section, dict) and section.get("file"):
         raise OwppError(f"the {block} is taken verbatim from its source, which sets its version")
-    after = next((i for i in children if re.match(rf"{indent}title:", lines[i])), start)
-    lines.insert(after + 1, f"{indent}version: {version}")
-    return "\n".join(lines), ""
+    old = text_of(get(section, "version"))
+    return set_key(text, f"{block}.version", version, after="title"), old
 
 
 def set_front_matter_version(text: str, version: str) -> tuple[str, str]:

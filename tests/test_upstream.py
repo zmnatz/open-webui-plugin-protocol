@@ -8,7 +8,7 @@ from conftest import embedded, write_tree
 from owpp.bundle import load_function_files
 from owpp.deploy import _needing_iframe_sandbox
 from owpp.errors import OwppError
-from owpp.pull import pull, set_ref
+from owpp.pull import pull
 from owpp.sources import Sources
 from owpp.versioning import bump, versions_of
 
@@ -261,32 +261,6 @@ class TestSync:
         assert code == 0 and "changed plugins/viz/tool.py" in out.replace("  ", " ")
         assert (tmp_path / "viz/plugin.yaml").read_text() == local(ref=NEW)
         assert "bump" not in out
-
-
-@pytest.mark.parametrize(
-    ("before", "after"),
-    [
-        (
-            f"source:\n  git: {REPO}\n  path: p\n",
-            f"source:\n  git: {REPO}\n  ref: {NEW}\n  path: p\n",
-        ),
-        (
-            f"source: {{git: {REPO}, path: p}}\n",
-            f"source: {{git: {REPO}, ref: {NEW}, path: p}}\n",
-        ),
-        (
-            f"source:\r\n    git: {REPO}  # where\r\n",
-            f"source:\r\n    git: {REPO}  # where\r\n    ref: {NEW}\r\n",
-        ),
-    ],
-)
-def test_set_ref_adds_the_line_after_git(before, after):
-    assert set_ref(before, "", NEW) == after
-
-
-def test_set_ref_needs_a_git_line():
-    with pytest.raises(OwppError, match="add it by hand"):
-        set_ref("source:\n  path: p\nfunction: {}\n", "", NEW)
 
 
 def test_the_mock_loads_it_from_stand_ins(tmp_path):
