@@ -16,7 +16,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 | Tests | `tests/` for owpp, `examples/plugins/<id>/tests/` for a plugin | They show it works, and keep it working. |
 | A docstring on each plugin test | the test itself: what it checks, then `By hand:` steps ([describe every test](testing.md#describe-every-test)) | A reviewer repeats them on a live Open-WebUI. The [test catalogue](reference/test-catalogue.md) is built from them. |
 | The guide | `docs/*.md` | When behaviour or a command changes. |
-| A changelog entry | `CHANGELOG.md`, in the section of the version being prepared (`## 0.1.0 (not released yet)` until the first release) | What users will notice. |
+| A changelog entry | `CHANGELOG.md`, in the section of the version being prepared (`## <version> (not released yet)` until it is released) | What users will notice, in one sentence; the details belong in the docs. |
 | A commit message that says why | git | A reviewer reads it with the diff. |
 
 ## Step by step

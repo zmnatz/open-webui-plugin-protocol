@@ -33,7 +33,7 @@ A quoted major.minor string that tracks owpp's major.minor. It changes only when
 - **Write the quotes.** Unquoted `0.2` is a YAML number and is refused, as is a patch version such as `"0.2.0"`.
 - A **newer** version than the owpp reading the manifest is refused: its keys may mean something else. Upgrade owpp first.
 - An **older** version is accepted; `owpp check` prints a note pointing at the migration. A manifest with **no key** is a 0.1 plugin, from before the key existed: `owpp check` warns and `owpp check --strict` fails.
-- `owpp migrate [id ...] [--dry-run]` brings old manifests up to 0.2. It changes only the `protocol:` line, adding it when absent, and keeps comments and layout so the change is there to review and commit. The 0.1 -> 0.2 step has nothing else to do: what 0.2 added is optional. See [the CLI](tooling.md#the-cli-owpp).
+- `owpp migrate [id ...] [--dry-run]` brings old manifests up to 0.2. It changes only the `protocol:` line, adding it when absent, and keeps comments and layout so the change is there to review and commit. The 0.1 -> 0.2 step has nothing else to do: what 0.2 added is optional. See [the CLI](tooling.md#the-cli-owpp) and [upgrading owpp](upgrading.md).
 
 ### `function:`
 

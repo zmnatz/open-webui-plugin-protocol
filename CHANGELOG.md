@@ -2,51 +2,50 @@
 
 ## 0.2.0 (2026-11-19)
 
-- `plugin.yaml` declares which version of the plugin format it was written for: `protocol: "0.2"`. The key must be a quoted major.minor string. A newer version is refused (upgrade owpp first), an older one is accepted with a note, and a manifest with no key is treated as 0.1: `owpp check` warns and `owpp check --strict` fails. `owpp init`, `owpp create` and every example manifest write the key. The known limit "No protocol version in `plugin.yaml`" is gone.
-- `owpp migrate [id ...] [--dry-run]` brings manifests up to the current protocol through a step per version, so each new version can add the migration from the one before it. The 0.1 -> 0.2 step adds `protocol: "0.2"`, keeping comments and layout; `--dry-run` writes nothing. The Excalidraw README now says what Excalidraw is and links to its site, component and docs.
-- Fixed: saving a parent function's valves (`INSTALL_TOOLS`, `INSTALL_SKILLS`, `TOOL_VALVES`) now applies them. The runtime resyncs on `function.valves_updated`, which Open-WebUI sends when an admin saves the valves; before, they only took effect on the next enable or update. A user saving their own UserValves (`scope: user`) does not resync.
-- A plugin can declare `requires: {iframe_sandbox_allow_same_origin: true}` in `plugin.yaml`. `owpp deploy` reads the instance's admin config before writing and **warns** in its report when that setting is missing or unreadable; it never changes the instance or refuses a deploy. Excalidraw and Inline Visualizer now declare it. The published docs site no longer includes the project's own agent-instruction pages, and the sign-in fallbacks verified against Open-WebUI v0.13.4's source are no longer described as untested assumptions.
-- `owpp create [id]`: a wizard that scaffolds a plugin, ready to fill in, with tests and a README. It branches on where the code lives. Written here: a filter, action, event or pipe (with that type's options from Open-WebUI's plugin docs: filter hooks `inlet`, `request`, `stream` and `outlet`, user toggles, `file_handler` and `priority`; several action buttons and an `HTMLResponse` page; manifold and streaming pipes; `@on` handlers and scheduled syncs), with a tool, skills in Open-WebUI's `SKILL.md` layout, a page and libraries; or an **installer**, a plugin with no code of its own that deploys a tool and/or skills through the generated parent function. From a git repository: `source:` pinned to a commit (a branch or tag is resolved with `git ls-remote`), taking the function itself or a tool and skills. Every combination bundles, passes `owpp check --strict` and passes the tests it writes. Nothing is written until the last stage, and Ctrl-C writes nothing.
-- `owpp sync [id ...] [--dry-run]`: moves the pinned commit of each plugin taken from git to the latest commit of the branch or tag it follows (the new, optional `source: track:`, else the repository's default branch). It lists which of the files the plugin takes were changed, added or removed, with a compare link for GitHub, and rewrites only the `ref:` line of `plugin.yaml`, leaving the change to review and commit. `owpp create` records `track:` when given a branch or tag. The docs show a scheduled workflow that opens a pull request for each upgrade.
-- `owpp deploy` reports versions: under each function, its `version:` change, each tool and skill it installs that is new, removed or changed (with versions), and the commit of the repository a git-sourced plugin takes code from, which the deploy now records in the function's meta (`meta.sources`; a git-sourced function deployed by 0.1.0 updates once to record it). Code that changed without a new version is flagged. `owpp deploy --dry-run --sync` (action input `sync`) gives the same report at the latest commits, as `owpp sync` would move them, without changing `plugin.yaml`.
-- Versioning. `owpp version` lists every plugin's versions (its own, its tool's, each skill's), and `owpp version <id> patch|minor|major|X.Y.Z [--tool | --skill name] [-m text]` gives one a new version: it rewrites one `version:` line (the function's or the tool's in `plugin.yaml`, a skill's in its SKILL.md, a loose function's header), keeping comments, and a function bump adds an entry to the plugin's `CHANGELOG.md` (which `owpp create` now writes). `owpp check --since <ref>` fails when a plugin, its tool or a skill changed since that git ref without a new version (action input `since`), and `owpp check` warns when `CHANGELOG.md` has no entry for the current version. `owpp sync` bumps a moved plugin's version and adds a changelog entry (`--bump`, default patch).
-- `owpp deploy` refuses to go back a version: when the instance runs a newer function, tool or skill version than the repository, the dry run warns and a deploy writes nothing, unless given `--force` (action input `force`).
-- Docs: **Install** and **Getting started** pages at the start of the site (requirements, uvx and pinning, the test extra; from an empty repository to a plugin deployed from CI), and the site menu's sections now collapse.
-- Docs: the audit trail page (generated from `git log`) and the decisions page are gone. The decisions page recorded assumptions made while preparing 0.1.0 rather than decisions anyone took; the known limits it listed are now under [status and limits](docs/README.md#status-and-limits), with their issues.
-- `owpp deploy` no longer needs an API key. Without `OPEN_WEBUI_API_KEY` it signs in: with `OPEN_WEBUI_USERNAME` and `OPEN_WEBUI_PASSWORD` (an Open-WebUI account, then LDAP), with `OPEN_WEBUI_OIDC_TOKEN` (exchanged for a session through Open-WebUI's OAuth token exchange, provider `OPEN_WEBUI_OAUTH_PROVIDER`), or with nothing (an instance with sign-in off, or behind a proxy that sets the trusted email header). The account must be an admin. The action has matching inputs, and `api-key` is optional.
-- For AI agents: an agent skill, [`skills/owpp`](skills/owpp/SKILL.md) (`npx skills add zmnatz/open-webui-plugin-protocol@owpp`), that walks through creating, changing, versioning, upgrading and deploying plugins; `owpp create --spec <file>`, which creates a plugin from a YAML or JSON description instead of the wizard's questions; and `llms.txt` and `llms-full.txt` on the documentation site. A docs page, "With an AI agent", says how to use them and why there is no MCP server.
-- `owpp deploy` takes TLS certificates: `--ca-cert` / `OPEN_WEBUI_CA_CERT` (CAs to trust besides the system's) and `--client-cert`, `--client-key` / `OPEN_WEBUI_CLIENT_CERT`, `OPEN_WEBUI_CLIENT_KEY` (mutual TLS), each a PEM path or the PEM text. A certificate failure now stops at once with a hint, instead of retrying the health check.
-- `owpp init` now writes what `owpp create` writes with every answer left at its default. An event plugin's starting point uses `@on("system.startup.completed")` (`include: [events]`) instead of an `event()` method of `if` checks, as the authoring guide asks.
-- `owpp check` no longer reports a name as undefined when the code uses it only after `"name" in globals()`. A plugin with an `assets/` folder and no `live_reload` failed `check` because of it.
-- A local skill's `access` can be set in its SKILL.md front matter (documented; it already worked).
+- `plugin.yaml` declares its format version with `protocol: "0.2"`; newer versions are refused, and a missing key is read as 0.1 with a warning.
+- `owpp migrate [id ...] [--dry-run]` brings manifests up to the current protocol, keeping comments and layout.
+- Fixed: saving a parent function's valves (`INSTALL_TOOLS`, `INSTALL_SKILLS`, `TOOL_VALVES`) now applies them right away.
+- `requires: {iframe_sandbox_allow_same_origin: true}` makes `owpp deploy` warn when the instance is missing that setting.
+- `owpp create [id]` is a wizard that scaffolds any kind of plugin, local or from a pinned git `source:`, with tests and a README.
+- `owpp sync [id ...] [--dry-run]` moves a git-sourced plugin's pinned commit to the latest on its branch (`source: track:`) and lists the files that changed.
+- `owpp deploy` reports version changes for each function, tool and skill, and records a git-sourced plugin's commit in the function's meta.
+- `owpp version` lists and bumps plugin versions with a `CHANGELOG.md` entry, and `owpp check --since <ref>` fails on changes with no new version.
+- `owpp deploy` refuses to go back a version unless given `--force`.
+- Docs: new Install and Getting started pages.
+- Docs: the audit trail and decisions pages are gone, and their known limits moved to [status and limits](docs/README.md#status-and-limits).
+- `owpp deploy` can sign in with a username and password, an OIDC token or trusted headers instead of an API key.
+- For AI agents: an [`owpp` agent skill](skills/owpp/SKILL.md), `owpp create --spec <file>`, and `llms.txt` on the docs site.
+- `owpp deploy` takes CA and client TLS certificates (`--ca-cert`, `--client-cert`, `--client-key`).
+- `owpp init` now writes what `owpp create` writes with every answer left at its default.
+- Fixed: `owpp check` no longer reports a name as undefined when it is only used after `"name" in globals()`.
 
 ## 0.1.0 (2026-11-19)
 
-The first standalone release, extracted from a working deployment. On [PyPI](https://pypi.org/project/owpp/) as `owpp`; the GitHub Action is `zmnatz/open-webui-plugin-protocol@v0.1.0`.
+The first standalone release, extracted from a working deployment and published to [PyPI](https://pypi.org/project/owpp/) as `owpp`.
 
-- Plugin folders with a `plugin.yaml` manifest: a function (the parent) plus an optional tool and skills, `shared.py`, `static/`, `templates/` and `assets/`.
-- Bundler: fixed order (header, libraries, `shared.py`, code, runtime), `{{file:}}`, `from __future__` hoisting, git sources pinned by full SHA, skills as whole folders.
-- Runtime: the function installs, updates and removes its tool and skills; parent valves `INSTALL_TOOLS`, `INSTALL_SKILLS`, `TOOL_VALVES`.
-- Libraries: `assets` (`assets/loader.js` and `assets/custom.css` published through the Shared Assets Protocol, with `class Event(PluginAssets)`), `config` (a `config.yaml` parsed at bundle time), `core`, `routes`, `jobs` (with `PluginScheduledSync`), `chat_data`, `static` (files served as they are), `templates` (files the function renders, never served), and the vendored Shared Assets Protocol.
-- The `jobs:` manifest section: the sync mixin adds its `ENABLE` and `SYNC_INTERVAL_MINUTES` valves itself, and the interval's default is declared in `plugin.yaml`.
-- Environment templates, `${NAME:-default}`, in `jobs:` and `config.yaml`: embedded as written and resolved from the Open-WebUI container's environment when the plugin loads, never when bundling (so a bundle never depends on the machine that built it). `owpp check` lists the variables a plugin reads.
-- `plugin_token` / `plugin_check_token`: signed, expiring tokens scoped to the function, for a route that cannot carry a session. A `plugin_mount` name is the mount's identity, so a moved mount replaces its old self. The events mixin creates `self.valves` itself.
-- A page opened with no session is not just refused: the no-input sign-ins (trusted headers, auth off) are tried in-process, then the browser goes to Open-WebUI's login page and back; iframes and API calls get a plain 401.
-- `owpp check` warns about a valve with no description and about tool methods with no docstring, type hints or `:param` lines; `--strict` fails on warnings.
-- `SECURITY.md`: the trust model, what `owpp` limits, the known limits, how to report.
-- Signed in by default, public only on purpose: every route needs a signed-in user, marked on the route, on the mount (`access=`) or, for `static/` files, with `static: {access: user | admin | public}`, and enforced by `plugin_mount`. `access="public"` (exactly that word, per mount) serves people who are not signed in, and `owpp check` notes every one. The `public/` folder and `dynamic:` list of the deployment it was extracted from are refused, with a message saying where things went (`static/`, `templates/`). Unknown top-level keys in `plugin.yaml` are refused. A single route is marked with `user: PluginAdmin` or `user: PluginUser` (tighten only), or by its chat with `chat_id: WritableChat` / `ReadableChat`. `guard=` replaces the check for a sandboxed API. Code that mounts straight onto the app is refused.
-- Event handlers by decorator: `@on("event.name", own=True)` on a `PluginEvents` class, with event names checked by `owpp check`. `PluginScheduledSync` and `PluginAssets` are built on it.
-- Function types read from the top-level class; `global` only for filters and actions.
-- `owpp` CLI (a Python package, `uvx owpp`): `list`, `check`, `bundle`, `deploy`, `init`. Configurable plugins folder and ownership marker; `--only` deploys without pruning.
-- Composite GitHub Action (runs `owpp` from its own checkout with uv).
-- Excalidraw can load its editor from a host you run (`EXCALIDRAW_ASSETS_URL`, built by `self-host/build.sh`), so the page needs nothing from the internet.
-- `owpp test [id ...]`: runs each plugin's `tests/` folder with pytest against a mock Open-WebUI (`owpp.testing.MockOpenWebUI`, `docs/testing.md`). The mock covers the function, tool and skill tables, users and auth, chats in SQLite, config, the socket, event sinks and the FastAPI app. The `owui`, `plugin_dir` and `plugin` pytest fixtures are registered wherever owpp is installed. The extra `owpp[test]` brings pytest and the packages Open-WebUI ships.
-- `owpp init` scaffolds a plugin, with a `tests/test_<id>.py` that passes.
-- Examples: `excalidraw`, `mcpo_sync`, `stale_data`, `inline_visualizer`, `page_banners`, `litellm_model_sync`, each with unit tests in its own `tests/` folder. Every test has a docstring: what it checks, then `By hand:` steps to repeat it on a live Open-WebUI. `owpp init` scaffolds tests that do the same, and `tests/test_test_docs.py` enforces it.
-- A documentation site (Zensical, `zensical.toml`, built by `tools/build_docs.py`), published to GitHub Pages by `.github/workflows/docs.yml`. It adds pages for review: a test catalogue built from the test docstrings, an audit trail built from `git log`, and how to review and make a change.
-- Screenshots on a real Open-WebUI: `tools/screenshots/run.py` starts Open-WebUI v0.13.4, a scripted model and mcpo in Docker, deploys `examples/plugins` with `owpp deploy`, and follows the plugins' By hand steps with Playwright (`docs/screenshots.md`). The screenshots are in `docs/screenshots/`, and the site shows them in the test catalogue, on each example's page and on a page of their own. `.github/workflows/screenshots.yml` takes them on GitHub when run by hand.
-- Known limitation: the Excalidraw editor needs **iframe Sandbox Allow Same Origin** in Open-WebUI. Without it, the sandboxed panel sends no session and the page answers 401. The README says how to turn it on and what that costs. It is kept on purpose, as Inline Visualizer needs the same setting (issue #6).
-- `access: public` on a tool or skill is Open-WebUI's `user:*` read grant, so every signed-in user can use it. Grants an earlier copy of the runtime wrote to the no-auth `anyone:*` audience, which Open-WebUI ignores for tools and skills, are swapped once on the next sync.
-- `global: false` for a filter that each user switches on (a toggle): the deploy never makes it global, and takes it out of global if someone did. Without the key, a new filter is still made global on first deploy.
-- The mock Open-WebUI fetches a `source:` plugin's pinned files from git when a test gives no `sources=`, stands in for any `open_webui.*` module or name it does not implement (using one raises `NotImplementedError` naming it), and has Open-WebUI's data directories (`owui.data_dir`).
-- `jobs: adopt_markers` in `plugin.yaml`: the markers of an earlier sync whose entries a sync treats as its own (`plugin_sync_markers()`), for moving from that sync without leaving its entries behind. mcpo Sync and LiteLLM Model Sync use it.
+- Plugin folders with a `plugin.yaml` manifest: a parent function plus an optional tool and skills.
+- A bundler that turns a plugin folder into one file per function and tool, with git sources pinned by full SHA.
+- A runtime with which the function installs, updates and removes its tool and skills.
+- Libraries: `assets`, `config`, `core`, `routes`, `jobs`, `chat_data`, `static`, `templates` and the vendored Shared Assets Protocol.
+- A `jobs:` manifest section for scheduled syncs, with their interval declared in `plugin.yaml`.
+- `${NAME:-default}` environment templates in `jobs:` and `config.yaml`, resolved when the plugin loads, never when bundling.
+- `plugin_token` / `plugin_check_token`: signed, expiring tokens for routes that cannot carry a session.
+- A page opened with no session tries the no-input sign-ins, then sends the browser to Open-WebUI's login page.
+- `owpp check` warns about undocumented valves and tool methods, and `--strict` fails on warnings.
+- `SECURITY.md` describes the trust model and how to report a vulnerability.
+- Routes need a signed-in user by default, and `access="public"` opts a single mount out.
+- Event handlers by decorator: `@on("event.name")` on a `PluginEvents` class.
+- A function's type is read from its top-level class, and `global` applies only to filters and actions.
+- The `owpp` CLI with `list`, `check`, `bundle`, `deploy` and `init`.
+- A composite GitHub Action that runs `owpp`.
+- Excalidraw can load its editor from a host you run (`EXCALIDRAW_ASSETS_URL`).
+- `owpp test` runs each plugin's tests against a mock Open-WebUI (`owpp[test]`).
+- `owpp init` scaffolds a plugin with a passing test.
+- Six example plugins, each with unit tests whose docstrings say how to repeat them by hand.
+- A documentation site, published to GitHub Pages.
+- Screenshots of the examples on a real Open-WebUI, taken by `tools/screenshots/run.py`.
+- Known limitation: the Excalidraw editor needs Open-WebUI's **iframe Sandbox Allow Same Origin** setting (issue #6).
+- `access: public` on a tool or skill grants it to every signed-in user.
+- `global: false` keeps a per-user toggle filter out of global.
+- The mock Open-WebUI fetches a `source:` plugin's pinned files when a test gives no `sources=`.
+- `jobs: adopt_markers` lets a sync take over the entries of an earlier sync.
