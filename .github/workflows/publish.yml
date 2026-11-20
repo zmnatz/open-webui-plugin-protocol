@@ -3,7 +3,17 @@ on:
   push:
     tags: ["v*"]
 jobs:
+  notes:
+    # Before anything is published: the tag is v<the package's version>, and CHANGELOG.md has a
+    # dated section for it, which becomes the GitHub release's notes.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 tools/release_notes.py "$GITHUB_REF_NAME" > notes.md
+      - uses: actions/upload-artifact@v4
+        with: { name: notes, path: notes.md }
   pypi:
+    needs: notes
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -13,3 +23,21 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv build
       - run: uv publish --trusted-publishing always
+      - uses: actions/upload-artifact@v4
+        with: { name: dist, path: dist/ }
+  release:
+    # The GitHub release for the tag, with the changelog section and the built package.
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME" dist/*
+          --verify-tag --latest
+          --title "owpp ${GITHUB_REF_NAME#v}"
+          --notes-file notes/notes.md

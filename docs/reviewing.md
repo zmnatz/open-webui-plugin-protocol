@@ -54,4 +54,4 @@ The unit tests run against a mock. It covers what plugins call, not Open-WebUI's
 
 ## 6. Approve
 
-Approve when CI is green, the live checks for the change pass, and the changelog is up to date. A release is a `v*` tag on `main`. `.github/workflows/publish.yml` publishes that tag to PyPI.
+Approve when CI is green, the live checks for the change pass, and the changelog is up to date. A release is a `v*` tag on `main`: set `__version__` in `src/owpp/__init__.py`, turn `## Unreleased` in `CHANGELOG.md` into `## <version> (<date>)`, move the docs' version pins, then push an annotated tag (`git tag -a v<version> -m "owpp <version>"`). `.github/workflows/publish.yml` refuses a tag that is not `v<__version__>` or has no dated changelog section, publishes the package to PyPI, and then creates the GitHub release with that section as its notes and the built package attached.
