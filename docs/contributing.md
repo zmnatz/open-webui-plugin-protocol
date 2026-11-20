@@ -17,7 +17,8 @@ What a change to this repository includes, so that the person who [reviews it](r
 | A docstring on each plugin test | the test itself: what it checks, then `By hand:` steps ([describe every test](testing.md#describe-every-test)) | A reviewer repeats them on a live Open-WebUI. The [test catalogue](reference/test-catalogue.md) is built from them. |
 | The guide | `docs/*.md` | When behaviour or a command changes. |
 | A changelog entry | `CHANGELOG.md`, in the section of the version being prepared (`## Unreleased` until it is released) | What users will notice, in one sentence; the details belong in the docs. |
-| A commit message that says why | git | A reviewer reads it with the diff. |
+| A review of the docs around it | the pages the change touches, and the ones next to them | For an issue labelled `documentation`: the same thing explained in full in two places becomes one explanation and a link, and anything that no longer matches the code is fixed. |
+| A commit message that says why | git, with a [conventional-commit prefix](#commit-messages) | A reviewer reads it with the diff. |
 
 ## Step by step
 
@@ -28,6 +29,22 @@ What a change to this repository includes, so that the person who [reviews it](r
 5. Update the guide and the changelog.
 6. Check this site: `uv run --group docs python tools/build_docs.py`. A broken link fails the build.
 7. Open a pull request: say what changed, why, and which live checks you did.
+
+## Commit messages
+
+A commit message starts with a conventional-commit type, chosen from the issue's labels:
+
+| Label | Type |
+| --- | --- |
+| `enhancement` | `feat` |
+| `bug` | `fix` |
+| `documentation` (alone) | `docs` |
+| `refactor` | `refactor` |
+| `test` | `test` |
+| `chore` | `chore`, `ci` or `build` |
+| `breaking` | `!` after the type, and a `BREAKING CHANGE:` footer |
+
+`documentation` next to another type label means the change includes the docs review above, not that the commit is `docs`: an `enhancement` with `documentation` is `feat`.
 
 ## This site
 
