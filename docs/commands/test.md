@@ -8,7 +8,7 @@ Runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With 
 
 It needs the `test` extra (pytest, and the packages Open-WebUI ships that plugins import): `uvx --from 'owpp[test]' owpp test`. Without it, it stops with ``error: owpp test needs pytest: run it as `uvx --from 'owpp[test]' owpp test`, or `pip install 'owpp[test]'` ``.
 
-A plugin [taken whole from git](../plugin-format.md#a-whole-plugin-from-git) has the upstream's tests, which are not run by default. With `--upstream` it also runs them, from the pinned commit, against the plugin as built with your overrides. That runs the other repository's code, so it is opt-in and the `OPEN_WEBUI_*` variables are removed from the environment first.
+A plugin [taken whole from git](../plugin-format.md#a-whole-plugin-from-git) has the upstream's tests, which are not run by default. With `--upstream` it also runs them, from the pinned commit, against the plugin as built with your overrides. That runs the other repository's code, so it is opt-in and the `OPEN_WEBUI_*` [variables](../environment-variables.md#signing-in) are removed from the environment first.
 
 ## Options
 
@@ -17,7 +17,7 @@ A plugin [taken whole from git](../plugin-format.md#a-whole-plugin-from-git) has
 | `id ...` | The plugins to test. Default: every plugin with a `tests/` folder. |
 | `--upstream` | Also run the tests of plugins taken whole from git, from the pinned commit. |
 | `-- pytest args` | Everything after `--` goes to pytest. |
-| `--dir FOLDER` | The plugins folder. Default `$OWPP_PLUGINS_DIR`, else `./plugins`. |
+| `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## Examples
 

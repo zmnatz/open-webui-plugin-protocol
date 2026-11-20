@@ -16,7 +16,7 @@ With `--spec`, it asks nothing: the file says what the wizard would have asked, 
 | --- | --- |
 | `id` | The plugin id. Asked if left out; on the command line it wins over the spec's. |
 | `--spec FILE` | Ask nothing: create the plugin a YAML or JSON file describes (`-` reads stdin). |
-| `--dir FOLDER` | The plugins folder. Default `$OWPP_PLUGINS_DIR`, else `./plugins`. |
+| `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## Examples
 

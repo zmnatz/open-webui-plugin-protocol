@@ -32,7 +32,7 @@ It commits nothing and deploys nothing: the change is yours to review and commit
 | `id ...` | The plugins to pull. Default: every plugin with a `source:`. |
 | `--dry-run` | Say what would move; write nothing. |
 | `--bump` | How to bump a moved plugin's version, with a `CHANGELOG.md` entry: `patch` (default), `minor`, `major`, or `none`. |
-| `--dir FOLDER` | The plugins folder. Default `$OWPP_PLUGINS_DIR`, else `./plugins`. |
+| `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## A pull request for each upgrade
 

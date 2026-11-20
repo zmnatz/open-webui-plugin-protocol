@@ -39,7 +39,7 @@ It exits 1 when a bundle fails, when `--since` finds a change without a new vers
 | `id ...` | The plugins to check. Default: all. |
 | `--strict` | Fail on warnings too. |
 | `--since ref` | Also fail when a plugin changed since this git ref (for example `origin/main`) but its version did not. See [below](#a-change-needs-a-new-version). |
-| `--dir FOLDER` | The plugins folder. Default `$OWPP_PLUGINS_DIR`, else `./plugins`. |
+| `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## A change needs a new version
 

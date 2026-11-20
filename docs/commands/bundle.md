@@ -14,7 +14,7 @@ An id that is not in the plugins folder fails with `no plugin "<id>" in <folder>
 | --- | --- |
 | `<id>` | The plugin. |
 | `out.py` | Write the bundle to this file instead of printing it. |
-| `--dir FOLDER` | The plugins folder. Default `$OWPP_PLUGINS_DIR`, else `./plugins`. |
+| `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## Examples
 

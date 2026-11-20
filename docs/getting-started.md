@@ -57,7 +57,7 @@ export OPEN_WEBUI_USERNAME=admin@example.com OPEN_WEBUI_PASSWORD=...
 export OPEN_WEBUI_OIDC_TOKEN=... OPEN_WEBUI_OAUTH_PROVIDER=oidc
 ```
 
-With none of them, it tries to sign in without credentials, which works where sign-in is switched off or a proxy adds the trusted email header. See [signing in](commands/deploy.md#signing-in). Use a dedicated admin account for deploys if you can, and keep credentials out of git: environment variables here, secrets in CI.
+With none of them, it tries to sign in without credentials, which works where sign-in is switched off or a proxy adds the trusted email header. See [signing in](commands/deploy.md#signing-in), and each variable in [environment variables](environment-variables.md). Use a dedicated admin account for deploys if you can, and keep credentials out of git: environment variables here, secrets in CI.
 
 ## 5. Deploy
 
@@ -70,7 +70,7 @@ The deploy creates each function, activates it, and makes a new filter global. I
 
 ## 6. Deploy from CI
 
-Commit the repository, add the credential as a secret (here `OPEN_WEBUI_API_KEY`; or `username` and `password`, or `oidc-token`, as inputs), and deploy on every push to `main`:
+Commit the repository, add the credential as a secret (here a secret named `OPEN_WEBUI_API_KEY` for the `api-key` input; or `username` and `password`, or `oidc-token`; the inputs set the [environment variables](environment-variables.md#signing-in) of step 4), and deploy on every push to `main`:
 
 ```yaml
 # .github/workflows/deploy-plugins.yml

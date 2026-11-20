@@ -43,6 +43,7 @@ It is not worth it when:
 | Use routes, jobs, chat data, static files and templates | [libraries](libraries.md) |
 | Unit-test a plugin against a mock Open-WebUI | [testing](testing.md) |
 | Look up a command and its options, set up CI | [tooling](tooling.md), which links each command's page |
+| Set the instance, the credentials or the plugins folder | [environment variables](environment-variables.md) |
 | Use it in your repository, or move existing functions over | [adopting](adopting.md) |
 | Move to a new owpp version | [upgrading](upgrading.md) |
 | Fix an error owpp printed | [troubleshooting](troubleshooting.md) |

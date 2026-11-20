@@ -17,27 +17,17 @@ Deploys the plugins to a running Open-WebUI: creates, updates or leaves alone on
 | `--latest` | With `--dry-run`: report against the latest commit each git-sourced plugin tracks, as [`owpp pull`](pull.md) would move it, without changing `plugin.yaml`. Refused without `--dry-run`. |
 | `--force` | Deploy even where the instance runs a newer version than the repository: see [deploying an older version](#deploying-an-older-version). |
 | `--force-prune` | Allow deleting more than half of the managed functions at once. |
-| `--managed-by marker` | The [ownership marker](#the-ownership-marker). Default `$OWPP_MANAGED_BY`, else `open-webui-plugin-protocol`. |
-| `--ca-cert PEM` | A PEM of CA certificates to trust besides the system's (a private CA, or a self-signed Open-WebUI). Default `$OPEN_WEBUI_CA_CERT`. |
-| `--client-cert PEM` | A client certificate to present, for a server or proxy that requires mutual TLS. Default `$OPEN_WEBUI_CLIENT_CERT`. |
-| `--client-key PEM` | Its private key, when not in the same PEM. Default `$OPEN_WEBUI_CLIENT_KEY`. |
-| `--dir FOLDER` | The plugins folder. Default `$OWPP_PLUGINS_DIR` (`FUNCTIONS_DIR` is accepted too), else `./plugins`. |
+| `--managed-by marker` | The [ownership marker](#the-ownership-marker). Default [`$OWPP_MANAGED_BY`](../environment-variables.md#owpp_managed_by), else `open-webui-plugin-protocol`. |
+| `--ca-cert PEM` | A PEM of CA certificates to trust besides the system's (a private CA, or a self-signed Open-WebUI). Default [`$OPEN_WEBUI_CA_CERT`](../environment-variables.md#open_webui_ca_cert). |
+| `--client-cert PEM` | A client certificate to present, for a server or proxy that requires mutual TLS. Default [`$OPEN_WEBUI_CLIENT_CERT`](../environment-variables.md#open_webui_client_cert). |
+| `--client-key PEM` | Its private key, when not in the same PEM. Default [`$OPEN_WEBUI_CLIENT_KEY`](../environment-variables.md#open_webui_client_key). |
+| `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 The certificate options and their variables take a path, or the PEM text itself.
 
 ## Deploy settings
 
-The instance and the credentials come only from the environment, never from flags (in CI, from secrets through the [action's](../tooling.md#github-action) inputs), so they stay out of shell history and process lists.
-
-| Setting | Meaning |
-| --- | --- |
-| `OPEN_WEBUI_URL` | Required. Base URL of the Open-WebUI instance. |
-| `OPEN_WEBUI_API_KEY` | An admin API key (Settings > Account > API keys; the admin setting "Enable API Keys" must be on). Optional: see [signing in](#signing-in). |
-| `OPEN_WEBUI_USERNAME`, `OPEN_WEBUI_PASSWORD` | Without an API key: an admin's email and password, or LDAP user name and password. |
-| `OPEN_WEBUI_OIDC_TOKEN`, `OPEN_WEBUI_OAUTH_PROVIDER` | Without either: an OIDC access token, exchanged for a session, and the Open-WebUI OAuth provider it is from (default `oidc`). |
-| `OPEN_WEBUI_CA_CERT`, `OPEN_WEBUI_CLIENT_CERT`, `OPEN_WEBUI_CLIENT_KEY` | The defaults of `--ca-cert`, `--client-cert` and `--client-key`. |
-| `OWPP_PLUGINS_DIR` | The default of `--dir`. |
-| `OWPP_MANAGED_BY` | The default of `--managed-by`. |
+The instance and the credentials come only from the environment, never from flags: [`OPEN_WEBUI_URL`](../environment-variables.md#open_webui_url) (required), and the sign-in variables below. Every variable, its default and how it interacts with the others: [environment variables](../environment-variables.md). In CI, the [action's](../tooling.md#github-action) inputs set them.
 
 ## Signing in
 
@@ -45,16 +35,16 @@ The deploy needs an **admin** of the instance. It uses the first of these that i
 
 | Set | What it does | The instance needs |
 | --- | --- | --- |
-| `OPEN_WEBUI_API_KEY` | Uses the key as it is. | API keys on (Admin Panel > Settings > General > Enable API Keys), and a key from Settings > Account > API keys. |
-| `OPEN_WEBUI_USERNAME` and `OPEN_WEBUI_PASSWORD` | Signs in with them as an Open-WebUI account (the user name is the email, `POST /api/v1/auths/signin`), and if that fails, as an LDAP user (`POST /api/v1/auths/ldap`). | Password sign-in on; LDAP configured for an LDAP user. |
-| `OPEN_WEBUI_OIDC_TOKEN` | Exchanges the token for a session (`POST /api/v1/auths/oauth/<provider>/token/exchange`, the provider from `OPEN_WEBUI_OAUTH_PROVIDER`, default `oidc`). | `ENABLE_OAUTH_TOKEN_EXCHANGE=true`, and that OAuth provider configured. |
+| [`OPEN_WEBUI_API_KEY`](../environment-variables.md#open_webui_api_key) | Uses the key as it is. | API keys on (Admin Panel > Settings > General > Enable API Keys), and a key from Settings > Account > API keys. |
+| [`OPEN_WEBUI_USERNAME`](../environment-variables.md#open_webui_username) and [`OPEN_WEBUI_PASSWORD`](../environment-variables.md#open_webui_password) | Signs in with them as an Open-WebUI account (the user name is the email, `POST /api/v1/auths/signin`), and if that fails, as an LDAP user (`POST /api/v1/auths/ldap`). | Password sign-in on; LDAP configured for an LDAP user. |
+| [`OPEN_WEBUI_OIDC_TOKEN`](../environment-variables.md#open_webui_oidc_token) | Exchanges the token for a session (`POST /api/v1/auths/oauth/<provider>/token/exchange`, the provider from [`OPEN_WEBUI_OAUTH_PROVIDER`](../environment-variables.md#open_webui_oauth_provider), default `oidc`). | `ENABLE_OAUTH_TOKEN_EXCHANGE=true`, and that OAuth provider configured. |
 | nothing | Signs in with no credentials, as the browser would. | Sign-in switched off (`WEBUI_AUTH=False`), or a proxy in front of it that adds the trusted email header (`WEBUI_AUTH_TRUSTED_EMAIL_HEADER`). |
 
 The session it gets is used for that run only, and the account must be an admin: otherwise the deploy stops before writing anything, saying who it signed in as. When it cannot sign in, the error says what it tried and why it failed.
 
 ## The ownership marker
 
-Every function the deploy writes gets `meta.managed_by = <marker>` and a note in its description. The marker is the **only** thing pruning acts on: a function with this marker whose plugin folder is gone is deleted, and a function without it (made by hand in the UI, or by another deployment with a different marker) is never touched.
+Every function the deploy writes gets `meta.managed_by = <marker>` (`--managed-by`, else [`OWPP_MANAGED_BY`](../environment-variables.md#owpp_managed_by)) and a note in its description. The marker is the **only** thing pruning acts on: a function with this marker whose plugin folder is gone is deleted, and a function without it (made by hand in the UI, or by another deployment with a different marker) is never touched.
 
 - Use one marker per source of truth. Two repositories deploying to one instance need different markers, or each will prune the other's functions.
 - **Never change the marker of a deployment that already has functions.** They would look hand-made: not updated cleanly, and never pruned. See [adopting](../adopting.md#keep-your-existing-marker).

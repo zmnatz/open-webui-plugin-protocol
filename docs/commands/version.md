@@ -42,7 +42,7 @@ A function bump adds a `## <version> (<date>)` entry to the top of the plugin's 
 | `--tool` | Change the tool's version instead of the function's. |
 | `--skill name` | Change that skill's version (added if it had none). |
 | `-m`, `--message` | The `CHANGELOG.md` entry, for the plugin's own version. |
-| `--dir FOLDER` | The plugins folder. Default `$OWPP_PLUGINS_DIR`, else `./plugins`. |
+| `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 `--tool`, `--skill` and `-m` go with a new version only.
 

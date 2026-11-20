@@ -18,7 +18,7 @@ It reads every plugin the way [`owpp deploy`](deploy.md) would, git sources incl
 
 | Option | Meaning |
 | --- | --- |
-| `--dir FOLDER` | The plugins folder. Default `$OWPP_PLUGINS_DIR`, else `./plugins`. |
+| `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## Examples
 

@@ -12,7 +12,7 @@ Scaffolds the smallest plugin of a type in `<plugins folder>/<id>/`: `plugin.yam
 | --- | --- |
 | `<id>` | The plugin id, and the folder name. |
 | `--type` | `event` (default), `filter`, `action` or `pipe`. |
-| `--dir FOLDER` | The plugins folder. Default `$OWPP_PLUGINS_DIR`, else `./plugins`. |
+| `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## Examples
 

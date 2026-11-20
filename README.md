@@ -62,6 +62,8 @@ OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deplo
 # or OPEN_WEBUI_USERNAME + OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing: docs/commands/deploy.md#signing-in
 ```
 
+The deploy reads the instance and the credentials from the environment: [`OPEN_WEBUI_URL`](docs/environment-variables.md#open_webui_url), then [`OPEN_WEBUI_API_KEY`](docs/environment-variables.md#open_webui_api_key), [`OPEN_WEBUI_USERNAME`](docs/environment-variables.md#open_webui_username) and [`OPEN_WEBUI_PASSWORD`](docs/environment-variables.md#open_webui_password), [`OPEN_WEBUI_OIDC_TOKEN`](docs/environment-variables.md#open_webui_oidc_token), or nothing ([signing in](docs/commands/deploy.md#signing-in)). Every variable: [environment variables](docs/environment-variables.md).
+
 ## Deploy from GitHub Actions
 
 ```yaml
