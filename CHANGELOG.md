@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.1 (not released yet)
+## 0.2.1 (2026-11-19)
 
 - `source: {plugin: true}` takes a whole owpp plugin folder from git, such as one of the examples, and bundles it with the owpp reading it ([a whole plugin from git](docs/plugin-format.md#a-whole-plugin-from-git)).
 - `ref:` can be left out of a `source:` until `owpp sync` adds it; `owpp check` and `owpp deploy` refuse an unpinned source.
