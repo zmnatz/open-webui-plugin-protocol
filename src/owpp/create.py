@@ -23,15 +23,17 @@ libraries rather than copies of them, HTML in files rather than in Python string
 
 from __future__ import annotations
 
+import datetime as _dt
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from pathlib import Path
 
 from .bundle import VALID_ID, VALID_SKILL_ID
 from .errors import OwppError
 from .events import problem_with
-from .sources import GIT_URL, SHA40
+from .sources import GIT_URL, SHA40, TRACK
+from .versioning import changelog_text
 
 CLASS = {"event": "Event", "filter": "Filter", "action": "Action", "pipe": "Pipe"}
 CODE_TYPES = tuple(CLASS)
@@ -94,6 +96,7 @@ class SourceSpec:
     ref: str
     path: str = ""
     function_file: str = ""  # the function itself, taken verbatim (type "upstream")
+    track: str = ""  # the branch or tag `owpp sync` follows; empty: the default branch
 
 
 @dataclass
@@ -267,6 +270,8 @@ def _validate_source(spec: PluginSpec) -> None:
         raise OwppError("the repository must be an https://, ssh:// or user@host:path git URL")
     if not SHA40.fullmatch(src.ref):
         raise OwppError("the commit must be a full 40-character SHA (a branch or tag can move)")
+    if src.track and not TRACK.fullmatch(src.track):
+        raise OwppError("track must be a branch or tag name")
     if src.path:
         _check_repo_path("the folder in the repository", src.path)
     if src.function_file:
@@ -687,11 +692,12 @@ def render_manifest(spec: PluginSpec) -> str:
     src = spec.source
     if src:
         out += [
-            f"# {spec.title} comes from a git repository, pinned to a commit. To upgrade, review the",
-            "# upstream diff, then set `ref` to the new full commit SHA.",
+            f"# {spec.title} comes from a git repository, pinned to a commit. To upgrade: `owpp sync {spec.id}`",
+            "# moves `ref` to the latest commit of `track` (else the default branch); review, then commit.",
             "source:",
             f"  git: {_yaml(src.git)}",
             f"  ref: {src.ref}",
+            *([f"  track: {src.track}"] if src.track else []),
             f"  path: {_yaml(src.path) if src.path else _py('')}",
         ]
     out.append("function:")
@@ -1035,8 +1041,10 @@ def render_readme(spec: PluginSpec) -> str:
             "## Source",
             "",
             f"From {src.git}{f' (`{src.path}`)' if src.path else ''}, pinned to commit `{src.ref}`.",
-            "To upgrade: review the upstream diff from that commit, then set `ref` in plugin.yaml to",
-            "the new full commit SHA. This code runs with admin rights in Open-WebUI.",
+            f"To upgrade: `owpp sync {spec.id}` moves `ref` in plugin.yaml to the latest commit of "
+            + (f"`{src.track}`" if src.track else "the default branch")
+            + " and lists the files that changed.",
+            "Review the upstream diff before committing it: this code runs with admin rights in Open-WebUI.",
         ]
     settings = []
     if spec.has_code:
@@ -1087,6 +1095,11 @@ def render_readme(spec: PluginSpec) -> str:
         f"- Function type: **{kind.get(spec.type, spec.type)}**.",
         f"- `owpp deploy --only {spec.id} --dry-run`, then without `--dry-run`.",
     ]
+    if spec.type != "upstream":
+        sections.append(
+            f"- A change is a new version: `owpp version {spec.id} patch` (and say what changed in "
+            "CHANGELOG.md); `owpp check --since origin/main` fails on a change without one."
+        )
     if spec.type == "filter" and spec.global_ is None and not spec.toggle:
         sections.append(
             "- A new filter is made global on its first deploy; set `global:` in plugin.yaml to change that."
@@ -1115,10 +1128,14 @@ _PAGE_HTML = """<!doctype html>
 """
 
 
-def render(spec: PluginSpec) -> dict[str, str]:
-    """The plugin folder's files, {path: text}."""
+def render(spec: PluginSpec, today: str | None = None) -> dict[str, str]:
+    """The plugin folder's files, {path: text}. `today` dates the first CHANGELOG.md entry."""
     validate(spec)
     files = {"plugin.yaml": render_manifest(spec)}
+    if spec.type != "upstream":  # an upstream function's versions are the upstream's
+        files["CHANGELOG.md"] = changelog_text(
+            spec.title, spec.version, ["First version."], today or _dt.date.today().isoformat()
+        )
     if spec.has_code:
         files["function.py"] = render_function(spec)
     files["README.md"] = render_readme(spec)
@@ -1161,9 +1178,59 @@ def render(spec: PluginSpec) -> dict[str, str]:
     return files
 
 
-def write_plugin(directory: Path | str, spec: PluginSpec) -> Path:
+def spec_from_data(data: object, plugin_id: str = "") -> PluginSpec:
+    """A PluginSpec from plain data (a YAML or JSON document): the keys of PluginSpec, with
+    `tool`, `skills` and `source` as mappings of ToolSpec, SkillSpec and SourceSpec, and
+    `buttons` and `models` as lists of {id, name}. `global` may be written for `global_`.
+    Unknown keys are refused, so a typo is not silently a default."""
+    if not isinstance(data, dict):
+        raise OwppError("a plugin spec is a mapping (see docs/creating.md#from-a-spec)")
+    data = dict(data)
+    if "global" in data:
+        data["global_"] = data.pop("global")
+    if plugin_id:
+        data["id"] = plugin_id
+    if not data.get("id"):
+        raise OwppError("the spec needs an id (or give it on the command line)")
+
+    def build(cls, value, label):
+        if not isinstance(value, dict):
+            raise OwppError(f"{label} must be a mapping")
+        known = {f.name for f in fields(cls)}
+        unknown = sorted(set(value) - known)
+        if unknown:
+            shown = ", ".join(sorted(k.rstrip("_") for k in known))
+            raise OwppError(f"{label}: unknown key {', '.join(unknown)} (known: {shown})")
+        return cls(**value)
+
+    def pairs(value, label):
+        out = []
+        for item in value or []:
+            if isinstance(item, dict) and set(item) <= {"id", "name"} and "id" in item:
+                out.append((str(item["id"]), str(item.get("name") or title_of(str(item["id"])))))
+            elif isinstance(item, str):
+                out.append((item, title_of(item)))
+            else:
+                raise OwppError(f"{label}: each entry is an id or {{id, name}}")
+        return out
+
+    if data.get("tool") is not None:
+        data["tool"] = build(ToolSpec, data["tool"], "tool")
+    if data.get("source") is not None:
+        data["source"] = build(SourceSpec, data["source"], "source")
+    data["skills"] = [
+        build(SkillSpec, s if isinstance(s, dict) else {"id": s}, "skills")
+        for s in data.get("skills") or []
+    ]
+    for key in ("buttons", "models"):
+        if key in data:
+            data[key] = pairs(data[key], key)
+    return build(PluginSpec, data, "the spec")
+
+
+def write_plugin(directory: Path | str, spec: PluginSpec, today: str | None = None) -> Path:
     """Write the plugin folder `<directory>/<id>/`. Refuses a folder that exists."""
-    files = render(spec)
+    files = render(spec, today)
     folder = Path(directory) / spec.id
     if folder.exists():
         raise OwppError(f"{folder} already exists")

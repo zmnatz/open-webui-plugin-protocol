@@ -19,7 +19,6 @@ what the tests of `owpp.create` check.
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
@@ -44,7 +43,7 @@ from .create import (
 )
 from .errors import OwppError
 from .events import KNOWN_EVENTS, problem_with
-from .sources import GIT_URL, SHA40
+from .sources import GIT_URL, SHA40, resolve_ref
 
 DOCS = "https://docs.openwebui.com/features/extensibility/"
 # (stages, minutes) for each branch; the first two stages are the same in both.
@@ -240,37 +239,6 @@ def _git_author() -> str:
     except (OSError, subprocess.SubprocessError):
         return ""
     return done.stdout.strip() if done.returncode == 0 else ""
-
-
-def resolve_ref(git: str, ref: str) -> str | None:
-    """The full commit SHA a branch or tag of `git` points at (with `git ls-remote`), or None
-    when it cannot be found. A full SHA is returned as it is."""
-    if SHA40.fullmatch(ref):
-        return ref
-    if not GIT_URL.fullmatch(git) or not shutil.which("git") or ref.startswith("-"):
-        return None
-    try:
-        done = subprocess.run(
-            ["git", "ls-remote", git, ref, f"{ref}^{{}}"],
-            capture_output=True,
-            text=True,
-            timeout=60,
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},  # never wait for a password
-        )
-    except (OSError, subprocess.SubprocessError):
-        return None
-    if done.returncode != 0:
-        return None
-    found = dict(
-        (name, sha)
-        for sha, _, name in (line.partition("\t") for line in done.stdout.splitlines())
-        if SHA40.fullmatch(sha)
-    )
-    # An annotated tag's commit is the peeled ^{} entry; a branch or light tag has just one.
-    for name in (f"refs/tags/{ref}^{{}}", f"refs/heads/{ref}", f"refs/tags/{ref}", ref):
-        if name in found:
-            return found[name]
-    return next(iter(found.values()), None)
 
 
 def _need(text: str, label: str) -> str | None:
@@ -602,7 +570,8 @@ def stage_repository(p: Prompter, resolve: Callable[[str, str], str | None]) -> 
         "Folder in the repository the files are in (Enter for the root)",
         check=lambda t: _repo_path(t) if t else None,
     )
-    return SourceSpec(git, sha, path.strip("/"))
+    track = "" if SHA40.fullmatch(ref) or ref == "HEAD" else ref  # what owpp sync follows
+    return SourceSpec(git, sha, path.strip("/"), track=track)
 
 
 def stage_take(p: Prompter, plugin_id: str, title: str, src: SourceSpec) -> dict:

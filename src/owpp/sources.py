@@ -19,6 +19,8 @@ Value = str | dict
 Fetcher = Callable[[str, str, "list[str]"], "dict[str, Value]"]
 
 SHA40 = re.compile(r"[0-9a-f]{40}")
+# A branch or tag a plugin follows (`source: track:`), as git allows it, never an option.
+TRACK = re.compile(r"[A-Za-z0-9_][A-Za-z0-9._/-]*")
 MAX_SOURCE_BYTES = 2_000_000
 MAX_SKILL_FILES = 1000
 
@@ -41,6 +43,9 @@ def source_key(folder: str, src: object, rel: str, directory: bool = False) -> s
             f"{where}.ref must be a full 40-character commit SHA, not a branch or tag "
             "(those can change under you)"
         )
+    track = text_of(src.get("track"))
+    if track and not TRACK.fullmatch(track):
+        raise OwppError(f"{where}.track must be a branch or tag name (owpp sync follows it)")
     parts = [p for p in [*text_of(src.get("path")).split("/"), *str(rel).split("/")] if p]
     if any(p in ("..", ".") for p in parts):
         raise OwppError(f"{where}: paths may not contain . or ..")
@@ -63,6 +68,42 @@ def _source_files(manifest: dict) -> list[tuple[str, bool]]:
         elif get(sk, "file"):
             files.append((sk["file"], False))
     return files
+
+
+def pick_sha(ls_remote: str, ref: str) -> str | None:
+    """The commit `ref` names in `git ls-remote` output. An annotated tag's commit is its
+    peeled `^{}` entry; a tag wins over a branch of the same name, as in git itself."""
+    found = {
+        name: sha
+        for sha, _, name in (line.partition("\t") for line in ls_remote.splitlines())
+        if SHA40.fullmatch(sha)
+    }
+    names = ["HEAD"] if ref == "HEAD" else []
+    names += [f"refs/tags/{ref}^{{}}", f"refs/tags/{ref}", f"refs/heads/{ref}"]
+    return next((found[n] for n in names if n in found), None)
+
+
+def resolve_ref(git: str, ref: str) -> str | None:
+    """The full commit SHA a branch or tag of `git` points at, looked up with `git ls-remote`
+    (`HEAD`: the default branch), or None when it cannot be found. A SHA is returned as it is."""
+    if SHA40.fullmatch(ref):
+        return ref
+    if not GIT_URL.fullmatch(git) or not (ref == "HEAD" or TRACK.fullmatch(ref)):
+        return None
+    if not shutil.which("git"):
+        return None
+    patterns = ["HEAD"] if ref == "HEAD" else [ref, f"{ref}^{{}}"]
+    try:
+        done = subprocess.run(
+            ["git", "ls-remote", "--", git, *patterns],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={**os.environ, "GIT_ALLOW_PROTOCOL": "https:ssh", "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return pick_sha(done.stdout, ref) if done.returncode == 0 else None
 
 
 def plugin_folders(directory: Path) -> list[Path]:

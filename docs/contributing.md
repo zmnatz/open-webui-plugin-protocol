@@ -17,8 +17,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 | A docstring on each plugin test | the test itself: what it checks, then `By hand:` steps ([describe every test](testing.md#describe-every-test)) | A reviewer repeats them on a live Open-WebUI. The [test catalogue](reference/test-catalogue.md) is built from them. |
 | The guide | `docs/*.md` | When behaviour or a command changes. |
 | A changelog entry | `CHANGELOG.md`, in the section of the version being prepared (`## 0.1.0 (not released yet)` until the first release) | What users will notice. |
-| A decision | `docs/decisions.md` | When you chose one way over another, so the choice can be revisited. |
-| A commit message that says why | git | It becomes the change's entry in the [audit trail](project/audit-trail.md). |
+| A commit message that says why | git | A reviewer reads it with the diff. |
 
 ## Step by step
 
@@ -26,7 +25,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 2. Make the change, until it passes.
 3. Run everything CI runs ([reviewing, step 3](reviewing.md#3-run-it-yourself)).
 4. If you changed a plugin, deploy it to a test instance and do its **By hand** steps yourself.
-5. Update the guide, the changelog and decisions.
+5. Update the guide and the changelog.
 6. Check this site: `uv run --group docs python tools/build_docs.py`. A broken link fails the build.
 7. Open a pull request: say what changed, why, and which live checks you did.
 
@@ -36,8 +35,7 @@ The site is built with [Zensical](https://zensical.org/), configured in `zensica
 
 - the root `CHANGELOG.md`, `SECURITY.md` and `NOTICE.md`, and each example plugin's `README.md`;
 - the examples overview, from each `plugin.yaml`;
-- the test catalogue, from the test docstrings;
-- the audit trail, from `git log`.
+- the test catalogue, from the test docstrings.
 
 Links written for GitHub (`../SECURITY.md`, a plugin's `config.yaml`) are rewritten to the page that carries the file, or to the file on GitHub. A link to a file or heading that does not exist fails the build. `serve` assembles the pages once, so after editing `docs/`, run it again.
 

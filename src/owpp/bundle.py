@@ -30,7 +30,7 @@ import ast
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -883,6 +883,24 @@ class FunctionFile:
     valves: dict | None = None
     name: str = ""
     description: str = ""
+    # The git repository the plugin takes code from, and the commit: {"<git>[ <path>]": sha}.
+    sources: dict = field(default_factory=dict)
+
+
+def runtime_data(content: str | None) -> dict:
+    """The tool and skills a function bundle installs (its embedded runtime data):
+    {"tools": [...], "skills": [...]}, empty for code with none."""
+    m = re.search(r'_PLUGIN = _json\.loads\((".*")\)\n', content or "")
+    if not m:
+        return {"tools": [], "skills": []}
+    data = json.loads(json.loads(m.group(1)))
+    return {"tools": data.get("tools", []), "skills": data.get("skills", [])}
+
+
+def source_label(source: dict) -> str:
+    """How a `source:` is named in a report and in a deployed function's meta."""
+    path = text_of(source.get("path")).strip("/")
+    return f"{text_of(source.get('git'))}{f' {path}' if path else ''}"
 
 
 def _make_item(
@@ -946,16 +964,19 @@ def load_function_files(
             content = bundle_function(folder, remote)
             if content is None:
                 continue
-            fn = read_manifest(folder)["function"]
+            manifest = read_manifest(folder)
+            fn = manifest["function"]
             declared = fn.get("global")
-            loaded.append(
-                _make_item(
-                    "function",
-                    e.name,
-                    f"{e.name}/",
-                    content,
-                    valves=fn.get("valves"),
-                    global_=declared if isinstance(declared, bool) and "file" in fn else None,
-                )
+            item = _make_item(
+                "function",
+                e.name,
+                f"{e.name}/",
+                content,
+                valves=fn.get("valves"),
+                global_=declared if isinstance(declared, bool) and "file" in fn else None,
             )
+            src = manifest.get("source")
+            if isinstance(src, dict):
+                item.sources = {source_label(src): text_of(src.get("ref"))}
+            loaded.append(item)
     return loaded

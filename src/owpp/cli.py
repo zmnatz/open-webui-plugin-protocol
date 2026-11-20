@@ -5,6 +5,8 @@
   owpp bundle <id> [out.py]          print (or write) the exact code that would be deployed
   owpp deploy [--only id,id] [--dry-run] [--force-prune] [--managed-by marker]
   owpp test [id ...] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
+  owpp sync [id ...] [--dry-run] [--bump part]   move plugins taken from git to their latest commit
+  owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
   owpp create [id]                   a wizard: asks what the plugin is, then writes it
   owpp init <id> [--type event|filter|action|pipe]   scaffold a plugin folder
 
@@ -16,9 +18,7 @@ from __future__ import annotations
 import argparse
 import ast
 import builtins
-import json
 import os
-import re
 import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
@@ -26,12 +26,14 @@ from pathlib import Path
 import yaml
 
 from . import __version__
-from .bundle import FunctionFile, env_references, load_function_files
-from .create import CLASS, PluginSpec, write_plugin
+from .bundle import FunctionFile, env_references, load_function_files, runtime_data
+from .create import CLASS, PluginSpec, spec_from_data, write_plugin
 from .deploy import options_from_env, run_deploy
 from .errors import OwppError
 from .lint import lint_notes, lint_plugin
+from .manifest import parse_yaml, read_text
 from .sources import fetch_sources, plugin_folders, source_keys
+from .versioning import bump, changelog_problem, check_since, version_of, versions_of
 
 # ---- check --------------------------------------------------------------------
 
@@ -89,8 +91,7 @@ def check_bundle(code: str, name: str = "bundle.py") -> str | None:
 
 def bundle_parts(fn: FunctionFile) -> list[tuple[str, str]]:
     """The function bundle, then each tool bundle the runtime embeds for it."""
-    m = re.search(r'_PLUGIN = _json\.loads\((".*")\)\n', fn.content)
-    tools = json.loads(json.loads(m.group(1))).get("tools", []) if m else []
+    tools = runtime_data(fn.content)["tools"]
     return [(fn.id, fn.content)] + [
         (f"tool {t['id']}", t["content"]) for t in tools if not t.get("self")
     ]
@@ -141,6 +142,11 @@ def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
             warnings += 1
         for finding in lint_notes(directory / fn.file.rstrip("/"), fn.file.rstrip("/")):
             print(f"note  {finding}")
+        if fn.file.endswith("/"):
+            problem = changelog_problem(directory / fn.id, version_of(fn.content))
+            if problem:
+                print(f"warn  {fn.id}/{problem}")
+                warnings += 1
         if fn.file.endswith("/"):  # a plugin folder: say which environment variables it reads
             for var, default in env_references(directory / fn.id):
                 shown = (
@@ -151,9 +157,41 @@ def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
                     else "default empty"
                 )
                 print(f"env   {var} ({shown})")
+    if args.since:
+        chosen = [f for f in all_functions if not args.ids or f.id in args.ids]
+        for finding in check_since(directory, args.since, args.ids, new_files=chosen):
+            print(f"FAIL  {finding}")
+            bad += 1
     if warnings:
         print(f"{warnings} warning(s){'; failing because of --strict' if args.strict else ''}")
     return 1 if bad or (args.strict and warnings) else 0
+
+
+def _cmd_version(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    if args.how is None:  # show
+        if args.tool or args.skill or args.message:
+            print("--tool, --skill and -m go with a new version: patch, minor, major or X.Y.Z")
+            return 1
+        ids = (
+            [args.id]
+            if args.id
+            else [f.name for f in plugin_folders(directory)]
+            + sorted(p.stem for p in directory.glob("*.py"))
+        )
+        for plugin_id in ids:
+            for i, (what, version) in enumerate(versions_of(directory, plugin_id)):
+                name = plugin_id if i == 0 else f"  {what}"
+                print(f"{name:<28}{version or '(no version)'}")
+        return 0
+    if not args.id:
+        print("say which plugin: owpp version <id> patch|minor|major|X.Y.Z")
+        return 1
+    for b in bump(directory, args.id, args.how, args.tool, args.skill, args.message or ""):
+        print(f"{b.what}: {b.old or '(no version)'} -> {b.new} ({b.file})")
+    changelog = directory / args.id / "CHANGELOG.md"
+    if not (args.tool or args.skill or args.message) and changelog.exists():
+        print(f"now say what changed, in the new entry of {changelog}")
+    return 0
 
 
 def _cmd_bundle(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -179,6 +217,11 @@ def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         dry_run=args.dry_run,
         force_prune=args.force_prune,
         managed_by=args.managed_by,
+        sync=args.sync,
+        force=args.force,
+        ca_cert=args.ca_cert,
+        client_cert=args.client_cert,
+        client_key=args.client_key,
     )
     return run_deploy(opts, env)
 
@@ -231,6 +274,14 @@ def _cmd_init(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
     return 0
 
 
+def _cmd_sync(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    from .sync import sync
+
+    if not directory.exists():
+        raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
+    return sync(directory, args.ids, dry_run=args.dry_run, bump_by=args.bump)
+
+
 def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
     from .wizard import run_wizard
 
@@ -238,6 +289,15 @@ def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         print()
         return main(["check", plugin_id, "--strict", "--dir", str(folder)], env)
 
+    if args.spec:  # no questions: the plugin described in a file (for scripts and agents)
+        text = sys.stdin.read() if args.spec == "-" else read_text(args.spec)
+        try:
+            data = parse_yaml(text)
+        except yaml.YAMLError as e:
+            raise OwppError(f"{args.spec}: not valid YAML or JSON ({e})") from e
+        folder = write_plugin(directory, spec_from_data(data, args.id or ""))
+        print(f"created {folder}")
+        return check(directory, folder.name)
     return run_wizard(directory, args.id or "", check=check)
 
 
@@ -245,7 +305,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="owpp",
         description="Write, test and deploy Open-WebUI plugins from a git repository.",
-        epilog="deploy needs OPEN_WEBUI_URL and OPEN_WEBUI_API_KEY. Docs: docs/README.md",
+        epilog="deploy needs OPEN_WEBUI_URL, and signs in with OPEN_WEBUI_API_KEY, "
+        "OPEN_WEBUI_USERNAME and OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing. "
+        "Docs: docs/tooling.md#signing-in",
     )
     parser.add_argument("--version", action="version", version=f"owpp {__version__}")
     common = argparse.ArgumentParser(add_help=False)
@@ -265,14 +327,49 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument(
         "--strict",
         action="store_true",
-        help="fail on warnings too (valves with no description, poorly described tools)",
+        help="fail on warnings too (valves with no description, poorly described tools, "
+        "a CHANGELOG.md with no entry for the version)",
+    )
+    check.add_argument(
+        "--since",
+        metavar="ref",
+        help="also fail when a plugin changed since this git ref (e.g. origin/main) but its "
+        "version did not",
     )
     bundle = add("bundle", _cmd_bundle, "print (or write) the code that would be deployed")
     bundle.add_argument("id")
     bundle.add_argument("out", nargs="?", metavar="out.py")
     deploy = add("deploy", _cmd_deploy, "deploy the plugins to an Open-WebUI instance")
     deploy.add_argument("--only", metavar="id,id", help="deploy just these (no pruning)")
-    deploy.add_argument("--dry-run", action="store_true", help="list what would change")
+    deploy.add_argument(
+        "--ca-cert",
+        metavar="PEM",
+        help="a PEM file of CA certificates to trust besides the system's (default "
+        "$OPEN_WEBUI_CA_CERT)",
+    )
+    deploy.add_argument(
+        "--client-cert",
+        metavar="PEM",
+        help="a client certificate to present, for mutual TLS (default $OPEN_WEBUI_CLIENT_CERT)",
+    )
+    deploy.add_argument(
+        "--client-key",
+        metavar="PEM",
+        help="its private key, when not in the same file (default $OPEN_WEBUI_CLIENT_KEY)",
+    )
+    deploy.add_argument(
+        "--dry-run", action="store_true", help="list what would change, with versions"
+    )
+    deploy.add_argument(
+        "--force",
+        action="store_true",
+        help="deploy even where the instance runs a newer version (a downgrade)",
+    )
+    deploy.add_argument(
+        "--sync",
+        action="store_true",
+        help="with --dry-run: at the latest commit each git-sourced plugin tracks (owpp sync)",
+    )
     deploy.add_argument(
         "--force-prune",
         action="store_true",
@@ -283,8 +380,34 @@ def build_parser() -> argparse.ArgumentParser:
     )
     test = add("test", _cmd_test, "run each plugin's tests/ against a mock Open-WebUI")
     test.add_argument("ids", nargs="*", metavar="id", help="plugins to test (default: all)")
+    sync = add("sync", _cmd_sync, "move plugins taken from git to the latest commit they track")
+    sync.add_argument("ids", nargs="*", metavar="id", help="plugins to sync (default: all)")
+    sync.add_argument("--dry-run", action="store_true", help="say what would move; write nothing")
+    sync.add_argument(
+        "--bump",
+        choices=["patch", "minor", "major", "none"],
+        default="patch",
+        help="bump a moved plugin's version, with a CHANGELOG.md entry (default patch)",
+    )
+    version = add(
+        "version", _cmd_version, "show the versions of the plugins, or give one a new version"
+    )
+    version.add_argument("id", nargs="?", help="the plugin (default: every plugin, shown)")
+    version.add_argument(
+        "how", nargs="?", help="the new version: patch, minor, major or X.Y.Z (default: show)"
+    )
+    version.add_argument("--tool", action="store_true", help="the tool's version")
+    version.add_argument("--skill", metavar="name", help="that skill's version")
+    version.add_argument(
+        "-m", "--message", help="the CHANGELOG.md entry (for the plugin's own version)"
+    )
     create = add("create", _cmd_create, "create a plugin, answering a few questions (a wizard)")
     create.add_argument("id", nargs="?", help="the plugin id (asked if left out)")
+    create.add_argument(
+        "--spec",
+        metavar="FILE",
+        help="ask nothing: create the plugin a YAML or JSON file describes (- reads stdin)",
+    )
     init = add("init", _cmd_init, "scaffold a plugin folder")
     init.add_argument("id")
     init.add_argument("--type", choices=list(CLASS), default="event")

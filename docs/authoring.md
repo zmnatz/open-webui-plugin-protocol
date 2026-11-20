@@ -31,7 +31,7 @@ A plugin that serves HTTP routes from a **filter** (Excalidraw) mounts them when
 8. **Own only what you made.** Mark what a sync writes (`managed_by`) and touch only that.
 9. **Log with a fixed prefix** (`"My Plugin: ..."`) so a plugin's lines can be found.
 10. **Public is deliberate.** Every route needs a signed-in user. Mount with `plugin_mount`, which enforces that, `static/` files included, and mark a route that exposes other users' data `user: PluginAdmin`. Serving people who are not signed in takes `access="public"` on a mount of its own (or `static: {access: public}`), in those exact words; `owpp check` lists each one, so keep them few. An admin route is marked on the handler: `async def purge(user: PluginAdmin)`; a mount where every route is admin-only uses `plugin_mount(..., access="admin")`; the static files use `static: {access: admin}`. A route about one chat takes `chat_id: WritableChat` or `ReadableChat`, which checks that this user can reach that chat. Whatever those cannot express is still the function's, using the `user` it is given.
-11. **Third-party code is pinned** by full commit SHA and reviewed before the SHA moves.
+11. **Third-party code is pinned** by full commit SHA and reviewed before the SHA moves (`owpp sync` moves it; you review and commit).
 
 ## Steps
 
@@ -64,3 +64,4 @@ For a plugin taken from git, also say where it comes from, the pinned commit, an
 - [ ] data-exposing routes are gated
 - [ ] a page in the Artifacts panel: README states the same-origin requirement and its cost
 - [ ] remote code pinned to a full SHA
+- [ ] a change has a new version (`owpp version <id> patch`, and a CHANGELOG.md entry); `owpp check --since origin/main` passes

@@ -115,7 +115,7 @@ The tool stage defaults to yes for an installer. If it has no tool, the skills s
 | --- | --- |
 | 1. Name the plugin | The id and title |
 | 2. Where the code lives | git |
-| 3. The repository | The URL (https, ssh or `user@host:path`; never a local path). A branch, tag or commit: a branch or tag is looked up with `git ls-remote` and pinned to its full commit SHA, and if that fails (offline, a private repository, no such ref) you type the SHA. The folder in the repository the files are in |
+| 3. The repository | The URL (https, ssh or `user@host:path`; never a local path). A branch, tag or commit: a branch or tag is looked up with `git ls-remote` and pinned to its full commit SHA, and recorded as `track:` for [`owpp sync`](tooling.md#owpp-sync-moving-a-pinned-commit); if the lookup fails (offline, a private repository, no such ref) you type the SHA. The folder in the repository the files are in |
 | 4. What it takes | The function itself (its file, taken verbatim with its header). A tool (its file and id). Skills (each one's id, and its folder or its `SKILL.md`). `access: public` for the tool and each skill |
 | 5. Describe it, or Global? | Without the function, it is an installer and asks for its header. With the function, the header comes from the file, and the only question is whether to make it global (filters and actions only) |
 | 6. Review and write | Yes or no |
@@ -128,6 +128,7 @@ source:
   git: "https://github.com/Classic298/open-webui-plugins.git"
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea
   path: inline-visualizer-v2
+  track: main
 function:
   title: Viz
   ...
@@ -142,11 +143,12 @@ skills:
     access: public
 ```
 
-The README states where the code comes from, the pinned commit and how to upgrade it: review the upstream diff, then set `ref` to the new SHA. The tests fetch the pinned files, so they need the network. The test file says how to load the plugin with stand-ins instead (`owui.load(plugin_dir, sources={...})`), as [`inline_visualizer`](../examples/plugins/inline_visualizer) does. See [bundling: git sources](bundling.md#git-sources).
+The README states where the code comes from, the pinned commit and how to upgrade it: `owpp sync <id>` moves `ref` to the latest commit and lists the files that changed, and you review the diff before committing. The tests fetch the pinned files, so they need the network. The test file says how to load the plugin with stand-ins instead (`owui.load(plugin_dir, sources={...})`), as [`inline_visualizer`](../examples/plugins/inline_visualizer) does. See [bundling: git sources](bundling.md#git-sources).
 
 ## What it writes, in every case
 
 - **`plugin.yaml`**, with comments that say where each part goes.
+- **`CHANGELOG.md`**, with an entry for the first version (not for an upstream function, whose versions are the upstream's). [`owpp version`](tooling.md#versions) adds the next ones.
 - **`README.md`**, with the sections the [authoring guide](authoring.md#documentation-the-readme-every-plugin-has) requires: a description, settings, `## Test` and `## Deploy`.
 - **`tests/test_<id>.py`**, with one test per part: the valves, the type's entry point (a chat through the filter, the action's button, the pipe's models, startup), the tool and each method, the skills, the page and who may open it, the config. Each test has the docstring and the `By hand:` steps that [testing](testing.md#describe-every-test) asks for.
 
@@ -170,6 +172,26 @@ owpp deploy --only my_plugin --dry-run          # then without --dry-run
 ```
 
 Then follow the [authoring guide](authoring.md): its conventions and its checklist.
+
+## From a spec
+
+`owpp create --spec <file>` asks nothing: the file says what the wizard would have asked, as YAML or JSON (`-` reads it from stdin), and it writes the plugin and checks it. It is for scripts and [AI agents](ai-agents.md). An id on the command line wins over the file's.
+
+```yaml
+id: notes
+type: filter                 # filter | action | event | pipe | installer | upstream
+description: Keeps notes on the chat.
+hooks: [inlet, outlet]
+toggle: false
+tool: {id: notes, methods: [save, search]}
+skills:
+  - {id: take-notes, description: Use when the user asks to remember something.}
+page: rendered
+page_access: admin
+chat_data: true
+```
+
+The keys are those of `PluginSpec` (below), with `tool`, `skills` and `source` as mappings and `buttons` and `models` as lists of ids or `{id, name}`. `global` may be written for `global_`. A key it does not know is refused, so a typo is never a silent default. The full list, with a plugin from git, is in the [owpp skill's spec reference](../skills/owpp/references/spec.md).
 
 ## From code
 

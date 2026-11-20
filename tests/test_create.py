@@ -20,6 +20,7 @@ from owpp.create import (
     SourceSpec,
     ToolSpec,
     render,
+    spec_from_data,
     write_plugin,
 )
 from owpp.errors import OwppError
@@ -242,7 +243,9 @@ class TestFromGit:
     def test_it_writes_no_code_of_its_own(self, from_git):
         for spec in GIT_SPECS:
             names = {p.name for p in (from_git / spec.id).iterdir()}
-            assert names == {"plugin.yaml", "README.md", "tests"}
+            # An installer's version is ours, so it has a changelog; an upstream function's is not.
+            changelog = {"CHANGELOG.md"} if spec.type == "installer" else set()
+            assert names == {"plugin.yaml", "README.md", "tests"} | changelog
             readme = (from_git / spec.id / "README.md").read_text()
             assert SHA in readme and "To upgrade" in readme
 
@@ -444,7 +447,8 @@ class TestWizard:
         assert read.left == [] and looked_up == [(GIT, "v1.2")]
         assert "Stage 6/6 · Review and write" in out and f"v1.2 is commit {SHA}" in out
         m = read_manifest(tmp_path / "viz")
-        assert m["source"] == {"git": GIT, "ref": SHA, "path": "plugins/viz"}
+        # The tag it was given is what owpp sync follows.
+        assert m["source"] == {"git": GIT, "ref": SHA, "path": "plugins/viz", "track": "v1.2"}
         assert m["tool"] == {"id": "viz", "file": "tool.py", "access": "public"}
         assert m["skills"] == {"visualize": {"dir": "skills/visualize", "access": "public"}}
 
@@ -506,3 +510,65 @@ def test_a_full_sha_needs_no_lookup():
     """resolve_ref asks git only for a branch or tag."""
     assert resolve_ref("https://example.invalid/repo.git", SHA) == SHA
     assert resolve_ref("/not/a/url", "main") is None
+
+
+class TestFromASpec:
+    """`owpp create --spec FILE`: the same plugin the wizard makes, described as data, for
+    scripts and agents that cannot answer questions."""
+
+    def test_a_spec_file_makes_the_plugin_and_checks_it(self, tmp_path, capsys):
+        spec = tmp_path / "notes.yaml"
+        spec.write_text(
+            "id: notes\ntype: filter\nglobal: false\nhooks: [inlet, outlet]\n"
+            "tool: {id: notes, methods: [save, search]}\n"
+            "skills:\n  - {id: take-notes, description: Use it to remember.}\n  - draw\n"
+            "page: rendered\npage_access: admin\n"
+        )
+        assert main(["create", "--spec", str(spec), "--dir", str(tmp_path / "p")], env={}) == 0
+        assert "ok    notes" in capsys.readouterr().out
+        folder = tmp_path / "p" / "notes"
+        m = read_manifest(folder)
+        assert m["function"]["global"] is False and m["tool"]["id"] == "notes"
+        assert sorted(p.name for p in (folder / "skills").iterdir()) == ["draw", "take-notes"]
+        assert (folder / "templates" / "page.html").is_file()
+
+    def test_json_on_stdin_and_the_id_on_the_command_line(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(
+            sys,
+            "stdin",
+            io.StringIO(
+                '{"type": "action", "buttons": ["summarize", {"id": "tr", "name": "Translate"}]}'
+            ),
+        )
+        assert main(["create", "act", "--spec", "-", "--dir", str(tmp_path)], env={}) == 0
+        code = (tmp_path / "act" / "function.py").read_text()
+        assert '{"id": "summarize", "name": "Summarize"}, {"id": "tr", "name": "Translate"}' in code
+
+    def test_a_plugin_from_git(self, tmp_path):
+        spec = spec_from_data(
+            {
+                "id": "viz",
+                "type": "installer",
+                "source": {"git": GIT, "ref": SHA, "path": "v2", "track": "main"},
+                "tool": {"id": "viz", "file": "tool.py"},
+                "skills": [{"id": "visualize", "path": "SKILL.md", "is_dir": False}],
+            }
+        )
+        m = read_manifest(write_plugin(tmp_path, spec))
+        assert m["source"]["track"] == "main" and m["skills"] == {
+            "visualize": {"file": "SKILL.md", "access": "public"}
+        }
+
+    @pytest.mark.parametrize(
+        "data, message",
+        [
+            ({"id": "p", "tpye": "filter"}, "unknown key tpye"),
+            ({"id": "p", "tool": {"id": "t", "metods": []}}, "tool: unknown key metods"),
+            ({"type": "filter"}, "needs an id"),
+            ([1, 2], "is a mapping"),
+            ({"id": "p", "type": "action", "buttons": [3]}, "an id or"),
+        ],
+    )
+    def test_what_it_refuses(self, data, message):
+        with pytest.raises(OwppError, match=message):
+            spec_from_data(data)

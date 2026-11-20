@@ -17,20 +17,34 @@ them all.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
+import shutil
+import ssl
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, NamedTuple
 
 from .bundle import VALID_ID, FunctionFile, load_function_files
 from .errors import OwppError
-from .sources import Fetcher, fetch_sources, git_fetcher, source_keys
+from .sources import Fetcher, fetch_sources, git_fetcher, plugin_folders, source_keys
+from .versioning import (
+    is_older,
+    own_code,
+    same,
+    skill_version,
+    skills_of,
+    tool_version,
+    tools_of,
+    version_of,
+)
 
 API = "/api/v1/functions"
 
@@ -57,27 +71,109 @@ Fetch = Callable[[str, str, "dict[str, str] | None", "bytes | None"], HttpRespon
 
 
 def urllib_fetch(
-    method: str, url: str, headers: dict[str, str] | None = None, body: bytes | None = None
+    method: str,
+    url: str,
+    headers: dict[str, str] | None = None,
+    body: bytes | None = None,
+    context: ssl.SSLContext | None = None,
 ) -> HttpResponse:
     request = urllib.request.Request(url, data=body, headers=headers or {}, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310 (admin-chosen URL)
+        with urllib.request.urlopen(request, timeout=60, context=context) as response:  # noqa: S310 (admin-chosen URL)
             return HttpResponse(response.status, response.read().decode("utf-8", "replace"))
     except urllib.error.HTTPError as e:
         return HttpResponse(e.code, e.read().decode("utf-8", "replace"))
 
 
+# ---- TLS: a CA to trust, a client certificate to present ------------------------
+
+
+def _is_pem(value: str) -> bool:
+    return "-----BEGIN " in value
+
+
+def _pem_file(value: str, label: str, work: Path) -> str:
+    """A PEM given as a path, or as its text (then written to a private file in `work`)."""
+    if _is_pem(value):
+        path = work / f"{label}.pem"
+        path.touch(mode=0o600)
+        path.write_text(value if value.endswith("\n") else value + "\n")
+        return str(path)
+    if not Path(value).expanduser().is_file():
+        raise OwppError(f"{label}: no file {value} (give a path to a PEM file, or the PEM itself)")
+    return str(Path(value).expanduser())
+
+
+def tls_context(
+    ca_cert: str = "", client_cert: str = "", client_key: str = ""
+) -> ssl.SSLContext | None:
+    """The TLS settings for talking to Open-WebUI, or None for Python's defaults.
+
+    `ca_cert`: certificates to trust besides the system's (a private CA, or a self-signed
+    server). `client_cert` (and `client_key`, when the key is not in the same PEM): the
+    certificate to present to a server or proxy that asks for one (mutual TLS). Each is a path
+    to a PEM file, or the PEM text itself (as a CI secret holds it)."""
+    if not (ca_cert or client_cert or client_key):
+        return None
+    if client_key and not client_cert:
+        raise OwppError("OPEN_WEBUI_CLIENT_KEY needs OPEN_WEBUI_CLIENT_CERT")
+    context = ssl.create_default_context()  # the system's CAs, and verification on
+    try:
+        if ca_cert:
+            if _is_pem(ca_cert):
+                context.load_verify_locations(cadata=ca_cert)
+            else:
+                context.load_verify_locations(
+                    cafile=_pem_file(ca_cert, "OPEN_WEBUI_CA_CERT", Path())
+                )
+        if client_cert:
+            with tempfile.TemporaryDirectory(prefix="owpp-tls-") as work:
+                cert = _pem_file(client_cert, "OPEN_WEBUI_CLIENT_CERT", Path(work))
+                key = (
+                    _pem_file(client_key, "OPEN_WEBUI_CLIENT_KEY", Path(work))
+                    if client_key
+                    else None
+                )
+                context.load_cert_chain(cert, key)  # read now: the files can go
+    except ssl.SSLError as e:
+        raise OwppError(f"a certificate could not be loaded: {e}") from e
+    return context
+
+
 @dataclass
 class Options:
     base_url: str
-    api_key: str
+    # An API key, or the session token signing in gave; empty: sign in first. Never shown.
+    api_key: str = field(repr=False)
     dir: Path
     dry_run: bool = False
     force_prune: bool = False
     only: list[str] | None = None
     managed_by: str = MANAGED_BY
+    # With dry_run: report against the latest commit each git-sourced plugin tracks, not the
+    # pinned one (as if `owpp sync` had run), without changing plugin.yaml.
+    sync: bool = False
+    # Deploy even where the live version is newer than the repository's (a downgrade).
+    force: bool = False
     fetch: Fetch = field(default=urllib_fetch, repr=False)
     git_fetcher: Fetcher = field(default=git_fetcher, repr=False)
+    resolve: Callable[[str, str], str | None] | None = field(default=None, repr=False)
+    # TLS (tls_context): a CA to trust, a client certificate (and key) to present.
+    ca_cert: str = field(default="", repr=False)
+    client_cert: str = field(default="", repr=False)
+    client_key: str = field(default="", repr=False)
+
+    def __post_init__(self) -> None:
+        context = tls_context(self.ca_cert, self.client_cert, self.client_key)
+        if context is not None and self.fetch is urllib_fetch:
+            self.fetch = functools.partial(urllib_fetch, context=context)
+
+    # Without an API key, the deploy signs in (sign_in): with a user name (an email, or an LDAP
+    # user) and a password, with an OIDC token for an OAuth provider, or with nothing at all.
+    username: str = ""
+    password: str = field(default="", repr=False)
+    oidc_token: str = field(default="", repr=False)
+    oauth_provider: str = "oidc"
 
 
 def options_from_env(
@@ -88,12 +184,21 @@ def options_from_env(
     dry_run: bool = False,
     force_prune: bool = False,
     managed_by: str | None = None,
+    sync: bool = False,
+    force: bool = False,
+    ca_cert: str | None = None,
+    client_cert: str | None = None,
+    client_key: str | None = None,
 ) -> Options:
     """Flags win over the environment, which wins over the defaults."""
     env = os.environ if env is None else env
     return Options(
         base_url=env.get("OPEN_WEBUI_URL", "").rstrip("/"),
         api_key=env.get("OPEN_WEBUI_API_KEY", ""),
+        username=env.get("OPEN_WEBUI_USERNAME", ""),
+        password=env.get("OPEN_WEBUI_PASSWORD", ""),
+        oidc_token=env.get("OPEN_WEBUI_OIDC_TOKEN", ""),
+        oauth_provider=env.get("OPEN_WEBUI_OAUTH_PROVIDER", "") or "oidc",
         dir=Path(
             dir or env.get("OWPP_PLUGINS_DIR") or env.get("FUNCTIONS_DIR") or "plugins"
         ).resolve(),
@@ -101,6 +206,11 @@ def options_from_env(
         force_prune=force_prune,
         only=[i for i in only.split(",") if i] if only else None,
         managed_by=managed_by or env.get("OWPP_MANAGED_BY") or MANAGED_BY,
+        sync=sync,
+        force=force,
+        ca_cert=ca_cert or env.get("OPEN_WEBUI_CA_CERT", ""),
+        client_cert=client_cert or env.get("OPEN_WEBUI_CLIENT_CERT", ""),
+        client_key=client_key or env.get("OPEN_WEBUI_CLIENT_KEY", ""),
     )
 
 
@@ -123,6 +233,105 @@ def _field(obj: Any, key: str) -> Any:
     return obj.get(key) if isinstance(obj, dict) else None
 
 
+# ---- signing in ---------------------------------------------------------------
+
+AUTHS = "/api/v1/auths"
+
+
+def _post_signin(opts: Options, path: str, body: dict) -> tuple[dict | None, str]:
+    """POST to one of Open-WebUI's sign-in endpoints: (its result, "") or (None, why not)."""
+    res = opts.fetch(
+        "POST",
+        f"{opts.base_url}{AUTHS}{path}",
+        {"Content-Type": "application/json", "Accept": "application/json"},
+        json.dumps(body).encode("utf-8"),
+    )
+    try:
+        data = json.loads(res.text)
+    except ValueError:
+        data = None
+    if res.ok and isinstance(data, dict) and data.get("token"):
+        return data, ""
+    detail = data.get("detail") if isinstance(data, dict) else None
+    return None, f"HTTP {res.status}{f': {detail}' if detail else ''}"
+
+
+def sign_in(opts: Options) -> str:
+    """The credential the deploy uses, and how it was obtained. An API key is used as it is.
+    Otherwise it signs in, as the person opening Open-WebUI would, and uses the session token:
+
+    - a user name and password: Open-WebUI's own accounts (the user name is the email), then,
+      if that fails, LDAP;
+    - an OIDC token: exchanged at /oauth/<provider>/token/exchange, which the instance must
+      allow (ENABLE_OAUTH_TOKEN_EXCHANGE=true);
+    - nothing: an empty sign-in, which Open-WebUI answers when sign-in is switched off
+      (WEBUI_AUTH=False) or a proxy in front of it adds the trusted email header.
+
+    The account must be an admin. Sets opts.api_key; raises OwppError when it cannot sign in."""
+    if opts.api_key:
+        return "an API key"
+    if bool(opts.username) != bool(opts.password):
+        raise OwppError("OPEN_WEBUI_USERNAME and OPEN_WEBUI_PASSWORD go together: set both")
+    if opts.username:
+        how = f"user {opts.username}"
+        result, why = _post_signin(
+            opts, "/signin", {"email": opts.username, "password": opts.password}
+        )
+        if result is None:
+            result, ldap_why = _post_signin(
+                opts, "/ldap", {"user": opts.username, "password": opts.password}
+            )
+            if result is None:
+                raise OwppError(
+                    f"could not sign in as {opts.username}: with a password ({why}), "
+                    f"with LDAP ({ldap_why})"
+                )
+            how = f"LDAP user {opts.username}"
+    elif opts.oidc_token:
+        provider = opts.oauth_provider.strip().lower()
+        if not VALID_ID.fullmatch(provider.replace("-", "_")):
+            raise OwppError(f"OPEN_WEBUI_OAUTH_PROVIDER {provider!r} is not a provider name")
+        how = f"an OIDC token ({provider})"
+        result, why = _post_signin(
+            opts, f"/oauth/{provider}/token/exchange", {"token": opts.oidc_token}
+        )
+        if result is None:
+            raise OwppError(
+                f"could not exchange the OIDC token with provider {provider} ({why}). The "
+                "instance must set ENABLE_OAUTH_TOKEN_EXCHANGE=true and have that provider "
+                "configured; set OPEN_WEBUI_OAUTH_PROVIDER if it is not called oidc"
+            )
+    else:
+        how = "an open sign-in"
+        result, why = _post_signin(opts, "/signin", {"email": "", "password": ""})
+        if result is None:
+            raise OwppError(
+                f"no credentials, and Open-WebUI did not sign in without them ({why}). Set "
+                "OPEN_WEBUI_API_KEY (an admin's API key), OPEN_WEBUI_USERNAME and "
+                "OPEN_WEBUI_PASSWORD, or OPEN_WEBUI_OIDC_TOKEN"
+            )
+    role = result.get("role")
+    if role is not None and role != "admin":
+        who = result.get("email") or result.get("name") or "that account"
+        raise OwppError(f"signed in with {how} as {who}, who is not an admin (role {role})")
+    opts.api_key = str(result["token"])
+    return how
+
+
+def _tls_hint(error: ssl.SSLError) -> str:
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return (
+            f"{error.verify_message or error}: give the CA that signed its certificate with "
+            "OPEN_WEBUI_CA_CERT (or --ca-cert)"
+        )
+    text = str(error)
+    if "CERTIFICATE_REQUIRED" in text or "HANDSHAKE_FAILURE" in text:
+        return (
+            f"{text}: it may want a client certificate, OPEN_WEBUI_CLIENT_CERT (or --client-cert)"
+        )
+    return text
+
+
 def wait_for_health(opts: Options, attempts: int = 6, delay: float = 30.0) -> None:
     """Open-WebUI may still be starting (the stack redeploys on the same push). Six tries
     30 s apart (~3 min); rerun the workflow if a redeploy takes longer."""
@@ -130,8 +339,11 @@ def wait_for_health(opts: Options, attempts: int = 6, delay: float = 30.0) -> No
         try:
             if opts.fetch("GET", f"{opts.base_url}/health", None, None).ok:
                 return
-        except OSError:
-            pass  # not up yet
+        except OSError as e:
+            reason = getattr(e, "reason", e)
+            if isinstance(reason, ssl.SSLError):  # waiting will not fix a certificate
+                raise OwppError(f"{opts.base_url}: TLS failed ({_tls_hint(reason)})") from e
+            # otherwise: not up yet
         if i < attempts - 1:
             time.sleep(delay)
     raise OwppError(f"{opts.base_url}/health did not answer in time")
@@ -184,6 +396,7 @@ def plan_deploy(
                 _norm(existing.get("content")) == _norm(replace_imports(f.content))
                 and meta.get("managed_by") == managed_by
                 and (meta.get("description") or "") == f.description
+                and (meta.get("sources") or {}) == f.sources
             )
             plan.append(PlanItem(f, "unchanged" if same else "update", existing))
     return plan
@@ -211,6 +424,78 @@ class Result:
     action: str
     kind: str = "function"
     type: str | None = None
+    version: str = ""  # the function's version, from its header
+    details: list[str] = field(default_factory=list)  # what changes: versions, tools, skills
+    downgrades: list[str] = field(default_factory=list)  # parts older than the live version
+
+
+# ---- what changes, in versions ------------------------------------------------
+
+
+def _from_to(old: str, new: str) -> str:
+    return f"{old or '(no version)'} -> {new or '(no version)'}"
+
+
+@dataclass
+class Changes:
+    """What deploying a function changes: `details` for the report, and `downgrades`, the
+    parts whose new version is older than the live one."""
+
+    details: list[str] = field(default_factory=list)
+    downgrades: list[str] = field(default_factory=list)
+
+    def version_change(self, label: str, old: str, new: str) -> None:
+        if is_older(new, old):
+            self.downgrades.append(f"{label} {old} -> {new}")
+            self.details.append(f"{label}: {_from_to(old, new)}, OLDER than the live version")
+        else:
+            self.details.append(f"{label}: {_from_to(old, new)}")
+
+
+def _parts(changes: Changes, kind: str, old: dict, new: dict, version) -> None:
+    """One line per tool (or skill) that is added, removed or changed."""
+    for item_id in sorted(set(old) | set(new)):
+        a, b = old.get(item_id), new.get(item_id)
+        label = f"{kind} `{item_id}`"
+        if a is None:
+            v = version(b)
+            changes.details.append(f"{label}: new{f' ({v})' if v else ''}")
+        elif b is None:
+            changes.details.append(f"{label}: removed")
+        elif not same(a, b):
+            va, vb = version(a), version(b)
+            if va != vb:
+                changes.version_change(label, va, vb)
+            else:
+                changes.details.append(f"{label}: changed, still {vb or '(no version)'}")
+
+
+def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, str]) -> Changes:
+    """What deploying `f` changes, by version: the function, each tool and skill it installs,
+    and the commit of the git repository it takes code from. `existing` is the live function
+    (with its content), or None; `latest` notes which sources were moved to their latest commit."""
+    old = existing.get("content") if existing else None
+    changes = Changes()
+    old_v, new_v = version_of(old), version_of(f.content)
+    if existing is None:
+        changes.details.append(f"function: new{f' ({new_v})' if new_v else ''}")
+    elif old_v != new_v:
+        changes.version_change("function", old_v, new_v)
+    elif own_code(old) != own_code(replace_imports(f.content)):
+        changes.details.append(f"function: code changed, still {new_v or '(no version)'}")
+    _parts(changes, "tool", tools_of(old), tools_of(f.content), tool_version)
+    _parts(changes, "skill", skills_of(old), skills_of(f.content), skill_version)
+    live_sources = ((existing or {}).get("meta") or {}).get("sources") or {}
+    for label, sha in f.sources.items():
+        was = live_sources.get(label)
+        note = f" ({latest[label]})" if label in latest else ""
+        if existing is None:
+            changes.details.append(f"source {label}: {sha[:7]}{note}")
+        elif was != sha:
+            changes.details.append(
+                f"source {label}: {was[:7] if was else '(not recorded)'} -> {sha[:7]}{note}"
+            )
+    return changes
 
 
 def _with_content(opts: Options, files: list[FunctionFile], live: list[dict]) -> list[dict]:
@@ -247,7 +532,9 @@ def _ensure_not_global(opts: Options, fn_id: str, state: Any) -> list[str]:
     return []
 
 
-def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
+def _deploy_functions(
+    opts: Options, files: list[FunctionFile], latest: dict[str, str] | None = None
+) -> list[Result]:
     # The list call is also the credential check: a bad key is a 401/403 here, before
     # anything is written. (A missing single function is a 401 too, so it cannot be used
     # to tell "absent" from "unauthorised".)
@@ -276,9 +563,20 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
         )
 
     plan = plan_deploy(files, _with_content(opts, files, live), managed_by)
+    changes = {p.file.id: describe_changes(p.file, p.existing, latest or {}) for p in plan}
+    # Going back a version is refused before anything is written, unless forced.
+    older = {i: c.downgrades for i, c in changes.items() if c.downgrades}
+    if older and not opts.dry_run and not opts.force:
+        raise OwppError(
+            "refusing to deploy older versions over newer ones on the instance: "
+            + "; ".join(f"{i} ({', '.join(d)})" for i, d in older.items())
+            + ". Check you are deploying the right branch, or re-run with --force"
+        )
     results: list[Result] = []
     for p in plan:
         f = p.file
+        details, downgrades = changes[f.id].details, changes[f.id].downgrades
+        version = version_of(f.content)
         if p.action == "unchanged" or opts.dry_run:
             pending = []
             if f.want_global and p.existing:
@@ -299,16 +597,16 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
                     else _ensure_not_global(opts, f.id, p.existing)
                 )
                 action = f"unchanged, {', '.join(notes)}"
-            results.append(Result(f.id, f.file, action, type=f.type))
+            results.append(
+                Result(f.id, f.file, action, f.kind, f.type, version, details, downgrades)
+            )
             continue
 
         # An update replaces meta, so it is always sent whole.
-        form = {
-            "id": f.id,
-            "name": f.name,
-            "content": f.content,
-            "meta": {"description": f.description, "managed_by": managed_by},
-        }
+        meta: dict = {"description": f.description, "managed_by": managed_by}
+        if f.sources:  # the commit it was deployed from, for the next report
+            meta["sources"] = f.sources
+        form = {"id": f.id, "name": f.name, "content": f.content, "meta": meta}
         if p.action == "update":
             updated = _call(opts, "POST", f"{API}/id/{f.id}/update", form)
             state = updated if updated is not None else p.existing
@@ -319,7 +617,18 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
                 if f.not_global
                 else []
             )
-            results.append(Result(f.id, f.file, ", ".join(["updated", *notes]), type=f.type))
+            results.append(
+                Result(
+                    f.id,
+                    f.file,
+                    ", ".join(["updated", *notes]),
+                    f.kind,
+                    f.type,
+                    version,
+                    details,
+                    downgrades,
+                )
+            )
             continue
 
         created = _call(opts, "POST", f"{API}/create", form)
@@ -333,7 +642,9 @@ def _deploy_functions(opts: Options, files: list[FunctionFile]) -> list[Result]:
         if (f.want_global or default_global) and not _field(created, "is_global"):
             _call(opts, "POST", f"{API}/id/{f.id}/toggle/global")
             notes.append("made global")
-        results.append(Result(f.id, f.file, ", ".join(["created", *notes]), type=f.type))
+        results.append(
+            Result(f.id, f.file, ", ".join(["created", *notes]), f.kind, f.type, version, details)
+        )
 
     _valves_pass(opts, plan, results)
 
@@ -377,7 +688,55 @@ def _valves_pass(opts: Options, plan: list[PlanItem], results: list[Result]) -> 
             row.action = note if row.action == "unchanged" else f"{row.action}, {note}"
 
 
+def _latest_copy(opts: Options, work: Path) -> tuple[Path, dict[str, str]]:
+    """A copy of the plugins folder in `work` with each git-sourced plugin moved to the latest
+    commit it tracks, as `owpp sync` would, and {source label: note} for the report."""
+    from .bundle import source_label
+    from .manifest import read_manifest, read_text, text_of
+    from .sources import resolve_ref
+    from .sync import rewrite_ref, track_of
+
+    copy = work / opts.dir.name
+    shutil.copytree(
+        opts.dir, copy, symlinks=True, ignore=shutil.ignore_patterns(".git", "node_modules")
+    )
+    notes: dict[str, str] = {}
+    for folder in plugin_folders(copy):
+        src = read_manifest(folder).get("source")
+        if not isinstance(src, dict):
+            continue
+        track = track_of(folder, src)
+        where = "the default branch" if track == "HEAD" else track
+        label, pinned = source_label(src), text_of(src.get("ref"))
+        sha = (opts.resolve or resolve_ref)(text_of(src.get("git")), track)
+        if not sha:
+            notes[label] = f"could not look up {where}: the pinned commit"
+            continue
+        path = folder / "plugin.yaml"
+        if sha != pinned:
+            path.write_bytes(rewrite_ref(read_text(path), pinned, sha).encode("utf-8"))
+        notes[label] = (
+            f"latest of {where}; plugin.yaml pins {pinned[:7]}"
+            if sha != pinned
+            else f"latest of {where}, as pinned"
+        )
+    return copy, notes
+
+
 def deploy(opts: Options) -> list[Result]:
+    if opts.sync and not opts.dry_run:
+        raise OwppError(
+            "--sync only goes with --dry-run: to deploy the latest commits, run `owpp sync`, "
+            "review and commit the change, then deploy"
+        )
+    if not opts.sync:
+        return _deploy(opts)
+    with tempfile.TemporaryDirectory(prefix="owpp-sync-") as work:
+        copy, notes = _latest_copy(opts, Path(work))
+        return _deploy(replace(opts, dir=copy), notes)
+
+
+def _deploy(opts: Options, latest: dict[str, str] | None = None) -> list[Result]:
     remote = fetch_sources(source_keys(opts.dir), opts.git_fetcher)
     files = load_function_files(opts.dir, remote)
     if opts.only:
@@ -393,15 +752,35 @@ def deploy(opts: Options) -> list[Result]:
             "no functions (plugin folders with a function in plugin.yaml, or *.py files) "
             f"in {opts.dir}"
         )
-    return _deploy_functions(opts, files)
+    return _deploy_functions(opts, files, latest)
 
 
-def render_report(results: list[Result], dry_run: bool) -> str:
-    lines = [
-        f"- {f'{r.type} function' if r.type else r.kind} `{r.id}` ({r.file}): {r.action}"
-        for r in results
-    ]
-    return f"{'Dry run: ' if dry_run else ''}Open-WebUI functions\n\n" + "\n".join(lines) + "\n"
+def render_report(results: list[Result], dry_run: bool, sync: bool = False) -> str:
+    lines = []
+    for r in results:
+        what = f"{r.type} function" if r.type else r.kind
+        unchanged = r.action == "unchanged" and r.version
+        action = f"{r.action} ({r.version})" if unchanged else r.action
+        lines.append(f"- {what} `{r.id}` ({r.file}): {action}")
+        lines += [f"  - {d}" for d in r.details]
+    title = "Open-WebUI functions"
+    older = [r for r in results if r.downgrades]
+    if older:
+        forced = any("updated" in r.action for r in older)
+        lines += [
+            "",
+            f"Warning: {len(older)} function(s) would go back a version: "
+            + ", ".join(f"`{r.id}` ({', '.join(r.downgrades)})" for r in older)
+            + (
+                ". Deployed with --force."
+                if forced
+                else ". The instance has newer versions than this repository: check the branch. "
+                "A deploy refuses this without --force."
+            ),
+        ]
+    if dry_run:
+        title = f"Dry run{' at the latest commits' if sync else ''}: {title}"
+    return f"{title}\n\n" + "\n".join(lines) + "\n"
 
 
 def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
@@ -414,20 +793,14 @@ def run_deploy(opts: Options, env: Mapping[str, str] | None = None) -> int:
             file=sys.stderr,
         )
         return 1
-    if not opts.api_key:
-        print(
-            "error: OPEN_WEBUI_API_KEY is not set: create an API key for an admin user in "
-            "Open-WebUI (Settings > Account > API keys; the admin setting 'Enable API Keys' "
-            "must be on)",
-            file=sys.stderr,
-        )
-        return 1
     try:
         wait_for_health(opts)
-        report = render_report(deploy(opts), opts.dry_run)
+        how = sign_in(opts)
+        report = render_report(deploy(opts), opts.dry_run, opts.sync)
     except OwppError as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
+    print(f"(signed in with {how})\n")
     print(report)
     if env.get("GITHUB_STEP_SUMMARY"):
         with open(env["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
