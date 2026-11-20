@@ -68,7 +68,7 @@ The deploy reads the instance and the credentials from the environment: [`OPEN_W
 
 ```yaml
 - uses: actions/checkout@v5
-- uses: zmnatz/open-webui-plugin-protocol@v0.2.1
+- uses: zmnatz/open-webui-plugin-protocol@v0.3.0
   with:
     url: https://chat.example.com
     api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
@@ -103,7 +103,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ## Status
 
-0.2.1, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), but that run is started by hand, not part of CI. See [status and limits](docs/README.md#status-and-limits).
+0.3.0, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), but that run is started by hand, not part of CI. See [status and limits](docs/README.md#status-and-limits).
 
 ## Development
 
