@@ -15,7 +15,7 @@
 | [`owpp create`](commands/create.md) | A wizard: asks what the plugin is, then writes it. |
 | [`owpp init`](commands/init.md) | Scaffold the smallest plugin of a type. |
 
-Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS_DIR`, else `./plugins`. `owpp --version` prints the version.
+Every command takes `--dir <folder>`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir), else `./plugins`. The variables each command reads: [environment variables](environment-variables.md). `owpp --version` prints the version.
 
 ## GitHub Action
 
@@ -45,10 +45,10 @@ The action runs `owpp` from its own checkout, so the version you deploy with is 
 
 | Input | What it sets |
 | --- | --- |
-| `url` | Required. `OPEN_WEBUI_URL`. |
-| `api-key`, `username`, `password`, `oidc-token`, `oauth-provider` | How the deploy [signs in](commands/deploy.md#signing-in) (store them as secrets). |
-| `plugins-dir` | The plugins folder, relative to the repository root (default `plugins`). |
-| `managed-by` | The [ownership marker](commands/deploy.md#the-ownership-marker) (default `open-webui-plugin-protocol`). |
+| `url` | Required. [`OPEN_WEBUI_URL`](environment-variables.md#open_webui_url). |
+| `api-key`, `username`, `password`, `oidc-token`, `oauth-provider` | How the deploy [signs in](commands/deploy.md#signing-in): the [sign-in variables](environment-variables.md#signing-in) (store them as secrets). |
+| `plugins-dir` | The plugins folder, relative to the repository root (default `plugins`): [`OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir). |
+| `managed-by` | The [ownership marker](commands/deploy.md#the-ownership-marker) (default `open-webui-plugin-protocol`): [`OWPP_MANAGED_BY`](environment-variables.md#owpp_managed_by). |
 | `only`, `dry-run`, `latest`, `force` | [`owpp deploy`](commands/deploy.md)'s `--only`, `--dry-run`, `--latest` and `--force` (`"true"` to turn one on). |
 | `check` | `"false"` skips `owpp check` before deploying (default `"true"`). |
 | `since` | [`owpp check --since`](commands/check.md#a-change-needs-a-new-version) this git ref. Needs that ref fetched (`actions/checkout` with `fetch-depth: 0`). |
@@ -66,6 +66,7 @@ More CI: a scheduled [dry run at the latest commits](commands/deploy.md#the-repo
 | Deploy against a stand-in Open-WebUI API: create, update, global, prune, valves, `--only` | `tests/test_deploy.py` |
 | CLI commands, `check`, `init` scaffolds | `tests/test_cli.py` |
 | Every command has a page in `docs/commands/` that documents each of its flags | `tests/test_command_docs.py` |
+| Every environment variable owpp reads has an entry in `docs/environment-variables.md` | `tests/test_env_docs.py` |
 | `owpp pull`: moving a pinned commit, the files it lists, refusing what it cannot check | `tests/test_pull.py` |
 | `owpp create`: every combination it writes bundles, passes `check --strict` and its own tests; the wizard, driven by scripted answers | `tests/test_create.py` |
 | Every example plugin bundles, compiles, has unit tests and documents Test and Deploy | `tests/test_bundle.py`, "TestExamples" |

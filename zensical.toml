@@ -33,6 +33,7 @@ nav = [
     { "Libraries" = "libraries.md" },
     { "Testing" = "testing.md" },
     { "Tooling and CI" = "tooling.md" },
+    { "Environment variables" = "environment-variables.md" },
     { "Adopting it" = "adopting.md" },
     { "Upgrading owpp" = "upgrading.md" },
     { "Troubleshooting" = "troubleshooting.md" },

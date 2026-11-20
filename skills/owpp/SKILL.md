@@ -9,7 +9,7 @@ A **plugin** is a folder, `plugins/<id>/`, with a `plugin.yaml`: a function (the
 
 Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.2.1`). `uvx owpp <command> --help` is the reference for every flag, and each command has a page at https://zmnatz.github.io/open-webui-plugin-protocol/commands/<command>/. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
 
-Every command takes `--dir`: the plugins folder, default `./plugins`.
+Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#owpp_plugins_dir), else `./plugins`.
 
 ## Pick the branch
 
@@ -54,7 +54,7 @@ Done when the user has seen the files that changed, and `owpp check <id> --stric
 
 ## Deploy
 
-1. **Credentials** come from the environment: `OPEN_WEBUI_URL`, then one of `OPEN_WEBUI_API_KEY`; `OPEN_WEBUI_USERNAME` and `OPEN_WEBUI_PASSWORD`; `OPEN_WEBUI_OIDC_TOKEN`; or none, where the instance signs in without them. The account must be an admin. Leave them in the environment: ask the user to set them, and keep them out of files, commands and messages.
+1. **Credentials** come from the environment: [`OPEN_WEBUI_URL`](https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_url), then one of [`OPEN_WEBUI_API_KEY`](https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_api_key); [`OPEN_WEBUI_USERNAME`](https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_username) and [`OPEN_WEBUI_PASSWORD`](https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_password); [`OPEN_WEBUI_OIDC_TOKEN`](https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_oidc_token); or none, where the instance signs in without them. Every variable owpp reads: https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/ The account must be an admin. Leave them in the environment: ask the user to set them, and keep them out of files, commands and messages.
 2. **Dry run**: `uvx owpp deploy --dry-run` (add `--only <id>` for one plugin). Read the report to the user: what is created or updated, each version change, and every warning.
 3. **Deploy** only once the user says to: `uvx owpp deploy` (with the same `--only`).
    - A **downgrade warning** (the instance runs a newer version than the repository) means the wrong branch, most of the time: stop and ask. `--force` is for a rollback the user asks for by name.

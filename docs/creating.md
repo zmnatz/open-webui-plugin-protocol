@@ -5,8 +5,10 @@
 ```sh
 uvx owpp create              # asks for the id
 uvx owpp create my_plugin    # starts with that id
-uvx owpp create --dir src    # into another plugins folder (default: $OWPP_PLUGINS_DIR, else ./plugins)
+uvx owpp create --dir src    # into another plugins folder than ./plugins
 ```
+
+Its flags, and the default plugins folder ([`OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir)): [`owpp create`](commands/create.md).
 
 - **Every question has a default.** Enter takes it. Pressing Enter all the way makes a minimal event plugin, the same as `owpp init <id>`.
 - **Nothing is written until the last stage.** It lists the files and asks before writing them. Ctrl-C, or the end of input, stops without writing anything. A folder that already exists is never overwritten.

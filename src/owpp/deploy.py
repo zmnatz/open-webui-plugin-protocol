@@ -201,9 +201,7 @@ def options_from_env(
         password=env.get("OPEN_WEBUI_PASSWORD", ""),
         oidc_token=env.get("OPEN_WEBUI_OIDC_TOKEN", ""),
         oauth_provider=env.get("OPEN_WEBUI_OAUTH_PROVIDER", "") or "oidc",
-        dir=Path(
-            dir or env.get("OWPP_PLUGINS_DIR") or env.get("FUNCTIONS_DIR") or "plugins"
-        ).resolve(),
+        dir=Path(dir or env.get("OWPP_PLUGINS_DIR") or "plugins").resolve(),
         dry_run=dry_run,
         force_prune=force_prune,
         only=[i for i in only.split(",") if i] if only else None,

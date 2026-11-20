@@ -5,28 +5,28 @@ branding:
   color: blue
 inputs:
   url:
-    description: Base URL of the Open-WebUI instance.
+    description: Base URL of the Open-WebUI instance. Sets OPEN_WEBUI_URL (https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_url).
     required: true
   api-key:
-    description: An Open-WebUI admin API key (store it as a secret). Optional; without it the deploy signs in with the inputs below, or with nothing.
+    description: An Open-WebUI admin API key (store it as a secret). Optional; without it the deploy signs in with the inputs below, or with nothing. Sets OPEN_WEBUI_API_KEY (https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_api_key).
     default: ""
   username:
-    description: An admin's email (or LDAP user name), with password, when there is no api-key.
+    description: An admin's email (or LDAP user name), with password, when there is no api-key. Sets OPEN_WEBUI_USERNAME (https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_username).
     default: ""
   password:
-    description: That admin's password (store it as a secret).
+    description: That admin's password (store it as a secret). Sets OPEN_WEBUI_PASSWORD (https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_password).
     default: ""
   oidc-token:
-    description: An OIDC access token exchanged for an Open-WebUI session (the instance must set ENABLE_OAUTH_TOKEN_EXCHANGE=true).
+    description: An OIDC access token exchanged for an Open-WebUI session (the instance must set ENABLE_OAUTH_TOKEN_EXCHANGE=true). Sets OPEN_WEBUI_OIDC_TOKEN (https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_oidc_token).
     default: ""
   oauth-provider:
-    description: The Open-WebUI OAuth provider the oidc-token is from.
+    description: The Open-WebUI OAuth provider the oidc-token is from. Sets OPEN_WEBUI_OAUTH_PROVIDER (https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#open_webui_oauth_provider).
     default: oidc
   plugins-dir:
-    description: The plugins folder, relative to the repository root.
+    description: The plugins folder, relative to the repository root. Sets OWPP_PLUGINS_DIR (https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#owpp_plugins_dir).
     default: plugins
   managed-by:
-    description: Ownership marker written on deployed functions; pruning only touches functions carrying it. Keep it stable.
+    description: Ownership marker written on deployed functions; pruning only touches functions carrying it. Keep it stable. Sets OWPP_MANAGED_BY (https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#owpp_managed_by).
     default: open-webui-plugin-protocol
   only:
     description: Comma-separated plugin ids to deploy (no pruning). Empty deploys all.

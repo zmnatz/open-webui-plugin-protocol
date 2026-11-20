@@ -12,7 +12,7 @@ The deploy signs in before it writes anything, so none of these change the insta
 error: no credentials, and Open-WebUI did not sign in without them (HTTP <status>: <reason>). Set OPEN_WEBUI_API_KEY (an admin's API key), OPEN_WEBUI_USERNAME and OPEN_WEBUI_PASSWORD, or OPEN_WEBUI_OIDC_TOKEN
 ```
 
-None of the credential variables is set, so the deploy tried to sign in with nothing, which works only when the instance has sign-in switched off or sits behind a trusted-header proxy. Set one of the variables named. In the GitHub Action, pass `api-key:` from a secret; a secret that is not defined in the repository arrives empty.
+None of the [credential variables](environment-variables.md#signing-in) is set, so the deploy tried to sign in with nothing, which works only when the instance has sign-in switched off or sits behind a trusted-header proxy. Set one of the variables named. In the GitHub Action, pass `api-key:` from a secret; a secret that is not defined in the repository arrives empty.
 
 ### A wrong user name or password
 
@@ -20,7 +20,7 @@ None of the credential variables is set, so the deploy tried to sign in with not
 error: could not sign in as <user>: with a password (HTTP <status>: <reason>), with LDAP (HTTP <status>: <reason>)
 ```
 
-The account was tried as an Open-WebUI account and then as an LDAP user, and both refused. The text in brackets is what Open-WebUI answered each time. The user name of an Open-WebUI account is its email. Setting only one of the two variables fails earlier, with `OPEN_WEBUI_USERNAME and OPEN_WEBUI_PASSWORD go together: set both`.
+The account was tried as an Open-WebUI account and then as an LDAP user, and both refused. The text in brackets is what Open-WebUI answered each time. The user name of an Open-WebUI account is its email. Setting only one of [`OPEN_WEBUI_USERNAME`](environment-variables.md#open_webui_username) and [`OPEN_WEBUI_PASSWORD`](environment-variables.md#open_webui_password) fails earlier, with `OPEN_WEBUI_USERNAME and OPEN_WEBUI_PASSWORD go together: set both`.
 
 ### An OIDC token that is not exchanged
 
@@ -54,7 +54,7 @@ An API key is used as it is, so a wrong one is only found when the deploy lists 
 error: OPEN_WEBUI_URL is not set (the base URL of your Open-WebUI, e.g. https://chat.example.com)
 ```
 
-Set it to the address you open Open-WebUI at, without `/api`.
+Set [`OPEN_WEBUI_URL`](environment-variables.md#open_webui_url) to the address you open Open-WebUI at, without `/api`.
 
 ### The instance does not answer
 
@@ -72,7 +72,7 @@ An example, for a self-signed certificate:
 error: <url>: TLS failed (certificate verify failed: self-signed certificate: give the CA that signed its certificate with OPEN_WEBUI_CA_CERT (or --ca-cert))
 ```
 
-The instance's certificate is signed by a CA the system does not trust (a private CA, or a self-signed certificate). Pass that CA's PEM as the message says. When the server or a proxy wants a client certificate, the hint names `OPEN_WEBUI_CLIENT_CERT (or --client-cert)` instead. Both are in [deploy settings](commands/deploy.md#deploy-settings).
+The instance's certificate is signed by a CA the system does not trust (a private CA, or a self-signed certificate). Pass that CA's PEM as the message says. When the server or a proxy wants a client certificate, the hint names `OPEN_WEBUI_CLIENT_CERT (or --client-cert)` instead. Both take a path or the PEM text: see [`OPEN_WEBUI_CA_CERT`](environment-variables.md#open_webui_ca_cert) and [`OPEN_WEBUI_CLIENT_CERT`](environment-variables.md#open_webui_client_cert).
 
 ## Code taken from git
 
@@ -144,7 +144,7 @@ The deploy deletes every function carrying its [ownership marker](commands/deplo
 
 ### Functions that are never updated or pruned
 
-There is no error: a function keeps old code, or stays after its folder is deleted. It does not carry the marker this deploy uses, so owpp treats it as made by hand. That happens when the marker changed (another `--managed-by` or `OWPP_MANAGED_BY`), or when the function was made in the UI or by another repository's deploy. Use the marker the existing functions have: see [keep your existing marker](adopting.md#keep-your-existing-marker).
+There is no error: a function keeps old code, or stays after its folder is deleted. It does not carry the marker this deploy uses, so owpp treats it as made by hand. That happens when the marker changed (another `--managed-by` or [`OWPP_MANAGED_BY`](environment-variables.md#owpp_managed_by)), or when the function was made in the UI or by another repository's deploy. Use the marker the existing functions have: see [keep your existing marker](adopting.md#keep-your-existing-marker).
 
 ### An older version than the instance's
 

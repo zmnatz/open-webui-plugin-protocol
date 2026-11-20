@@ -20,7 +20,7 @@ ok    notes: protocol 0.2
 | --- | --- |
 | `id ...` | The plugins to migrate. Default: all. |
 | `--dry-run` | Say what would change; write nothing. |
-| `--dir FOLDER` | The plugins folder. Default `$OWPP_PLUGINS_DIR`, else `./plugins`. |
+| `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## Examples
 
