@@ -49,6 +49,8 @@ Every command takes `--dir <folder>`: the plugins folder, default `$OWPP_PLUGINS
 | `OPEN_WEBUI_URL` | Required. Base URL of the Open-WebUI instance. |
 | `OPEN_WEBUI_API_KEY` | An admin API key (Settings > Account > API keys; the admin setting "Enable API Keys" must be on). Optional: see [signing in](#signing-in). |
 | `OPEN_WEBUI_USERNAME`, `OPEN_WEBUI_PASSWORD` | Without an API key: an admin's email and password, or LDAP user name and password. |
+| `--ca-cert`, `OPEN_WEBUI_CA_CERT` | A PEM of CA certificates to trust besides the system's (a private CA, or a self-signed Open-WebUI): a path, or the PEM text. |
+| `--client-cert`, `--client-key`, `OPEN_WEBUI_CLIENT_CERT`, `OPEN_WEBUI_CLIENT_KEY` | A client certificate (and its key, when not in the same PEM) for a server or proxy that requires mutual TLS: paths, or the PEM text. |
 | `OPEN_WEBUI_OIDC_TOKEN`, `OPEN_WEBUI_OAUTH_PROVIDER` | Without either: an OIDC access token, exchanged for a session, and the Open-WebUI OAuth provider it is from (default `oidc`). |
 | `--dir`, `OWPP_PLUGINS_DIR` | The plugins folder (`FUNCTIONS_DIR` is accepted too). |
 | `--managed-by`, `OWPP_MANAGED_BY` | The ownership marker, default `open-webui-plugin-protocol`. See below. |

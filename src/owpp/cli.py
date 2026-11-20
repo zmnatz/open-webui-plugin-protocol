@@ -219,6 +219,9 @@ def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         managed_by=args.managed_by,
         sync=args.sync,
         force=args.force,
+        ca_cert=args.ca_cert,
+        client_cert=args.client_cert,
+        client_key=args.client_key,
     )
     return run_deploy(opts, env)
 
@@ -338,6 +341,22 @@ def build_parser() -> argparse.ArgumentParser:
     bundle.add_argument("out", nargs="?", metavar="out.py")
     deploy = add("deploy", _cmd_deploy, "deploy the plugins to an Open-WebUI instance")
     deploy.add_argument("--only", metavar="id,id", help="deploy just these (no pruning)")
+    deploy.add_argument(
+        "--ca-cert",
+        metavar="PEM",
+        help="a PEM file of CA certificates to trust besides the system's (default "
+        "$OPEN_WEBUI_CA_CERT)",
+    )
+    deploy.add_argument(
+        "--client-cert",
+        metavar="PEM",
+        help="a client certificate to present, for mutual TLS (default $OPEN_WEBUI_CLIENT_CERT)",
+    )
+    deploy.add_argument(
+        "--client-key",
+        metavar="PEM",
+        help="its private key, when not in the same file (default $OPEN_WEBUI_CLIENT_KEY)",
+    )
     deploy.add_argument(
         "--dry-run", action="store_true", help="list what would change, with versions"
     )

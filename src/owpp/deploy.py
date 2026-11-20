@@ -17,9 +17,11 @@ them all.
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import shutil
+import ssl
 import sys
 import tempfile
 import time
@@ -69,14 +71,73 @@ Fetch = Callable[[str, str, "dict[str, str] | None", "bytes | None"], HttpRespon
 
 
 def urllib_fetch(
-    method: str, url: str, headers: dict[str, str] | None = None, body: bytes | None = None
+    method: str,
+    url: str,
+    headers: dict[str, str] | None = None,
+    body: bytes | None = None,
+    context: ssl.SSLContext | None = None,
 ) -> HttpResponse:
     request = urllib.request.Request(url, data=body, headers=headers or {}, method=method)
     try:
-        with urllib.request.urlopen(request, timeout=60) as response:  # noqa: S310 (admin-chosen URL)
+        with urllib.request.urlopen(request, timeout=60, context=context) as response:  # noqa: S310 (admin-chosen URL)
             return HttpResponse(response.status, response.read().decode("utf-8", "replace"))
     except urllib.error.HTTPError as e:
         return HttpResponse(e.code, e.read().decode("utf-8", "replace"))
+
+
+# ---- TLS: a CA to trust, a client certificate to present ------------------------
+
+
+def _is_pem(value: str) -> bool:
+    return "-----BEGIN " in value
+
+
+def _pem_file(value: str, label: str, work: Path) -> str:
+    """A PEM given as a path, or as its text (then written to a private file in `work`)."""
+    if _is_pem(value):
+        path = work / f"{label}.pem"
+        path.touch(mode=0o600)
+        path.write_text(value if value.endswith("\n") else value + "\n")
+        return str(path)
+    if not Path(value).expanduser().is_file():
+        raise OwppError(f"{label}: no file {value} (give a path to a PEM file, or the PEM itself)")
+    return str(Path(value).expanduser())
+
+
+def tls_context(
+    ca_cert: str = "", client_cert: str = "", client_key: str = ""
+) -> ssl.SSLContext | None:
+    """The TLS settings for talking to Open-WebUI, or None for Python's defaults.
+
+    `ca_cert`: certificates to trust besides the system's (a private CA, or a self-signed
+    server). `client_cert` (and `client_key`, when the key is not in the same PEM): the
+    certificate to present to a server or proxy that asks for one (mutual TLS). Each is a path
+    to a PEM file, or the PEM text itself (as a CI secret holds it)."""
+    if not (ca_cert or client_cert or client_key):
+        return None
+    if client_key and not client_cert:
+        raise OwppError("OPEN_WEBUI_CLIENT_KEY needs OPEN_WEBUI_CLIENT_CERT")
+    context = ssl.create_default_context()  # the system's CAs, and verification on
+    try:
+        if ca_cert:
+            if _is_pem(ca_cert):
+                context.load_verify_locations(cadata=ca_cert)
+            else:
+                context.load_verify_locations(
+                    cafile=_pem_file(ca_cert, "OPEN_WEBUI_CA_CERT", Path())
+                )
+        if client_cert:
+            with tempfile.TemporaryDirectory(prefix="owpp-tls-") as work:
+                cert = _pem_file(client_cert, "OPEN_WEBUI_CLIENT_CERT", Path(work))
+                key = (
+                    _pem_file(client_key, "OPEN_WEBUI_CLIENT_KEY", Path(work))
+                    if client_key
+                    else None
+                )
+                context.load_cert_chain(cert, key)  # read now: the files can go
+    except ssl.SSLError as e:
+        raise OwppError(f"a certificate could not be loaded: {e}") from e
+    return context
 
 
 @dataclass
@@ -97,6 +158,16 @@ class Options:
     fetch: Fetch = field(default=urllib_fetch, repr=False)
     git_fetcher: Fetcher = field(default=git_fetcher, repr=False)
     resolve: Callable[[str, str], str | None] | None = field(default=None, repr=False)
+    # TLS (tls_context): a CA to trust, a client certificate (and key) to present.
+    ca_cert: str = field(default="", repr=False)
+    client_cert: str = field(default="", repr=False)
+    client_key: str = field(default="", repr=False)
+
+    def __post_init__(self) -> None:
+        context = tls_context(self.ca_cert, self.client_cert, self.client_key)
+        if context is not None and self.fetch is urllib_fetch:
+            self.fetch = functools.partial(urllib_fetch, context=context)
+
     # Without an API key, the deploy signs in (sign_in): with a user name (an email, or an LDAP
     # user) and a password, with an OIDC token for an OAuth provider, or with nothing at all.
     username: str = ""
@@ -115,6 +186,9 @@ def options_from_env(
     managed_by: str | None = None,
     sync: bool = False,
     force: bool = False,
+    ca_cert: str | None = None,
+    client_cert: str | None = None,
+    client_key: str | None = None,
 ) -> Options:
     """Flags win over the environment, which wins over the defaults."""
     env = os.environ if env is None else env
@@ -134,6 +208,9 @@ def options_from_env(
         managed_by=managed_by or env.get("OWPP_MANAGED_BY") or MANAGED_BY,
         sync=sync,
         force=force,
+        ca_cert=ca_cert or env.get("OPEN_WEBUI_CA_CERT", ""),
+        client_cert=client_cert or env.get("OPEN_WEBUI_CLIENT_CERT", ""),
+        client_key=client_key or env.get("OPEN_WEBUI_CLIENT_KEY", ""),
     )
 
 
@@ -241,6 +318,20 @@ def sign_in(opts: Options) -> str:
     return how
 
 
+def _tls_hint(error: ssl.SSLError) -> str:
+    if isinstance(error, ssl.SSLCertVerificationError):
+        return (
+            f"{error.verify_message or error}: give the CA that signed its certificate with "
+            "OPEN_WEBUI_CA_CERT (or --ca-cert)"
+        )
+    text = str(error)
+    if "CERTIFICATE_REQUIRED" in text or "HANDSHAKE_FAILURE" in text:
+        return (
+            f"{text}: it may want a client certificate, OPEN_WEBUI_CLIENT_CERT (or --client-cert)"
+        )
+    return text
+
+
 def wait_for_health(opts: Options, attempts: int = 6, delay: float = 30.0) -> None:
     """Open-WebUI may still be starting (the stack redeploys on the same push). Six tries
     30 s apart (~3 min); rerun the workflow if a redeploy takes longer."""
@@ -248,8 +339,11 @@ def wait_for_health(opts: Options, attempts: int = 6, delay: float = 30.0) -> No
         try:
             if opts.fetch("GET", f"{opts.base_url}/health", None, None).ok:
                 return
-        except OSError:
-            pass  # not up yet
+        except OSError as e:
+            reason = getattr(e, "reason", e)
+            if isinstance(reason, ssl.SSLError):  # waiting will not fix a certificate
+                raise OwppError(f"{opts.base_url}: TLS failed ({_tls_hint(reason)})") from e
+            # otherwise: not up yet
         if i < attempts - 1:
             time.sleep(delay)
     raise OwppError(f"{opts.base_url}/health did not answer in time")
