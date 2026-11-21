@@ -15,9 +15,9 @@ jobs:
         with:
           fetch-depth: 0 # --since needs the branch it compares with
       - uses: astral-sh/setup-uv@v6
-      - run: uvx owpp@0.3.1 check --strict
-      - run: uvx --from 'owpp[test]==0.3.1' owpp test
-      - run: uvx owpp@0.3.1 check --since origin/${{ github.base_ref }}
+      - run: uvx owpp@0.4.0 check --strict
+      - run: uvx --from 'owpp[test]==0.4.0' owpp test
+      - run: uvx owpp@0.4.0 check --since origin/${{ github.base_ref }}
 ```
 
 | Step | Fails when |
@@ -26,7 +26,7 @@ jobs:
 | [`owpp test`](../commands/test.md) | A plugin's tests fail against the mock. A plugin with code from git fetches it, so the job needs the network (or the tests [load stand-ins](kinds.md#code-from-git)). |
 | [`owpp check --since`](../commands/check.md#a-change-needs-a-new-version) | A plugin changed but its version did not; it names the `owpp version` command to run. |
 
-Pin the same owpp version here as in the deploy (`uses: zmnatz/open-webui-plugin-protocol@v0.3.1`), so the tests bundle what the deploy will. The [GitHub Action](../tooling.md#github-action) runs `owpp check` before it deploys, but not the tests.
+Pin the same owpp version here as in the deploy (`uses: zmnatz/open-webui-plugin-protocol@v0.4.0`), so the tests bundle what the deploy will. The [GitHub Action](../tooling.md#github-action) runs `owpp check` before it deploys, but not the tests.
 
 ## A live check
 

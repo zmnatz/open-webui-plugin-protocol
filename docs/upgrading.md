@@ -4,18 +4,23 @@ The runtime and libraries are copied into every bundle, so a new owpp changes th
 
 ## Steps
 
-1. **Move the pin.** Change the version wherever you run owpp: `uvx owpp@0.3.1`, `uv tool install owpp==0.3.1`, or the action's `uses: zmnatz/open-webui-plugin-protocol@v0.3.1`.
+1. **Move the pin.** Change the version wherever you run owpp: `uvx owpp@0.4.0`, `uv tool install owpp==0.4.0`, or the action's `uses: zmnatz/open-webui-plugin-protocol@v0.4.0`.
 2. **Migrate the manifests.** See what would change, then write it:
 
    ```sh
-   uvx owpp@0.3.1 migrate --dry-run
-   uvx owpp@0.3.1 migrate
+   uvx owpp@0.4.0 migrate --dry-run
+   uvx owpp@0.4.0 migrate
    ```
 
    `migrate` rewrites only what each version step changes, keeps comments and layout, and lists every `plugin.yaml` it writes. A manifest already at the current version is left alone. Pass ids to migrate only some plugins.
-3. **Check.** `uvx owpp@0.3.1 check --strict` bundles every plugin as the deploy would. `check` notes any manifest still on an older protocol and warns about one with no `protocol:` key; `--strict` makes that warning fail.
+3. **Check.** `uvx owpp@0.4.0 check --strict` bundles every plugin as the deploy would. `check` notes any manifest still on an older protocol and warns about one with no `protocol:` key; `--strict` makes that warning fail.
 4. **Dry run.** `owpp deploy --dry-run` against your instance shows which functions, tools and skills the new bundles would update.
 5. **Commit** the pin and the manifest changes together, and deploy.
+
+## 0.3 -> 0.4
+
+- **Nothing to migrate.** Manifests stay `protocol: "0.3"`, and the bundles a deploy writes are the same as 0.3.1's, so the first deploy changes nothing on the instance.
+- **Plugin tests:** a filter called through the mock now gets `__model__` (`{"id": "mock-model", ...}` unless a test passes `model=`). A filter that read `__model__` and got `None` before now gets a model.
 
 ## 0.2 -> 0.3
 

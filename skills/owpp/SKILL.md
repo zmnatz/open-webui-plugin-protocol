@@ -7,7 +7,7 @@ description: Open-WebUI plugins kept in git with owpp, the Open-WebUI plugin pro
 
 A **plugin** is a folder, `plugins/<id>/`, with a `plugin.yaml`: a function (the parent) and, optionally, a tool and skills that the function installs when it is enabled and removes when it is disabled. `owpp` bundles the folder into the single file Open-WebUI stores, tests it against a mock Open-WebUI, and deploys it.
 
-Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.3.1`). `uvx owpp <command> --help` is the reference for every flag, and each command has a page at https://zmnatz.github.io/open-webui-plugin-protocol/commands/<command>/. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
+Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.4.0`). `uvx owpp <command> --help` is the reference for every flag, and each command has a page at https://zmnatz.github.io/open-webui-plugin-protocol/commands/<command>/. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
 
 Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#owpp_plugins_dir), else `./plugins`.
 
