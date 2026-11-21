@@ -1,14 +1,16 @@
 # Dynamic Vision Router, by open-webui and atgehrhardt (credits to @iamg30 for v0.1.5-v0.1.7).
-# Copyright (c) 2023- Open WebUI Inc. Source, version 0.1.7:
+# Copyright (c) 2023- Open WebUI Inc. Adapted from version 0.1.7:
 # https://github.com/open-webui/functions/blob/8bf216e535dffd684109274da096a6a4451b8fe6/functions/filters/dynamic_vision_router/main.py
-# Used for the live suite (tools/live) unchanged apart from this comment, which replaces the
-# file's docstring header: owpp writes the header from plugin.yaml, and refuses a two-line author.
-# Licence: see NOTICE.md.
-from pydantic import BaseModel, Field
-from typing import Callable, Awaitable, Any, Optional, Literal
-import json
+# Adapted to this repository's conventions, with the same behaviour: the manifest is plugin.yaml
+# (owpp writes the header from it), the imports are tidied and unused ones dropped, the types
+# are modern, and the two role checks are one condition. Licence: see NOTICE.md.
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from open_webui.utils.misc import get_last_user_message_item
+from pydantic import BaseModel, Field
 
 
 class Filter:
@@ -47,17 +49,18 @@ class Filter:
         self,
         body: dict,
         __event_emitter__: Callable[[Any], Awaitable[None]],
-        __model__: Optional[dict] = None,
-        __user__: Optional[dict] = None,
+        __model__: dict | None = None,
+        __user__: dict | None = None,
     ) -> dict:
         if __model__["id"] in self.valves.skip_reroute_models:
             return body
         if __model__["id"] == self.valves.vision_model_id:
             return body
         if __user__ is not None:
-            if __user__.get("role") == "admin" and not self.valves.enabled_for_admins:
-                return body
-            elif __user__.get("role") == "user" and not self.valves.enabled_for_users:
+            role = __user__.get("role")
+            if (role == "admin" and not self.valves.enabled_for_admins) or (
+                role == "user" and not self.valves.enabled_for_users
+            ):
                 return body
 
         messages = body.get("messages")
@@ -73,12 +76,8 @@ class Filter:
         has_images = user_message.get("images") is not None
         if not has_images:
             user_message_content = user_message.get("content")
-            if user_message_content is not None and isinstance(
-                user_message_content, list
-            ):
-                has_images = any(
-                    item.get("type") == "image_url" for item in user_message_content
-                )
+            if user_message_content is not None and isinstance(user_message_content, list):
+                has_images = any(item.get("type") == "image_url" for item in user_message_content)
 
         if has_images:
             if self.valves.vision_model_id:
