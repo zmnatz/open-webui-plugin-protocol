@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from conftest import URL
 
 ASK = "[reasoning only] What is six times seven?"
@@ -26,7 +28,7 @@ def test_without_the_filter_the_reply_is_only_a_thought(user, api, shot):
     toggle(api, False)
     try:
         ask(user)
-        user.get_by_text("Thought", exact=False).first.wait_for(timeout=60_000)
+        user.get_by_text(re.compile("Thought|Thinking")).first.wait_for(timeout=60_000)
         user.wait_for_timeout(1000)
         shot(
             user,

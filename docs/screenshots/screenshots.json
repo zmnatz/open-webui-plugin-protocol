@@ -1,7 +1,7 @@
 {
   "open_webui": "0.13.4",
-  "taken": "2026-11-19",
-  "commit": "0ae8f6d",
+  "taken": "2026-11-21",
+  "commit": "3bb11aa",
   "shots": [
     {
       "file": "deploy/functions.png",

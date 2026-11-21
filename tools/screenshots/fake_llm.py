@@ -98,6 +98,12 @@ def _reply(body: dict) -> dict:
     messages = body.get("messages") or []
     last = messages[-1] if messages else {}
     called = [call["function"]["name"] for m in messages for call in m.get("tool_calls") or []]
+    # The examples' own replies come first: the rules below look at the whole prompt, which
+    # carries whatever the global functions add to it (a skill list mentions tool_calls).
+    if body.get("model") == VISION:
+        return {"content": SEEN}
+    if "[reasoning only]" in str(last.get("content", "")):
+        return {"reasoning": REASONING}  # a reply that ends in reasoning, with no answer
     # Open-WebUI may put calls of its own in front (v0.13 lists the skills first), so the
     # script's tool is called whenever it is offered and has not been called yet.
     for name in _tool_names(body):
@@ -113,10 +119,6 @@ def _reply(body: dict) -> dict:
             if f'"{name}"' in prompt or f"'{name}'" in prompt:
                 return {"content": json.dumps({"tool_calls": [{"name": name, "parameters": args}]})}
         return {"content": json.dumps({"tool_calls": []})}
-    if body.get("model") == VISION:
-        return {"content": SEEN}
-    if "[reasoning only]" in str(last.get("content", "")):
-        return {"reasoning": REASONING}  # a reply that ends in reasoning, with no answer
     if "title" in prompt.lower() and "chat" in prompt.lower() and last.get("role") == "user":
         # Open-WebUI's title and tag tasks want JSON; keep them short and stable.
         if "tags" in prompt.lower():
