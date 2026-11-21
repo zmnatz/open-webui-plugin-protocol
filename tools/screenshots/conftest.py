@@ -159,13 +159,13 @@ def shot(request):
 
 
 FAILURES = ROOT / "tools" / "screenshots" / "failures"
-FAKE_LLM = "http://127.0.0.1:9000"
+AIMOCK = "http://127.0.0.1:4010"
 
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     """When a script fails, keep what it saw: each open page as a PNG and its text, and what
-    the scripted model was asked, in tools/screenshots/failures/ (not committed)."""
+    aimock was asked, in tools/screenshots/failures/ (not committed)."""
     outcome = yield
     report = outcome.get_result()
     if report.when != "call" or not report.failed:
@@ -180,8 +180,9 @@ def pytest_runtest_makereport(item, call):
             page.screenshot(path=f"{stem}.png", full_page=True)
             stem.with_suffix(".txt").write_text(page.inner_text("body"))
     with contextlib.suppress(Exception):
-        with urllib.request.urlopen(FAKE_LLM + "/requests", timeout=10) as response:
-            asked = json.loads(response.read())["requests"][-8:]
+        url = AIMOCK + "/__aimock/journal?path=/v1/chat/completions"
+        with urllib.request.urlopen(url, timeout=10) as response:
+            asked = [e["body"] for e in json.loads(response.read()) if e.get("body")][-8:]
         summary = [
             {
                 "model": r.get("model"),

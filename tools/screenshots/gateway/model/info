@@ -1,0 +1,38 @@
+{
+  "data": [
+    {
+      "model_name": "screenshot-model",
+      "model_info": {
+        "display_name": "Screenshot Model",
+        "litellm_provider": "anthropic",
+        "model_family": "claude",
+        "mode": "chat",
+        "capabilities": {
+          "vision": true,
+          "tools": true
+        }
+      }
+    },
+    {
+      "model_name": "screenshot-vision",
+      "model_info": {
+        "display_name": "Screenshot Vision",
+        "litellm_provider": "openai",
+        "mode": "chat",
+        "capabilities": {
+          "vision": true,
+          "tools": false
+        }
+      }
+    },
+    {
+      "model_name": "screenshot-embedding",
+      "model_info": {
+        "display_name": "Screenshot Embeddings",
+        "litellm_provider": "openai",
+        "mode": "embedding",
+        "capabilities": {}
+      }
+    }
+  ]
+}

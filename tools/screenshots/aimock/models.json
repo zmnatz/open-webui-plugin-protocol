@@ -1,0 +1,119 @@
+{
+  "fixtures": [
+    {
+      "match": {
+        "model": "screenshot-vision"
+      },
+      "response": {
+        "content": "I am the vision model: a message with a picture was sent to me."
+      }
+    },
+    {
+      "match": {
+        "model": "screenshot-model",
+        "userMessage": "[reasoning only]"
+      },
+      "response": {
+        "content": "",
+        "reasoning": "Thinking it through, the answer is forty-two."
+      }
+    },
+    {
+      "match": {
+        "model": "screenshot-model",
+        "toolName": "show_excalidraw",
+        "toolResultContains": "excalidraw_artifact"
+      },
+      "response": {
+        "content": "Here is the diagram: the API reads from the database. Edit it in the panel."
+      }
+    },
+    {
+      "match": {
+        "model": "screenshot-model",
+        "toolName": "show_excalidraw"
+      },
+      "response": {
+        "toolCalls": [
+          {
+            "name": "show_excalidraw",
+            "arguments": {
+              "elements": [
+                {
+                  "type": "rectangle",
+                  "id": "api",
+                  "x": 80,
+                  "y": 80,
+                  "width": 200,
+                  "height": 90,
+                  "label": {
+                    "text": "API"
+                  }
+                },
+                {
+                  "type": "ellipse",
+                  "id": "db",
+                  "x": 420,
+                  "y": 80,
+                  "width": 200,
+                  "height": 90,
+                  "label": {
+                    "text": "Database"
+                  }
+                },
+                {
+                  "type": "arrow",
+                  "id": "q",
+                  "x": 280,
+                  "y": 125,
+                  "points": [
+                    [
+                      0,
+                      0
+                    ],
+                    [
+                      140,
+                      0
+                    ]
+                  ],
+                  "start": {
+                    "id": "api"
+                  },
+                  "end": {
+                    "id": "db"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "match": {
+        "model": "screenshot-model",
+        "userMessage": "Generate a concise"
+      },
+      "response": {
+        "content": "{\"title\": \"Screenshot demo\"}"
+      }
+    },
+    {
+      "match": {
+        "model": "screenshot-model",
+        "userMessage": "Generate 1-3 broad tags"
+      },
+      "response": {
+        "content": "{\"tags\": [\"Demo\"]}"
+      }
+    },
+    {
+      "match": {
+        "model": "screenshot-model"
+      },
+      "response": {
+        "content": "Hello! I am the screenshot model: I answer the same way every time."
+      }
+    }
+  ]
+}

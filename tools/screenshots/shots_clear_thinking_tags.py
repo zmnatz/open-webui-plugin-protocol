@@ -1,4 +1,4 @@
-"""Clear thinking tags on a real Open-WebUI: the scripted model stops while thinking."""
+"""Clear thinking tags on a real Open-WebUI: aimock's model stops while thinking."""
 
 from __future__ import annotations
 

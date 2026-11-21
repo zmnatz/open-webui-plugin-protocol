@@ -20,13 +20,13 @@ It needs Docker, which your user must be able to reach (in the `docker` group; w
 
 `tools/screenshots/run.py`:
 
-1. Starts `tools/screenshots/compose.yaml`. It holds Open-WebUI at the version the protocol targets (v0.13.4, the `-slim` image), a scripted model and [mcpo](https://github.com/open-webui/mcpo) with two servers. **iframe Sandbox Allow Same Origin** is on by default there (`DEFAULT_INTERFACE_SETTINGS`), as the examples with pages in the Artifacts panel require. Nothing is kept between runs.
+1. Starts `tools/screenshots/compose.yaml`. It holds Open-WebUI at the version the protocol targets (v0.13.4, the `-slim` image), aimock as its models (with a gateway's `/model/info` beside it) and [mcpo](https://github.com/open-webui/mcpo) with two servers. **iframe Sandbox Allow Same Origin** is on by default there (`DEFAULT_INTERFACE_SETTINGS`), as the examples with pages in the Artifacts panel require. Nothing is kept between runs.
 2. Signs up the admin (the first account always is) and adds a user, both throwaway.
 3. Deploys `examples/plugins` with `owpp deploy`, exactly as a plugin repository would.
 4. Runs the scripts in `tools/screenshots/shots_*.py` with pytest and Playwright. Each signs in on Open-WebUI's own login page, does what a person would, and saves a screenshot at each step worth seeing.
 5. Removes the containers.
 
-**The scripted model** (`tools/screenshots/fake_llm.py`) answers on a script, the same way every run, with no API key and no real model: [what it does](testing/live.md#the-scripted-model).
+**The model** is [aimock](https://github.com/CopilotKit/aimock), answering from fixtures in `tools/screenshots/aimock/`, the same way every run, with no API key and no real model: [how it answers](testing/live.md#the-model-aimock).
 
 ## Adding one
 

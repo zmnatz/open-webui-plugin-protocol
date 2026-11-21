@@ -13,7 +13,7 @@ ASK = "Draw our API and the database it reads from."
 
 @pytest.fixture(scope="module")
 def diagram_model(api):
-    """A workspace model on the scripted model, with the Excalidraw tool and native calling."""
+    """A workspace model on aimock's screenshot-model, with the Excalidraw tool and native calling."""
     api(
         "POST",
         "/api/v1/models/create",

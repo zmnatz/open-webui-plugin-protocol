@@ -26,11 +26,11 @@ Done when `uv run owpp test --dir examples/plugins <id>` and `uv run owpp check 
 
 Add `tools/screenshots/shots_<id>.py` ([adding one](../screenshots.md#adding-one)). Each test follows By hand steps in the browser, as the user or the admin, and calls `shot(...)` with `illustrates=[...]` naming the plugin tests it shows. Show the change: a before-and-after pair when the plugin changes something on screen (turn the function off for the before, and back on). Set up through the `api` fixture, and put back every valve and toggle you change.
 
-The [scripted model](../testing/live.md#the-scripted-model) answers on a script; extend it when the example needs a reply it does not give. A model a user who is not an admin must reach needs an entry in its `MODEL_INFO`: the LiteLLM sync gives it the read grant.
+The model is [aimock](../testing/live.md#the-model-aimock), answering from `tools/screenshots/aimock/models.json`. When the example needs a reply it does not give, add a fixture there, above the catch-all. A new model must also go in `tools/screenshots/gateway/` (`v1/models` and `model/info`): the LiteLLM sync gives it the read grant a user who is not an admin needs.
 
 ## 4. Check it live
 
-When the plugin depends on something only the real Open-WebUI does (which model a request goes to, what reaches the model, a grant), add a test to `tools/live/test_live.py` ([the live suite](../testing/live.md#the-live-suite)). When it needs a reply the [scripted model](../testing/live.md#the-scripted-model) does not give, add one there.
+When the plugin depends on something only the real Open-WebUI does (which model a request goes to, what reaches the model, a grant), add a test to `tools/live/test_live.py` ([the live suite](../testing/live.md#the-live-suite)). Its tests can read what Open-WebUI sent the model from aimock's journal.
 
 ## 5. Run it
 
@@ -39,7 +39,7 @@ uv run --group screenshots python tools/screenshots/run.py -- -k <id>   # its sc
 uv run --group screenshots python tools/screenshots/run.py --live       # the live suite
 ```
 
-Both start Open-WebUI in Docker. When `docker ps` says "permission denied", the user running the agent is not in the `docker` group: hand the user the command to run in their own terminal (`sudo -u "$USER" -g docker env "PATH=$PATH" uv run ...`), and work from the output they paste back. Each failure prints Open-WebUI's response body; its `detail` says what went wrong.
+Both start Open-WebUI in Docker; `run.py --up` starts it and leaves it running, to try something by hand ([trying things out in isolation](../testing/live.md#trying-things-out-in-isolation)). When `docker ps` says "permission denied", the user running the agent is not in the `docker` group: hand the user the command to run in their own terminal (`sudo -u "$USER" -g docker env "PATH=$PATH" uv run ...`), and work from the output they paste back. Each failure prints Open-WebUI's response body; its `detail` says what went wrong.
 
 Done when the live suite passes and the new PNGs and `docs/screenshots/screenshots.json` are in the commit.
 

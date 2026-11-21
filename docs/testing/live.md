@@ -12,7 +12,7 @@ Every test's docstring ends with **By hand**: the steps to see the same behaviou
 
 ## The live suite
 
-This repository also runs its examples on a real Open-WebUI, automatically. It starts the same stack as the [screenshots](../screenshots.md) (Open-WebUI v0.13.4 as the `-slim` image, the [scripted model](#the-scripted-model) and mcpo, in Docker), deploys `examples/plugins` with `owpp deploy`, then runs the tests in `tools/live/`: the screenshots show what happens, the live suite asserts it.
+This repository also runs its examples on a real Open-WebUI, automatically. It starts the same stack as the [screenshots](../screenshots.md) (Open-WebUI v0.13.4 as the `-slim` image, [aimock](#the-model-aimock) as its models, and mcpo, in Docker), deploys `examples/plugins` with `owpp deploy`, then runs the tests in `tools/live/`: the screenshots show what happens, the live suite asserts it.
 
 ```sh
 uv run --group screenshots python tools/screenshots/run.py --live
@@ -29,9 +29,9 @@ It needs Docker, reachable by your user ([taking screenshots](../screenshots.md#
 | `test_an_outlet_turns_unfinished_reasoning_into_the_answer` | `clear_thinking_tags`'s outlet runs through `/api/chat/completed` and changes the reply. |
 | `test_an_inlet_can_send_a_message_with_an_image_to_another_model` | `vision_router`'s inlet changes which model a request goes to, set by a valve. |
 
-To add one, write a `test_*.py` in `tools/live/` with the `api` (admin) and `user_api` fixtures. Each call returns `(status, body)`, with the body on an error too, so put it in the assertion message: Open-WebUI says what went wrong in `detail`.
+To add one, write a `test_*.py` in `tools/live/` with the `api` (admin) and `user_api` fixtures. Each call returns `(status, body)`, with the body on an error too, so put it in the assertion message: Open-WebUI says what went wrong in `detail`. To see what Open-WebUI sent the model, read aimock's journal (`_requests()` in `test_live.py`).
 
-A plugins repository can run its own the same way: `tools/screenshots/` (`compose.yaml`, `fake_llm.py`, `run.py`) and `tools/live/` are small enough to copy.
+A plugins repository can run its own the same way: see [an isolated Open-WebUI of your own](#an-isolated-open-webui-of-your-own).
 
 ### What the first runs found
 
@@ -41,13 +41,41 @@ None of these could the mock have shown:
 - **Over the API, a tool call comes back to the caller.** With no saved chat, Open-WebUI returns the model's tool call (`finish_reason: "tool_calls"`) rather than running the tool; the browser's chat runs it.
 - **`/api/chat/completed` needs a chat the user owns**, or it answers 404. In v0.13 it is kept for older clients: outlets also run inside the chat completion.
 
-## The scripted model
+## The model: aimock
 
-`tools/screenshots/fake_llm.py` is a small OpenAI-compatible server, standing in for a real model in both the live suite and the screenshots. When Open-WebUI offers it a tool it has a script for, it calls that tool with fixed arguments, then replies with fixed text. So "ask the model to draw something" gives the same drawing every time, with no API key and no real model. It also:
+The stack has no real model and needs no API key. Its models are [aimock](https://github.com/CopilotKit/aimock) (CopilotKit, MIT, pinned in `compose.yaml`): an OpenAI-compatible server that answers from **fixtures**, the same way every run. Each fixture says what to match (the model asked for, the last user message, a tool offered, a tool's result) and what to answer (text, tool calls, reasoning). The first fixture that matches wins. They are in `tools/screenshots/aimock/models.json`:
 
-- lists a second model, `screenshot-vision`, which answers that a picture reached it ([`vision_router`](../examples/vision_router.md));
-- answers a message containing `[reasoning only]` with reasoning and no answer ([`clear_thinking_tags`](../examples/clear_thinking_tags.md));
-- answers `/model/info` as a LiteLLM gateway would ([`litellm_model_sync`](../examples/litellm_model_sync.md)). That sync is what gives the models the read grant a user who is not an admin needs to use them;
-- records every chat request it gets, at `GET http://127.0.0.1:9000/requests`, so a test can see what Open-WebUI sent.
+| Fixture matches | It answers | For |
+| --- | --- | --- |
+| `model: screenshot-vision` | "I am the vision model: ..." | [`vision_router`](../examples/vision_router.md): the reply shows where the picture went. |
+| a last user message containing `[reasoning only]` | reasoning and no answer | [`clear_thinking_tags`](../examples/clear_thinking_tags.md) |
+| `show_excalidraw` offered, and its result in the request | "Here is the diagram: ..." | [`excalidraw`](../examples/excalidraw.md): the answer once the tool has run. |
+| `show_excalidraw` offered | a call to it, with a fixed drawing | `excalidraw`: so "draw something" gives the same drawing every time. |
+| Open-WebUI's title and tag tasks | fixed JSON | stable chat titles in the screenshots |
+| anything else for `screenshot-model` | "Hello! I am the screenshot model: ..." | every other chat |
 
-When an example needs a reply it does not give, add one there: a trigger phrase, a model, or an entry in its `/model/info`.
+aimock lists as its models (`/v1/models`) the models its fixtures name, so every fixture names one. It keeps a **journal** of every request, at `GET http://127.0.0.1:4010/__aimock/journal`, which is how a test sees what Open-WebUI sent: the messages after the filters ran, the tools offered, the model.
+
+Open-WebUI has a second OpenAI connection, `gateway`: an `nginx` serving two fixed files, the `/v1/models` and `/model/info` a LiteLLM gateway would answer for the same models. aimock has no `/model/info`, and [`litellm_model_sync`](../examples/litellm_model_sync.md) reads it. That sync is also what gives each model the read grant a user who is not an admin needs to use it, so **a model aimock answers as must be in the gateway's files too** (`tests/test_live_stack.py` checks it). Open-WebUI keeps the first connection's entry for a model both list, so the chats go to aimock.
+
+When an example needs a reply the fixtures do not give, add a fixture, more specific ones first. Every field a fixture can match on and answer with: [aimock's fixture reference](https://aimock.copilotkit.dev/fixtures/).
+
+## Trying things out in isolation
+
+The same stack is a throwaway Open-WebUI to try a plugin on, by hand, with nothing leaving the machine: no real model, no API key, `OFFLINE_MODE` on, and nothing kept once it stops.
+
+```sh
+uv run --group screenshots python tools/screenshots/run.py --up
+```
+
+It starts the stack, signs up an admin and a user, deploys `examples/plugins` with `owpp deploy`, prints the address and both accounts, and leaves it running. Then:
+
+- **Sign in** at http://127.0.0.1:3000 as either account, and follow a plugin's By hand steps.
+- **Deploy a change**: `run.py --up` prints the two variables to set, the address and the admin's token. With them set, `uv run owpp deploy --dir examples/plugins --only <id>`.
+- **Make the model say something new**: add a fixture to `tools/screenshots/aimock/models.json`, above the catch-all at the end, and restart aimock alone: `docker compose -f tools/screenshots/compose.yaml restart aimock`. (aimock's `POST /__aimock/fixtures` adds fixtures without a restart, but after the file's, so the catch-all answers first for `screenshot-model`.)
+- **See what Open-WebUI sent the model**: `curl 'http://127.0.0.1:4010/__aimock/journal?path=/v1/chat/completions'`. This is the quickest way to check an inlet: the messages there are the ones after every filter ran.
+- **Stop it**: `docker compose -f tools/screenshots/compose.yaml down --volumes`.
+
+### An isolated Open-WebUI of your own
+
+A plugins repository can do the same with four files: a `compose.yaml` with Open-WebUI (the `-slim` image), aimock and its fixtures, and a script that signs up an admin and runs `owpp deploy`. This repository's `tools/screenshots/compose.yaml`, `aimock/models.json` and `run.py` are a starting point; drop `gateway` and mcpo unless a plugin needs them.

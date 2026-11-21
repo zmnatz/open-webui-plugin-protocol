@@ -53,12 +53,14 @@ def test_it_answers_as_a_model(owui, plugin):
 A pipe that streams returns an async generator; read it inside `owui.run(...)`, which runs code on the mock's event loop:
 
 ```python
-    chunks = plugin.call("pipe", {"messages": [], "stream": True}, user=user)
+chunks = plugin.call("pipe", {"messages": [], "stream": True}, user=user)
 
-    async def read():
-        return "".join([chunk async for chunk in chunks])
 
-    assert owui.run(read()) == "Hello from Hello"
+async def read():
+    return "".join([chunk async for chunk in chunks])
+
+
+assert owui.run(read()) == "Hello from Hello"
 ```
 
 ## Tools
@@ -71,14 +73,16 @@ def test_show_creates_the_drawing_and_hands_the_filter_an_artifact(owui, plugin)
     rectangle in it."""
     ada = owui.add_user("Ada")
     chat = owui.add_chat(ada)
-    result = owui.tool("excalidraw").call("show_excalidraw", elements=[RECT], chat_id=chat, user=ada)
+    result = owui.tool("excalidraw").call(
+        "show_excalidraw", elements=[RECT], chat_id=chat, user=ada
+    )
     assert f'src="/excalidraw/view/{chat}"' in result["excalidraw_artifact"]
     assert owui.chat(chat).meta["excalidraw"]["elements"] == [RECT]
 ```
 
 - `.call(method, ..., user=, chat_id=)` calls a method as the model would.
 - `.specs` is what the model is told: each method's name, description and parameters. Test it when the docstrings are the instructions the model follows.
-- That the model actually calls the tool is Open-WebUI's and the model's part. This repository's [live suite](live.md#the-live-suite) checks it with a scripted model.
+- That the model actually calls the tool is Open-WebUI's and the model's part. This repository's [live suite](live.md#the-live-suite) checks it, with aimock as the model.
 
 Example: [`excalidraw`](../examples/excalidraw.md) (`tests/test_excalidraw_tool.py`).
 

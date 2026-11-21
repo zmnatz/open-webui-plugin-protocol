@@ -14,7 +14,7 @@ A reply with an answer after its reasoning is left alone. No valves. Global.
 - `owpp check clear_thinking_tags` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines.
 - `owpp bundle clear_thinking_tags out.py` writes the deployed code to read or diff.
 - `owpp test clear_thinking_tags` runs `tests/` against a mock Open-WebUI (docs/testing.md).
-- On a live Open-WebUI: with a model that sometimes stops while thinking, ask until a reply has a Thinking block and nothing after it. With the filter on, the thinking text is the reply. The live suite (`tools/screenshots/run.py --live`) and the screenshots do this with the scripted model.
+- On a live Open-WebUI: with a model that sometimes stops while thinking, ask until a reply has a Thinking block and nothing after it. With the filter on, the thinking text is the reply. The live suite (`tools/screenshots/run.py --live`) and the screenshots do this with aimock as the model.
 
 ## Deploy
 

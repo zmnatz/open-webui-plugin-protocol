@@ -60,7 +60,7 @@ def test_a_picture_goes_to_the_vision_model(user, shot, routed, tmp_path):
         user,
         "vision_router",
         "routed",
-        "A picture sent to the scripted model: the filter sent it to the vision model instead, "
+        "A picture sent to the screenshot model: the filter sent it to the vision model instead, "
         "and the status line says so.",
         illustrates=[
             "test_a_message_with_an_image_goes_to_the_vision_model",

@@ -1,5 +1,5 @@
-"""What the mock cannot promise, asserted on a real Open-WebUI with the scripted model
-(tools/screenshots/fake_llm.py)."""
+"""What the mock cannot promise, asserted on a real Open-WebUI whose model is aimock, answering
+from tools/screenshots/aimock/ (docs/testing/live.md)."""
 
 from __future__ import annotations
 
@@ -8,13 +8,14 @@ import urllib.request
 
 MODEL = "screenshot-model"
 PLAIN = "Hello! I am the screenshot model"
-FAKE_LLM = "http://127.0.0.1:9000"
+AIMOCK = "http://127.0.0.1:4010"
 
 
 def _requests() -> list[dict]:
-    """Every chat request the scripted model has received."""
-    with urllib.request.urlopen(FAKE_LLM + "/requests", timeout=10) as response:
-        return json.loads(response.read())["requests"]
+    """Every chat request aimock has received, from its journal: what Open-WebUI sent."""
+    url = AIMOCK + "/__aimock/journal?path=/v1/chat/completions"
+    with urllib.request.urlopen(url, timeout=10) as response:
+        return [entry["body"] for entry in json.loads(response.read()) if entry.get("body")]
 
 
 def test_the_deployed_functions_are_installed_and_active(api):
@@ -51,7 +52,7 @@ def test_a_deployed_tool_is_offered_to_the_model_and_the_model_calls_it(user_api
     model records the request) and hands back the call the model makes. It does not run the tool:
     for an API call with no saved chat, the client does that.
 
-    By hand: in a chat with the Excalidraw tool on and the scripted model, ask for a drawing.
+    By hand: in a chat with the Excalidraw tool on, ask for a drawing.
     """
     status, reply = user_api(
         "POST",
@@ -104,7 +105,7 @@ def test_an_outlet_turns_unfinished_reasoning_into_the_answer(user_api):
 
 def test_an_inlet_can_send_a_message_with_an_image_to_another_model(api, user_api):
     """The vision_router filter's valve names a model; a message with an image is then sent to it
-    (the scripted model records the model it was asked for), and one without is not."""
+    (aimock's journal records the model it was asked for), and one without is not."""
     _, models = user_api("GET", "/api/models")
     known = sorted(m["id"] for m in models["data"])
     assert "screenshot-vision" in known, known

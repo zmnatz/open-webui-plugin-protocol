@@ -1,6 +1,6 @@
 name: live
 # End-to-end, opt-in: deploys examples/plugins to a real Open-WebUI (the version the protocol
-# targets) with the scripted model, and asserts on what it does (tools/live). Not part of the
+# targets) with aimock as its models, and asserts on what it does (tools/live). Not part of the
 # normal checks (it pulls an image and starts three containers). Runs when started by hand, on a release tag, and on a
 # pull request carrying the `e2e` label.
 on:
