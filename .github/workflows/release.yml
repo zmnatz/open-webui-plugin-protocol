@@ -1,0 +1,75 @@
+name: release
+# Starts a release or a hotfix (docs/contributing.md#releasing). Run by hand: Actions > release >
+# Run workflow. Cuts release/<version> from develop (or hotfix/<version> from main), prepares it
+# with tools/release.py (the version, the dated changelog section, the docs' pins), pushes it and
+# opens its pull request into main. Merging that pull request publishes the release (publish.yml)
+# and merges main back into develop (merge-back.yml).
+#
+# With the default token, the pull request's checks do not start on their own (GitHub does not
+# start workflows for what its own token does): close and reopen it to start them. A RELEASE_TOKEN
+# secret (a fine-grained token or a GitHub App's, with contents and pull requests: write) avoids
+# that.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "patch, minor, major, or the new version (such as 0.5.0)"
+        required: true
+        default: minor
+      kind:
+        description: "release: from develop. hotfix: from main, a patch, opened as a draft for the fix."
+        type: choice
+        options: [release, hotfix]
+        default: release
+permissions:
+  contents: write
+  pull-requests: write
+concurrency:
+  group: release
+jobs:
+  start:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.kind == 'hotfix' && 'main' || 'develop' }}
+          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+      - id: prepare
+        env:
+          HOW: ${{ inputs.version }}
+          KIND: ${{ inputs.kind }}
+        run: |
+          if [ "$KIND" = hotfix ]; then
+            version=$(python3 tools/release.py prepare "$HOW" --hotfix)
+          else
+            version=$(python3 tools/release.py prepare "$HOW")
+          fi
+          branch="$KIND/$version"
+          if git ls-remote --exit-code origin "refs/heads/$branch" "refs/tags/v$version" >/dev/null; then
+            echo "::error::$branch or the tag v$version already exists"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+      - env:
+          VERSION: ${{ steps.prepare.outputs.version }}
+          BRANCH: ${{ steps.prepare.outputs.branch }}
+          KIND: ${{ inputs.kind }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git commit -am "chore: prepare the $VERSION $KIND"
+          git push origin "$BRANCH"
+          if [ "$KIND" = hotfix ]; then
+            draft=--draft
+            body="Hotfix $VERSION, cut from \`main\`. Push the fix to \`$BRANCH\` with its changelog entry under \`## $VERSION\`, then mark this ready and merge it with a merge commit."
+          else
+            draft=
+            body="Release $VERSION, cut from \`develop\`. Only fixes for the release go on \`$BRANCH\` now. Merge with a merge commit: that tags v$VERSION, publishes it, and merges \`main\` back into \`develop\`."
+          fi
+          if python3 tools/release_notes.py "v$VERSION" > notes.md 2>/dev/null; then
+            body="$body"$'\n\n## Changelog\n\n'"$(cat notes.md)"
+          fi
+          gh pr create $draft --base main --head "$BRANCH" --title "chore: $KIND $VERSION" --body "$body"

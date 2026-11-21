@@ -63,12 +63,16 @@ Never squash or rebase into `main`, or back from it into `develop`: `develop` wo
 
 ## Releasing
 
-1. Cut `release/<version>` from `develop`. On it: set `__version__` in `src/owpp/__init__.py`, turn `## Unreleased` in `CHANGELOG.md` into `## <version> (<date>)`, and move the docs' version pins. Only fixes for the release go on this branch after that.
-2. Open a pull request into `main` and merge it with a merge commit.
-3. Tag the merge on `main`: `git switch main && git pull && git tag -a v<version> -m "owpp <version>" && git push origin v<version>`. `.github/workflows/publish.yml` refuses a tag that is not `v<__version__>` or has no dated changelog section, publishes the package to PyPI, and then creates the GitHub release with that section as its notes and the built package attached.
-4. Open a pull request from `main` into `develop`, and merge it with a merge commit.
+Releases are started from the Actions tab, and everything after the merge is automatic:
 
-A hotfix is the same from step 1, with `hotfix/<version>` cut from `main` and a patch version.
+1. **Start it.** Run **Actions > release > Run workflow** with the version (`patch`, `minor`, `major`, or one such as `0.5.0`). `.github/workflows/release.yml` cuts `release/<version>` from `develop`, prepares it with `tools/release.py` (it sets `__version__` in `src/owpp/__init__.py`, turns `## Unreleased` in `CHANGELOG.md` into `## <version> (<date>)`, and moves the docs' version pins), and opens its pull request into `main`. Only fixes for the release go on that branch now. To prepare one by hand instead, run `python tools/release.py prepare <version>` on the branch.
+2. **Merge it** with a merge commit, once CI is green. CI's `release` job checks every pull request into `main` the way publishing will: `v<__version__>` is not a tag yet, and the changelog has a dated section for it with entries.
+3. **Publishing.** The merge into `main` starts `.github/workflows/publish.yml`. It tags the merge `v<version>`, publishes the package to PyPI, and creates the GitHub release with the changelog section as its notes and the built package attached. A `v*` tag pushed by hand publishes the same way, and a push to `main` whose version is already tagged publishes nothing.
+4. **Merge-back.** The same merge starts `.github/workflows/merge-back.yml`, which opens a pull request from `main` into `develop` and merges it with a merge commit. When it conflicts (usually `CHANGELOG.md`, when `develop` has new entries), it leaves the pull request open with the steps to resolve it on a branch from `develop`, and the run fails so it is not missed. **Actions > merge-back > Run workflow** tries again.
+
+A hotfix is the same with **kind** set to `hotfix`: `hotfix/<version>` is cut from `main`, with a patch version and an empty dated changelog section, and its pull request opens as a draft. Push the fix and its changelog entry to that branch, then mark it ready and merge it.
+
+The workflows need **Settings > Actions > General > Allow GitHub Actions to create and approve pull requests**. With the default token, GitHub does not start the checks on a pull request the workflow opened, so close and reopen the release pull request to run them. A `RELEASE_TOKEN` secret (a fine-grained token or a GitHub App's, with contents and pull requests: write) avoids that; the tag is always pushed with the default token, so it does not start publishing a second time.
 
 ## This site
 
