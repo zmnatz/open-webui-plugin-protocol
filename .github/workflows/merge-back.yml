@@ -53,15 +53,11 @@ jobs:
             exit 0
           fi
           gh pr comment "$number" --body "$(cat <<EOF
-          This merge-back could not be merged automatically (mergeable: $state). Resolve it on a branch from \`develop\`, not on \`main\`:
+          This merge-back could not be merged automatically (mergeable: $state). \`main\` only takes pull requests, so resolve it on a branch cut from \`main\`:
 
-          \`\`\`
-          git switch develop && git pull && git switch -c chore/merge-back-$version
-          git merge origin/main   # resolve, then commit
-          git push -u origin chore/merge-back-$version
-          \`\`\`
-
-          Open a pull request from it into \`develop\`, merge it with a merge commit, and close this one.
+          1. Create a branch \`chore/merge-back-$version\` from \`main\` (on GitHub: the branch menu on the Code tab, with \`main\` selected).
+          2. Open a pull request from it into \`develop\`, and use **Resolve conflicts** on it (or locally: \`git merge origin/develop\` on that branch, resolve, push).
+          3. Merge it with **Create a merge commit**, never a squash, and close this pull request.
           EOF
           )"
           echo "::error::main could not be merged back into develop automatically: see pull request #$number"
