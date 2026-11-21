@@ -117,6 +117,6 @@ uv run owpp check --dir examples/plugins
 
 ## Licence
 
-MIT ([LICENSE](LICENSE)). Vendored third-party code (Classic298's Shared Assets Protocol, BSD-3-Clause): [NOTICE.md](NOTICE.md).
+MIT ([LICENSE](LICENSE)). Third-party code: Classic298's Shared Assets Protocol (vendored, BSD-3-Clause), the `page_banners` example (a variant of Classic298's Better Banners) and two filters in the live suite (by Haervwe, MIT, and by open-webui, Open WebUI License). Notices and licences: [NOTICE.md](NOTICE.md).
 
 This project contains no Open WebUI code: it talks to Open WebUI's API and produces plugins that run inside it. It is an independent project, **not affiliated with or endorsed by Open WebUI Inc.**; "Open WebUI" is used only to say what it works with. Open WebUI itself is under the [Open WebUI License](https://github.com/open-webui/open-webui/blob/main/LICENSE).
