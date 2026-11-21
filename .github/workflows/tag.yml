@@ -1,0 +1,20 @@
+name: tag
+# Tags a release when it merges into main (docs/contributing.md#releasing), with
+# zmnatz/github-workflows. Only tags: publish.yml and docs.yml release the tag.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tag
+jobs:
+  tag:
+    uses: zmnatz/github-workflows/.github/workflows/gitflow-tag.yml@v1
+    with:
+      version-command: >-
+        sed -n 's/^__version__ = "\(.*\)"/\1/p' src/owpp/__init__.py
+      tag-message: "owpp "
+    secrets:
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
