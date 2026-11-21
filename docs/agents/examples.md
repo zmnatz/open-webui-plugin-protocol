@@ -18,7 +18,7 @@ Done when all five places name the author and the licence.
 
 ## 2. Test it
 
-Follow [the owpp skill's testing steps](../../skills/owpp/references/testing.md): every valve and every branch has a test, each with a docstring that says what it checks and then **By hand**. The test names matter twice over: the screenshots link to them, and the [test catalogue](../testing.md#describe-every-test) is built from the docstrings.
+Follow [the owpp skill's testing steps](../../skills/owpp/references/testing.md): every valve and every branch has a test, each with a docstring that says what it checks and then **By hand**. The test names matter twice over: the screenshots link to them, and the [test catalogue](../testing/writing.md#describe-every-test) is built from the docstrings.
 
 Done when `uv run owpp test --dir examples/plugins <id>` and `uv run owpp check --strict --dir examples/plugins <id>` pass.
 
@@ -26,11 +26,11 @@ Done when `uv run owpp test --dir examples/plugins <id>` and `uv run owpp check 
 
 Add `tools/screenshots/shots_<id>.py` ([adding one](../screenshots.md#adding-one)). Each test follows By hand steps in the browser, as the user or the admin, and calls `shot(...)` with `illustrates=[...]` naming the plugin tests it shows. Show the change: a before-and-after pair when the plugin changes something on screen (turn the function off for the before, and back on). Set up through the `api` fixture, and put back every valve and toggle you change.
 
-The scripted model (`tools/screenshots/fake_llm.py`) answers on a script. When the example needs a reply it does not give, add one there: a trigger phrase, a model, or an entry in `/model/info`. A model a user who is not an admin must reach needs an entry in `MODEL_INFO`: the LiteLLM sync gives it the read grant.
+The [scripted model](../testing/live.md#the-scripted-model) answers on a script; extend it when the example needs a reply it does not give. A model a user who is not an admin must reach needs an entry in its `MODEL_INFO`: the LiteLLM sync gives it the read grant.
 
 ## 4. Check it live
 
-When the plugin depends on something only the real Open-WebUI does (which model a request goes to, what reaches the model, a grant), add a test to `tools/live/test_live.py` ([the live suite](../screenshots.md#the-live-suite)).
+When the plugin depends on something only the real Open-WebUI does (which model a request goes to, what reaches the model, a grant), add a test to `tools/live/test_live.py` ([the live suite](../testing/live.md#the-live-suite)). When it needs a reply the [scripted model](../testing/live.md#the-scripted-model) does not give, add one there.
 
 ## 5. Run it
 

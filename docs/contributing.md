@@ -14,7 +14,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 | --- | --- | --- |
 | The code | `src/owpp/` (the CLI, bundler and deploy), `src/owpp/runtime/` (deployed byte for byte, never reformatted), or a plugin in `examples/plugins/` | |
 | Tests | `tests/` for owpp, `examples/plugins/<id>/tests/` for a plugin | They show it works, and keep it working. |
-| A docstring on each plugin test | the test itself: what it checks, then `By hand:` steps ([describe every test](testing.md#describe-every-test)) | A reviewer repeats them on a live Open-WebUI. The [test catalogue](reference/test-catalogue.md) is built from them. |
+| A docstring on each plugin test | the test itself: what it checks, then `By hand:` steps ([describe every test](testing/writing.md#describe-every-test)) | A reviewer repeats them on a live Open-WebUI. The [test catalogue](reference/test-catalogue.md) is built from them. |
 | The guide | `docs/*.md` | When behaviour or a command changes. |
 | A changelog entry | `CHANGELOG.md`, in the section of the version being prepared (`## Unreleased` until it is released) | What users will notice, in one sentence; the details belong in the docs. |
 | A review of the docs around it | the pages the change touches, and the ones next to them | For an issue labelled `documentation`: the same thing explained in full in two places becomes one explanation and a link, and anything that no longer matches the code is fixed. |
@@ -28,7 +28,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 4. If you changed a plugin, deploy it to a test instance and do its **By hand** steps yourself.
 5. Update the guide and the changelog.
 6. Check this site: `uv run --group docs python tools/build_docs.py`. A broken link fails the build.
-7. Open a pull request: say what changed, why, and which live checks you did. If it changes how a plugin behaves in Open-WebUI, run the [live suite](screenshots.md#the-live-suite) or label the pull request `e2e`.
+7. Open a pull request: say what changed, why, and which live checks you did. If it changes how a plugin behaves in Open-WebUI, run the [live suite](testing/live.md#the-live-suite) or label the pull request `e2e`.
 
 ## Commit messages
 

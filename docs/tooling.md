@@ -80,7 +80,4 @@ Git sources are faked in the tests (no network); `owpp check` compiles the real 
 
 ### Testing your own plugins
 
-- Run [`owpp check`](commands/check.md) in CI (the action does).
-- Put unit tests in each plugin's `tests/` folder and run them with [`owpp test`](commands/test.md). They run against a mock Open-WebUI (see [testing](testing.md)): `owui.load(...)`, `owui.startup()`, `owui.client(user).get(...)`, `owui.tool(id).call(...)`. In CI: `uvx --from 'owpp[test]' owpp test`.
-- Anything that needs Open-WebUI imports it inside the function that uses it, so the module loads under the mock (or any stub).
-- Write the live checks in each plugin's README, under `## Test`. The mock is not Open-WebUI.
+See [testing plugins](testing.md): writing tests, the mock, live checks, and [a CI workflow](testing/ci.md).

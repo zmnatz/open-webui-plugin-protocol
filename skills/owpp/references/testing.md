@@ -1,6 +1,6 @@
 # Testing a plugin
 
-A plugin's tests are its **spec**: each one names a behaviour in the plugin's terms (pages, valves, chats, replies) and proves it against the mock Open-WebUI. Each docstring's **By hand** steps are how a person sees the same behaviour on a live instance, and the README's `## Test` list is built from them. Mock reference (fixtures, every call, what it cannot do): https://zmnatz.github.io/open-webui-plugin-protocol/testing/
+A plugin's tests are its **spec**: each one names a behaviour in the plugin's terms (pages, valves, chats, replies) and proves it against the mock Open-WebUI. Each docstring's **By hand** steps are how a person sees the same behaviour on a live instance, and the README's `## Test` list is built from them. The full guide is at https://zmnatz.github.io/open-webui-plugin-protocol/testing/: [writing a test](https://zmnatz.github.io/open-webui-plugin-protocol/testing/writing/), [recipes for each kind of plugin](https://zmnatz.github.io/open-webui-plugin-protocol/testing/kinds/) (filters, actions, pipes, tools, events, pages, installers, code from git), and [the mock's reference](https://zmnatz.github.io/open-webui-plugin-protocol/testing/mock/).
 
 ## Steps
 
