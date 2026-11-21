@@ -28,7 +28,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 4. If you changed a plugin, deploy it to a test instance and do its **By hand** steps yourself.
 5. Update the guide and the changelog.
 6. Check this site: `uv run --group docs python tools/build_docs.py`. A broken link fails the build.
-7. Open a pull request: say what changed, why, and which live checks you did. If it changes how a plugin behaves in Open-WebUI, run the [live suite](testing/live.md#the-live-suite) or label the pull request `e2e`.
+7. Open a pull request: say what changed, why, and which live checks you did. The [live suite](testing/live.md#the-live-suite) runs on it; to run it before you push, `run.py --live`.
 
 ## Commit messages
 

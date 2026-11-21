@@ -1,23 +1,36 @@
 name: live
-# End-to-end, opt-in: deploys examples/plugins to a real Open-WebUI (the version the protocol
-# targets) with aimock as its models, and asserts on what it does (tools/live). Not part of the
-# normal checks (it pulls an image and starts three containers). Runs when started by hand, on a release tag, and on a
-# pull request carrying the `e2e` label.
+# The live suite (docs/testing/live.md): deploys examples/plugins to a real Open-WebUI (the
+# version the protocol targets, -slim) with aimock as its models and nginx serving fixed files,
+# then asserts on what it does (tools/live). Runs on every pull request and push to main, like ci.
 on:
-  workflow_dispatch:
   push:
+    branches: [main]
     tags: ["v*"]
   pull_request:
-    types: [labeled, synchronize]
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
   live:
-    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'e2e')
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
       - run: uv sync --group screenshots --python 3.13
+      # The stack's images, kept between runs. compose.yaml pins every one, so its hash is the key:
+      # a new pin pulls once, then loads from the cache.
+      - id: images
+        uses: actions/cache@v4
+        with:
+          path: ~/images.tar
+          key: live-images-${{ hashFiles('tools/screenshots/compose.yaml') }}
+      - if: steps.images.outputs.cache-hit == 'true'
+        run: docker load --input ~/images.tar
+      - if: steps.images.outputs.cache-hit != 'true'
+        run: |
+          docker compose -f tools/screenshots/compose.yaml pull
+          docker save --output ~/images.tar $(docker compose -f tools/screenshots/compose.yaml config --images)
       - run: uv run python tools/screenshots/run.py --live
