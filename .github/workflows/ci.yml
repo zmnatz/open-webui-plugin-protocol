@@ -29,10 +29,12 @@ jobs:
       - name: The built wheel runs and carries the runtime
         run: uvx --from dist/*.whl owpp check --dir examples/plugins mcpo_sync
   release:
-    # A pull request into main is a release or hotfix (docs/contributing.md#releasing): check now
-    # what publish.yml checks after the merge, that v<__version__> is new and CHANGELOG.md has a
-    # dated section for it with entries.
-    if: github.base_ref == 'main'
+    # A release or hotfix pull request into main (docs/contributing.md#releasing): check now what
+    # publish.yml checks after the merge, that v<__version__> is new and CHANGELOG.md has a dated
+    # section for it with entries.
+    if: >-
+      github.base_ref == 'main' &&
+      (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/'))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
