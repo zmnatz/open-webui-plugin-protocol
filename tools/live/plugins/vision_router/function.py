@@ -2,8 +2,9 @@
 
 The idea is from "Dynamic Vision Router" by open-webui and atgehrhardt
 (https://github.com/open-webui/functions/tree/main/functions/filters/dynamic_vision_router):
-an inlet that sends a message with an image to another model. That repository declares no
-licence, so none of its code is used here; this is written from the idea alone. See NOTICE.md.
+an inlet that sends a message with an image to another model. That repository has no licence
+file of its own (it is taken to fall under the Open WebUI License); no code is taken from it, and
+this is written from the idea alone. See NOTICE.md.
 
 It shows what an inlet can do that the mock cannot check: change `body["model"]` from a valve,
 and see which model and which user the real Open-WebUI passes in.
