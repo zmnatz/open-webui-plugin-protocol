@@ -1,6 +1,6 @@
 # Screenshots on a real Open-WebUI
 
-The unit tests run against a [mock](testing.md#what-it-is-not). The screenshots are the other half: the example plugins deployed to a real Open-WebUI, with a browser following their **By hand** steps. They show a reviewer what each check looks like, and they catch what the mock cannot. The first run found two bugs that every unit test had passed (see [what it found](#what-it-found)).
+The unit tests run against a [mock](testing/mock.md#what-it-is-not). The screenshots are the other half: the example plugins deployed to a real Open-WebUI, with a browser following their **By hand** steps. They show a reviewer what each check looks like, and they catch what the mock cannot. The first run found two bugs that every unit test had passed (see [what it found](#what-it-found)).
 
 They are in `docs/screenshots/`, with `screenshots.json` saying which plugin tests each one illustrates. The [test catalogue](reference/test-catalogue.md) shows each one under those tests, each example's page has its own, and [all screenshots](reference/screenshots.md) lists them with the Open-WebUI version and commit they were taken from.
 
@@ -14,19 +14,19 @@ uv run --group screenshots python tools/screenshots/run.py -- -k banner  # some 
 uv run --group screenshots python tools/screenshots/run.py --keep      # leave it running
 ```
 
-It needs Docker, and internet access (the Excalidraw editor loads from esm.sh). A full run takes about two minutes once the images are pulled. Commit the changed PNGs and `screenshots.json` with the change they show. `.github/workflows/screenshots.yml` does the same on GitHub when run by hand (**Actions > screenshots > Run workflow**) and uploads the result as an artifact.
+It needs Docker, which your user must be able to reach (in the `docker` group; without it, `sudo -u "$USER" -g docker env "PATH=$PATH" uv run ...` runs it as you), and internet access (the Excalidraw editor loads from esm.sh). A full run takes about two minutes once the images are pulled. Commit the changed PNGs and `screenshots.json` with the change they show. To check rather than photograph, run [the live suite](testing/live.md#the-live-suite). `.github/workflows/screenshots.yml` does the same on GitHub when run by hand (**Actions > screenshots > Run workflow**) and uploads the result as an artifact.
 
 ## What happens
 
 `tools/screenshots/run.py`:
 
-1. Starts `tools/screenshots/compose.yaml`. It holds Open-WebUI at the version the protocol targets (v0.13.4), a scripted model and [mcpo](https://github.com/open-webui/mcpo) with two servers. Nothing is kept between runs.
+1. Starts `tools/screenshots/compose.yaml`. It holds Open-WebUI at the version the protocol targets (v0.13.4, the `-slim` image), aimock as its models, and [fixed files](testing/live.md#everything-else-fixed-files) standing in for a LiteLLM gateway and mcpo. **iframe Sandbox Allow Same Origin** is on by default there (`DEFAULT_INTERFACE_SETTINGS`), as the examples with pages in the Artifacts panel require. Nothing is kept between runs.
 2. Signs up the admin (the first account always is) and adds a user, both throwaway.
 3. Deploys `examples/plugins` with `owpp deploy`, exactly as a plugin repository would.
 4. Runs the scripts in `tools/screenshots/shots_*.py` with pytest and Playwright. Each signs in on Open-WebUI's own login page, does what a person would, and saves a screenshot at each step worth seeing.
 5. Removes the containers.
 
-**The scripted model** (`tools/screenshots/fake_llm.py`) is a small OpenAI-compatible server. When Open-WebUI offers it a tool it has a script for, it calls that tool with fixed arguments, then replies with fixed text. So "ask the model to draw something" gives the same drawing every time, with no API key and no real model.
+**The model** is [aimock](https://github.com/CopilotKit/aimock), answering from fixtures in `tools/screenshots/aimock/`, the same way every run, with no API key and no real model: [how it answers](testing/live.md#the-model-aimock).
 
 ## Adding one
 

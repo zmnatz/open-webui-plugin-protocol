@@ -10,7 +10,7 @@ is checked in, so none of it can drift from the repository:
 
 - the root CHANGELOG, SECURITY, LICENSE and NOTICE files, and each example plugin's README;
 - an examples overview, built from each plugin.yaml;
-- the test catalogue, built from the test docstrings (docs/testing.md, "Describe every test");
+- the test catalogue, built from the test docstrings (docs/testing/writing.md, "Describe every test");
 - the libraries table in docs/libraries.md, built from the library catalogue;
 - llms.txt and llms-full.txt, for language models: the site's pages with their addresses, and
   the text of the guide in one file (https://llmstxt.org/);
@@ -471,7 +471,7 @@ def _test_catalogue() -> str:
         "",
         "Every unit test of the example plugins: what it checks, and how to see the same thing "
         "on a live Open-WebUI. It is built from the tests' docstrings each time the site is "
-        "built (see [Describe every test](docs/testing.md#describe-every-test)), so it always "
+        "built (see [Describe every test](docs/testing/writing.md#describe-every-test)), so it always "
         "matches the code it links to.",
         "",
         "Before a release, a reviewer can walk the green **By hand** boxes on a test instance. "

@@ -68,7 +68,7 @@ The deploy reads the instance and the credentials from the environment: [`OPEN_W
 
 ```yaml
 - uses: actions/checkout@v5
-- uses: zmnatz/open-webui-plugin-protocol@v0.3.1
+- uses: zmnatz/open-webui-plugin-protocol@v0.4.0
   with:
     url: https://chat.example.com
     api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
@@ -99,11 +99,11 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ## Examples
 
-[`examples/plugins/`](examples/plugins): `excalidraw` (filter + tool + page), `mcpo_sync` (scheduled event), `stale_data` (admin dashboard), `inline_visualizer` (third-party tool and skill from a pinned commit), `page_banners` (a variant of Better Banners: its script and stylesheet are files in `assets/`), `litellm_model_sync` (scheduled event that writes Open-WebUI's model configs from a LiteLLM gateway).
+[`examples/plugins/`](examples/plugins): `excalidraw` (filter + tool + page), `mcpo_sync` (scheduled event), `stale_data` (admin dashboard), `inline_visualizer` (third-party tool and skill from a pinned commit), `page_banners` (a variant of Better Banners: its script and stylesheet are files in `assets/`), `litellm_model_sync` (scheduled event that writes Open-WebUI's model configs from a LiteLLM gateway), `clear_thinking_tags` (outlet filter, adapted from Haervwe's), `vision_router` (inlet filter, adapted from open-webui's Dynamic Vision Router).
 
 ## Status
 
-0.3.1, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), but that run is started by hand, not part of CI. See [status and limits](docs/README.md#status-and-limits).
+0.4.0, written against Open-WebUI v0.13.4. The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.4 ([screenshots](docs/screenshots.md)), and checked there on every change by an end-to-end run with aimock as its models ([the live suite](docs/testing/live.md#the-live-suite)). See [status and limits](docs/README.md#status-and-limits).
 
 ## Development
 
@@ -117,6 +117,6 @@ uv run owpp check --dir examples/plugins
 
 ## Licence
 
-MIT ([LICENSE](LICENSE)). Vendored third-party code (Classic298's Shared Assets Protocol, BSD-3-Clause): [NOTICE.md](NOTICE.md).
+MIT ([LICENSE](LICENSE)). Third-party code: Classic298's Shared Assets Protocol (vendored, BSD-3-Clause), the `page_banners` example (a variant of Classic298's Better Banners) and the `clear_thinking_tags` (Haervwe, MIT) and `vision_router` (open-webui, Open WebUI License) examples. Notices and licences: [NOTICE.md](NOTICE.md).
 
 This project contains no Open WebUI code: it talks to Open WebUI's API and produces plugins that run inside it. It is an independent project, **not affiliated with or endorsed by Open WebUI Inc.**; "Open WebUI" is used only to say what it works with. Open WebUI itself is under the [Open WebUI License](https://github.com/open-webui/open-webui/blob/main/LICENSE).

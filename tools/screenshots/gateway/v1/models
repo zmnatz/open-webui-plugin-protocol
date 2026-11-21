@@ -1,0 +1,17 @@
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "screenshot-model",
+      "object": "model"
+    },
+    {
+      "id": "screenshot-vision",
+      "object": "model"
+    },
+    {
+      "id": "screenshot-embedding",
+      "object": "model"
+    }
+  ]
+}

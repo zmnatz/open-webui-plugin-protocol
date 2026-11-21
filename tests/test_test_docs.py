@@ -1,5 +1,5 @@
 """Every example plugin's test says what it checks and how to repeat it by hand, as
-docs/testing.md asks ("Describe every test"). The test catalogue on the docs site is built
+docs/testing/writing.md asks ("Describe every test"). The test catalogue on the docs site is built
 from these docstrings."""
 
 from __future__ import annotations

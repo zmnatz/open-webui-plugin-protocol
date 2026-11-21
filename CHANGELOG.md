@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.0 (2026-11-21)
+
+- The live suite deploys the examples to a real Open-WebUI v0.13.4 (`-slim`), with [aimock](https://github.com/CopilotKit/aimock) as its models, and checks what the mock cannot, on every pull request ([the live suite](docs/testing/live.md#the-live-suite)).
+- `tools/screenshots/run.py --up` starts the same Open-WebUI and leaves it running, to try a plugin by hand with no real model and nothing leaving the machine ([trying things out in isolation](docs/testing/live.md#trying-things-out-in-isolation)).
+- The mock passes filters `__model__` (`plugin.inlet(..., model=)`, default `"mock-model"`) and has `open_webui.utils.misc.get_last_user_message_item` ([the mock](docs/testing/mock.md)).
+- Two filter examples: [`clear_thinking_tags`](examples/plugins/clear_thinking_tags), an outlet adapted from Haervwe's Clear thinking tags, and [`vision_router`](examples/plugins/vision_router), an inlet adapted from open-webui's Dynamic Vision Router.
+- Docs: a Testing section (writing a test, recipes for each kind of plugin, the mock, a real Open-WebUI, CI), and the owpp agent skill's [testing steps](skills/owpp/references/testing.md).
+- Manifests stay `protocol: "0.3"`, and bundles are the same as 0.3.1's: nothing to migrate ([upgrading](docs/upgrading.md#03-04)).
+
 ## 0.3.1 (2026-11-20)
 
 - `owpp build` bundles the plugins into a folder that `owpp deploy --from` deploys elsewhere, with no checkout or git sources ([`owpp build`](docs/commands/build.md)).

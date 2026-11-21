@@ -5,32 +5,48 @@ name: owpp-screenshots
 
 services:
   open-webui:
-    # The version the protocol is written against (docs/README.md, "Status and limits").
-    image: ghcr.io/open-webui/open-webui:v0.13.4
+    # The version the protocol is written against (docs/README.md, "Status and limits"), as the
+    # slim image: it leaves out the bundled ML models (about 4.5 GB in the full one), which neither
+    # the screenshots nor the live run use.
+    image: ghcr.io/open-webui/open-webui:v0.13.4-slim
     ports: ["127.0.0.1:3000:8080"]
     environment:
       WEBUI_SECRET_KEY: screenshots-only
-      # The only model is the scripted one below: no Ollama, no real provider.
+      # The only models are aimock's, below: no Ollama, no real provider, no API key. The first
+      # connection answers the chats; the second only says what a LiteLLM gateway would say
+      # about the same models (for examples/plugins/litellm_model_sync). Open-WebUI keeps the
+      # first connection's entry for a model both list.
       ENABLE_OLLAMA_API: "false"
-      OPENAI_API_BASE_URL: http://fake-llm:9000/v1
-      OPENAI_API_KEY: unused
+      OPENAI_API_BASE_URLS: http://aimock:4010/v1;http://gateway/v1
+      OPENAI_API_KEYS: unused;unused
       # Nothing downloaded at startup, no update checks: the run is the same offline or not.
       OFFLINE_MODE: "true"
       ENABLE_VERSION_UPDATE_CHECK: "false"
+      # excalidraw and inline_visualizer show pages in the Artifacts panel, which need this on
+      # (`requires: iframe_sandbox_allow_same_origin` in their plugin.yaml; owpp deploy warns
+      # without it). shots_excalidraw.py turns it off and on again for its "without" shot.
+      DEFAULT_INTERFACE_SETTINGS: '{"iframeSandboxAllowSameOrigin": true}'
       # Read by examples/plugins/mcpo_sync, whose MCPO_BASE_URL default is http://mcpo:8000.
       MCPO_API_KEY: mcpo-key
-    depends_on: [fake-llm, mcpo]
+    depends_on: [aimock, static]
 
-  fake-llm:
-    # tools/screenshots/fake_llm.py: an OpenAI-compatible server that calls the tools on a script.
-    image: python:3.12-slim
-    command: ["python", "/app/fake_llm.py"]
-    environment:
-      FAKE_LLM_LOG: ${FAKE_LLM_LOG:-} # set to 1 to log every request it gets
-    volumes: ["./fake_llm.py:/app/fake_llm.py:ro"]
+  aimock:
+    # CopilotKit's aimock (https://github.com/CopilotKit/aimock, MIT): an OpenAI-compatible
+    # server that answers from the fixtures in aimock/, the same way every run. Its request
+    # journal, GET /__aimock/journal, is what the live suite reads to see what Open-WebUI sent.
+    image: ghcr.io/copilotkit/aimock:1.48.1
+    command: ["--fixtures", "/fixtures", "--host", "0.0.0.0", "--port", "4010"]
+    ports: ["127.0.0.1:4010:4010"]
+    volumes: ["./aimock:/fixtures:ro"]
 
-  mcpo:
-    # For examples/plugins/mcpo_sync. The image only publishes a moving tag.
-    image: ghcr.io/open-webui/mcpo:latest
-    command: ["--port", "8000", "--api-key", "mcpo-key", "--config", "/app/mcpo.json"]
-    volumes: ["./mcpo.json:/app/mcpo.json:ro"]
+  static:
+    # Fixed files for what the examples talk to besides a model (nginx.conf): a LiteLLM
+    # gateway's /model/info as "gateway", and mcpo's OpenAPI documents as "mcpo".
+    image: nginx:1.27-alpine
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./gateway:/srv/gateway:ro
+      - ./mcpo:/srv/mcpo:ro
+    networks:
+      default:
+        aliases: [gateway, mcpo]

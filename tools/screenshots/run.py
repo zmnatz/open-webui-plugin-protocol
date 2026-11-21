@@ -1,11 +1,14 @@
 """Take the documentation screenshots on a real Open-WebUI.
 
     uv run --group screenshots python tools/screenshots/run.py            # everything
-    uv run --group screenshots python tools/screenshots/run.py -k stale   # some of them
+    uv run --group screenshots python tools/screenshots/run.py -- -k stale  # some of them
     uv run --group screenshots python tools/screenshots/run.py --keep     # leave it running
+    uv run --group screenshots python tools/screenshots/run.py --live     # assert, no screenshots
+    uv run --group screenshots python tools/screenshots/run.py --up       # only start it, to try
 
-1. Starts compose.yaml: Open-WebUI (the version the protocol targets), a scripted model and
-   mcpo. Nothing is kept between runs.
+1. Starts compose.yaml: Open-WebUI (the version the protocol targets), aimock answering as
+   its models from aimock/, and nginx serving fixed files for a LiteLLM gateway and mcpo.
+   Nothing is kept between runs.
 2. Signs up the admin (the first account is the admin) and adds a user.
 3. Deploys examples/plugins with `owpp deploy`, exactly as a plugin repository would.
 4. Runs the Playwright scripts in this folder (shots_*.py). Each follows the By hand steps of
@@ -82,6 +85,16 @@ def accounts() -> tuple[str, str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Take the documentation screenshots.")
     parser.add_argument("--keep", action="store_true", help="leave Open-WebUI running")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="run the assertions in tools/live instead of taking screenshots",
+    )
+    parser.add_argument(
+        "--up",
+        action="store_true",
+        help="start it and deploy the examples, run nothing, and leave it running to try",
+    )
     parser.add_argument("pytest_args", nargs=argparse.REMAINDER, help="passed on to pytest")
     args = parser.parse_args(argv)
     if args.pytest_args[:1] == ["--"]:
@@ -98,19 +111,31 @@ def main(argv: list[str] | None = None) -> int:
             env=env,
             cwd=ROOT,
         )
+        if args.up:
+            args.keep = True
+            print(
+                f"\nOpen-WebUI: {URL}\n"
+                f"  admin: {ADMIN['email']} / {ADMIN['password']}\n"
+                f"  user:  {USER['email']} / {USER['password']}\n"
+                f"  to deploy a change: OPEN_WEBUI_URL={URL} OPEN_WEBUI_API_KEY={admin}\n"
+                "aimock: http://127.0.0.1:4010 (what it was asked: /__aimock/journal)\n"
+                "Trying things out: docs/testing/live.md#trying-things-out-in-isolation"
+            )
+            return 0
         env |= {
             "OWPP_SCREENSHOT_URL": URL,
             "OWPP_SCREENSHOT_ADMIN": json.dumps({**ADMIN, "token": admin}),
             "OWPP_SCREENSHOT_USER": json.dumps({**USER, "token": user}),
         }
+        suite, pattern = (HERE.parent / "live", "test_*.py") if args.live else (HERE, "shots_*.py")
         return subprocess.run(
             [
                 sys.executable,
                 "-m",
                 "pytest",
-                str(HERE),
+                str(suite),
                 "-o",
-                "python_files=shots_*.py",
+                f"python_files={pattern}",
                 "-p",
                 "no:cacheprovider",
                 *args.pytest_args,

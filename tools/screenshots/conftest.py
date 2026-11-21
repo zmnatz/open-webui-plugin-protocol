@@ -158,6 +158,44 @@ def shot(request):
     return take
 
 
+FAILURES = ROOT / "tools" / "screenshots" / "failures"
+AIMOCK = "http://127.0.0.1:4010"
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """When a script fails, keep what it saw: each open page as a PNG and its text, and what
+    aimock was asked, in tools/screenshots/failures/ (not committed)."""
+    outcome = yield
+    report = outcome.get_result()
+    if report.when != "call" or not report.failed:
+        return
+    FAILURES.mkdir(exist_ok=True)
+    for name in ("admin", "user", "signed_out"):
+        page = item.funcargs.get(name)
+        if page is None:
+            continue
+        stem = FAILURES / f"{item.name}-{name}"
+        with contextlib.suppress(Exception):
+            page.screenshot(path=f"{stem}.png", full_page=True)
+            stem.with_suffix(".txt").write_text(page.inner_text("body"))
+    with contextlib.suppress(Exception):
+        url = AIMOCK + "/__aimock/journal?path=/v1/chat/completions"
+        with urllib.request.urlopen(url, timeout=10) as response:
+            asked = [e["body"] for e in json.loads(response.read()) if e.get("body")][-8:]
+        summary = [
+            {
+                "model": r.get("model"),
+                "stream": r.get("stream"),
+                "tools": [t.get("function", {}).get("name") for t in r.get("tools") or []],
+                "messages": [[m.get("role"), str(m.get("content"))[:300]] for m in r["messages"]],
+            }
+            for r in asked
+        ]
+        (FAILURES / f"{item.name}-requests.json").write_text(json.dumps(summary, indent=2))
+    report.sections.append(("saved", f"what it saw: {FAILURES}/{item.name}-*"))
+
+
 def pytest_sessionfinish(session, exitstatus):
     """Merge this run's shots into screenshots.json (a run with -k keeps the others)."""
     if not _taken:

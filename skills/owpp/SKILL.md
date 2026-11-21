@@ -7,7 +7,7 @@ description: Open-WebUI plugins kept in git with owpp, the Open-WebUI plugin pro
 
 A **plugin** is a folder, `plugins/<id>/`, with a `plugin.yaml`: a function (the parent) and, optionally, a tool and skills that the function installs when it is enabled and removes when it is disabled. `owpp` bundles the folder into the single file Open-WebUI stores, tests it against a mock Open-WebUI, and deploys it.
 
-Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.3.1`). `uvx owpp <command> --help` is the reference for every flag, and each command has a page at https://zmnatz.github.io/open-webui-plugin-protocol/commands/<command>/. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
+Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.4.0`). `uvx owpp <command> --help` is the reference for every flag, and each command has a page at https://zmnatz.github.io/open-webui-plugin-protocol/commands/<command>/. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
 
 Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#owpp_plugins_dir), else `./plugins`.
 
@@ -18,6 +18,7 @@ Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](h
 | A new plugin | [Create](#create) |
 | Change a plugin that exists | [Change](#change) |
 | A plugin that takes its code from another git repository, or moving it to a newer commit | [From git](#from-git) |
+| Write or fix a plugin's tests | [references/testing.md](references/testing.md) |
 | Put plugins on an Open-WebUI instance | [Deploy](#deploy) |
 | Functions someone pasted into Open-WebUI by hand | https://zmnatz.github.io/open-webui-plugin-protocol/adopting/ |
 
@@ -31,13 +32,13 @@ Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](h
    - **installer**: no code of its own, only a tool and/or skills, which the generated function installs.
    - Code from another repository: [from git](#from-git).
 2. **Describe it in a spec and create it**: write the spec ([references/spec.md](references/spec.md)) to a file, then `uvx owpp create --spec <file>`. It writes the folder, with stubs, tests, a README and a CHANGELOG, and runs `owpp check --strict` on it. (`owpp create` with no `--spec` is a wizard for a person at a terminal: it waits for typed answers.)
-3. **Fill in the stubs**: the work goes in `function.py`, `tool.py`, `skills/<name>/SKILL.md` and the pages, following [the rules](#the-rules-owpp-and-open-webui-hold-the-code-to). Add a test for each behaviour, in the plugin's `tests/`.
+3. **Fill in the stubs**: the work goes in `function.py`, `tool.py`, `skills/<name>/SKILL.md` and the pages, following [the rules](#the-rules-owpp-and-open-webui-hold-the-code-to). Test every behaviour, in the plugin's `tests/`: [references/testing.md](references/testing.md).
 
 Done when `uvx owpp check <id> --strict` reports no `FAIL` and no `warn`, and `uvx --from 'owpp[test]' owpp test <id>` passes.
 
 ## Change
 
-1. Make the change, and its test.
+1. Make the change, test first ([references/testing.md](references/testing.md)).
 2. **Give it a new version**: `uvx owpp version <id> patch|minor|major -m "<what changed, for the people who use it>"`. Its tool's version: `--tool`; a skill's: `--skill <name>`. `uvx owpp version` lists them all.
 
 Done when `owpp check <id> --strict` and `owpp test <id>` pass, and `uvx owpp check --since origin/main` (or the branch the change will merge into) reports no `FAIL`: it fails on anything that changed without a new version, and says which `owpp version` command to run.
@@ -73,5 +74,5 @@ Done when the deploy's report lists every plugin as the user expected, and the R
 - **Routes** are mounted with `plugin_mount(app, router, prefix)` only; it puts the sign-in guard on them. A route that needs more than a signed-in user is marked on its handler (`user: PluginAdmin`, `chat_id: WritableChat`). Public (`access="public"`) is per mount, and only for what must serve people who are not signed in.
 - **Event handlers** use `@on("event.name", own=True)` on a `class Event(PluginEvents)`.
 - **HTML lives in files**: `static/` for files served as they are, `templates/` for pages the function fills in (`plugin_template_text("page.html")`).
-- **Tests** live in the plugin's `tests/` and use the `owui` and `plugin` fixtures. Each test's docstring says what it checks, then `By hand:` the steps to see the same on a live Open-WebUI. Mock reference: https://zmnatz.github.io/open-webui-plugin-protocol/testing/
+- **Tests** live in the plugin's `tests/` and use the `owui` and `plugin` fixtures. Each test's docstring says what it checks, then `By hand:` the steps to see the same on a live Open-WebUI ([references/testing.md](references/testing.md)).
 - **Vendored code** (the libraries owpp inserts, and code from a `source:`) is used as it is: changes go in the plugin's own files.

@@ -1,8 +1,24 @@
 {
   "open_webui": "0.13.4",
-  "taken": "2026-11-19",
-  "commit": "0ae8f6d",
+  "taken": "2026-11-21",
+  "commit": "d9e104f",
   "shots": [
+    {
+      "file": "clear_thinking_tags/with.png",
+      "plugin": "clear_thinking_tags",
+      "caption": "With the filter: the same reply, and its thinking text is shown as the answer.",
+      "illustrates": [
+        "test_a_reply_that_ends_in_reasoning_gets_it_as_its_answer"
+      ],
+      "script": "shots_clear_thinking_tags.py::test_with_the_filter_the_thought_is_the_answer"
+    },
+    {
+      "file": "clear_thinking_tags/without.png",
+      "plugin": "clear_thinking_tags",
+      "caption": "Without the filter: the model stopped while thinking, and the reply is only its Thinking block.",
+      "illustrates": [],
+      "script": "shots_clear_thinking_tags.py::test_without_the_filter_the_reply_is_only_a_thought"
+    },
     {
       "file": "deploy/functions.png",
       "plugin": "deploy",
@@ -147,6 +163,16 @@
         "test_only_admins_see_it"
       ],
       "script": "shots_stale_data.py::test_a_user_is_refused"
+    },
+    {
+      "file": "vision_router/routed.png",
+      "plugin": "vision_router",
+      "caption": "A picture sent to the screenshot model: the filter sent it to the vision model instead, and the status line says so.",
+      "illustrates": [
+        "test_a_message_with_an_image_goes_to_the_vision_model",
+        "test_it_can_say_where_the_message_went"
+      ],
+      "script": "shots_vision_router.py::test_a_picture_goes_to_the_vision_model"
     }
   ]
 }

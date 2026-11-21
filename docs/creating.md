@@ -153,7 +153,7 @@ The README states where the code comes from, the pinned commit and how to upgrad
 - **`plugin.yaml`**, with comments that say where each part goes.
 - **`CHANGELOG.md`**, with an entry for the first version (not for an upstream function, whose versions are the upstream's). [`owpp version`](commands/version.md) adds the next ones.
 - **`README.md`**, with the sections the [authoring guide](authoring.md#documentation-the-readme-every-plugin-has) requires: a description, settings, `## Test` and `## Deploy`.
-- **`tests/test_<id>.py`**, with one test per part: the valves, the type's entry point (a chat through the filter, the action's button, the pipe's models, startup), the tool and each method, the skills, the page and who may open it, the config. Each test has the docstring and the `By hand:` steps that [testing](testing.md#describe-every-test) asks for.
+- **`tests/test_<id>.py`**, with one test per part: the valves, the type's entry point (a chat through the filter, the action's button, the pipe's models, startup), the tool and each method, the skills, the page and who may open it, the config. Each test has the docstring and the `By hand:` steps that [testing](testing/writing.md#describe-every-test) asks for.
 
 Every combination is checked in this repository's tests (`tests/test_create.py`): it bundles, compiles, has no `owpp check --strict` warnings, and passes the tests it writes.
 

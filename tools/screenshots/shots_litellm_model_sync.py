@@ -1,5 +1,6 @@
-"""LiteLLM Model Sync on a real Open-WebUI. The scripted model's server answers /model/info as a
-LiteLLM gateway would (fake_llm.py), so the sync runs against Open-WebUI's real connection."""
+"""LiteLLM Model Sync on a real Open-WebUI. The stack's second OpenAI connection answers
+/model/info as a LiteLLM gateway would (gateway/), so the sync runs against Open-WebUI's real
+connections."""
 
 from __future__ import annotations
 
