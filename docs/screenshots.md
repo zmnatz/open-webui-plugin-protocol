@@ -28,6 +28,10 @@ It needs Docker, and internet access (the Excalidraw editor loads from esm.sh). 
 
 **The scripted model** (`tools/screenshots/fake_llm.py`) is a small OpenAI-compatible server. When Open-WebUI offers it a tool it has a script for, it calls that tool with fixed arguments, then replies with fixed text. So "ask the model to draw something" gives the same drawing every time, with no API key and no real model.
 
+## Live assertions
+
+`run.py --live` starts the same stack and deploys the same examples, then runs the assertions in `tools/live/` instead of a browser: the functions are installed and active, a user can see a public tool, the scripted model answers a chat and calls the deployed tool. `.github/workflows/live.yml` runs it only on request: by hand (**Actions > live > Run workflow**), on release tags, and on a pull request labelled `e2e`. It is an end-to-end check, not part of the normal test run (`uv run pytest` never collects it). It tests only the targeted Open-WebUI version. Add an assertion as a `test_*.py` in `tools/live/`, using the `api` and `user_api` fixtures (each returns `(status, body)`).
+
 ## Adding one
 
 In the right `shots_*.py` (or a new one), write a test as a person would do it, and call `shot`:

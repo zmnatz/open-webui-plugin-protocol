@@ -1,0 +1,23 @@
+name: live
+# End-to-end, opt-in: deploys examples/plugins to a real Open-WebUI (the version the protocol
+# targets) with the scripted model, and asserts on what it does (tools/live). Not part of the
+# normal checks (the image is ~4.5 GB). Runs when started by hand, on a release tag, and on a
+# pull request carrying the `e2e` label.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+  pull_request:
+    types: [labeled, synchronize]
+permissions:
+  contents: read
+jobs:
+  live:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'e2e')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uv sync --group screenshots --python 3.13
+      - run: uv run python tools/screenshots/run.py --live

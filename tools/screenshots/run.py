@@ -3,6 +3,7 @@
     uv run --group screenshots python tools/screenshots/run.py            # everything
     uv run --group screenshots python tools/screenshots/run.py -k stale   # some of them
     uv run --group screenshots python tools/screenshots/run.py --keep     # leave it running
+    uv run --group screenshots python tools/screenshots/run.py --live     # assert, no screenshots
 
 1. Starts compose.yaml: Open-WebUI (the version the protocol targets), a scripted model and
    mcpo. Nothing is kept between runs.
@@ -82,6 +83,11 @@ def accounts() -> tuple[str, str]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Take the documentation screenshots.")
     parser.add_argument("--keep", action="store_true", help="leave Open-WebUI running")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="run the assertions in tools/live instead of taking screenshots",
+    )
     parser.add_argument("pytest_args", nargs=argparse.REMAINDER, help="passed on to pytest")
     args = parser.parse_args(argv)
     if args.pytest_args[:1] == ["--"]:
@@ -103,14 +109,15 @@ def main(argv: list[str] | None = None) -> int:
             "OWPP_SCREENSHOT_ADMIN": json.dumps({**ADMIN, "token": admin}),
             "OWPP_SCREENSHOT_USER": json.dumps({**USER, "token": user}),
         }
+        suite, pattern = (HERE.parent / "live", "test_*.py") if args.live else (HERE, "shots_*.py")
         return subprocess.run(
             [
                 sys.executable,
                 "-m",
                 "pytest",
-                str(HERE),
+                str(suite),
                 "-o",
-                "python_files=shots_*.py",
+                f"python_files={pattern}",
                 "-p",
                 "no:cacheprovider",
                 *args.pytest_args,
