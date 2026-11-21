@@ -64,6 +64,17 @@ MODEL_INFO = [
         },
     },
     {
+        # For the live suite's vision router. Listed here so the sync gives it a public read
+        # grant: without one, a user who is not an admin cannot use it ("Model not found").
+        "model_name": VISION,
+        "model_info": {
+            "display_name": "Screenshot Vision",
+            "litellm_provider": "openai",
+            "mode": "chat",
+            "capabilities": {"vision": True, "tools": False},
+        },
+    },
+    {
         "model_name": EMBEDDING,
         "model_info": {
             "display_name": "Screenshot Embeddings",
