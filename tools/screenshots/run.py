@@ -104,21 +104,6 @@ def main(argv: list[str] | None = None) -> int:
             env=env,
             cwd=ROOT,
         )
-        if args.live:  # the test filter, beside the examples
-            subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "owpp",
-                    "deploy",
-                    "--dir",
-                    str(HERE.parent / "live/plugins"),
-                    "--no-prune",
-                ],
-                check=True,
-                env=env,
-                cwd=ROOT,
-            )
         env |= {
             "OWPP_SCREENSHOT_URL": URL,
             "OWPP_SCREENSHOT_ADMIN": json.dumps({**ADMIN, "token": admin}),

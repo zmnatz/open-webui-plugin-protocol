@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The live suite: `tools/screenshots/run.py --live` deploys the examples to a real Open-WebUI v0.13.4 (the `-slim` image) with a scripted model and checks what the mock cannot; `.github/workflows/live.yml` runs it by hand, on release tags and on pull requests labelled `e2e` ([the live suite](docs/screenshots.md#the-live-suite)).
+- Two filter examples: `clear_thinking_tags`, an outlet adapted from Haervwe's Clear thinking tags, and `vision_router`, an inlet adapted from open-webui's Dynamic Vision Router.
+- The mock gives filters `__model__` (`plugin.inlet(..., model=)`) and has `open_webui.utils.misc.get_last_user_message_item` ([the mock](docs/testing.md#the-mock)).
+
 ## 0.3.1 (2026-11-20)
 
 - `owpp build` bundles the plugins into a folder that `owpp deploy --from` deploys elsewhere, with no checkout or git sources ([`owpp build`](docs/commands/build.md)).

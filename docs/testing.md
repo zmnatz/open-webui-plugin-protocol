@@ -74,8 +74,8 @@ When a test cannot be repeated by hand, its `By hand:` says so and why (for exam
 
 | Call | What happens |
 | --- | --- |
-| `plugin.inlet(body, user=, chat_id=)`, `plugin.outlet(...)` | A chat request or reply passes through a filter. |
-| `plugin.call("method", *args, user=, chat_id=, **kwargs)` | Calls any method of the function's instance. The `__user__`, `__metadata__`, `__request__`, `__id__`, `__event_emitter__`, `__chat_id__` and `__app__` arguments it accepts are filled in. |
+| `plugin.inlet(body, user=, chat_id=, model=)`, `plugin.outlet(...)` | A chat request or reply passes through a filter. `model` is the id of the model the chat is with, given to the filter as `__model__` (`{"id", "name"}`; `"mock-model"` by default). |
+| `plugin.call("method", *args, user=, chat_id=, **kwargs)` | Calls any method of the function's instance. The `__user__`, `__metadata__`, `__request__`, `__id__`, `__event_emitter__`, `__chat_id__`, `__app__` and `__model__` arguments it accepts are filled in. |
 | `owui.tool(id)` | The installed tool, loaded from its stored code with its stored valves. `.call("method", ..., user=, chat_id=)` calls a method as the model would, and `.specs` lists what the model is told. |
 | `owui.client(user=None, **kw)` | A Starlette `TestClient` for the app, signed in as `user` or not signed in at all. Pass `follow_redirects=False` to see a sign-in redirect. |
 | `owui.run(coroutine)` | Runs async code on the mock's event loop, then lets the background tasks it started run until they finish or wait. |
@@ -108,7 +108,7 @@ The mock implements what plugins call, written against Open-WebUI v0.13. It does
 
 **What it does not implement still imports.** Third-party plugins import parts of Open-WebUI the mock has no use for (`open_webui.models.messages`, `open_webui.models.users.User`, ...). Any `open_webui.*` module or name the mock lacks imports as a stand-in, so the plugin loads. Calling or using one raises `NotImplementedError` naming it ("the mock Open-WebUI has no open_webui.models.messages.Messages; add it to src/owpp/testing/mock.py"), so a test reaches it only by exercising code that really needs it.
 
-So keep the live checks in each plugin's README under `## Test`, and treat a passing `owpp test` as "the plugin's own logic works", not "it works in Open-WebUI". When a plugin needs an Open-WebUI call the mock does not have, add it to `src/owpp/testing/mock.py`.
+So keep the live checks in each plugin's README under `## Test` (this repository also runs its examples on a real Open-WebUI: the [live suite](screenshots.md#the-live-suite)), and treat a passing `owpp test` as "the plugin's own logic works", not "it works in Open-WebUI". When a plugin needs an Open-WebUI call the mock does not have, add it to `src/owpp/testing/mock.py`.
 
 ## Tips
 

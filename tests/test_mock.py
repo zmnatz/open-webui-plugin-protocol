@@ -111,3 +111,31 @@ def test_a_source_plugin_is_loaded_from_its_pinned_commit(tmp_path, monkeypatch)
         assert owui.load(folder).type == "event"
         owui.load(folder)
     assert calls == [("https://example.com/repo.git", "a" * 40, ("p/event.py",))]
+
+
+FILTER_WITH_MODEL = """
+from open_webui.utils.misc import get_last_user_message_item
+
+
+class Filter:
+    def inlet(self, body, __model__=None):
+        last = get_last_user_message_item(body["messages"])
+        return {**body, "seen": [__model__["id"], last["content"]]}
+"""
+
+
+def test_a_filter_is_told_the_model_and_can_find_the_last_user_message(tmp_path):
+    """Open-WebUI passes a filter `__model__`, the model the chat is with, and plugins use its
+    `get_last_user_message_item`. The mock gives both: the model is "mock-model" unless a test
+    names one."""
+    folder = plugin_folder(tmp_path, FILTER_WITH_MODEL)
+    messages = [
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "a reply"},
+        {"role": "user", "content": "last"},
+        {"role": "assistant", "content": "another reply"},
+    ]
+    with MockOpenWebUI() as owui:
+        plugin = owui.load(folder)
+        assert plugin.inlet({"messages": messages})["seen"] == ["mock-model", "last"]
+        assert plugin.inlet({"messages": messages}, model="gpt-x")["seen"] == ["gpt-x", "last"]

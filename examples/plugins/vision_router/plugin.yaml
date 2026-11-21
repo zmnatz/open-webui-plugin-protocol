@@ -8,4 +8,4 @@ function:
   required_open_webui_version: 0.3.8
   license: Open WebUI License
   global: true
-  description: Used by the live suite (tools/live). Sends a message with an image to the model in the vision_model_id valve.
+  description: Sends a message with a picture to the model in the vision_model_id valve. Adapted from Dynamic Vision Router by open-webui and atgehrhardt.

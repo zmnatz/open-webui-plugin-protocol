@@ -8,4 +8,4 @@ function:
   required_open_webui_version: 0.5.0
   license: MIT
   global: true
-  description: Checks if the thinking tag was not closed in the final message and puts the thinking content as a message instead of leaving it as an incomplete thought.
+  description: Checks if the thinking tag was not closed in the final message and puts the thinking content as a message instead of leaving it as an incomplete thought. Adapted from Clear thinking tags by Haervwe.

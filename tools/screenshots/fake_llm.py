@@ -7,7 +7,8 @@ tools the same way every time, so this one follows a script instead of thinking:
   with the arguments listed there. Once the tool has answered, it replies with SCRIPT's text.
 - Asked in Open-WebUI's default mode (a prompt listing the tools, answered with JSON), it answers
   with the same call as {"tool_calls": [...]}.
-- A message containing "[reasoning only]" gets reasoning and no answer (the live suite).
+- A message containing "[reasoning only]" gets reasoning and no answer (Clear thinking tags).
+- A request for the vision model gets SEEN, whatever it asks (Dynamic Vision Router).
 - Anything else gets a short fixed reply, so the chat shows a normal answer.
 
 It also answers /model/info as a LiteLLM gateway would, for the LiteLLM Model Sync example.
@@ -22,7 +23,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL = "screenshot-model"
-VISION = "screenshot-vision"  # for the live suite: where a vision filter sends images
+VISION = "screenshot-vision"  # where examples/plugins/vision_router sends images
 
 BOX = {"type": "rectangle", "id": "api", "x": 80, "y": 80, "width": 200, "height": 90}
 DB = {"type": "ellipse", "id": "db", "x": 420, "y": 80, "width": 200, "height": 90}
@@ -48,6 +49,8 @@ SCRIPT = {
     ),
 }
 REASONING = "Thinking it through, the answer is forty-two."
+# What the vision model says, so a screenshot shows the message reached it.
+SEEN = "I am the vision model: a message with a picture was sent to me."
 REQUESTS: list[dict] = []  # every chat request, for the live suite (GET /requests)
 PLAIN = "Hello! I am the screenshot model: I answer the same way every time."
 EMBEDDING = "screenshot-embedding"
@@ -64,7 +67,7 @@ MODEL_INFO = [
         },
     },
     {
-        # For the live suite's vision router. Listed here so the sync gives it a public read
+        # For examples/plugins/vision_router. Listed here so the sync gives it a public read
         # grant: without one, a user who is not an admin cannot use it ("Model not found").
         "model_name": VISION,
         "model_info": {
@@ -110,6 +113,8 @@ def _reply(body: dict) -> dict:
             if f'"{name}"' in prompt or f"'{name}'" in prompt:
                 return {"content": json.dumps({"tool_calls": [{"name": name, "parameters": args}]})}
         return {"content": json.dumps({"tool_calls": []})}
+    if body.get("model") == VISION:
+        return {"content": SEEN}
     if "[reasoning only]" in str(last.get("content", "")):
         return {"reasoning": REASONING}  # a reply that ends in reasoning, with no answer
     if "title" in prompt.lower() and "chat" in prompt.lower() and last.get("role") == "user":

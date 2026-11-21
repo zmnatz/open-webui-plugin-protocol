@@ -64,6 +64,15 @@ class Record(types.SimpleNamespace):
         return getattr(self, key, default)
 
 
+# The model a filter is told the chat is with (`__model__`), unless a test names another.
+MOCK_MODEL = "mock-model"
+
+
+def get_last_user_message_item(messages: list[dict]) -> dict | None:
+    """open_webui.utils.misc's: the last message from the user, or None."""
+    return next((m for m in reversed(messages) if m.get("role") == "user"), None)
+
+
 def _now() -> int:
     return int(time.time())
 
@@ -264,21 +273,42 @@ class LoadedPlugin:
         return getattr(self.instance, "valves", None)
 
     def call(
-        self, method: str, *args, user: Record | None = None, chat_id: str | None = None, **kwargs
+        self,
+        method: str,
+        *args,
+        user: Record | None = None,
+        chat_id: str | None = None,
+        model: str = MOCK_MODEL,
+        **kwargs,
     ):
         """Call a method of the instance the way Open-WebUI does, adding the `__name__`
         arguments it takes (`__user__`, `__metadata__`, `__request__`, `__id__`,
-        `__event_emitter__`, `__chat_id__`, `__app__`)."""
+        `__event_emitter__`, `__chat_id__`, `__app__`, and `__model__`, the model `model`
+        names)."""
         fn = getattr(self.instance, method)
-        return self.owui._invoke(fn, args, kwargs, user=user, chat_id=chat_id, own_id=self.id)
+        return self.owui._invoke(
+            fn, args, kwargs, user=user, chat_id=chat_id, own_id=self.id, model=model
+        )
 
-    def inlet(self, body: dict, user: Record | None = None, chat_id: str | None = None) -> dict:
-        """A chat request passing through this filter on its way to the model."""
-        return self.call("inlet", body, user=user, chat_id=chat_id)
+    def inlet(
+        self,
+        body: dict,
+        user: Record | None = None,
+        chat_id: str | None = None,
+        model: str = MOCK_MODEL,
+    ) -> dict:
+        """A chat request with `model` passing through this filter on its way to the model."""
+        return self.call("inlet", body, user=user, chat_id=chat_id, model=model)
 
-    def outlet(self, body: dict, user: Record | None = None, chat_id: str | None = None) -> dict:
-        """A finished reply passing through this filter."""
-        return self.call("outlet", body, user=user, chat_id=chat_id)
+    def outlet(
+        self,
+        body: dict,
+        user: Record | None = None,
+        chat_id: str | None = None,
+        model: str = MOCK_MODEL,
+    ) -> dict:
+        """A finished reply from `model` passing through this filter."""
+        return self.call("outlet", body, user=user, chat_id=chat_id, model=model)
 
 
 class LoadedTool:
@@ -474,9 +504,11 @@ class MockOpenWebUI:
             after = {t for t in asyncio.all_tasks() if t is not me and not t.done()}
             quiet = quiet + 1 if after == before else 0
 
-    def _invoke(self, fn, args, kwargs, user, chat_id, own_id):
+    def _invoke(self, fn, args, kwargs, user, chat_id, own_id, model=None):
         accepted = inspect.signature(fn).parameters
         extra = {
+            # Open-WebUI passes the whole model; plugins mostly read its id and name.
+            "__model__": {"id": model, "name": model} if model else None,
             "__user__": self.user_dict(user) if user else None,
             "__metadata__": {
                 "chat_id": chat_id,
@@ -1257,6 +1289,10 @@ class MockOpenWebUI:
                 ),
                 "open_webui.utils.tools": module(
                     "open_webui.utils.tools", get_tool_specs=get_tool_specs
+                ),
+                "open_webui.utils.misc": module(
+                    "open_webui.utils.misc",
+                    get_last_user_message_item=get_last_user_message_item,
                 ),
                 "open_webui.utils.json_codec": module(
                     "open_webui.utils.json_codec", JSONCodec=JSONCodec
