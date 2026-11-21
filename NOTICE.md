@@ -38,3 +38,5 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 Plugins referenced by `source:` in the examples (such as `inline_visualizer`) are fetched from their own repositories at deploy time, under their own licences, and are not redistributed here.
 
 `tools/live/plugins/reasoning_filter/function.py` (a filter for the live suite, never deployed from the examples) has an outlet modelled on [Clear thinking tags](https://github.com/Haervwe/open-webui-tools/blob/main/filters/clean_thinking_tags_filter.py) by Haervwe, from [open-webui-tools](https://github.com/Haervwe/open-webui-tools) (MIT). The idea and the handling of Open-WebUI 0.12+'s `output` items come from there; the code is written here.
+
+`tools/live/plugins/vision_router/function.py` (also for the live suite only) takes its idea from [Dynamic Vision Router](https://github.com/open-webui/functions/tree/main/functions/filters/dynamic_vision_router) by open-webui and atgehrhardt: an inlet that sends a message with an image to another model. Its repository declares no licence, so no code was taken; the filter is written here.

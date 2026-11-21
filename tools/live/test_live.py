@@ -98,3 +98,37 @@ def test_a_filters_outlet_turns_unfinished_reasoning_into_the_answer(user_api):
     last = reply["messages"][-1]
     assert last["content"] == "x"
     assert last["output"][-1]["type"] == "message"
+
+
+def test_an_inlet_can_send_a_message_with_an_image_to_another_model(api, user_api):
+    """The vision_router filter's valve names a model; a message with an image is then sent to it
+    (the scripted model records the model it was asked for), and one without is not."""
+    before = api("GET", "/api/v1/functions/id/vision_router/valves")[1] or {}
+    api(
+        "POST",
+        "/api/v1/functions/id/vision_router/valves/update",
+        {**before, "vision_model_id": "screenshot-vision"},
+    )
+    try:
+        image = {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="}}
+        for text, image_parts in (("routed-check-9c1d", [image]), ("plain-check-4b8e", [])):
+            status, _ = user_api(
+                "POST",
+                "/api/chat/completions",
+                {
+                    "model": MODEL,
+                    "stream": False,
+                    "messages": [
+                        {"role": "user", "content": [{"type": "text", "text": text}, *image_parts]}
+                    ],
+                },
+            )
+            assert status == 200
+        models = {
+            text: {r["model"] for r in _requests() if text in str(r["messages"])}
+            for text in ("routed-check-9c1d", "plain-check-4b8e")
+        }
+    finally:
+        api("POST", "/api/v1/functions/id/vision_router/valves/update", before)
+    assert models["routed-check-9c1d"] == {"screenshot-vision"}
+    assert models["plain-check-4b8e"] == {MODEL}

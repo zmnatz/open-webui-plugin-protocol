@@ -22,6 +22,7 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 MODEL = "screenshot-model"
+VISION = "screenshot-vision"  # for the live suite: where a vision filter sends images
 
 BOX = {"type": "rectangle", "id": "api", "x": 80, "y": 80, "width": 200, "height": 90}
 DB = {"type": "ellipse", "id": "db", "x": 420, "y": 80, "width": 200, "height": 90}
@@ -127,7 +128,7 @@ class Handler(BaseHTTPRequestHandler):
         elif path.endswith("/model/info"):  # LiteLLM's, beside /v1
             self._send(200, {"data": MODEL_INFO})
         elif path.endswith("/models"):
-            models = [{"id": m, "object": "model"} for m in (MODEL, EMBEDDING)]
+            models = [{"id": m, "object": "model"} for m in (MODEL, VISION, EMBEDDING)]
             self._send(200, {"object": "list", "data": models})
         else:
             self._send(200, {"status": "ok"})
