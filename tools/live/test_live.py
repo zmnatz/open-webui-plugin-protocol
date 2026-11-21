@@ -4,9 +4,17 @@
 from __future__ import annotations
 
 import json
+import urllib.request
 
 MODEL = "screenshot-model"
 PLAIN = "Hello! I am the screenshot model"
+FAKE_LLM = "http://127.0.0.1:9000"
+
+
+def _requests() -> list[dict]:
+    """Every chat request the scripted model has received."""
+    with urllib.request.urlopen(FAKE_LLM + "/requests", timeout=10) as response:
+        return json.loads(response.read())["requests"]
 
 
 def test_the_deployed_functions_are_installed_and_active(api):
@@ -38,9 +46,13 @@ def test_the_scripted_model_answers_a_chat(user_api):
     assert PLAIN in reply["choices"][0]["message"]["content"]
 
 
-def test_the_model_can_call_the_deployed_tool(user_api):
-    """The script calls `show_excalidraw` whenever it is offered; the reply after the tool
-    has answered is the script's text."""
+def test_a_deployed_tool_is_offered_to_the_model_and_the_model_calls_it(user_api):
+    """With `tool_ids`, Open-WebUI offers the deployed tool's functions to the model (the scripted
+    model records the request) and hands back the call the model makes. It does not run the tool:
+    for an API call with no saved chat, the client does that.
+
+    By hand: in a chat with the Excalidraw tool on and the scripted model, ask for a drawing.
+    """
     status, reply = user_api(
         "POST",
         "/api/chat/completions",
@@ -48,22 +60,19 @@ def test_the_model_can_call_the_deployed_tool(user_api):
             "model": MODEL,
             "stream": False,
             "tool_ids": ["excalidraw"],
-            "messages": [{"role": "user", "content": "Draw an API and a database"}],
+            "messages": [{"role": "user", "content": "tool-offer-check-2d5c"}],
         },
     )
     assert status == 200, reply
-    assert "Here is the diagram" in json.dumps(reply), reply
-
-
-FAKE_LLM = "http://127.0.0.1:9000"
-
-
-def _requests() -> list[dict]:
-    import json
-    import urllib.request
-
-    with urllib.request.urlopen(FAKE_LLM + "/requests", timeout=10) as response:
-        return json.loads(response.read())["requests"]
+    choice = reply["choices"][0]
+    assert choice["finish_reason"] == "tool_calls", reply
+    assert choice["message"]["tool_calls"][0]["function"]["name"] == "show_excalidraw", reply
+    offered = [
+        [t["function"]["name"] for t in r.get("tools") or []]
+        for r in _requests()
+        if "tool-offer-check-2d5c" in str(r["messages"])
+    ]
+    assert any("show_excalidraw" in names for names in offered), offered
 
 
 def test_an_outlet_turns_unfinished_reasoning_into_the_answer(user_api):
@@ -96,6 +105,9 @@ def test_an_outlet_turns_unfinished_reasoning_into_the_answer(user_api):
 def test_an_inlet_can_send_a_message_with_an_image_to_another_model(api, user_api):
     """The vision_router filter's valve names a model; a message with an image is then sent to it
     (the scripted model records the model it was asked for), and one without is not."""
+    _, models = user_api("GET", "/api/models")
+    known = sorted(m["id"] for m in models["data"])
+    assert "screenshot-vision" in known, known
     before = api("GET", "/api/v1/functions/id/vision_router/valves")[1] or {}
     api(
         "POST",
