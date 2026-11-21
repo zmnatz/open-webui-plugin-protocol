@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Project: releases follow gitflow. Changes merge into `develop`; a release is started from the Actions tab, and merging it into `main` tags it, publishes it and merges `main` back into `develop`. `main` and the docs site are now always the latest release ([contributing](docs/contributing.md#releasing)).
+
 ## 0.4.0 (2026-11-21)
 
 - The live suite deploys the examples to a real Open-WebUI v0.13.4 (`-slim`), with [aimock](https://github.com/CopilotKit/aimock) as its models, and checks what the mock cannot, on every pull request ([the live suite](docs/testing/live.md#the-live-suite)).

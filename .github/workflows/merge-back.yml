@@ -1,0 +1,64 @@
+name: merge-back
+# After a release or hotfix merges into main, merges main back into develop
+# (docs/contributing.md#branches): opens the pull request from main into develop and merges it with
+# a merge commit, never a squash. If it conflicts, it leaves the pull request open, says how to
+# resolve it, and fails, so it is not missed. Run it by hand (Actions > merge-back) to retry.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write # merging the pull request writes to develop
+  pull-requests: write
+concurrency:
+  group: merge-back
+jobs:
+  merge-back:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - name: Is there anything to merge back
+        id: check
+        run: |
+          if ! gh api "repos/$GH_REPO/branches/develop" --silent 2>/dev/null; then
+            echo "No develop branch: nothing to merge back into"
+            exit 0
+          fi
+          behind=$(gh api "repos/$GH_REPO/compare/develop...main" --jq .ahead_by)
+          if [ "$behind" = 0 ]; then
+            echo "develop already has everything on main"
+            exit 0
+          fi
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+      - if: steps.check.outputs.needed
+        run: |
+          version=$(gh api "repos/$GH_REPO/contents/src/owpp/__init__.py?ref=main" --jq .content \
+            | base64 -d | sed -n 's/^__version__ = "\(.*\)"/\1/p')
+          number=$(gh pr list --base develop --head main --state open --json number --jq '.[0].number')
+          if [ -z "$number" ]; then
+            gh pr create --base develop --head main \
+              --title "chore: merge main back into develop after $version" \
+              --body "Automatic merge-back of \`main\` (v$version) into \`develop\`, by .github/workflows/merge-back.yml. Merge it with a merge commit, never a squash."
+            number=$(gh pr list --base develop --head main --state open --json number --jq '.[0].number')
+          fi
+          # GitHub works out whether it merges cleanly in the background.
+          for _ in $(seq 20); do
+            state=$(gh pr view "$number" --json mergeable --jq .mergeable)
+            [ "$state" != UNKNOWN ] && break
+            sleep 3
+          done
+          if [ "$state" = MERGEABLE ] && gh pr merge "$number" --merge; then
+            exit 0
+          fi
+          gh pr comment "$number" --body "$(cat <<EOF
+          This merge-back could not be merged automatically (mergeable: $state). \`main\` only takes pull requests, so resolve it on a branch cut from \`main\`:
+
+          1. Create a branch \`chore/merge-back-$version\` from \`main\` (on GitHub: the branch menu on the Code tab, with \`main\` selected).
+          2. Open a pull request from it into \`develop\`, and use **Resolve conflicts** on it (or locally: \`git merge origin/develop\` on that branch, resolve, push).
+          3. Merge it with **Create a merge commit**, never a squash, and close this pull request.
+          EOF
+          )"
+          echo "::error::main could not be merged back into develop automatically: see pull request #$number"
+          exit 1

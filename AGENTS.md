@@ -16,4 +16,5 @@ Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/ag
 
 - **Example plugins:** adding or changing one in `examples/plugins/` (adapting someone else's function, its tests, screenshots, the live suite, its docs) follows `docs/agents/examples.md`.
 - **`documentation` label:** review the docs the change touches, and the pages around them, for redundancy (the same thing explained in full in more than one place: keep one, link to it from the others) and stale information (anything that no longer matches the code). Do it without being asked.
+- **Branches:** start from `develop` and open the pull request into `develop`, not `main`. Releases and hotfixes follow `docs/contributing.md#branches`.
 - **Commit messages** start with a conventional-commit type chosen from the issue's labels. The mapping is in `docs/agents/triage-labels.md`.

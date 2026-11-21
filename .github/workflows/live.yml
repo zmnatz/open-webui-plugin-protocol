@@ -4,7 +4,7 @@ name: live
 # then asserts on what it does (tools/live). Runs on every pull request and push to main, like ci.
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
