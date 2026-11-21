@@ -1,10 +1,6 @@
 name: tag
-# Tags a release when it merges into main (docs/contributing.md#releasing): main moves only for a
-# release or hotfix, so a push to main whose __version__ has no v<version> tag yet is one. Only
-# tags: what a release does (publish.yml, docs.yml) runs on the tag.
-#
-# Pushes the tag with the RELEASE_TOKEN secret, because GitHub starts no workflows for a tag
-# pushed with a workflow's own token, and then nothing would be released.
+# Tags a release when it merges into main (docs/contributing.md#releasing), with
+# zmnatz/github-workflows. Only tags: publish.yml and docs.yml release the tag.
 on:
   push:
     branches: [main]
@@ -15,28 +11,10 @@ concurrency:
   group: tag
 jobs:
   tag:
-    runs-on: ubuntu-latest
-    steps:
-      - name: RELEASE_TOKEN is set
-        env:
-          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
-        run: |
-          if [ -z "$RELEASE_TOKEN" ]; then
-            echo "::error::The RELEASE_TOKEN secret is not set (docs/contributing.md#releasing): a tag pushed without it releases nothing"
-            exit 1
-          fi
-      - uses: actions/checkout@v5
-        with:
-          ref: main
-          token: ${{ secrets.RELEASE_TOKEN }}
-      - run: |
-          tag="v$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/owpp/__init__.py)"
-          if git ls-remote --exit-code origin "refs/tags/$tag" >/dev/null; then
-            echo "$tag is already tagged: nothing to release"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$tag" -m "owpp ${tag#v}"
-          git push origin "$tag"
-          echo "Tagged $tag: publish.yml and docs.yml release it"
+    uses: zmnatz/github-workflows/.github/workflows/gitflow-tag.yml@v1
+    with:
+      version-command: >-
+        sed -n 's/^__version__ = "\(.*\)"/\1/p' src/owpp/__init__.py
+      tag-message: "owpp "
+    secrets:
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}

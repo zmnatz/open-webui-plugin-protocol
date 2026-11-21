@@ -63,7 +63,7 @@ Never squash or rebase into `main`, or back from it into `develop`: `develop` wo
 
 ## Releasing
 
-Releases are started from the Actions tab, and everything after the merge is automatic:
+Releases are started from the Actions tab, and everything after the merge is automatic. The branching, tagging and merge-back are the shared workflows in [zmnatz/github-workflows](https://github.com/zmnatz/github-workflows), which this repository's `release.yml`, `tag.yml` and `merge-back.yml` call with its own commands; publishing is this repository's, on the tag:
 
 1. **Start it.** Run **Actions > release > Run workflow** with the version (`patch`, `minor`, `major`, or one such as `0.5.0`). `.github/workflows/release.yml` cuts `release/<version>` from `develop`, prepares it with `tools/release.py` (it sets `__version__` in `src/owpp/__init__.py`, turns `## Unreleased` in `CHANGELOG.md` into `## <version> (<date>)`, and moves the docs' version pins), and opens its pull request into `main`. Only fixes for the release go on that branch now. To prepare one by hand instead, run `python tools/release.py prepare <version>` on the branch.
 2. **Merge it** with a merge commit, once CI is green. CI's `release` job checks a `release/` or `hotfix/` pull request into `main` the way publishing will: `v<__version__>` is not a tag yet, and the changelog has a dated section for it with entries.
@@ -73,7 +73,7 @@ Releases are started from the Actions tab, and everything after the merge is aut
 
 A hotfix is the same with **kind** set to `hotfix`: `hotfix/<version>` is cut from `main`, with a patch version and an empty dated changelog section, and its pull request opens as a draft. Push the fix and its changelog entry to that branch, then mark it ready and merge it.
 
-`release.yml`, `tag.yml` and `merge-back.yml` need a `RELEASE_TOKEN` Actions secret, and fail at once without it: a fine-grained token (or a GitHub App's) for this repository with **Contents** and **Pull requests: read and write**. GitHub starts no workflows for what a workflow's own token does, so with that token the release pull request would get no checks and the tag would release nothing. When the token expires, renew it and update the secret.
+`release.yml`, `tag.yml` and `merge-back.yml` need a `RELEASE_TOKEN` Actions secret, and fail at once without it: a fine-grained token (or a GitHub App's) for this repository with **Contents** and **Pull requests: read and write** ([the token](https://github.com/zmnatz/github-workflows#the-token)). GitHub starts no workflows for what a workflow's own token does, so with that token the release pull request would get no checks and the tag would release nothing. When the token expires, renew it and update the secret.
 
 ## This site
 
