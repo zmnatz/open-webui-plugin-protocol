@@ -5,7 +5,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 ## Before you start
 
 - Find or open an issue on [GitHub Issues](https://github.com/zmnatz/open-webui-plugin-protocol/issues) that says what you are changing and why. The triage labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` and `wontfix`.
-- Work on a branch, not `main`.
+- Branch from `develop`, not `main` ([branches](#branches)).
 - Install the tools: [uv](https://docs.astral.sh/uv/), then `uv sync`. For this site: `uv sync --group docs` (Python 3.11 or newer).
 
 ## What a change includes
@@ -28,7 +28,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 4. If you changed a plugin, deploy it to a test instance and do its **By hand** steps yourself.
 5. Update the guide and the changelog.
 6. Check this site: `uv run --group docs python tools/build_docs.py`. A broken link fails the build.
-7. Open a pull request: say what changed, why, and which live checks you did. The [live suite](testing/live.md#the-live-suite) runs on it; to run it before you push, `run.py --live`.
+7. Open a pull request into `develop`: say what changed, why, and which live checks you did. The [live suite](testing/live.md#the-live-suite) runs on it; to run it before you push, `run.py --live`.
 
 ## Commit messages
 
@@ -46,6 +46,30 @@ A commit message starts with a conventional-commit type, chosen from the issue's
 
 `documentation` next to another type label means the change includes the docs review above, not that the commit is `docs`: an `enhancement` with `documentation` is `feat`.
 
+## Branches
+
+The repository follows [gitflow](https://nvie.com/posts/a-successful-git-branching-model/) ([why](adr/0001-gitflow.md)):
+
+- `develop` is the next release, and the default branch.
+- `main` is the latest release, and what the docs site shows. It moves only when a release or hotfix merges into it.
+
+| Branch | Starts from | Merges into | How |
+| --- | --- | --- | --- |
+| a change: `feat/…`, `fix/…`, `docs/…`, named after its type | `develop` | `develop` | squash |
+| `release/<version>` | `develop` | `main`, then `main` into `develop` | merge commit |
+| `hotfix/<version>` | `main` | `main`, then `main` into `develop` | merge commit |
+
+Never squash or rebase into `main`, or back from it into `develop`: `develop` would then lack commits that `main` has, and the next release would conflict. The repository's rules allow only merge commits into `main`.
+
+## Releasing
+
+1. Cut `release/<version>` from `develop`. On it: set `__version__` in `src/owpp/__init__.py`, turn `## Unreleased` in `CHANGELOG.md` into `## <version> (<date>)`, and move the docs' version pins. Only fixes for the release go on this branch after that.
+2. Open a pull request into `main` and merge it with a merge commit.
+3. Tag the merge on `main`: `git switch main && git pull && git tag -a v<version> -m "owpp <version>" && git push origin v<version>`. `.github/workflows/publish.yml` refuses a tag that is not `v<__version__>` or has no dated changelog section, publishes the package to PyPI, and then creates the GitHub release with that section as its notes and the built package attached.
+4. Open a pull request from `main` into `develop`, and merge it with a merge commit.
+
+A hotfix is the same from step 1, with `hotfix/<version>` cut from `main` and a patch version.
+
 ## This site
 
 The site is built with [Zensical](https://zensical.org/), configured in `zensical.toml`. The pages are `docs/*.md`. Build it with `uv run --group docs python tools/build_docs.py` (or `serve` to preview), not `zensical` directly: the script puts `docs/` and the generated pages into `build/docs/`, which is what Zensical builds. Nothing generated is checked in, so none of it can go stale:
@@ -56,4 +80,4 @@ The site is built with [Zensical](https://zensical.org/), configured in `zensica
 
 Links written for GitHub (`../SECURITY.md`, a plugin's `config.yaml`) are rewritten to the page that carries the file, or to the file on GitHub. A link to a file or heading that does not exist fails the build. `serve` assembles the pages once, so after editing `docs/`, run it again.
 
-`.github/workflows/docs.yml` builds the site on every pull request and publishes it to GitHub Pages from `main`. To publish, the repository's **Settings > Pages > Source** must be set to **GitHub Actions** once.
+`.github/workflows/docs.yml` builds the site on every pull request and publishes it to GitHub Pages from `main`, so the site matches the latest release. To publish, the repository's **Settings > Pages > Source** must be set to **GitHub Actions** once.
