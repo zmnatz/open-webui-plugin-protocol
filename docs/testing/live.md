@@ -12,7 +12,7 @@ Every test's docstring ends with **By hand**: the steps to see the same behaviou
 
 ## The live suite
 
-This repository also runs its examples on a real Open-WebUI, automatically. It starts the same stack as the [screenshots](../screenshots.md) (Open-WebUI v0.13.4, the [scripted model](#the-scripted-model) and mcpo, in Docker), deploys `examples/plugins` with `owpp deploy`, then runs the tests in `tools/live/`: the screenshots show what happens, the live suite asserts it.
+This repository also runs its examples on a real Open-WebUI, automatically. It starts the same stack as the [screenshots](../screenshots.md) (Open-WebUI v0.13.4 as the `-slim` image, the [scripted model](#the-scripted-model) and mcpo, in Docker), deploys `examples/plugins` with `owpp deploy`, then runs the tests in `tools/live/`: the screenshots show what happens, the live suite asserts it.
 
 ```sh
 uv run --group screenshots python tools/screenshots/run.py --live
