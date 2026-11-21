@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 (2026-11-21)
 
 - Project: releases follow gitflow. Changes merge into `develop`; a release is started from the Actions tab, and merging it into `main` tags it, publishes it and merges `main` back into `develop`. `main` and the docs site are now always the latest release ([contributing](docs/contributing.md#releasing)).
 
