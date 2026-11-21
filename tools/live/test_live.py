@@ -64,21 +64,7 @@ def _requests() -> list[dict]:
         return json.loads(response.read())["requests"]
 
 
-def test_a_filters_inlet_changes_what_the_model_receives(user_api):
-    """The test filter's inlet adds a system message; the scripted model records the request."""
-    question = "inlet-check-7f3a"
-    status, _ = user_api(
-        "POST",
-        "/api/chat/completions",
-        {"model": MODEL, "stream": False, "messages": [{"role": "user", "content": question}]},
-    )
-    assert status == 200
-    seen = [r for r in _requests() if question in str(r["messages"])]
-    assert seen, "the model never received the question"
-    assert any("LIVE-TEST-INLET-MARKER" in str(r["messages"]) for r in seen)
-
-
-def test_a_filters_outlet_turns_unfinished_reasoning_into_the_answer(user_api):
+def test_an_outlet_turns_unfinished_reasoning_into_the_answer(user_api):
     """POST /api/chat/completed runs the outlets. A reply that ends in reasoning with no answer
     comes back as a message, in `output` (what 0.12+ renders) and in `content`."""
     reasoning = {"type": "reasoning", "id": "r1", "content": [{"type": "output_text", "text": "x"}]}

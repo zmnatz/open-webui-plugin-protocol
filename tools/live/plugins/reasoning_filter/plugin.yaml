@@ -1,9 +1,0 @@
-protocol: "0.3"
-function:
-  title: Live Test Filter
-  author: zmnatz
-  version: 0.1.0
-  global: true
-  required_open_webui_version: 0.12.0
-  license: MIT
-  description: For the live suite only. The inlet adds a marker system message; the outlet turns a reply that ends in unfinished reasoning into the answer. The outlet is modelled on Clear thinking tags by Haervwe.
