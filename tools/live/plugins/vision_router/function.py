@@ -1,35 +1,107 @@
-"""A filter for the live suite (tools/live), never deployed from examples/plugins.
-
-The idea is from "Dynamic Vision Router" by open-webui and atgehrhardt
-(https://github.com/open-webui/functions/tree/main/functions/filters/dynamic_vision_router):
-an inlet that sends a message with an image to another model. That repository has no licence
-file of its own (it is taken to fall under the Open WebUI License); no code is taken from it, and
-this is written from the idea alone. See NOTICE.md.
-
-It shows what an inlet can do that the mock cannot check: change `body["model"]` from a valve,
-and see which model and which user the real Open-WebUI passes in.
-"""
-
+# Dynamic Vision Router, by open-webui and atgehrhardt (credits to @iamg30 for v0.1.5-v0.1.7).
+# Copyright (c) 2023- Open WebUI Inc. Source, version 0.1.7:
+# https://github.com/open-webui/functions/blob/8bf216e535dffd684109274da096a6a4451b8fe6/functions/filters/dynamic_vision_router/main.py
+# Used for the live suite (tools/live) unchanged apart from this comment, which replaces the
+# file's docstring header: owpp writes the header from plugin.yaml, and refuses a two-line author.
+# Licence: see NOTICE.md.
 from pydantic import BaseModel, Field
+from typing import Callable, Awaitable, Any, Optional, Literal
+import json
 
-
-def has_image(messages: list) -> bool:
-    last = next((m for m in reversed(messages) if m.get("role") == "user"), None)
-    content = (last or {}).get("content")
-    return isinstance(content, list) and any(
-        isinstance(part, dict) and part.get("type") == "image_url" for part in content
-    )
+from open_webui.utils.misc import get_last_user_message_item
 
 
 class Filter:
     class Valves(BaseModel):
-        vision_model_id: str = Field(default="", description="Where messages with images go.")
+        priority: int = Field(
+            default=0,
+            description="Priority level for the filter operations.",
+        )
+        vision_model_id: str = Field(
+            default="",
+            description="The identifier of the vision model to be used for processing images. Note: Compatibility is provider-specific; ollama models can only route to ollama models, and OpenAI models to OpenAI models respectively.",
+        )
+        skip_reroute_models: list[str] = Field(
+            default_factory=list,
+            description="A list of model identifiers that should not be re-routed to the chosen vision model.",
+        )
+        enabled_for_admins: bool = Field(
+            default=False,
+            description="Whether dynamic vision routing is enabled for admin users.",
+        )
+        enabled_for_users: bool = Field(
+            default=True,
+            description="Whether dynamic vision routing is enabled for regular users.",
+        )
+        status: bool = Field(
+            default=False,
+            description="A flag to enable or disable the status indicator. Set to True to enable status updates.",
+        )
+        pass
 
     def __init__(self):
         self.valves = self.Valves()
+        pass
 
-    def inlet(self, body: dict, __model__: dict | None = None) -> dict:
-        target = self.valves.vision_model_id
-        if target and (__model__ or {}).get("id") != target and has_image(body.get("messages", [])):
-            body["model"] = target
+    async def inlet(
+        self,
+        body: dict,
+        __event_emitter__: Callable[[Any], Awaitable[None]],
+        __model__: Optional[dict] = None,
+        __user__: Optional[dict] = None,
+    ) -> dict:
+        if __model__["id"] in self.valves.skip_reroute_models:
+            return body
+        if __model__["id"] == self.valves.vision_model_id:
+            return body
+        if __user__ is not None:
+            if __user__.get("role") == "admin" and not self.valves.enabled_for_admins:
+                return body
+            elif __user__.get("role") == "user" and not self.valves.enabled_for_users:
+                return body
+
+        messages = body.get("messages")
+        if messages is None:
+            # Handle the case where messages is None
+            return body
+
+        user_message = get_last_user_message_item(messages)
+        if user_message is None:
+            # Handle the case where user_message is None
+            return body
+
+        has_images = user_message.get("images") is not None
+        if not has_images:
+            user_message_content = user_message.get("content")
+            if user_message_content is not None and isinstance(
+                user_message_content, list
+            ):
+                has_images = any(
+                    item.get("type") == "image_url" for item in user_message_content
+                )
+
+        if has_images:
+            if self.valves.vision_model_id:
+                body["model"] = self.valves.vision_model_id
+                if self.valves.status:
+                    await __event_emitter__(
+                        {
+                            "type": "status",
+                            "data": {
+                                "description": f"Request routed to {self.valves.vision_model_id}",
+                                "done": True,
+                            },
+                        }
+                    )
+            else:
+                if self.valves.status:
+                    await __event_emitter__(
+                        {
+                            "type": "status",
+                            "data": {
+                                "description": "No vision model ID provided, routing could not be completed.",
+                                "done": True,
+                            },
+                        }
+                    )
         return body

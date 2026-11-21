@@ -1,9 +1,11 @@
 protocol: "0.3"
 function:
-  title: Live Test Vision Router
-  author: zmnatz
-  version: 0.1.0
+  title: Dynamic Vision Router
+  author: open-webui, atgehrhardt
+  author_url: https://github.com/open-webui
+  funding_url: https://github.com/open-webui
+  version: 0.1.7
+  required_open_webui_version: 0.3.8
+  license: Open WebUI License
   global: true
-  required_open_webui_version: 0.12.0
-  license: MIT
-  description: For the live suite only. The inlet sends a message with an image to the model in the vision_model_id valve. The idea is from Dynamic Vision Router by open-webui and atgehrhardt.
+  description: Used by the live suite (tools/live). Sends a message with an image to the model in the vision_model_id valve.
