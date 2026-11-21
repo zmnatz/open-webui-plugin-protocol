@@ -19,6 +19,10 @@ services:
       # Nothing downloaded at startup, no update checks: the run is the same offline or not.
       OFFLINE_MODE: "true"
       ENABLE_VERSION_UPDATE_CHECK: "false"
+      # excalidraw and inline_visualizer show pages in the Artifacts panel, which need this on
+      # (`requires: iframe_sandbox_allow_same_origin` in their plugin.yaml; owpp deploy warns
+      # without it). shots_excalidraw.py turns it off and on again for its "without" shot.
+      DEFAULT_INTERFACE_SETTINGS: '{"iframeSandboxAllowSameOrigin": true}'
       # Read by examples/plugins/mcpo_sync, whose MCPO_BASE_URL default is http://mcpo:8000.
       MCPO_API_KEY: mcpo-key
     depends_on: [fake-llm, mcpo]
