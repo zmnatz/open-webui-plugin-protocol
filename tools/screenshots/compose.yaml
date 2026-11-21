@@ -28,7 +28,7 @@ services:
       DEFAULT_INTERFACE_SETTINGS: '{"iframeSandboxAllowSameOrigin": true}'
       # Read by examples/plugins/mcpo_sync, whose MCPO_BASE_URL default is http://mcpo:8000.
       MCPO_API_KEY: mcpo-key
-    depends_on: [aimock, gateway, mcpo]
+    depends_on: [aimock, static]
 
   aimock:
     # CopilotKit's aimock (https://github.com/CopilotKit/aimock, MIT): an OpenAI-compatible
@@ -39,17 +39,14 @@ services:
     ports: ["127.0.0.1:4010:4010"]
     volumes: ["./aimock:/fixtures:ro"]
 
-  gateway:
-    # Fixed files: the /v1/models and /model/info a LiteLLM gateway would serve for aimock's
-    # models (gateway/nginx.conf).
+  static:
+    # Fixed files for what the examples talk to besides a model (nginx.conf): a LiteLLM
+    # gateway's /model/info as "gateway", and mcpo's OpenAPI documents as "mcpo".
     image: nginx:1.27-alpine
     volumes:
-      - ./gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./gateway/v1:/srv/v1:ro
-      - ./gateway/model:/srv/model:ro
-
-  mcpo:
-    # For examples/plugins/mcpo_sync. The image only publishes a moving tag.
-    image: ghcr.io/open-webui/mcpo:latest
-    command: ["--port", "8000", "--api-key", "mcpo-key", "--config", "/app/mcpo.json"]
-    volumes: ["./mcpo.json:/app/mcpo.json:ro"]
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./gateway:/srv/gateway:ro
+      - ./mcpo:/srv/mcpo:ro
+    networks:
+      default:
+        aliases: [gateway, mcpo]

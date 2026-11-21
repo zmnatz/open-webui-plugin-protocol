@@ -12,7 +12,7 @@ Every test's docstring ends with **By hand**: the steps to see the same behaviou
 
 ## The live suite
 
-This repository also runs its examples on a real Open-WebUI, automatically. It starts the same stack as the [screenshots](../screenshots.md) (Open-WebUI v0.13.4 as the `-slim` image, [aimock](#the-model-aimock) as its models, and mcpo, in Docker), deploys `examples/plugins` with `owpp deploy`, then runs the tests in `tools/live/`: the screenshots show what happens, the live suite asserts it.
+This repository also runs its examples on a real Open-WebUI, automatically. It starts the same stack as the [screenshots](../screenshots.md) (Open-WebUI v0.13.4 as the `-slim` image, [aimock](#the-model-aimock) as its models, and [fixed files](#everything-else-fixed-files) for the services the examples call, in Docker), deploys `examples/plugins` with `owpp deploy`, then runs the tests in `tools/live/`: the screenshots show what happens, the live suite asserts it.
 
 ```sh
 uv run --group screenshots python tools/screenshots/run.py --live
@@ -56,9 +56,20 @@ The stack has no real model and needs no API key. Its models are [aimock](https:
 
 aimock lists as its models (`/v1/models`) the models its fixtures name, so every fixture names one. It keeps a **journal** of every request, at `GET http://127.0.0.1:4010/__aimock/journal`, which is how a test sees what Open-WebUI sent: the messages after the filters ran, the tools offered, the model.
 
-Open-WebUI has a second OpenAI connection, `gateway`: an `nginx` serving two fixed files, the `/v1/models` and `/model/info` a LiteLLM gateway would answer for the same models. aimock has no `/model/info`, and [`litellm_model_sync`](../examples/litellm_model_sync.md) reads it. That sync is also what gives each model the read grant a user who is not an admin needs to use it, so **a model aimock answers as must be in the gateway's files too** (`tests/test_live_stack.py` checks it). Open-WebUI keeps the first connection's entry for a model both list, so the chats go to aimock.
+Open-WebUI has a second OpenAI connection, `gateway`, which only describes the same models ([fixed files](#everything-else-fixed-files)). It keeps the first connection's entry for a model both list, so the chats go to aimock.
 
 When an example needs a reply the fixtures do not give, add a fixture, more specific ones first. Every field a fixture can match on and answer with: [aimock's fixture reference](https://aimock.copilotkit.dev/fixtures/).
+
+## Everything else: fixed files
+
+What the examples call besides a model answers with fixed files, from one `nginx` (the `static` service, `tools/screenshots/nginx.conf`), so the stack runs no code of anyone's but Open-WebUI's and aimock's:
+
+| Stands in for | Reached as | Files | For |
+| --- | --- | --- | --- |
+| A LiteLLM gateway | `http://gateway/v1` (Open-WebUI's second OpenAI connection) | `gateway/v1/models`, `gateway/model/info` | [`litellm_model_sync`](../examples/litellm_model_sync.md). aimock has no `/model/info`. |
+| mcpo | `http://mcpo:8000`, with `Authorization: Bearer mcpo-key` | `mcpo/openapi.json` (lists `time` and `fetch`), `mcpo/<server>/openapi.json` | [`mcpo_sync`](../examples/mcpo_sync.md) |
+
+The LiteLLM sync is also what gives each model the read grant a user who is not an admin needs, so **a model aimock answers as must be in the gateway's files too**. `tests/test_live_stack.py` checks that, and that every server mcpo's root lists has its own document.
 
 ## Trying things out in isolation
 
@@ -78,4 +89,4 @@ It starts the stack, signs up an admin and a user, deploys `examples/plugins` wi
 
 ### An isolated Open-WebUI of your own
 
-A plugins repository can do the same with four files: a `compose.yaml` with Open-WebUI (the `-slim` image), aimock and its fixtures, and a script that signs up an admin and runs `owpp deploy`. This repository's `tools/screenshots/compose.yaml`, `aimock/models.json` and `run.py` are a starting point; drop `gateway` and mcpo unless a plugin needs them.
+A plugins repository can do the same with four files: a `compose.yaml` with Open-WebUI (the `-slim` image), aimock and its fixtures, and a script that signs up an admin and runs `owpp deploy`. This repository's `tools/screenshots/compose.yaml`, `aimock/models.json` and `run.py` are a starting point; drop the `static` service unless a plugin calls one of the services it stands in for.

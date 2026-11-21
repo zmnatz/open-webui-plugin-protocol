@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import yaml
@@ -49,3 +50,13 @@ def test_the_gateway_describes_every_model_aimock_answers_as():
     info = json.loads((STACK / "gateway" / "model" / "info").read_text())["data"]
     described = {m["model_name"] for m in info}
     assert answered <= listed == described
+
+
+def test_every_mcpo_server_the_root_lists_has_its_own_openapi_document():
+    """mcpo_sync reads the servers from the root's description ("- [name](/name/docs)") and
+    writes a tool server at <base>/<name>/openapi.json, so each listed one must be there."""
+    root = json.loads((STACK / "mcpo" / "openapi.json").read_text())
+    names = re.findall(r"\[([^\]]+)\]\(/([^)/]+)/docs\)", root["info"]["description"])
+    assert names
+    for _, route in names:
+        assert json.loads((STACK / "mcpo" / route / "openapi.json").read_text())["paths"]

@@ -7,7 +7,8 @@
     uv run --group screenshots python tools/screenshots/run.py --up       # only start it, to try
 
 1. Starts compose.yaml: Open-WebUI (the version the protocol targets), aimock answering as
-   its models from aimock/, a gateway's /model/info, and mcpo. Nothing is kept between runs.
+   its models from aimock/, and nginx serving fixed files for a LiteLLM gateway and mcpo.
+   Nothing is kept between runs.
 2. Signs up the admin (the first account is the admin) and adds a user.
 3. Deploys examples/plugins with `owpp deploy`, exactly as a plugin repository would.
 4. Runs the Playwright scripts in this folder (shots_*.py). Each follows the By hand steps of

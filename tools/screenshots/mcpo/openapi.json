@@ -1,0 +1,9 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "mcpo",
+    "version": "1.0",
+    "description": "MCP servers behind mcpo, as fixed files for the test stack.\n\n- [time](/time/docs)\n- [fetch](/fetch/docs)"
+  },
+  "paths": {}
+}
