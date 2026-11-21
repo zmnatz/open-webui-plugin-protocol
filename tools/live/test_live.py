@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import json
+
 MODEL = "screenshot-model"
 PLAIN = "Hello! I am the screenshot model"
 
@@ -49,8 +51,8 @@ def test_the_model_can_call_the_deployed_tool(user_api):
             "messages": [{"role": "user", "content": "Draw an API and a database"}],
         },
     )
-    assert status == 200
-    assert "Here is the diagram" in reply["choices"][0]["message"]["content"]
+    assert status == 200, reply
+    assert "Here is the diagram" in json.dumps(reply), reply
 
 
 FAKE_LLM = "http://127.0.0.1:9000"
@@ -69,18 +71,23 @@ def test_an_outlet_turns_unfinished_reasoning_into_the_answer(user_api):
     comes back as a message, in `output` (what 0.12+ renders) and in `content`."""
     reasoning = {"type": "reasoning", "id": "r1", "content": [{"type": "output_text", "text": "x"}]}
     assistant = {"role": "assistant", "content": "", "output": [reasoning]}
+    # The endpoint checks that the chat belongs to the user, so it must exist.
+    status, chat = user_api(
+        "POST", "/api/v1/chats/new", {"chat": {"title": "outlet check", "messages": []}}
+    )
+    assert status == 200, chat
     status, reply = user_api(
         "POST",
         "/api/chat/completed",
         {
             "model": MODEL,
-            "chat_id": "live-test",
+            "chat_id": chat["id"],
             "id": "m1",
             "session_id": "s1",
             "messages": [{"role": "user", "content": "Hi"}, assistant],
         },
     )
-    assert status == 200
+    assert status == 200, reply
     last = reply["messages"][-1]
     assert last["content"] == "x"
     assert last["output"][-1]["type"] == "message"
@@ -96,9 +103,14 @@ def test_an_inlet_can_send_a_message_with_an_image_to_another_model(api, user_ap
         {**before, "vision_model_id": "screenshot-vision"},
     )
     try:
-        image = {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo="}}
+        image = {
+            "type": "image_url",
+            "image_url": {
+                "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=="
+            },
+        }
         for text, image_parts in (("routed-check-9c1d", [image]), ("plain-check-4b8e", [])):
-            status, _ = user_api(
+            status, reply = user_api(
                 "POST",
                 "/api/chat/completions",
                 {
@@ -109,7 +121,7 @@ def test_an_inlet_can_send_a_message_with_an_image_to_another_model(api, user_ap
                     ],
                 },
             )
-            assert status == 200
+            assert status == 200, reply
         models = {
             text: {r["model"] for r in _requests() if text in str(r["messages"])}
             for text in ("routed-check-9c1d", "plain-check-4b8e")

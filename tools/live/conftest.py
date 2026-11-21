@@ -15,7 +15,7 @@ URL = os.environ.get("OWPP_SCREENSHOT_URL", "http://127.0.0.1:3000")
 
 
 class Api:
-    """Open-WebUI's HTTP API as one account. Returns (status, parsed body)."""
+    """Open-WebUI's HTTP API as one account. Returns (status, parsed body), also on an error."""
 
     def __init__(self, token: str):
         self.token = token
@@ -31,7 +31,12 @@ class Api:
             with urllib.request.urlopen(request, timeout=120) as response:
                 return response.status, json.loads(response.read() or b"null")
         except urllib.error.HTTPError as error:
-            return error.code, None
+            # Keep the body: Open-WebUI says why in `detail`.
+            text = error.read().decode(errors="replace")
+            try:
+                return error.code, json.loads(text)
+            except json.JSONDecodeError:
+                return error.code, text
 
 
 def _account(name: str) -> dict:
