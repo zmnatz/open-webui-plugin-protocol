@@ -5,8 +5,10 @@ name: owpp-screenshots
 
 services:
   open-webui:
-    # The version the protocol is written against (docs/README.md, "Status and limits").
-    image: ghcr.io/open-webui/open-webui:v0.13.4
+    # The version the protocol is written against (docs/README.md, "Status and limits"), as the
+    # slim image: it leaves out the bundled ML models (about 4.5 GB in the full one), which neither
+    # the screenshots nor the live run use.
+    image: ghcr.io/open-webui/open-webui:v0.13.4-slim
     ports: ["127.0.0.1:3000:8080"]
     environment:
       WEBUI_SECRET_KEY: screenshots-only
