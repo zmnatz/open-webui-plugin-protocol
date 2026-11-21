@@ -36,3 +36,5 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 `examples/plugins/page_banners/` is a variant of [Better Banners](https://github.com/Classic298/open-webui-plugins/tree/main/better-banners) by Classic298, under the same licence and copyright notice as above: `assets/loader.js`, `assets/custom.css` and `function.py` are derived from it, with the changes listed in that plugin's README.
 
 Plugins referenced by `source:` in the examples (such as `inline_visualizer`) are fetched from their own repositories at deploy time, under their own licences, and are not redistributed here.
+
+`tools/live/plugins/reasoning_filter/function.py` (a filter for the live suite, never deployed from the examples) has an outlet modelled on [Clear thinking tags](https://github.com/Haervwe/open-webui-tools/blob/main/filters/clean_thinking_tags_filter.py) by Haervwe, from [open-webui-tools](https://github.com/Haervwe/open-webui-tools) (MIT). The idea and the handling of Open-WebUI 0.12+'s `output` items come from there; the code is written here.

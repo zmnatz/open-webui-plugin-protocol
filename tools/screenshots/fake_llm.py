@@ -7,6 +7,7 @@ tools the same way every time, so this one follows a script instead of thinking:
   with the arguments listed there. Once the tool has answered, it replies with SCRIPT's text.
 - Asked in Open-WebUI's default mode (a prompt listing the tools, answered with JSON), it answers
   with the same call as {"tool_calls": [...]}.
+- A message containing "[reasoning only]" gets reasoning and no answer (the live suite).
 - Anything else gets a short fixed reply, so the chat shows a normal answer.
 
 It also answers /model/info as a LiteLLM gateway would, for the LiteLLM Model Sync example.
@@ -45,6 +46,8 @@ SCRIPT = {
         "Here is the diagram: the API reads from the database. Edit it in the panel.",
     ),
 }
+REASONING = "Thinking it through, the answer is forty-two."
+REQUESTS: list[dict] = []  # every chat request, for the live suite (GET /requests)
 PLAIN = "Hello! I am the screenshot model: I answer the same way every time."
 EMBEDDING = "screenshot-embedding"
 # What a LiteLLM gateway's /model/info says about the models, for examples/plugins/litellm_model_sync.
@@ -95,6 +98,8 @@ def _reply(body: dict) -> dict:
             if f'"{name}"' in prompt or f"'{name}'" in prompt:
                 return {"content": json.dumps({"tool_calls": [{"name": name, "parameters": args}]})}
         return {"content": json.dumps({"tool_calls": []})}
+    if "[reasoning only]" in str(last.get("content", "")):
+        return {"reasoning": REASONING}  # a reply that ends in reasoning, with no answer
     if "title" in prompt.lower() and "chat" in prompt.lower() and last.get("role") == "user":
         # Open-WebUI's title and tag tasks want JSON; keep them short and stable.
         if "tags" in prompt.lower():
@@ -117,7 +122,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         path = self.path.rstrip("/")
-        if path.endswith("/model/info"):  # LiteLLM's, beside /v1
+        if path.endswith("/requests"):
+            self._send(200, {"requests": REQUESTS})
+        elif path.endswith("/model/info"):  # LiteLLM's, beside /v1
             self._send(200, {"data": MODEL_INFO})
         elif path.endswith("/models"):
             models = [{"id": m, "object": "model"} for m in (MODEL, EMBEDDING)]
@@ -139,6 +146,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.path.rstrip("/").endswith("/chat/completions"):
             self._send(404, {"error": "not found"})
             return
+        REQUESTS.append(body)
         reply = _reply(body)
         call_id = f"call_{uuid.uuid4().hex[:12]}"
         if "tool_call" in reply:
@@ -156,6 +164,9 @@ class Handler(BaseHTTPRequestHandler):
             }
             message = {"role": "assistant", "content": None, "tool_calls": delta["tool_calls"]}
             finish = "tool_calls"
+        elif "reasoning" in reply:
+            delta = message = {"role": "assistant", "reasoning_content": reply["reasoning"]}
+            finish = "stop"
         else:
             delta = message = {"role": "assistant", "content": reply["content"]}
             finish = "stop"

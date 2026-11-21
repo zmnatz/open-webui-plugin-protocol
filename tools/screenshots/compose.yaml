@@ -27,6 +27,7 @@ services:
     # tools/screenshots/fake_llm.py: an OpenAI-compatible server that calls the tools on a script.
     image: python:3.12-slim
     command: ["python", "/app/fake_llm.py"]
+    ports: ["127.0.0.1:9000:9000"] # the live suite reads GET /requests
     environment:
       FAKE_LLM_LOG: ${FAKE_LLM_LOG:-} # set to 1 to log every request it gets
     volumes: ["./fake_llm.py:/app/fake_llm.py:ro"]
