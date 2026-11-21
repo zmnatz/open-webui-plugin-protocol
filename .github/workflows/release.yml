@@ -2,13 +2,11 @@ name: release
 # Starts a release or a hotfix (docs/contributing.md#releasing). Run by hand: Actions > release >
 # Run workflow. Cuts release/<version> from develop (or hotfix/<version> from main), prepares it
 # with tools/release.py (the version, the dated changelog section, the docs' pins), pushes it and
-# opens its pull request into main. Merging that pull request publishes the release (publish.yml)
-# and merges main back into develop (merge-back.yml).
+# opens its pull request into main. Merging that pull request tags the release (tag.yml) and merges
+# main back into develop (merge-back.yml).
 #
-# With the default token, the pull request's checks do not start on their own (GitHub does not
-# start workflows for what its own token does): close and reopen it to start them. A RELEASE_TOKEN
-# secret (a fine-grained token or a GitHub App's, with contents and pull requests: write) avoids
-# that.
+# Uses the RELEASE_TOKEN secret, so the pull request's checks start: GitHub starts no workflows for
+# what a workflow's own token does.
 on:
   workflow_dispatch:
     inputs:
@@ -22,18 +20,25 @@ on:
         options: [release, hotfix]
         default: release
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read # the writes use RELEASE_TOKEN
 concurrency:
   group: release
 jobs:
   start:
     runs-on: ubuntu-latest
     steps:
+      - name: RELEASE_TOKEN is set
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error::The RELEASE_TOKEN secret is not set (docs/contributing.md#releasing)"
+            exit 1
+          fi
       - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.kind == 'hotfix' && 'main' || 'develop' }}
-          token: ${{ secrets.RELEASE_TOKEN || github.token }}
+          token: ${{ secrets.RELEASE_TOKEN }}
       - id: prepare
         env:
           HOW: ${{ inputs.version }}
@@ -55,7 +60,7 @@ jobs:
           VERSION: ${{ steps.prepare.outputs.version }}
           BRANCH: ${{ steps.prepare.outputs.branch }}
           KIND: ${{ inputs.kind }}
-          GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

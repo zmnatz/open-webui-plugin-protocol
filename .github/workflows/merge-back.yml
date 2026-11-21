@@ -3,22 +3,30 @@ name: merge-back
 # (docs/contributing.md#branches): opens the pull request from main into develop and merges it with
 # a merge commit, never a squash. If it conflicts, it leaves the pull request open, says how to
 # resolve it, and fails, so it is not missed. Run it by hand (Actions > merge-back) to retry.
+# Uses the RELEASE_TOKEN secret, so the merge into develop starts its checks.
 on:
   push:
     branches: [main]
   workflow_dispatch:
 permissions:
-  contents: write # merging the pull request writes to develop
-  pull-requests: write
+  contents: read # the writes use RELEASE_TOKEN
 concurrency:
   group: merge-back
 jobs:
   merge-back:
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+      GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
       GH_REPO: ${{ github.repository }}
     steps:
+      - name: RELEASE_TOKEN is set
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+        run: |
+          if [ -z "$RELEASE_TOKEN" ]; then
+            echo "::error::The RELEASE_TOKEN secret is not set (docs/contributing.md#releasing)"
+            exit 1
+          fi
       - name: Is there anything to merge back
         id: check
         run: |
