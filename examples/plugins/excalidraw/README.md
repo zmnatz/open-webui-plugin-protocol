@@ -8,7 +8,7 @@ A shared Excalidraw drawing per chat, opened in the Artifacts side panel.
 |---|---|
 | `function.py` | The Filter: serves the editor at `/excalidraw/view/<chat_id>` (mounted with the `routes` library) and appends it to replies so the panel opens. |
 | `tool.py` | The Tool: lets the model show, read and change the drawing. |
-| `shared.py` | In front of both: imports, constants, the versioned scene on top of the `chat_data` library (a drawing lives in its chat's metadata under `excalidraw`) and the element helpers. |
+| `shared.py` | In front of both, imported with `from shared import ...`: constants, the versioned scene on top of the `chat_data` library (a drawing lives in its chat's metadata under `excalidraw`) and the element helpers. |
 | `templates/viewer.html` | The editor page, embedded in the bundle and never served raw: `function.py` reads it with `plugin_template_text()` and renders it at `/excalidraw/view/<chat_id>` for a signed-in user who can write to the chat, filling in a short-lived token. |
 | `config.yaml` | `assets_url: ${EXCALIDRAW_ASSETS_URL:-}`: where the editor's files are, read from the Open-WebUI container's environment. Empty means esm.sh. |
 | `self-host/` | A pinned build script that produces the editor's files for you to host yourself (see below). Not part of the deployed plugin. |

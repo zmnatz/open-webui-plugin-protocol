@@ -39,6 +39,7 @@ import yaml
 from . import envtemplate
 from .errors import OwppError
 from .events import problem_with
+from .flatten import flatten
 from .libraries import BY_NAME, hoist_future, json_literal, link
 from .manifest import (
     coalesce,
@@ -136,8 +137,12 @@ def _bundle_code(folder: Path, name: str, keys: dict) -> str:
     if not file.exists():
         raise OwppError(f"{folder}: no {name}.py")
     shared_file = folder / "shared.py"
-    shared = read_text(shared_file) if shared_file.exists() else ""
-    source = shared + read_text(file)
+    shared = read_text(shared_file) if shared_file.exists() else None
+    if shared is not None:
+        flatten("shared", shared, None, f"{shared_file}")
+    code = flatten(name, read_text(file), shared, f"{file}")
+    shared = shared or ""
+    source = shared + code
     if shared:
         lines, rest = hoist_future(source)
         source = lines + rest

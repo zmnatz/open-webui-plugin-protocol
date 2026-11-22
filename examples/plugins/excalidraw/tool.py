@@ -1,9 +1,21 @@
-# Lets the model show, read and change the chat's drawing. The scene store, the element helpers
-# and the constants come from shared.py, which the bundler puts above this file.
+# Lets the model show, read and change the chat's drawing.
 
 import json
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
+
+from shared import (
+    _ID,
+    MARKER,
+    PREFIX,
+    _as_list,
+    _empty,
+    _load,
+    _merge,
+    _mutate,
+    _simplify,
+    _with_ids,
+)
 
 ELEMENT_DOC = """\
 Elements use Excalidraw's skeleton format. Every element, arrows included, needs

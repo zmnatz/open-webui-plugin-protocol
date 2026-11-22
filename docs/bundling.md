@@ -15,6 +15,25 @@ A bundle is always, in this order, with no numbering or naming scheme to maintai
 
 A function bundle and a tool bundle are separate Open-WebUI modules. They share code through `shared.py` (each gets a copy) and, where state must be shared, through `sys.modules` (the `chat_data` library does this for temporary chats).
 
+## Imports between the files
+
+Each file imports what it uses, as in any Python project, so it reads, lints and type-checks on its own ([why](adr/0002-plugin-source-is-python.md)). That includes the plugin's own code:
+
+```python
+# function.py
+import json
+
+from shared import PREFIX, _load
+```
+
+`from shared import ...` resolves in an editor and in tests. The bundle has no `shared` module: shared.py is already above the file, so the bundler removes the line. Removing it is only safe for some forms, and the bundler refuses the others, naming the line:
+
+- **Only a top-level `from shared import NAME`.** Not `import shared`, not `from shared import *`, and not an import inside a function.
+- **No `as`.** Once the line is gone, an alias would be undefined.
+- **The name must be defined in shared.py.**
+- **No name both in shared.py and in the file.** They become one namespace, so one would replace the other. Importing the same module in both (`import json`) is fine.
+- **`function.py` and `tool.py` cannot import each other.** They are bundled into separate modules. Move what both need into shared.py.
+
 ## `{{file:NAME}}`
 
 In `function.py` or `tool.py`, `{{file:NAME}}` is replaced by the text of the sibling file `NAME`. Use it to keep an HTML page or large literal out of a Python string. For files served over HTTP prefer a `public/` folder.

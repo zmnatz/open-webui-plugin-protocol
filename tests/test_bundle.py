@@ -238,6 +238,63 @@ class TestToolAndSkills:
         assert tool.startswith('"""\ntitle: T\n"""\nSHARED = 1\nclass Tools:')
         assert "def plugin_mount(" not in tool  # include applies to the function only
 
+    def test_from_shared_imports_are_removed_once_shared_py_is_inlined(self, plugin):
+        """`from shared import NAME` is a real import for the editor and the tests; in the bundle
+        shared.py is already above the file, so the line goes, however many lines it spans."""
+        d = plugin(
+            "function:\n  title: T\ntool:\n  id: t\n  title: T\n",
+            {
+                "shared.py": "import json\n\nSHARED = 1\nOTHER = json.dumps(2)\n",
+                "function.py": "# top\nfrom shared import SHARED\n\nclass Filter:\n    x = SHARED\n",
+                "tool.py": "from shared import (\n    OTHER,\n    SHARED,\n)\n\nclass Tools:\n    y = OTHER\n",
+            },
+        )
+        (fn,) = load_function_files(d)
+        tool = embedded(fn.content)["tools"][0]["content"]
+        for code in (fn.content, tool):
+            assert "from shared" not in code and "    OTHER,\n" not in code
+            assert code.index("SHARED = 1") < code.index("class ")
+        assert "# top\n\nclass Filter:" in fn.content
+        assert "\n\nclass Tools:" in tool
+
+    @pytest.mark.parametrize(
+        ("source", "error"),
+        [
+            ("from shared import SHARED as S\n", r"function\.py:1: .*`as`"),
+            ("import shared\n", r"function\.py:1: .*`from shared import NAME`"),
+            ("def f():\n    from shared import SHARED\n", r"function\.py:2: .*top level"),
+            ("from shared import *\n", r"function\.py:1: .*import \*`: name what you use"),
+            (
+                "from shared import MISSING\n",
+                r"function\.py:1: .*MISSING.*not defined in shared\.py",
+            ),
+            ("from shared import SHARED\nSHARED = 2\n", r"function\.py:2: .*SHARED.*shared\.py"),
+            ("def SHARED():\n    pass\n", r"function\.py:1: .*SHARED.*shared\.py"),
+            ("from tool import X\n", r"function\.py:1: .*tool\.py.*separate.*shared\.py"),
+            ("import tool\n", r"function\.py:1: .*tool\.py.*separate.*shared\.py"),
+        ],
+    )
+    def test_refuses_imports_that_would_break_once_flattened(self, plugin, source, error):
+        d = plugin("function:\n  title: T\n", {"shared.py": "SHARED = 1\n", "function.py": source})
+        with pytest.raises(OwppError, match=error):
+            load_function_files(d)
+
+    def test_tool_py_cannot_import_from_function_py(self, plugin):
+        d = plugin(
+            "function:\n  title: T\ntool:\n  id: t\n  title: T\n",
+            {
+                "function.py": "class Filter:\n    pass\n",
+                "tool.py": "from function import Filter\n\nclass Tools:\n    pass\n",
+            },
+        )
+        with pytest.raises(OwppError, match=r"tool\.py:1: .*function\.py.*separate.*shared\.py"):
+            load_function_files(d)
+
+    def test_from_shared_without_a_shared_py(self, plugin):
+        d = plugin("function:\n  title: T\n", {"function.py": "from shared import X\n"})
+        with pytest.raises(OwppError, match=r"function\.py:1: .*no shared\.py"):
+            load_function_files(d)
+
     def test_future_imports_move_above_the_libraries_and_shared_py(self, plugin):
         d = plugin(
             "function:\n  title: T\ninclude: [jobs]\n",

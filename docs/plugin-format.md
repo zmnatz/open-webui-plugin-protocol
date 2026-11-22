@@ -7,7 +7,7 @@ plugins/<id>/
   plugin.yaml      required
   function.py      the function (omit it for a plugin that is only a tool and skills)
   tool.py          the tool
-  shared.py        code placed in front of function.py and of tool.py
+  shared.py        code both use: they `from shared import NAME`, and it is placed in front of each
   skills/<id>/     SKILL.md plus any supporting files, installed as a whole folder
   static/          files served as they are, to signed-in users unless `static:` says otherwise; index.html is the plugin's page
   templates/       files the function renders itself (a page it fills in); embedded, never served
@@ -20,7 +20,7 @@ A plugin may also be a single `<id>.py` (a function with no tool or skills). The
 
 ## `plugin.yaml`
 
-All sections are optional except that a tool or skills need a `function:` section: the function is the parent. The current protocol version is `0.2`.
+All sections are optional except that a tool or skills need a `function:` section: the function is the parent. The current protocol version is `0.3`.
 
 ### `protocol:`
 

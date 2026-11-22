@@ -1,6 +1,5 @@
 # Serves the editor, adds it to replies as an artifact and keeps the Excalidraw tool installed.
-# The scene store and the constants come from shared.py, and plugin_* from the libraries: the
-# bundler puts both above this file.
+# plugin_* come from the libraries, which the bundler puts above this file.
 
 import json
 import re
@@ -9,6 +8,19 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
+from shared import (
+    _ID,
+    CORS,
+    EXCALIDRAW_VERSION,
+    MARKER,
+    NO_STORE,
+    PREFIX,
+    _empty,
+    _load,
+    _mutate,
+    _NoChat,
+    log,
+)
 
 # Editor assets: the browser loads React and Excalidraw from esm.sh (no integrity check), or
 # from EXCALIDRAW_ASSETS_URL when self-hosted (self-host/build.sh). To upgrade Excalidraw, change
