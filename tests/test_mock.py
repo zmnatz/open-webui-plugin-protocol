@@ -161,7 +161,9 @@ def test_an_event_can_be_about_something_other_than_a_function(tmp_path):
         owui.emit("user.deleted", {"type": "user", "id": "u1"})
         owui.emit("function.enable_started", "demo")
         owui.emit("function.updated", "demo")  # not enabled, not starting: not sent
-        assert plugin.module.SEEN == [("function.enable_started", {"type": "function", "id": "demo"})]
+        assert plugin.module.SEEN == [
+            ("function.enable_started", {"type": "function", "id": "demo"})
+        ]
         owui.functions["demo"].is_active = True
         owui.emit("user.deleted", {"type": "user", "id": "u1"})
         assert plugin.module.SEEN[-1] == ("user.deleted", {"type": "user", "id": "u1"})
@@ -184,7 +186,10 @@ def test_a_plugin_can_ask_a_model(tmp_path):
     in `owui.completions`."""
     with MockOpenWebUI() as owui:
         from open_webui.routers.pipelines import process_pipeline_inlet_filter
-        from open_webui.routers.tasks import apply_task_model_params, get_task_model_generation_config
+        from open_webui.routers.tasks import (
+            apply_task_model_params,
+            get_task_model_generation_config,
+        )
         from open_webui.utils.chat import generate_chat_completion
 
         owui.model_reply = "blue"

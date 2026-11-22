@@ -29,9 +29,12 @@ def strings(path):
     tree = ast.parse(path.read_text())
     found = {}
     for node in ast.walk(tree):
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant):
-            if isinstance(node.value.value, str):
-                found[ast.unparse(node.targets[0])] = node.value.value
+        if (
+            isinstance(node, ast.Assign)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            found[ast.unparse(node.targets[0])] = node.value.value
     return found
 
 
@@ -142,13 +145,24 @@ page = "".join(page)
 # The markup _build_html built in Python never depends on the valves: run that code once and
 # keep what it made as files, included where its placeholder was.
 build = next(
-    n for n in ast.walk(ast.parse(event_py.read_text()))
+    n
+    for n in ast.walk(ast.parse(event_py.read_text()))
     if isinstance(n, ast.FunctionDef) and n.name == "_build_html"
 )
-NAMES = {"metadata_grid", "shared_meta_fields", "save_meta", "rename_meta", "sync_options",
-         "sync_html", "json_modal", "css_modal", "json_modals"}
+NAMES = {
+    "metadata_grid",
+    "shared_meta_fields",
+    "save_meta",
+    "rename_meta",
+    "sync_options",
+    "sync_html",
+    "json_modal",
+    "css_modal",
+    "json_modals",
+}
 code = [
-    s for s in build.body
+    s
+    for s in build.body
     if (isinstance(s, ast.FunctionDef) and s.name in NAMES)
     or (isinstance(s, ast.Assign) and ast.unparse(s.targets[0]) in NAMES)
 ]
@@ -170,12 +184,17 @@ write("consult_prompt.txt", ev["CONSULT_PROMPT"] + "\n")
 
 # The notice page (_notice_page), one line as the original builds it, with placeholders.
 notice = next(
-    n for n in ast.walk(ast.parse(event_py.read_text()))
+    n
+    for n in ast.walk(ast.parse(event_py.read_text()))
     if isinstance(n, ast.FunctionDef) and n.name == "_notice_page"
 )
 joined = next(n for n in ast.walk(notice) if isinstance(n, ast.JoinedStr))
 text = "".join(
-    v.value if isinstance(v, ast.Constant) else "__TITLE__" if "title" in ast.unparse(v) else "__DETAIL__"
+    v.value
+    if isinstance(v, ast.Constant)
+    else "__TITLE__"
+    if "title" in ast.unparse(v)
+    else "__DETAIL__"
     for v in joined.values
 )
 write("notice.html", text + "\n")
@@ -184,8 +203,14 @@ write("notice.html", text + "\n")
 launcher = launcher_py.read_text()
 a = launcher.index('        content = f"""') + len('        content = f"""')
 frame = launcher[a : launcher.index('"""', a)]
-fields = {"h": "HEIGHT", "inner_w_pct": "INNER_WIDTH", "inner_h": "INNER_HEIGHT", "scale": "SCALE",
-          "popout_url": "POPOUT_URL", "frame_url": "FRAME_URL"}
+fields = {
+    "h": "HEIGHT",
+    "inner_w_pct": "INNER_WIDTH",
+    "inner_h": "INNER_HEIGHT",
+    "scale": "SCALE",
+    "popout_url": "POPOUT_URL",
+    "frame_url": "FRAME_URL",
+}
 frame = re.sub(r"(?<!\{)\{([a-z_]+)\}(?!\})", lambda m: "__" + fields[m[1]] + "__", frame)
 write("launcher/embed.html", frame.replace("{{", "{").replace("}}", "}") + "\n")
 

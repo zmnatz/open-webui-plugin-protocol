@@ -27,7 +27,10 @@ def test_a_personal_theme_reaches_only_its_owner(owui, personal):
     mine = td.save(td.user, "/me", css=td.CSS.replace("red", "blue"))
     assert mine.status_code == 200 and mine.json()["cssTag"]
     assert "blue" in td.user.get(BASE + "/me/theme.css").text
-    assert td.user.get(BASE + "/me/theme.css").headers["cache-control"] == "private, no-cache, must-revalidate"
+    assert (
+        td.user.get(BASE + "/me/theme.css").headers["cache-control"]
+        == "private, no-cache, must-revalidate"
+    )
     bob = owui.client(owui.add_user("Bob"))
     assert bob.get(BASE + "/me/theme.css").text == ""
     assert td.anon.get(BASE + "/me/theme.css").text == ""
@@ -106,8 +109,17 @@ def test_the_sign_in_picture_is_for_everyone_and_changed_by_admins(td):
     url = td.admin.post(BASE + "/auth-background", content=td.PNG).json()["url"]
     assert url.startswith(BASE + "/auth-background?v=")
     picture = td.anon.get(BASE + "/auth-background")
-    assert (picture.status_code, picture.headers["content-type"], picture.content) == (200, "image/png", td.PNG)
-    assert td.anon.get(BASE + "/auth-background", headers={"if-none-match": picture.headers["etag"]}).status_code == 304
+    assert (picture.status_code, picture.headers["content-type"], picture.content) == (
+        200,
+        "image/png",
+        td.PNG,
+    )
+    assert (
+        td.anon.get(
+            BASE + "/auth-background", headers={"if-none-match": picture.headers["etag"]}
+        ).status_code
+        == 304
+    )
     assert td.admin.delete(BASE + "/auth-background").json() == {"ok": True}
     assert td.anon.get(BASE + "/auth-background").status_code == 404
 
@@ -158,5 +170,7 @@ def test_a_change_to_a_picture_from_another_site_is_refused(td):
     By hand: not repeatable without a second site.
     """
     cross = {"sec-fetch-site": "cross-site"}
-    assert td.admin.post(BASE + "/auth-background", content=td.PNG, headers=cross).status_code == 403
+    assert (
+        td.admin.post(BASE + "/auth-background", content=td.PNG, headers=cross).status_code == 403
+    )
     assert td.admin.delete(BASE + "/page-background", headers=cross).status_code == 403

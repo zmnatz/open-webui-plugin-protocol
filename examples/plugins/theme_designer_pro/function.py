@@ -32,11 +32,12 @@ import logging
 import os
 import re as _re
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from owpp.lib import (
@@ -250,7 +251,7 @@ class Event(PluginEvents):
         """Return the validated designer URL, auto-correcting if needed."""
         route = self.valves.designer_url.rstrip("/")
         # Sanitize: only allow alphanumeric, hyphens, underscores, slashes, and dots
-        route = _re.sub(r'[^a-zA-Z0-9/_.-]', '', route)
+        route = _re.sub(r"[^a-zA-Z0-9/_.-]", "", route)
         if not route.startswith("/api/v1/"):
             corrected = "/api/v1" + (route if route.startswith("/") else "/" + route)
             log.warning(
@@ -282,7 +283,10 @@ class Event(PluginEvents):
     LEGACY_INDEX_MARKERS = (
         ("<!-- OWUI Theme Pro Bootloader -->", "</script>"),
         ('<style id="owui-server-theme">', "</style><!-- /owui-server-theme -->"),
-        ('<script type="application/json" id="owui-theme-state">', "</script><!-- /owui-theme-state -->"),
+        (
+            '<script type="application/json" id="owui-theme-state">',
+            "</script><!-- /owui-theme-state -->",
+        ),
     )
 
     @staticmethod
@@ -442,23 +446,29 @@ class Event(PluginEvents):
         if cached and cached[0] == cache_key:
             return cached[1]
 
-        js = self._bootloader_body().replace(
-            "__THEME_ROUTE__", cache_key[1]
-        ).replace(
-            "__CANVAS_API_ACCESS__",
-            "true" if self.valves.enable_canvas_api_access else "false",
-        ).replace(
-            "__THEME_ACTIVE__",
-            "true" if active else "false",
-        ).replace(
-            "__PERSONAL_THEMES__",
-            "true" if self.valves.allow_personal_themes else "false",
-        ).replace(
-            "__CANVAS_FX__",
-            "true" if self.valves.enable_canvas_fx else "false",
-        ).replace(
-            "__CALM_CHAT_COLUMN__",
-            "true" if self.valves.calm_chat_column else "false",
+        js = (
+            self._bootloader_body()
+            .replace("__THEME_ROUTE__", cache_key[1])
+            .replace(
+                "__CANVAS_API_ACCESS__",
+                "true" if self.valves.enable_canvas_api_access else "false",
+            )
+            .replace(
+                "__THEME_ACTIVE__",
+                "true" if active else "false",
+            )
+            .replace(
+                "__PERSONAL_THEMES__",
+                "true" if self.valves.allow_personal_themes else "false",
+            )
+            .replace(
+                "__CANVAS_FX__",
+                "true" if self.valves.enable_canvas_fx else "false",
+            )
+            .replace(
+                "__CALM_CHAT_COLUMN__",
+                "true" if self.valves.calm_chat_column else "false",
+            )
         )
 
         # State inlined as a JS string literal, minus the canvas scripts.
@@ -474,7 +484,9 @@ class Event(PluginEvents):
                 self.ADMIN_TAB_SCRIPT.strip()
                 .replace("__THEME_ROUTE__", cache_key[1])
                 .replace("__TAB_ADMIN__", "true" if self.valves.show_in_admin_settings else "false")
-                .replace("__TAB_PERSONAL__", "true" if self.valves.allow_personal_themes else "false")
+                .replace(
+                    "__TAB_PERSONAL__", "true" if self.valves.allow_personal_themes else "false"
+                )
             )
 
         if active and self.valves.show_in_admin_panel:
@@ -672,9 +684,7 @@ class Event(PluginEvents):
                 CUSTOM_CSS_PATH,
                 self.CSS_BLOCK_START,
                 self.CSS_BLOCK_END,
-                lambda: Event.instance._custom_css_fragment()
-                if reload_active(app)
-                else "",
+                lambda: Event.instance._custom_css_fragment() if reload_active(app) else "",
                 order=self.ASSET_ORDER,
             )
             return True
@@ -715,20 +725,21 @@ class Event(PluginEvents):
         the old set in place instead of new CSS beside old state. The renames
         that follow are not rolled back if one of them fails."""
         import tempfile as _tmpf
+
         staged = []
         try:
             for path, content in files:
                 path.parent.mkdir(parents=True, exist_ok=True)
-                _fd, _tmp = _tmpf.mkstemp(dir=path.parent, suffix='.tmp')
+                _fd, _tmp = _tmpf.mkstemp(dir=path.parent, suffix=".tmp")
                 staged.append((_tmp, path))
-                with os.fdopen(_fd, 'w', encoding='utf-8') as f:
+                with os.fdopen(_fd, "w", encoding="utf-8") as f:
                     f.write(content)
             for _tmp, path in staged:
                 os.replace(_tmp, path)
         except BaseException:
             for _tmp, _ in staged:
-                try: os.unlink(_tmp)
-                except OSError: pass
+                with suppress(OSError):
+                    os.unlink(_tmp)
             raise
 
     AUTH_BG_FILE_NAME = "auth_background"
@@ -763,15 +774,16 @@ class Event(PluginEvents):
     def _write_bytes(path: Path, data: bytes) -> None:
         """Atomically write bytes to path via tempfile + os.replace."""
         import tempfile as _tmpf
+
         path.parent.mkdir(parents=True, exist_ok=True)
-        _fd, _tmp = _tmpf.mkstemp(dir=os.path.dirname(path), suffix='.tmp')
+        _fd, _tmp = _tmpf.mkstemp(dir=os.path.dirname(path), suffix=".tmp")
         try:
-            with os.fdopen(_fd, 'wb') as f:
+            with os.fdopen(_fd, "wb") as f:
                 f.write(data)
             os.replace(_tmp, path)
         except BaseException:
-            try: os.unlink(_tmp)
-            except OSError: pass
+            with suppress(OSError):
+                os.unlink(_tmp)
             raise
 
     _UNDECODABLE_WARNED: set = set()
@@ -794,7 +806,10 @@ class Event(PluginEvents):
                 if len(Event._UNDECODABLE_WARNED) > 256:
                     Event._UNDECODABLE_WARNED.clear()
                 Event._UNDECODABLE_WARNED.add(path)
-                log.warning("[Theme Pro] %s is not valid UTF-8; reading it with the bad bytes replaced", path)
+                log.warning(
+                    "[Theme Pro] %s is not valid UTF-8; reading it with the bad bytes replaced",
+                    path,
+                )
             return path.read_text(encoding="utf-8", errors="replace")
 
     def _load_css(self, user_id: str | None = None) -> str | None:
@@ -868,7 +883,9 @@ class Event(PluginEvents):
         except (ValueError, RecursionError):
             return False
 
-    def _load_library_or_set_aside(self, user_id: str | None = None) -> tuple[str | None, str | None]:
+    def _load_library_or_set_aside(
+        self, user_id: str | None = None
+    ) -> tuple[str | None, str | None]:
         """(library, None), or (None, the name it was kept under) when the
         file has text but isn't a JSON object. The designer would open on an
         empty gallery and its next library save would overwrite a file that
@@ -900,10 +917,18 @@ class Event(PluginEvents):
             path.rename(aside)
             notice = self._library_notice_path(user_id)
             try:
-                Event._atomic_write(notice, (Event._read_theme_file(notice) or "") + aside.name + "\n")
+                Event._atomic_write(
+                    notice, (Event._read_theme_file(notice) or "") + aside.name + "\n"
+                )
             except OSError as e:
-                log.warning("[Theme Pro] Couldn't record the kept library name for the designer: %s", e)
-        log.warning("[Theme Pro] %s isn't a JSON object; kept it as %s and started an empty gallery", path, aside.name)
+                log.warning(
+                    "[Theme Pro] Couldn't record the kept library name for the designer: %s", e
+                )
+        log.warning(
+            "[Theme Pro] %s isn't a JSON object; kept it as %s and started an empty gallery",
+            path,
+            aside.name,
+        )
         return None, aside.name
 
     def _library_notice_path(self, user_id: str | None = None) -> Path:
@@ -1001,15 +1026,14 @@ class Event(PluginEvents):
         iterator). Losing a cache entry is harmless; a 500 is not.
         """
         if len(cache) >= Event._PERSONAL_CACHE_MAX:
-            try:
+            with suppress(RuntimeError):
                 cache.pop(next(iter(cache), None), None)
-            except RuntimeError:
-                pass
         cache[key] = value
 
     # Saves run their file work in a thread, one at a time, so two of them
     # can't interleave one's CSS with the other's state
     import threading as _threading
+
     _save_lock = _threading.Lock()
 
     @classmethod
@@ -1072,10 +1096,8 @@ class Event(PluginEvents):
             self._get_state_path(user_id),
             self._get_sections_path(user_id),
         ):
-            try:
+            with suppress(FileNotFoundError):
                 path.unlink()
-            except FileNotFoundError:
-                pass
         for kind in ("css", "state"):
             Event._personal_delivery_cache.pop((user_id, kind), None)
         log.info("[Theme Pro] Removed a personal theme; that user is back on the instance theme")
@@ -1086,20 +1108,18 @@ class Event(PluginEvents):
             return False
         if not (isinstance(state, str) and state) or state != self._load_state(user_id):
             return False
-        valid = isinstance(sections, dict) and all(isinstance(sections.get(k), str) for k in self.SECTION_KEYS)
+        valid = isinstance(sections, dict) and all(
+            isinstance(sections.get(k), str) for k in self.SECTION_KEYS
+        )
         if valid and {k: sections[k] for k in self.SECTION_KEYS} != self._load_sections(user_id):
             return False
-        if library and isinstance(library, str) and library != self._load_library(user_id):
-            return False
-        return True
+        return not (library and isinstance(library, str) and library != self._load_library(user_id))
 
     def _delete_personal_library(self, user_id: str) -> None:
         """Remove a user's saved themes and presets, for a Factory Reset in
         their personal designer."""
-        try:
+        with suppress(FileNotFoundError):
             self._get_library_path(user_id).unlink()
-        except FileNotFoundError:
-            pass
 
     def _delete_user_themes(self, user_id: str) -> bool:
         """Remove everything a deleted account kept here: its personal theme
@@ -1163,7 +1183,7 @@ class Event(PluginEvents):
             from open_webui.env import DATA_DIR
 
             with Event._file_lock(Path(DATA_DIR) / "theme" / ".index.lock"):
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     content = f.read()
                 cleaned = self._strip_legacy_index_blocks(content)
                 if cleaned != content:
@@ -1311,7 +1331,12 @@ class Event(PluginEvents):
 
         event_instance = self
 
-        from starlette.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
+        from starlette.responses import (
+            HTMLResponse,
+            JSONResponse,
+            PlainTextResponse,
+            StreamingResponse,
+        )
 
         def _disabled():
             return JSONResponse(
@@ -1424,7 +1449,9 @@ class Event(PluginEvents):
                 except FileNotFoundError:
                     pass
                 except OSError as e:
-                    return JSONResponse({"error": f"Could not remove the picture: {e}"}, status_code=500)
+                    return JSONResponse(
+                        {"error": f"Could not remove the picture: {e}"}, status_code=500
+                    )
                 return JSONResponse({"ok": True})
             buf = bytearray()
             async for chunk in request.stream():
@@ -1433,7 +1460,9 @@ class Event(PluginEvents):
                     return JSONResponse({"error": "The picture is over 5 MB"}, status_code=413)
             data = bytes(buf)
             if not Event._image_mime(data):
-                return JSONResponse({"error": "Use a PNG, JPEG, GIF or WebP picture"}, status_code=415)
+                return JSONResponse(
+                    {"error": "Use a PNG, JPEG, GIF or WebP picture"}, status_code=415
+                )
             try:
                 await asyncio.to_thread(Event._write_bytes, path, data)
             except OSError as e:
@@ -1555,7 +1584,9 @@ class Event(PluginEvents):
         async def page_background(request: Request):
             if not reload_active(request.app):
                 return _disabled()
-            return await _picture(request, event_instance._get_page_bg_path(), route_base + "/page-background")
+            return await _picture(
+                request, event_instance._get_page_bg_path(), route_base + "/page-background"
+            )
 
         @designer.api_route("/page-background", methods=["POST", "DELETE"])
         async def change_page_background(request: Request, user: PluginAdmin):
@@ -1564,7 +1595,9 @@ class Event(PluginEvents):
             refusal = await _cross_origin_refusal(request)
             if refusal is not None:
                 return refusal
-            return await _picture(request, event_instance._get_page_bg_path(), route_base + "/page-background")
+            return await _picture(
+                request, event_instance._get_page_bg_path(), route_base + "/page-background"
+            )
 
         # {base}/me/page-background: a personal theme's, for its owner alone.
         @designer.api_route("/me/page-background", methods=["GET", "POST", "DELETE"])
@@ -1577,7 +1610,11 @@ class Event(PluginEvents):
                 refusal = await _cross_origin_refusal(request)
                 if refusal is not None:
                     return refusal
-            return await _picture(request, event_instance._get_page_bg_path(user.id), route_base + "/me/page-background")
+            return await _picture(
+                request,
+                event_instance._get_page_bg_path(user.id),
+                route_base + "/me/page-background",
+            )
 
         # ---- the "public" mount: what signed-out pages need too ------------------------
 
@@ -1590,7 +1627,9 @@ class Event(PluginEvents):
             delivery = None
             if reload_active(request.app):
                 delivery = await asyncio.to_thread(event_instance._get_css_delivery)
-            return _delivery_response(request, delivery, "text/css", "", "no-cache, must-revalidate")
+            return _delivery_response(
+                request, delivery, "text/css", "", "no-cache, must-revalidate"
+            )
 
         async def serve_theme_state(request: Request):
             """The saved theme state, for the bootloader's seeding. No auth.
@@ -1598,20 +1637,26 @@ class Event(PluginEvents):
             delivery = None
             if reload_active(request.app):
                 delivery = await asyncio.to_thread(event_instance._get_state_delivery)
-            return _delivery_response(request, delivery, "application/json", "{}", "no-cache, must-revalidate")
+            return _delivery_response(
+                request, delivery, "application/json", "{}", "no-cache, must-revalidate"
+            )
 
         async def serve_personal_css(request: Request):
             user = await _personal_user(request)
             delivery = None
             if user is not None:
-                delivery = await asyncio.to_thread(event_instance._get_personal_delivery, user.id, "css")
+                delivery = await asyncio.to_thread(
+                    event_instance._get_personal_delivery, user.id, "css"
+                )
             return _delivery_response(request, delivery, "text/css", "", PERSONAL_CACHE)
 
         async def serve_personal_state(request: Request):
             user = await _personal_user(request)
             delivery = None
             if user is not None:
-                delivery = await asyncio.to_thread(event_instance._get_personal_delivery, user.id, "state")
+                delivery = await asyncio.to_thread(
+                    event_instance._get_personal_delivery, user.id, "state"
+                )
             return _delivery_response(request, delivery, "application/json", "{}", PERSONAL_CACHE)
 
         async def serve_personal_library(request: Request):
@@ -1649,9 +1694,13 @@ class Event(PluginEvents):
                 # An over-cap page still says hello, so it checks for missed
                 # saves on each retry; a stopping worker's doesn't, so the
                 # restarted worker's hello is the one that refetches
-                body = "retry: 3000\n\n" if ending else (
-                    "retry: 60000\n\n"
-                    f'event: hello\ndata: {{"spread":{Event._RESYNC_SPREAD}}}\n\n'
+                body = (
+                    "retry: 3000\n\n"
+                    if ending
+                    else (
+                        "retry: 60000\n\n"
+                        f'event: hello\ndata: {{"spread":{Event._RESYNC_SPREAD}}}\n\n'
+                    )
                 )
                 return StreamingResponse(
                     iter([body]),
@@ -1675,8 +1724,8 @@ class Event(PluginEvents):
                         await asyncio.sleep(Event._SSE_HEARTBEAT_SECONDS)  # 15s for Cloudflare
                         Event._deliver(": heartbeat\n\n")
 
-                request.app.state._theme_sse_heartbeat = (
-                    asyncio.get_running_loop().create_task(_sse_heartbeat())
+                request.app.state._theme_sse_heartbeat = asyncio.get_running_loop().create_task(
+                    _sse_heartbeat()
                 )
 
             queue = asyncio.Queue(maxsize=8)
@@ -1753,11 +1802,32 @@ class Event(PluginEvents):
                         held = await held_tags(uid)
                         frames = []
                         if "theme" in held:
-                            frames.append(("theme-update", {"cssTag": held["theme"][0], "stateTag": held["theme"][1]}))
+                            frames.append(
+                                (
+                                    "theme-update",
+                                    {"cssTag": held["theme"][0], "stateTag": held["theme"][1]},
+                                )
+                            )
                         if "library" in held:
-                            frames.append(("library-update", {"scope": "me" if uid else "instance", "tag": held["library"][0]}))
+                            frames.append(
+                                (
+                                    "library-update",
+                                    {
+                                        "scope": "me" if uid else "instance",
+                                        "tag": held["library"][0],
+                                    },
+                                )
+                            )
                         if "personal" in held:
-                            frames.append(("personal-theme-update", {"cssTag": held["personal"][0], "stateTag": held["personal"][1]}))
+                            frames.append(
+                                (
+                                    "personal-theme-update",
+                                    {
+                                        "cssTag": held["personal"][0],
+                                        "stateTag": held["personal"][1],
+                                    },
+                                )
+                            )
                         for name, data in frames:
                             yield f"event: {name}\ndata: {_json.dumps({**data, 'resync': True}, separators=(',', ':'))}\n\n"
                     while True:
@@ -1790,7 +1860,12 @@ class Event(PluginEvents):
         async def auth_background(request: Request):
             if not reload_active(request.app):
                 return _disabled()
-            return await _picture(request, event_instance._get_auth_bg_path(), route_base + "/auth-background", "no-cache")
+            return await _picture(
+                request,
+                event_instance._get_auth_bg_path(),
+                route_base + "/auth-background",
+                "no-cache",
+            )
 
         def read_only_routes(router: APIRouter) -> APIRouter:
             """What a page loaded at some time from this URL reads: at the designer URL, and at
@@ -1813,7 +1888,12 @@ class Event(PluginEvents):
             refusal = await _cross_origin_refusal(request)
             if refusal is not None:
                 return refusal
-            return await _picture(request, event_instance._get_auth_bg_path(), route_base + "/auth-background", "no-cache")
+            return await _picture(
+                request,
+                event_instance._get_auth_bg_path(),
+                route_base + "/auth-background",
+                "no-cache",
+            )
 
         plugin_mount(app, designer, route_base, name="designer")
         plugin_mount(app, public, route_base, name="public", access="public")
@@ -1825,7 +1905,7 @@ class Event(PluginEvents):
         plugin_mount(app, APIRouter(), route_base, name=f"alias {route_base}", access="public")
         log.info("[Theme Pro] Registered routes at %s", route_base)
 
-    async def _handle_css_save(self, request, user_id: str | None = None) -> "JSONResponse":
+    async def _handle_css_save(self, request, user_id: str | None = None) -> JSONResponse:
         """Handle POST to save or reset theme CSS + state.
 
         With user_id, the save is that user's personal theme: it goes to their
@@ -1871,9 +1951,7 @@ class Event(PluginEvents):
             if isinstance(sections, dict):
                 total = sum(len(v) for v in sections.values() if isinstance(v, str))
                 if total > 5 * 1024 * 1024:
-                    return JSONResponse(
-                        {"error": "sections exceeds 5MB limit"}, status_code=413
-                    )
+                    return JSONResponse({"error": "sections exceeds 5MB limit"}, status_code=413)
 
             if is_reset and user_id:
                 # A personal reset puts the user back on the instance theme.
@@ -1894,6 +1972,7 @@ class Event(PluginEvents):
                 return JSONResponse({"status": "reset"})
 
             if is_reset:
+
                 def reset_instance():
                     with Event._save_transaction():
                         for path, what in (
@@ -1924,12 +2003,14 @@ class Event(PluginEvents):
             # Library-only sync (no CSS/state to save — e.g., draft mode preset import)
             if not css:
                 if library and isinstance(library, str):
+
                     def write_library():
                         with Event._save_transaction():
                             if library == self._load_library(user_id):
                                 return False
                             self._save_library(library, user_id)
                             return True
+
                     if not await asyncio.to_thread(write_library):
                         return JSONResponse({"status": "ok", "noop": True})
                     # Open designers hold the library in memory; tell them.
@@ -1967,8 +2048,12 @@ class Event(PluginEvents):
                     if isinstance(sections, dict) and all(
                         isinstance(sections.get(k), str) for k in self.SECTION_KEYS
                     ):
-                        files.append((self._get_sections_path(user_id),
-                                      _json.dumps({k: sections[k] for k in self.SECTION_KEYS})))
+                        files.append(
+                            (
+                                self._get_sections_path(user_id),
+                                _json.dumps({k: sections[k] for k in self.SECTION_KEYS}),
+                            )
+                        )
                     else:
                         self._delete_sections(user_id)
 
@@ -1979,7 +2064,10 @@ class Event(PluginEvents):
                         if '"_cssSections"' in state:
                             try:
                                 parsed = _json.loads(state)
-                                if isinstance(parsed, dict) and parsed.pop("_cssSections", None) is not None:
+                                if (
+                                    isinstance(parsed, dict)
+                                    and parsed.pop("_cssSections", None) is not None
+                                ):
                                     state = _json.dumps(parsed, separators=(",", ":"))
                             except Exception:
                                 pass
@@ -1988,8 +2076,12 @@ class Event(PluginEvents):
                     if library and isinstance(library, str):
                         files.append((self._get_library_path(user_id), library))
                     Event._write_together(files)
-                    log.info("[Theme Pro] Saved theme to %s (%d files, %d bytes of CSS)",
-                             files[0][0].parent, len(files), len(css))
+                    log.info(
+                        "[Theme Pro] Saved theme to %s (%d files, %d bytes of CSS)",
+                        files[0][0].parent,
+                        len(files),
+                        len(css),
+                    )
                     return True
 
             if not await asyncio.to_thread(write):
@@ -2061,10 +2153,17 @@ class Event(PluginEvents):
                 return None
             return {"kind": "theme", "sha": sha, "mode": mode}
         assert prefix == APPLY_TOKEN_PREFIX
-        theme = cls._parse_consult(_json.dumps({
-            "hue": data.get("h"), "chroma": data.get("c"), "lightness": data.get("l"),
-            "gradient": bool(data.get("g")), "name": data.get("n") or "",
-        }))
+        theme = cls._parse_consult(
+            _json.dumps(
+                {
+                    "hue": data.get("h"),
+                    "chroma": data.get("c"),
+                    "lightness": data.get("l"),
+                    "gradient": bool(data.get("g")),
+                    "name": data.get("n") or "",
+                }
+            )
+        )
         if not theme:
             return None
         theme["mode"] = mode
@@ -2124,7 +2223,9 @@ class Event(PluginEvents):
         content = message.get("content") if isinstance(message, dict) else None
         if isinstance(content, list):
             # Content parts, as some pipelines answer
-            content = "".join(p["text"] for p in content if isinstance(p, dict) and isinstance(p.get("text"), str))
+            content = "".join(
+                p["text"] for p in content if isinstance(p, dict) and isinstance(p.get("text"), str)
+            )
         return content if isinstance(content, str) else ""
 
     @staticmethod
@@ -2147,7 +2248,11 @@ class Event(PluginEvents):
             except (TypeError, ValueError, OverflowError):
                 return None
 
-        hue, chroma, lightness = number("hue", 0, 360), number("chroma", 0, 40), number("lightness", 0, 50)
+        hue, chroma, lightness = (
+            number("hue", 0, 360),
+            number("chroma", 0, 40),
+            number("lightness", 0, 50),
+        )
         if hue is None or chroma is None or lightness is None:
             return None
         gradient = data.get("gradient")
@@ -2160,7 +2265,7 @@ class Event(PluginEvents):
             "name": name,
         }
 
-    async def _handle_consult(self, request, user) -> "JSONResponse":
+    async def _handle_consult(self, request, user) -> JSONResponse:
         """Ask a model on this instance to turn a description into a theme."""
         from starlette.responses import JSONResponse
 
@@ -2182,7 +2287,9 @@ class Event(PluginEvents):
         model_id, params = await self._consult_model(request)
         if not model_id:
             return JSONResponse(
-                {"error": "No model to ask: set AI Consultant Model in this function's valves, or a task model under Admin Settings > Interface"},
+                {
+                    "error": "No model to ask: set AI Consultant Model in this function's valves, or a task model under Admin Settings > Interface"
+                },
                 status_code=409,
             )
         payload = {
@@ -2215,7 +2322,12 @@ class Event(PluginEvents):
             return JSONResponse({"error": "The model could not answer"}, status_code=502)
         theme = self._parse_consult(self._completion_text(result))
         if not theme:
-            return JSONResponse({"error": "The model's answer had no theme in it — try again or describe it differently"}, status_code=502)
+            return JSONResponse(
+                {
+                    "error": "The model's answer had no theme in it — try again or describe it differently"
+                },
+                status_code=502,
+            )
         theme["model"] = model_id
         return JSONResponse(theme, headers={"Cache-Control": "no-store"})
 
@@ -2264,27 +2376,34 @@ class Event(PluginEvents):
         # the designer manages its own state (the bootloader's fetch/state
         # path is gated on !window.__THEME_DESIGNER__), so it gets null.
         route_base = self._get_route_base()
-        bootloader_js = self._bootloader_body().replace(
-            "__THEME_ROUTE__", route_base
-        ).replace(
-            "__CANVAS_API_ACCESS__",
-            "true" if self.valves.enable_canvas_api_access else "false",
-        ).replace(
-            "__THEME_ACTIVE__",
-            "true",
-        ).replace(
-            # The designer applies the theme it is editing itself.
-            "__PERSONAL_THEMES__",
-            "false",
-        ).replace(
-            "__EMBEDDED_STATE__",
-            "null",
-        ).replace(
-            "__CANVAS_FX__",
-            "true" if self.valves.enable_canvas_fx else "false",
-        ).replace(
-            "__CALM_CHAT_COLUMN__",
-            "true" if self.valves.calm_chat_column else "false",
+        bootloader_js = (
+            self._bootloader_body()
+            .replace("__THEME_ROUTE__", route_base)
+            .replace(
+                "__CANVAS_API_ACCESS__",
+                "true" if self.valves.enable_canvas_api_access else "false",
+            )
+            .replace(
+                "__THEME_ACTIVE__",
+                "true",
+            )
+            .replace(
+                # The designer applies the theme it is editing itself.
+                "__PERSONAL_THEMES__",
+                "false",
+            )
+            .replace(
+                "__EMBEDDED_STATE__",
+                "null",
+            )
+            .replace(
+                "__CANVAS_FX__",
+                "true" if self.valves.enable_canvas_fx else "false",
+            )
+            .replace(
+                "__CALM_CHAT_COLUMN__",
+                "true" if self.valves.calm_chat_column else "false",
+            )
         )
 
         valve_config = {
@@ -2292,9 +2411,7 @@ class Event(PluginEvents):
             "enableCanvasApiAccess": self.valves.enable_canvas_api_access,
             "enableUrlImport": self.valves.enable_url_import,
             "allowedImportDomains": [
-                d.strip()
-                for d in self.valves.allowed_import_domains.split(",")
-                if d.strip()
+                d.strip() for d in self.valves.allowed_import_domains.split(",") if d.strip()
             ],
             "enableCustomCss": self.valves.enable_custom_css,
             "enableAuthPageTheming": self.valves.enable_auth_page_theming,
@@ -2319,6 +2436,7 @@ class Event(PluginEvents):
             # Personal designs follow the admin's Draft choice no further:
             # saves only ever change the user's own theme.
             valve_config["draftModeDefault"] = False
+
         def script_json(value):
             # Every '<' escaped, not only '</': a saved theme holding '<!--'
             # and '<script' (in a Canvas FX script, say) put the HTML parser in
@@ -2346,7 +2464,12 @@ class Event(PluginEvents):
                 parsed = _json.loads(saved_state)
             except ValueError:
                 parsed = None
-            gallery_refs = ("_activeThemeRef", "_activeCanvasRef", "_activeCssRef", "_activeGradientRef")
+            gallery_refs = (
+                "_activeThemeRef",
+                "_activeCanvasRef",
+                "_activeCssRef",
+                "_activeGradientRef",
+            )
             if isinstance(parsed, dict) and any(k in parsed for k in gallery_refs):
                 for key in gallery_refs:
                     parsed.pop(key, None)
@@ -2425,7 +2548,9 @@ class Event(PluginEvents):
     # Cross-worker valve convergence (multi-container / Redis only).
     instance = None  # Live instance the producers and peer valve sync read
     _last_valves_snapshot = None  # All valve values at the last event(), to detect ANY change
-    _sse_clients: set = set()  # Active SSE connections, aliased to app.state by _share_sse_clients()
+    _sse_clients: set = (
+        set()
+    )  # Active SSE connections, aliased to app.state by _share_sse_clients()
     _sse_cids: dict = {}  # Stream id -> queue of _sse_clients, aliased the same way
     # Per-worker ceiling on concurrent SSE connections. The endpoint is
     # unauthenticated, so this bounds worst-case memory/FD usage; over-cap
@@ -2467,47 +2592,60 @@ class Event(PluginEvents):
         Unmarked sidebar rules are left alone. Works rule by rule, so it runs
         on the flat CSS or on the structural and gradient sections alike.
         """
-        rule_open = r'#sidebar(?::not\(\.h-full\))?\s*\{\s*/\*\[FX\]\*/'
+        rule_open = r"#sidebar(?::not\(\.h-full\))?\s*\{\s*/\*\[FX\]\*/"
         # The designer tints a gradient's hex base colour as rgba() and any
         # other colour as color-mix(in srgb, <colour> NN%, transparent), with
         # a lone blur(). Only that lone blur matches, never the -webkit-
         # property, so CSS this already rewrote (a copy kept aside and saved
         # back as a personal theme) passes unchanged.
-        lone_blur = r'blur\([^)]*\)(?=\s*!important)'
+        lone_blur = r"blur\([^)]*\)(?=\s*!important)"
 
         def rewrite(rule: str) -> str:
-            if mode == 'translucent':
-                blur = 'blur(20px) saturate(1.3)'
+            if mode == "translucent":
+                blur = "blur(20px) saturate(1.3)"
                 rule = _re.sub(
-                    r'(' + rule_open + r'\s*background-color:\s*)(var\(--[^)]+\))(\s*!important\s*;)\s*\}',
-                    rf'\1color-mix(in srgb, \2 20%, transparent)\3 backdrop-filter: {blur} !important; -webkit-backdrop-filter: {blur} !important; }}',
+                    r"("
+                    + rule_open
+                    + r"\s*background-color:\s*)(var\(--[^)]+\))(\s*!important\s*;)\s*\}",
+                    rf"\1color-mix(in srgb, \2 20%, transparent)\3 backdrop-filter: {blur} !important; -webkit-backdrop-filter: {blur} !important; }}",
                     rule,
                 )
                 rule = _re.sub(
-                    r'(' + rule_open + r'[^}]*background-color:\s*)rgba\(([^,]+,[^,]+,[^,]+),\s*[\d.]+\)(\s*!important\s*;[^}]*(?<![\w-])backdrop-filter:\s*)' + lone_blur,
-                    rf'\1rgba(\2, 0.25)\3{blur}',
+                    r"("
+                    + rule_open
+                    + r"[^}]*background-color:\s*)rgba\(([^,]+,[^,]+,[^,]+),\s*[\d.]+\)(\s*!important\s*;[^}]*(?<![\w-])backdrop-filter:\s*)"
+                    + lone_blur,
+                    rf"\1rgba(\2, 0.25)\3{blur}",
                     rule,
                 )
                 rule = _re.sub(
-                    r'(' + rule_open + r'[^}]*background-color:\s*color-mix\(in srgb,\s*[^;{}]+\s)\d+%(,\s*transparent\)\s*!important\s*;[^}]*(?<![\w-])backdrop-filter:\s*)' + lone_blur,
-                    rf'\g<1>25%\2{blur}',
+                    r"("
+                    + rule_open
+                    + r"[^}]*background-color:\s*color-mix\(in srgb,\s*[^;{}]+\s)\d+%(,\s*transparent\)\s*!important\s*;[^}]*(?<![\w-])backdrop-filter:\s*)"
+                    + lone_blur,
+                    rf"\g<1>25%\2{blur}",
                     rule,
                 )
             else:
-                blur = 'none'
+                blur = "none"
                 rule = _re.sub(
-                    r'(' + rule_open + r'\s*background-color:\s*)var\(--[^)]+\)(\s*!important\s*;)\s*\}',
-                    rf'\1transparent\2 backdrop-filter: {blur} !important; -webkit-backdrop-filter: {blur} !important; }}',
+                    r"("
+                    + rule_open
+                    + r"\s*background-color:\s*)var\(--[^)]+\)(\s*!important\s*;)\s*\}",
+                    rf"\1transparent\2 backdrop-filter: {blur} !important; -webkit-backdrop-filter: {blur} !important; }}",
                     rule,
                 )
                 rule = _re.sub(
-                    r'(' + rule_open + r'[^}]*background-color:\s*)(?:rgba\([^)]+\)|color-mix\([^;{}]+\))(\s*!important\s*;[^}]*(?<![\w-])backdrop-filter:\s*)' + lone_blur,
-                    rf'\1transparent\2{blur}',
+                    r"("
+                    + rule_open
+                    + r"[^}]*background-color:\s*)(?:rgba\([^)]+\)|color-mix\([^;{}]+\))(\s*!important\s*;[^}]*(?<![\w-])backdrop-filter:\s*)"
+                    + lone_blur,
+                    rf"\1transparent\2{blur}",
                     rule,
                 )
             return _re.sub(
-                r'[^\n]*#sidebar[^{]*\{\s*/\*\[FX\]\*/\s*background-color:\s*revert-layer\s*;?\s*\}',
-                '',
+                r"[^\n]*#sidebar[^{]*\{\s*/\*\[FX\]\*/\s*background-color:\s*revert-layer\s*;?\s*\}",
+                "",
                 rule,
             )
 
@@ -2525,11 +2663,11 @@ class Event(PluginEvents):
             start = line_break + 1 if line_break >= 0 else (pos if at - pos <= window else at)
             end = css.find("}", at, at + window)
             if end < 0:
-                out.append(css[pos:at + len(marker)])
+                out.append(css[pos : at + len(marker)])
                 pos = at + len(marker)
                 continue
             out.append(css[pos:start])
-            rewritten = rewrite(css[start:end + 1])
+            rewritten = rewrite(css[start : end + 1])
             out.append(rewritten)
             pos = end + 1
             if not rewritten.strip():
@@ -2584,49 +2722,63 @@ class Event(PluginEvents):
         integration menus. Descendant selectors, because the portals nest
         their surfaces at varying depths.
         """
-        blur = 'blur(20px) saturate(1.3)'
+        blur = "blur(20px) saturate(1.3)"
         # A portal: a direct child of body that isn't the app or the theme
         # system's own. SvelteKit's page wrapper is a body > div too; pages
         # outside .app, such as a shared chat, sit in it.
         portal = ':not(.app):not(#theme-designer-container):not([id^="owui-"]):not([style*="display: contents"]):not(script):not(style)'
         # A surface inside it: not an interactive widget or the app's own
-        surface = ':not(button):not(a):not(input):not(select):not(label):not(span):not(svg):not(img):not(.app *):not(#theme-designer-container *)'
+        surface = ":not(button):not(a):not(input):not(select):not(label):not(span):not(svg):not(img):not(.app *):not(#theme-designer-container *)"
 
         def surfaces_with(*utilities):
             """Divs carrying one of these background utilities, plain or dark:."""
-            selectors = [s for utility in utilities for s in (
-                f'div[class^="{utility}"]', f'div[class*=" {utility}"]',
-                f'div[class^="dark:{utility}"]', f'div[class*=" dark:{utility}"]')]
-            return ':where(' + ', '.join(s + surface for s in selectors) + ')'
+            selectors = [
+                s
+                for utility in utilities
+                for s in (
+                    f'div[class^="{utility}"]',
+                    f'div[class*=" {utility}"]',
+                    f'div[class^="dark:{utility}"]',
+                    f'div[class*=" dark:{utility}"]',
+                )
+            ]
+            return ":where(" + ", ".join(s + surface for s in selectors) + ")"
 
         # Open WebUI's UI greys are bg-base-* after 0.13.4 (bg-gray-* through 0.13.4)
-        grey = surfaces_with('bg-gray-', 'bg-base-')
-        white = surfaces_with('bg-white')
+        grey = surfaces_with("bg-gray-", "bg-base-")
+        white = surfaces_with("bg-white")
 
         def glass(color_var):
             return (
-                f'  background-color: color-mix(in srgb, var({color_var}) 25%, transparent) !important;\n'
-                f'  backdrop-filter: {blur} !important;\n'
-                f'  -webkit-backdrop-filter: {blur} !important;\n'
+                f"  background-color: color-mix(in srgb, var({color_var}) 25%, transparent) !important;\n"
+                f"  backdrop-filter: {blur} !important;\n"
+                f"  -webkit-backdrop-filter: {blur} !important;\n"
             )
 
         light = ':root:not(.dark):not([data-theme="dark"]):not([data-theme="oled-dark"]):not([data-theme="her"])'
         # (theme selectors, surfaces, tint)
         rules = [
-            (('.dark', '[data-theme="dark"]', '[data-theme="oled-dark"]'), (grey,), '--color-gray-950'),
-            ((light,), (white, grey), '--color-gray-50'),
-            (('.her', '[data-theme="her"]'), (white, grey), '--color-gray-50'),
+            (
+                (".dark", '[data-theme="dark"]', '[data-theme="oled-dark"]'),
+                (grey,),
+                "--color-gray-950",
+            ),
+            ((light,), (white, grey), "--color-gray-50"),
+            ((".her", '[data-theme="her"]'), (white, grey), "--color-gray-50"),
         ]
-        css = '\n/* --- Overlay Translucency (valve-injected) --- */\n'
+        css = "\n/* --- Overlay Translucency (valve-injected) --- */\n"
         for themes, surfaces, color_var in rules:
-            selectors = [f'{theme} body > div{portal} {s}' for s in surfaces for theme in themes]
-            css += ',\n'.join(selectors) + ' {\n' + glass(color_var) + '}\n'
-        for scheme, surfaces, color_var in (('dark', (grey,), '--color-gray-950'), ('light', (white, grey), '--color-gray-50')):
+            selectors = [f"{theme} body > div{portal} {s}" for s in surfaces for theme in themes]
+            css += ",\n".join(selectors) + " {\n" + glass(color_var) + "}\n"
+        for scheme, surfaces, color_var in (
+            ("dark", (grey,), "--color-gray-950"),
+            ("light", (white, grey), "--color-gray-50"),
+        ):
             selectors = [f'  [data-theme="system"] body > div{portal} {s}' for s in surfaces]
-            css += f'@media (prefers-color-scheme: {scheme}) {{\n'
-            css += ',\n'.join(selectors) + ' {\n' + glass(color_var) + '  }\n}\n'
+            css += f"@media (prefers-color-scheme: {scheme}) {{\n"
+            css += ",\n".join(selectors) + " {\n" + glass(color_var) + "  }\n}\n"
         # The fade at the top of a chat goes with the solid overlays
-        css += '\n/* Overlay Transparency: no fade at the top of chats */\n#navbar-bg-gradient-to-b { display: none !important; }\n'
+        css += "\n/* Overlay Transparency: no fade at the top of chats */\n#navbar-bg-gradient-to-b { display: none !important; }\n"
         return css
 
     def _valve_appended_css(self) -> str:
@@ -2643,8 +2795,12 @@ class Event(PluginEvents):
             css += self._overlay_css()
         return css
 
-    _CANVAS_CLEARING = _re.compile(r"/\*\[OWUI_CLEAR_CANVAS_START\]\*/.*?/\*\[OWUI_CLEAR_CANVAS_END\]\*/", _re.DOTALL)
-    _STRUCTURAL = _re.compile(r"/\*\[OWUI_STRUCTURAL_START\]\*/.*?/\*\[OWUI_STRUCTURAL_END\]\*/", _re.DOTALL)
+    _CANVAS_CLEARING = _re.compile(
+        r"/\*\[OWUI_CLEAR_CANVAS_START\]\*/.*?/\*\[OWUI_CLEAR_CANVAS_END\]\*/", _re.DOTALL
+    )
+    _STRUCTURAL = _re.compile(
+        r"/\*\[OWUI_STRUCTURAL_START\]\*/.*?/\*\[OWUI_STRUCTURAL_END\]\*/", _re.DOTALL
+    )
 
     @classmethod
     def _drop_canvas_clearing(cls, css: str) -> str:
@@ -2704,7 +2860,11 @@ class Event(PluginEvents):
 
     def _css_valve_key(self) -> tuple:
         """The valves _postprocess_css reads, for the delivery cache keys."""
-        return (self.valves.enable_canvas_fx, self.valves.sidebar_transparency, self.valves.overlay_transparency)
+        return (
+            self.valves.enable_canvas_fx,
+            self.valves.sidebar_transparency,
+            self.valves.overlay_transparency,
+        )
 
     def _state_valve_key(self) -> tuple:
         """The valves _postprocess_state and _state_with_sections read, for
@@ -2754,9 +2914,11 @@ class Event(PluginEvents):
             url = picture.get("url") if isinstance(picture, dict) else None
             old = None
             if isinstance(url, str):
-                old = (personal and Event._UPLOAD_BASE[True].match(url)) or Event._UPLOAD_BASE[False].match(url)
+                old = (personal and Event._UPLOAD_BASE[True].match(url)) or Event._UPLOAD_BASE[
+                    False
+                ].match(url)
             if old and old.group() != route_base:
-                picture["url"] = route_base + url[old.end():]
+                picture["url"] = route_base + url[old.end() :]
                 changed = True
         return _json.dumps(data, separators=(",", ":")) if changed else state_str
 
@@ -2769,8 +2931,14 @@ class Event(PluginEvents):
             for mode in ("dark", "oled", "light", "her"):
                 if isinstance(data.get(mode), dict):
                     for key in (
-                        "themeShowAuth", "customCssShowAuth", "canvasShowAuth", "gradientShowAuth",
-                        "themeAuthOnly", "customCssAuthOnly", "canvasAuthOnly", "gradientAuthOnly",
+                        "themeShowAuth",
+                        "customCssShowAuth",
+                        "canvasShowAuth",
+                        "gradientShowAuth",
+                        "themeAuthOnly",
+                        "customCssAuthOnly",
+                        "canvasAuthOnly",
+                        "gradientAuthOnly",
                     ):
                         data[mode][key] = False
             hidden = data.get("_hiddenBackgrounds")
@@ -2879,13 +3047,17 @@ class Event(PluginEvents):
                 continue
             if signed_in_only and not user:
                 continue
-            try:
+            with suppress(asyncio.QueueFull):
                 q.put_nowait(msg)
-            except asyncio.QueueFull:
-                pass
 
     @classmethod
-    def _send(cls, msg: str, user_id: str | None = None, signed_in_only: bool = False, local_only: bool = False):
+    def _send(
+        cls,
+        msg: str,
+        user_id: str | None = None,
+        signed_in_only: bool = False,
+        local_only: bool = False,
+    ):
         """Deliver msg here and, unless local_only, to the same pages on the
         other workers through Redis."""
         if not local_only:
@@ -2898,7 +3070,14 @@ class Event(PluginEvents):
         cls._deliver(msg, user_id, signed_in_only)
 
     @classmethod
-    def _broadcast_update(cls, etags: dict | None = None, local_only: bool = False, origin: str | None = None, settle: bool = False, resync: bool = False):
+    def _broadcast_update(
+        cls,
+        etags: dict | None = None,
+        local_only: bool = False,
+        origin: str | None = None,
+        settle: bool = False,
+        resync: bool = False,
+    ):
         """Tell every page the instance theme changed.
 
         The frame carries only a version token: pages refetch /theme.css and
@@ -2946,7 +3125,15 @@ class Event(PluginEvents):
         return min(2000, 8 * len(cls._sse_clients))
 
     @classmethod
-    def _broadcast_personal(cls, user_id: str, local_only: bool = False, origin: str | None = None, settle: bool = False, tags: dict | None = None, resync: bool = False):
+    def _broadcast_personal(
+        cls,
+        user_id: str,
+        local_only: bool = False,
+        origin: str | None = None,
+        settle: bool = False,
+        tags: dict | None = None,
+        resync: bool = False,
+    ):
         """Tell one user's open pages that their personal theme changed.
 
         Nobody else's page is told, on this worker or, through Redis, on any
@@ -2965,7 +3152,15 @@ class Event(PluginEvents):
         cls._send(f"event: personal-theme-update\ndata: {data}\n\n", user_id, local_only=local_only)
 
     @classmethod
-    def _broadcast_library(cls, user_id: str | None, origin: str | None, settle: bool = False, tag: str | None = None, local_only: bool = False, resync: bool = False):
+    def _broadcast_library(
+        cls,
+        user_id: str | None,
+        origin: str | None,
+        settle: bool = False,
+        tag: str | None = None,
+        local_only: bool = False,
+        resync: bool = False,
+    ):
         """Tell open designers the saved themes and presets changed, so one
         holding an older copy reloads instead of saving it over the new one.
         Only designers listen for this event; a personal library's goes to its
@@ -2978,13 +3173,17 @@ class Event(PluginEvents):
         if resync:
             payload["resync"] = True
         data = _json.dumps(payload, separators=(",", ":"))
-        cls._send(f"event: library-update\ndata: {data}\n\n", user_id or None, local_only=local_only)
+        cls._send(
+            f"event: library-update\ndata: {data}\n\n", user_id or None, local_only=local_only
+        )
 
     # More model ids than this go out as "every model"
     _MODEL_IDS_MAX = 50
 
     @classmethod
-    def _broadcast_backgrounds(cls, user_id: str | None = None, model_ids: list | None = None, signed_in_only: bool = False):
+    def _broadcast_backgrounds(
+        cls, user_id: str | None = None, model_ids: list | None = None, signed_in_only: bool = False
+    ):
         """Tell pages that a background image they may fade changed, so they
         look its address up again: user_id's pages for their Chat Background
         Image, the others for a model's. Without model_ids, every model's.
@@ -3223,10 +3422,8 @@ class Event(PluginEvents):
             task = getattr(app.state, attr, None)
             if task is not None:
                 task.cancel()
-                try:
+                with suppress(BaseException):  # CancelledError (expected) or teardown noise
                     await task
-                except BaseException:
-                    pass  # CancelledError (expected) or teardown noise
                 setattr(app.state, attr, None)
         cls._end_sse_streams()
 
@@ -3269,10 +3466,8 @@ class Event(PluginEvents):
 
         def hook():
             app.state._theme_streams_ending = True
-            try:
+            with suppress(RuntimeError):  # loop already closed
                 loop.call_soon_threadsafe(Event._end_sse_streams)
-            except RuntimeError:
-                pass  # loop already closed
 
         app.state._theme_exit_hook = hook
         if threading.current_thread() is not threading.main_thread():
@@ -3322,7 +3517,9 @@ class Event(PluginEvents):
         if not redis_url or alive or getattr(app.state, "_theme_shutting_down", False):
             return
         try:
-            app.state._theme_redis_task = asyncio.get_running_loop().create_task(Event._run_redis_subscriber(app))
+            app.state._theme_redis_task = asyncio.get_running_loop().create_task(
+                Event._run_redis_subscriber(app)
+            )
             app.state._theme_redis_exec = RELOAD_EXEC_ID
         except Exception as exc:
             log.warning("[Theme Pro] Could not start Redis subscriber: %s", exc)
@@ -3351,7 +3548,9 @@ class Event(PluginEvents):
                     # system.startup.started started this task.
                     waited += 1
                     if waited == 60:
-                        log.warning("[Theme Pro] Open WebUI has had no Redis client for 60s; live push stays within this worker until it has one")
+                        log.warning(
+                            "[Theme Pro] Open WebUI has had no Redis client for 60s; live push stays within this worker until it has one"
+                        )
                     await asyncio.sleep(1)
                     continue
                 # RedisCluster routes a subscribe only after initialize()
@@ -3368,7 +3567,9 @@ class Event(PluginEvents):
                     try:
                         await cls._resync_local_clients(app)
                     except Exception:
-                        log.warning("[Theme Pro] Resync after reconnecting to Redis failed", exc_info=True)
+                        log.warning(
+                            "[Theme Pro] Resync after reconnecting to Redis failed", exc_info=True
+                        )
                 # listen() blocked forever on a connection dropped without a
                 # reset (an idle timeout in a NAT, load balancer or Swarm's
                 # IPVS), and this worker stopped hearing the others with
@@ -3420,7 +3621,9 @@ class Event(PluginEvents):
                 except RuntimeError:
                     teardown = True
                     return
-                log.warning("[Theme Pro] Redis subscriber lost connection: %s — reconnecting in 5s", exc)
+                log.warning(
+                    "[Theme Pro] Redis subscriber lost connection: %s — reconnecting in 5s", exc
+                )
                 reconnecting = True
                 await asyncio.sleep(5)
             finally:
@@ -3428,10 +3631,8 @@ class Event(PluginEvents):
                 # BaseException: a re-delivered CancelledError during shutdown
                 # must not skip it.
                 if not teardown and pubsub:
-                    try:
+                    with suppress(BaseException):
                         await pubsub.aclose()
-                    except BaseException:
-                        pass
 
     @classmethod
     async def _relay_redis_message(cls, app, raw: str, primed: bool = False) -> bool:
@@ -3445,15 +3646,15 @@ class Event(PluginEvents):
             newline = raw.index("\n")
             if raw[4:newline] == cls._WORKER_ID:
                 return primed
-            raw = raw[newline + 1:]
+            raw = raw[newline + 1 :]
         if raw.startswith(cls._PERSONAL_PREFIX):
-            user_id, _, msg = raw[len(cls._PERSONAL_PREFIX):].partition("\n")
+            user_id, _, msg = raw[len(cls._PERSONAL_PREFIX) :].partition("\n")
             cls._deliver(msg, user_id)
         elif raw.startswith(cls._SIGNED_IN_PREFIX):
-            cls._deliver(raw[len(cls._SIGNED_IN_PREFIX):], signed_in_only=True)
+            cls._deliver(raw[len(cls._SIGNED_IN_PREFIX) :], signed_in_only=True)
         elif raw.startswith(cls._CTRL_PREFIX):
             # Control messages never reach browsers
-            ctrl = raw[len(cls._CTRL_PREFIX):].strip()
+            ctrl = raw[len(cls._CTRL_PREFIX) :].strip()
             if ctrl.startswith("bind "):
                 # A page on another worker claimed one of our streams
                 parts = ctrl.split()
@@ -3468,7 +3669,12 @@ class Event(PluginEvents):
             # A peer saved the theme: rebuild what its pages refetch here, off
             # the loop, before telling them. Frames after it wait, in order.
             inst = cls.instance
-            if not primed and raw.startswith("event: theme-update\n") and inst is not None and reload_active(app):
+            if (
+                not primed
+                and raw.startswith("event: theme-update\n")
+                and inst is not None
+                and reload_active(app)
+            ):
                 primed = True
                 try:
                     await asyncio.to_thread(inst._prime_delivery_caches, app)
@@ -3478,7 +3684,13 @@ class Event(PluginEvents):
         return primed
 
     # Every event that can change a model's background image
-    _MODEL_EVENTS = ("model.created", "model.updated", "model.deleted", "model.imported", "model.synced")
+    _MODEL_EVENTS = (
+        "model.created",
+        "model.updated",
+        "model.deleted",
+        "model.imported",
+        "model.synced",
+    )
 
     async def _broadcast_background_event(self, event_name: str, event: dict, subject: dict):
         """Tell pages about a changed background image: Open WebUI shows the
@@ -3623,10 +3835,8 @@ class Event(PluginEvents):
         self._ensure_redis_subscriber(app)
         if getattr(app.state, "_theme_exit_hook_exec", None) != RELOAD_EXEC_ID:
             app.state._theme_exit_hook_exec = RELOAD_EXEC_ID
-            try:
+            with suppress(Exception):
                 Event._install_exit_hook(app)
-            except Exception:
-                pass
 
         # The valves whose change pushes a theme-update to open pages
         valve_changes = [
@@ -3644,10 +3854,7 @@ class Event(PluginEvents):
         # made. The first event of the process (no snapshot yet) is not a
         # change: peers load their own valves on their own startup.
         valves_now = self._valves_snapshot()
-        if (
-            Event._last_valves_snapshot is not None
-            and valves_now != Event._last_valves_snapshot
-        ):
+        if Event._last_valves_snapshot is not None and valves_now != Event._last_valves_snapshot:
             Event._broadcast_valve_sync()
 
         # Threaded: the flock can wait on another process and must not stall
@@ -3673,7 +3880,9 @@ class Event(PluginEvents):
                 # version already. Priming runs off-loop.
                 etags = await asyncio.to_thread(self._prime_delivery_caches, app)
                 Event._broadcast_update(etags)
-                log.info("[Theme Pro] Valve change (%s) — pushed to SSE clients", ", ".join(reasons))
+                log.info(
+                    "[Theme Pro] Valve change (%s) — pushed to SSE clients", ", ".join(reasons)
+                )
             if was_not_published:
                 log.info(
                     "[Theme Pro] Published loader.js + custom.css fragments to the shared static-asset registry"
@@ -3681,15 +3890,14 @@ class Event(PluginEvents):
             Event._published = True
         else:
             # Only latch on success, so the next event retries
-            log.warning(
-                "[Theme Pro] Fragment publish failed — will retry on next event"
-            )
+            log.warning("[Theme Pro] Fragment publish failed — will retry on next event")
 
         Event._last_designer_url = self.valves.designer_url
         Event._last_enable_canvas_fx = self.valves.enable_canvas_fx
         Event._last_sidebar_transparency = self.valves.sidebar_transparency
         Event._last_overlay_transparency = self.valves.overlay_transparency
         Event._last_valves_snapshot = valves_now
+
 
 def register(app: Any) -> None:
     # Up to the last release the key was "theme-designer-pro": drop those fragments, wake its listeners.
@@ -3707,10 +3915,8 @@ def register(app: Any) -> None:
     # does. Runs as a task: the valves are read from the database.
     async def load():
         inst._ensure_redis_subscriber(app)
-        try:
+        with suppress(Exception):
             Event._install_exit_hook(app)
-        except Exception:
-            pass
         await Event._handle_peer_valve_sync(app)
 
     task = asyncio.get_running_loop().create_task(load())

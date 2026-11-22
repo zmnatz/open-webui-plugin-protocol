@@ -20,7 +20,11 @@ def test_a_save_reaches_every_open_page(td):
     saved = td.save(origin="tab1").json()
     ((name, data),) = td.heard(page)
     assert name == "theme-update"
-    assert (data["cssTag"], data["stateTag"], data["origin"]) == (saved["cssTag"], saved["stateTag"], "tab1")
+    assert (data["cssTag"], data["stateTag"], data["origin"]) == (
+        saved["cssTag"],
+        saved["stateTag"],
+        "tab1",
+    )
 
 
 def test_a_personal_save_reaches_only_its_owners_pages(owui, td):
@@ -55,7 +59,9 @@ def test_a_page_claims_its_stream_to_hear_its_own_theme(td):
     assert td.anon.post(BASE + "/events/bind", json={"cid": "a" * 24}).status_code == 401
 
 
-def test_a_worker_past_its_stream_limit_tells_pages_to_come_back_later(owui, plugin_dir, monkeypatch):
+def test_a_worker_past_its_stream_limit_tells_pages_to_come_back_later(
+    owui, plugin_dir, monkeypatch
+):
     """Each worker holds at most `sse_max_clients` streams (config.yaml, 8192 by default, or
     TDP_SSE_MAX_CLIENTS); past it a page is told to retry in a minute.
 
@@ -77,7 +83,11 @@ def test_the_limits_default_to_the_originals(td):
 
     By hand: `owpp check theme_designer_pro` lists the three variables with these defaults.
     """
-    assert (td.event._SSE_MAX_CLIENTS, td.event._SSE_HEARTBEAT_SECONDS, td.event.CONSULT_INTERVAL) == (8192, 15, 3)
+    assert (
+        td.event._SSE_MAX_CLIENTS,
+        td.event._SSE_HEARTBEAT_SECONDS,
+        td.event.CONSULT_INTERVAL,
+    ) == (8192, 15, 3)
 
 
 def test_a_valve_that_changes_the_look_tells_open_pages(td):
@@ -208,8 +218,9 @@ def test_a_bootloader_an_old_version_wrote_into_index_html_is_removed(owui, plug
 
     By hand: not repeatable without one of those versions' index.html.
     """
-    from open_webui.env import FRONTEND_BUILD_DIR
     from pathlib import Path
+
+    from open_webui.env import FRONTEND_BUILD_DIR
 
     index = Path(FRONTEND_BUILD_DIR) / "index.html"
     index.write_text(
@@ -217,4 +228,3 @@ def test_a_bootloader_an_old_version_wrote_into_index_html_is_removed(owui, plug
     )
     owui.startup()
     assert index.read_text() == "<html><head><title>x</title></head></html>"
-

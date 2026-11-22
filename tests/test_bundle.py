@@ -670,7 +670,10 @@ class TestStaticAndTemplates:
         ("listed", "error"),
         [
             ("[cards/]", r"tool\.templates: `cards/` is not in templates/"),
-            ("[card]", r"tool\.templates: `card` is not in templates/ \(a folder is written `card/`\)"),
+            (
+                "[card]",
+                r"tool\.templates: `card` is not in templates/ \(a folder is written `card/`\)",
+            ),
             ("card/", r"tool\.templates must be a list of paths in templates/"),
             ("['']", r"tool\.templates must be a list of paths in templates/"),
         ],

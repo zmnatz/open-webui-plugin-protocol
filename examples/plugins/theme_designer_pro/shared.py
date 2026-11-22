@@ -18,6 +18,7 @@ def _fill(template: str, values: dict) -> str:
     happens to hold a placeholder's text is left as it is. Names not in `values` stay."""
     return _PLACEHOLDER.sub(lambda m: str(values[m[1]]) if m[1] in values else m[0], template)
 
+
 # Values the Launcher picked (hue, chroma, lightness), signed for one user.
 APPLY_TOKEN_PREFIX = "tdp-apply.v1."
 # A whole theme the Launcher built: the token carries the theme file's SHA-256, and the chat's
@@ -50,7 +51,9 @@ def _open_token(key: bytes | None, token) -> tuple[str, dict] | None:
     ASCII (a link can carry anything, and a real token never does), forged, or not a JSON object.
     Who it is for and when it expires are the caller's to check."""
     token = str(token or "")
-    prefix = next((p for p in (APPLY_TOKEN_PREFIX, THEME_TOKEN_PREFIX) if token.startswith(p)), None)
+    prefix = next(
+        (p for p in (APPLY_TOKEN_PREFIX, THEME_TOKEN_PREFIX) if token.startswith(p)), None
+    )
     if not key or not prefix or not token.isascii():
         return None
     body, _, sig = token[len(prefix) :].partition(".")

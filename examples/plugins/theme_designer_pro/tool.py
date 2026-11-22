@@ -42,8 +42,26 @@ _catalog_lock = asyncio.Lock()
 # Animations that aren't backgrounds
 CATALOG_SKIP = {"diagnostic hud"}
 STOPWORDS = {
-    "the", "and", "with", "for", "that", "this", "your", "theme", "themes", "background",
-    "animated", "animation", "like", "some", "make", "want", "into", "over", "from", "chat",
+    "the",
+    "and",
+    "with",
+    "for",
+    "that",
+    "this",
+    "your",
+    "theme",
+    "themes",
+    "background",
+    "animated",
+    "animation",
+    "like",
+    "some",
+    "make",
+    "want",
+    "into",
+    "over",
+    "from",
+    "chat",
 }
 
 # Frosted glass in Open WebUI's own shapes, tinted by the palette and the
@@ -101,7 +119,7 @@ GLASS_LIGHT = """:root {
 
 def _hsl_hex(hue: float, sat: float, lit: float) -> str:
     r, g, b = colorsys.hls_to_rgb((hue % 360) / 360, lit / 100, sat / 100)
-    return "#%02x%02x%02x" % tuple(round(v * 255) for v in (r, g, b))
+    return "#{:02x}{:02x}{:02x}".format(*tuple(round(v * 255) for v in (r, g, b)))
 
 
 def _hex(value: str) -> str:
@@ -114,14 +132,18 @@ def _light_accent(accent: str) -> str:
     if not accent:
         return ""
     r, g, b = (int(accent[i : i + 2], 16) / 255 for i in (1, 3, 5))
-    h, l, s = colorsys.rgb_to_hls(r, g, b)
-    r, g, b = colorsys.hls_to_rgb(h, min(l, 0.42), s)
-    return "#%02x%02x%02x" % tuple(round(v * 255) for v in (r, g, b))
+    h, light, s = colorsys.rgb_to_hls(r, g, b)
+    r, g, b = colorsys.hls_to_rgb(h, min(light, 0.42), s)
+    return "#{:02x}{:02x}{:02x}".format(*tuple(round(v * 255) for v in (r, g, b)))
 
 
 def _words(text: str) -> set:
     """Words that say what an animation shows, plurals folded: "leaves" meets "leave"."""
-    words = {w for w in re.findall(r"[a-z]+", str(text or "").lower()) if len(w) > 2 and w not in STOPWORDS}
+    words = {
+        w
+        for w in re.findall(r"[a-z]+", str(text or "").lower())
+        if len(w) > 2 and w not in STOPWORDS
+    }
     return {w[:-1] if len(w) > 4 and w.endswith("s") else w for w in words}
 
 
@@ -131,7 +153,9 @@ def _strip_js_comments(code: str) -> str:
 
 # A setting the designer turns into a slider, switch or color picker: a top-level
 # UPPER_CASE constant with a literal value, above the first function
-SETTING_LINE = re.compile(r"""^(?:const|let|var)\s+[A-Z][A-Z0-9_]*\s*=\s*(?:-?\d*\.?\d+(?:e-?\d+)?|true|false|['"]#[0-9a-fA-F]{3,8}['"])\s*;""")
+SETTING_LINE = re.compile(
+    r"""^(?:const|let|var)\s+[A-Z][A-Z0-9_]*\s*=\s*(?:-?\d*\.?\d+(?:e-?\d+)?|true|false|['"]#[0-9a-fA-F]{3,8}['"])\s*;"""
+)
 FROM_TEMPLATE = " Start from the theme-designer-pro skill's templates/animation.js (read it with read_skill_file) and change what it draws."
 
 
@@ -153,18 +177,23 @@ def _animation_problem(code: str) -> str:
     body = _strip_js_comments(code)
     if "onmessage" not in body:
         return "it has no self.onmessage handler"
-    handlers = len(re.findall(r"onmessage\s*=(?!=)", body)) + len(re.findall(r"addEventListener\(\s*['\"]message['\"]", body))
+    handlers = len(re.findall(r"onmessage\s*=(?!=)", body)) + len(
+        re.findall(r"addEventListener\(\s*['\"]message['\"]", body)
+    )
     if handlers > 1:
         return "it sets its message handler more than once; handle every message in one self.onmessage switch"
     for case in ("init", "resize"):
-        if not re.search(r"['\"]%s['\"]" % case, body):
+        if not re.search(rf"['\"]{case}['\"]", body):
             return f"it has no '{case}' case in its self.onmessage switch"
     for pattern, what in (
         (r"(^|[^.\w$])document\b", "`document`"),
         (r"(^|[^.\w$])window\s*[.\[]", "`window`"),
         (r"(^|[^.\w$])(localStorage|sessionStorage|indexedDB)\b", "browser storage"),
         (r"(^|[^.\w$])alert\s*\(", "`alert`"),
-        (r"\b(fetch|importScripts|XMLHttpRequest|WebSocket|EventSource|navigator\.sendBeacon)\b|\bimport\s*\(", "network requests"),
+        (
+            r"\b(fetch|importScripts|XMLHttpRequest|WebSocket|EventSource|navigator\.sendBeacon)\b|\bimport\s*\(",
+            "network requests",
+        ),
     ):
         if re.search(pattern, body):
             return f"it uses {what}, which an animation can't: it runs in an isolated worker that can only draw"
@@ -186,7 +215,9 @@ def _animation_problem(code: str) -> str:
 
 
 # An escape is its own token, first: \/* opens no comment and \" no string.
-CSS_TOKEN = re.compile(r"""\\[\s\S]|/\*[\s\S]*?(?:\*/|\Z)|"(?:[^"\\\n]|\\[\s\S])*(?:"|(?=\n)|\Z)|'(?:[^'\\\n]|\\[\s\S])*(?:'|(?=\n)|\Z)""")
+CSS_TOKEN = re.compile(
+    r"""\\[\s\S]|/\*[\s\S]*?(?:\*/|\Z)|"(?:[^"\\\n]|\\[\s\S])*(?:"|(?=\n)|\Z)|'(?:[^'\\\n]|\\[\s\S])*(?:'|(?=\n)|\Z)"""
+)
 CLOSED_STRING = re.compile(r"""\A(?:"(?:[^"\\\n]|\\[\s\S])*"|'(?:[^'\\\n]|\\[\s\S])*')\Z""")
 CSS_ESCAPE = re.compile(r"\\(?:([0-9a-fA-F]{1,6})[ \t\n]?|(\n)|([\s\S]))")
 # Where an image may sit in image-set(): only a data: string or a gradient
@@ -269,7 +300,7 @@ def _css_fetch_problem(css: str) -> str:
     if re.search(r"""(?:url|src)[ \t\n]*\((?![ \t\n]*['"]data:)""", read) or any(
         _image_set_fetches(read, m.end()) for m in re.finditer(r"image(?:-set)?[ \t\n]*\(", read)
     ):
-        return "it loads a url(), image-set() or src(); only quoted data: URLs such as url(\"data:...\") are allowed, so a theme never fetches anything"
+        return 'it loads a url(), image-set() or src(); only quoted data: URLs such as url("data:...") are allowed, so a theme never fetches anything'
     if re.search(r"expression[ \t\n]*\(|javascript:|-moz-binding|behavior[ \t\n]*:", read):
         return "it uses script in CSS"
     return ""
@@ -290,7 +321,11 @@ def _gradient_from(colors: str):
     hexes = [c for c in (_hex(x) for x in str(colors or "").split(",")) if c][:8]
     if len(hexes) < 2:
         return None
-    return {"stops": [{"color": c, "position": round(i * 100 / (len(hexes) - 1))} for i, c in enumerate(hexes)]}
+    return {
+        "stops": [
+            {"color": c, "position": round(i * 100 / (len(hexes) - 1))} for i, c in enumerate(hexes)
+        ]
+    }
 
 
 def _title(script: str) -> str:
@@ -298,22 +333,49 @@ def _title(script: str) -> str:
     return re.sub(r"\s*\(.*?\)", "", found.group(1).strip())[:48] if found else "Custom animation"
 
 
-def _mode_data(h, c, l, accent="", gradient=None, canvas="", css="", accent2="", accent3="") -> dict:
+def _mode_data(
+    h, c, lum, accent="", gradient=None, canvas="", css="", accent2="", accent3=""
+) -> dict:
     """One mode with every field the theme format lists, defaults included."""
     g = gradient or {}
     return {
-        "h": h, "c": c, "l": l, "paletteEnabled": True,
-        "accent": accent, "accent2": accent2, "accent3": accent3,
-        "overrides": {}, "locks": {}, "manualOverrides": "", "manualOverridesEnabled": False,
-        "customCSS": css, "customCssEnabled": bool(css), "autoScope": True,
-        "canvasScript": canvas, "canvasEnabled": bool(canvas),
-        "gradientEnabled": bool(g), "gradientType": "linear", "gradientStops": g.get("stops", []),
-        "gradientAngle": 135, "gradientRadialPosX": 50, "gradientRadialPosY": 50,
-        "gradientRadialShape": "ellipse", "gradientRadialSize": "farthest-corner",
-        "gradientMeshPoints": [], "gradientMeshBgColor": "#0a0a12",
-        "gradientIntensity": 100 if g else 85, "gradientAnimation": False, "gradientAnimationSpeed": 8,
-        "themeShowAuth": True, "customCssShowAuth": True, "canvasShowAuth": True, "gradientShowAuth": True,
-        "themeAuthOnly": False, "customCssAuthOnly": False, "canvasAuthOnly": False, "gradientAuthOnly": False,
+        "h": h,
+        "c": c,
+        "l": lum,
+        "paletteEnabled": True,
+        "accent": accent,
+        "accent2": accent2,
+        "accent3": accent3,
+        "overrides": {},
+        "locks": {},
+        "manualOverrides": "",
+        "manualOverridesEnabled": False,
+        "customCSS": css,
+        "customCssEnabled": bool(css),
+        "autoScope": True,
+        "canvasScript": canvas,
+        "canvasEnabled": bool(canvas),
+        "gradientEnabled": bool(g),
+        "gradientType": "linear",
+        "gradientStops": g.get("stops", []),
+        "gradientAngle": 135,
+        "gradientRadialPosX": 50,
+        "gradientRadialPosY": 50,
+        "gradientRadialShape": "ellipse",
+        "gradientRadialSize": "farthest-corner",
+        "gradientMeshPoints": [],
+        "gradientMeshBgColor": "#0a0a12",
+        "gradientIntensity": 100 if g else 85,
+        "gradientAnimation": False,
+        "gradientAnimationSpeed": 8,
+        "themeShowAuth": True,
+        "customCssShowAuth": True,
+        "canvasShowAuth": True,
+        "gradientShowAuth": True,
+        "themeAuthOnly": False,
+        "customCssAuthOnly": False,
+        "canvasAuthOnly": False,
+        "gradientAuthOnly": False,
     }
 
 
@@ -333,7 +395,7 @@ class Tools:
         )
         model_written_css: bool = Field(
             default=True,
-            description="Let the chat model add its own CSS to a theme. It can't load anything: no @import, and url(), image-set() and src() only with quoted data: URLs such as url(\"data:...\").",
+            description='Let the chat model add its own CSS to a theme. It can\'t load anything: no @import, and url(), image-set() and src() only with quoted data: URLs such as url("data:...").',
         )
         canvas_catalog_url: str = Field(
             default="https://raw.githubusercontent.com/silentoplayz/theme-designer-pro-presets/main/bundles/canvas-fx-all.json",
@@ -380,15 +442,21 @@ class Tools:
         """The catalog's animations as (name, description, script)."""
         url = self.valves.canvas_catalog_url.strip()
         async with _catalog_lock:
-            if _catalog["url"] == url and _catalog["presets"] and time.time() - _catalog["at"] < 3600:
+            if (
+                _catalog["url"] == url
+                and _catalog["presets"]
+                and time.time() - _catalog["at"] < 3600
+            ):
                 return _catalog["presets"]
             try:
                 import aiohttp
 
-                async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session:
-                    async with session.get(url) as response:
-                        response.raise_for_status()
-                        data = json.loads(await response.text())
+                async with (
+                    aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=10)) as session,
+                    session.get(url) as response,
+                ):
+                    response.raise_for_status()
+                    data = json.loads(await response.text())
             except Exception:
                 return _catalog["presets"] if _catalog["url"] == url else []
             presets = []
@@ -412,13 +480,17 @@ class Tools:
             label = re.sub(r"\s*\(.*?\)", "", name).lower()
             # How much of the request it covers first; a word in its name breaks ties
             covered = words & (_words(label) | _words(description))
-            score = (10 if label in str(wanted).lower() else 0) + 4 * len(covered) + len(words & _words(label))
+            score = (
+                (10 if label in str(wanted).lower() else 0)
+                + 4 * len(covered)
+                + len(words & _words(label))
+            )
             if score > best_score:
                 best, best_score = (name, description, script), score
         return best, [p[0] for p in presets]
 
     async def open_theme_designer(
-        self, my_theme: bool = False, __user__: dict = {}
+        self, my_theme: bool = False, __user__: dict | None = None
     ) -> tuple:
         """
         Open the Theme Designer Pro designer inside the chat, for working on a theme by hand.
@@ -432,13 +504,18 @@ class Tools:
 
         :param my_theme: For admins only. True opens the admin's own personal theme; False (default) opens the instance theme every user sees. Users always get their own personal theme.
         """
+        __user__ = __user__ or {}
         personal = __user__.get("role") != "admin" or bool(my_theme)
         url = self._designer_url(personal)
         return await self._embed(
             url,
             url,
             "The designer is open in the chat, on "
-            + ("the user's own personal theme." if personal else "the instance theme every user sees."),
+            + (
+                "the user's own personal theme."
+                if personal
+                else "the instance theme every user sees."
+            ),
         )
 
     async def create_theme(
@@ -459,7 +536,7 @@ class Tools:
         accent3: str = "",
         mode: str = "all",
         everyone: bool = False,
-        __user__: dict = {},
+        __user__: dict | None = None,
     ) -> tuple:
         """
         Build a whole Open WebUI theme the user describes and show it in the chat as a card with a live
@@ -488,13 +565,14 @@ class Tools:
         :param mode: Which mode(s) to build for. "all" (default), "dark", "oled", "light" or "her".
         :param everyone: For admins only. True builds it for the instance theme every user sees, and only when the admin clearly asks for that (e.g. "for everyone"). Default False: the user's own theme.
         """
+        __user__ = __user__ or {}
         personal = __user__.get("role") != "admin" or not everyone
         mode = mode if mode in MODES else "all"
         name = " ".join(str(name or "").split())[:60] or "Chat theme"
         description = " ".join(str(description or "").split())[:240]
         h = max(0, min(360, int(hue)))
         c = max(0, min(60, int(chroma)))
-        l = max(5, min(30, int(lightness)))
+        lum = max(5, min(30, int(lightness)))
         accent, accent2, accent3 = _hex(accent), _hex(accent2), _hex(accent3)
 
         # The chat model's own animation and CSS: checked here, so a problem goes
@@ -508,7 +586,9 @@ class Tools:
             if problem:
                 return f"Not built: the animation_code can't be used because {problem} Then call create_theme again."
         if extra_css and not self.valves.model_written_css:
-            return "Not built: an admin turned off CSS the chat model writes. Leave custom_css empty."
+            return (
+                "Not built: an admin turned off CSS the chat model writes. Leave custom_css empty."
+            )
         if extra_css:
             problem = _check_css(extra_css)
             if problem:
@@ -525,21 +605,29 @@ class Tools:
         if gradient and not script and _gradient_from(gradient_colors):
             dark_gradient = _gradient_from(gradient_colors)
         if gradient and not script and not dark_gradient:
-            dark_gradient = {"stops": [
-                {"color": _hsl_hex(h, 15, 4), "position": 0},
-                {"color": _hsl_hex(h, 25, 12), "position": 33},
-                {"color": _hsl_hex(h, 20, 7), "position": 66},
-                {"color": _hsl_hex(h, 15, 4), "position": 100},
-            ]}
+            dark_gradient = {
+                "stops": [
+                    {"color": _hsl_hex(h, 15, 4), "position": 0},
+                    {"color": _hsl_hex(h, 25, 12), "position": 33},
+                    {"color": _hsl_hex(h, 20, 7), "position": 66},
+                    {"color": _hsl_hex(h, 15, 4), "position": 100},
+                ]
+            }
         if gradient and not script:
-            light_gradient = {"stops": [
-                {"color": _hsl_hex(h, 35, 97), "position": 0},
-                {"color": _hsl_hex(h + 15, 45, 91), "position": 40},
-                {"color": _hsl_hex(h, 40, 95), "position": 75},
-                {"color": _hsl_hex(h, 35, 97), "position": 100},
-            ]}
-        dark_css = ((GLASS_DARK + GLASS_RULES) if glass else "") + (extra_css + "\n" if extra_css else "")
-        light_css = ((GLASS_LIGHT + GLASS_RULES) if glass else "") + (extra_css + "\n" if extra_css else "")
+            light_gradient = {
+                "stops": [
+                    {"color": _hsl_hex(h, 35, 97), "position": 0},
+                    {"color": _hsl_hex(h + 15, 45, 91), "position": 40},
+                    {"color": _hsl_hex(h, 40, 95), "position": 75},
+                    {"color": _hsl_hex(h, 35, 97), "position": 100},
+                ]
+            }
+        dark_css = ((GLASS_DARK + GLASS_RULES) if glass else "") + (
+            extra_css + "\n" if extra_css else ""
+        )
+        light_css = ((GLASS_LIGHT + GLASS_RULES) if glass else "") + (
+            extra_css + "\n" if extra_css else ""
+        )
         la, la2, la3 = _light_accent(accent), _light_accent(accent2), _light_accent(accent3)
         light_c = round(c * 0.6)
         theme = {
@@ -550,7 +638,9 @@ class Tools:
             "targetVersion": "1.18.0" if written else "1.17.0",
             "repositoryUrl": "",
             "updateUrl": "",
-            "dark": _mode_data(h, c, l, accent, dark_gradient, script, dark_css, accent2, accent3),
+            "dark": _mode_data(
+                h, c, lum, accent, dark_gradient, script, dark_css, accent2, accent3
+            ),
             "oled": _mode_data(h, c, 0, accent, dark_gradient, script, dark_css, accent2, accent3),
             "light": _mode_data(h, light_c, 20, la, light_gradient, script, light_css, la2, la3),
             "her": _mode_data(h, light_c, 20, la, light_gradient, script, light_css, la2, la3),
@@ -586,15 +676,17 @@ class Tools:
         elif background.strip() and not self.valves.background_animations:
             built += ", without an animated background (an admin turned them off)"
         elif background.strip():
-            built += (
-                ", without an animated background: none in the catalog matched"
-                + (" (it has: " + ", ".join(catalog) + ")" if catalog else " (the catalog could not be reached)")
+            built += ", without an animated background: none in the catalog matched" + (
+                " (it has: " + ", ".join(catalog) + ")"
+                if catalog
+                else " (the catalog could not be reached)"
             )
         built += (" and frosted glass panels" if glass else "") + ", for "
         built += "the user's own theme" if personal else "the instance theme every user sees"
         built += "" if mode == "all" else f" in {mode} mode only"
         return await self._card(details), (
-            built + ". A card in the chat shows it with a live preview, Apply and Preview. Nothing has changed yet: "
+            built
+            + ". A card in the chat shows it with a live preview, Apply and Preview. Nothing has changed yet: "
             "the theme is applied only when the user presses Apply. Tell them in a sentence or two how it looks and "
             "that Apply puts it on; don't list settings or code."
         )
@@ -602,7 +694,9 @@ class Tools:
     async def _card(self, details: dict) -> HTMLResponse:
         """The theme card shown in the chat."""
         data = json.dumps(details, ensure_ascii=False).replace("<", "\\u003c")
-        return HTMLResponse(headers={"Content-Disposition": "inline"}, content=CARD_HTML.replace("__DATA__", data))
+        return HTMLResponse(
+            headers={"Content-Disposition": "inline"}, content=CARD_HTML.replace("__DATA__", data)
+        )
 
     async def _embed(self, frame_url: str, popout_url: str, result: str) -> tuple:
         """The designer in a frame, shown in the chat."""

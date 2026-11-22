@@ -14,7 +14,9 @@ def test_enabling_it_installs_the_launcher_and_the_skill_for_everyone(owui, tdp)
     Workspace > Skills has theme-designer-pro, both shown to a user who is not an admin.
     """
     assert TOOL in owui.tools and SKILL in owui.skills
-    files = sorted(f["path"] if isinstance(f, dict) else f for f in owui.skills[SKILL].data["files"])
+    files = sorted(
+        f["path"] if isinstance(f, dict) else f for f in owui.skills[SKILL].data["files"]
+    )
     assert len(files) == 7 and any("templates/animation.js" in str(f) for f in files)
     assert owui.tools[TOOL].access_grants and owui.skills[SKILL].access_grants
 

@@ -35,7 +35,10 @@ def test_an_admin_saves_the_theme_and_every_page_gets_it(td):
     assert css.text == td.CSS and css.headers["etag"] == saved.json()["cssTag"]
     state = td.anon.get(BASE + "/state.json").json()
     assert state["dark"] == td.STATE["dark"]
-    assert state["_cssSections"]["vars"] == td.SECTIONS["vars"] and state["_cssSections"]["extra"] == ""
+    assert (
+        state["_cssSections"]["vars"] == td.SECTIONS["vars"]
+        and state["_cssSections"]["extra"] == ""
+    )
 
 
 def test_an_unchanged_theme_is_not_sent_again(td):
@@ -47,7 +50,9 @@ def test_an_unchanged_theme_is_not_sent_again(td):
     td.save()
     etag = td.anon.get(BASE + "/theme.css").headers["etag"]
     assert td.anon.get(BASE + "/theme.css", headers={"if-none-match": etag}).status_code == 304
-    assert td.anon.get(BASE + "/theme.css", headers={"if-none-match": "W/" + etag}).status_code == 304
+    assert (
+        td.anon.get(BASE + "/theme.css", headers={"if-none-match": "W/" + etag}).status_code == 304
+    )
 
 
 def test_saving_the_same_theme_again_writes_nothing(td):
@@ -75,7 +80,12 @@ def test_a_user_cannot_save_the_instance_theme(td):
 
 @pytest.mark.parametrize(
     "headers",
-    [{"sec-fetch-site": "cross-site"}, {"sec-fetch-site": "same-site"}, {"origin": "https://evil.example"}, {"origin": "null"}],
+    [
+        {"sec-fetch-site": "cross-site"},
+        {"sec-fetch-site": "same-site"},
+        {"origin": "https://evil.example"},
+        {"origin": "null"},
+    ],
 )
 def test_a_change_sent_from_another_site_is_refused(td, headers):
     """A page on another site can send the session cookie along; a change it sends is refused,
@@ -98,7 +108,12 @@ def test_a_change_from_open_webuis_own_pages_goes_through(td, owui):
     for headers in ({"sec-fetch-site": "same-origin"}, {"origin": "http://testserver"}):
         assert td.admin.post(BASE, json={"css": td.CSS + "\n"}, headers=headers).status_code == 200
     owui.config["webui.url"] = "https://chat.example"
-    assert td.admin.post(BASE, json={"css": td.CSS}, headers={"origin": "https://chat.example"}).status_code == 200
+    assert (
+        td.admin.post(
+            BASE, json={"css": td.CSS}, headers={"origin": "https://chat.example"}
+        ).status_code
+        == 200
+    )
 
 
 def test_a_save_must_be_json(td):
@@ -134,7 +149,9 @@ def test_a_body_bigger_than_the_whole_limit_is_refused_unread(td):
     By hand: not repeatable from the designer.
     """
     response = td.admin.post(
-        BASE, content=b"{}", headers={"content-type": "application/json", "content-length": str(65 * 1024 * 1024)}
+        BASE,
+        content=b"{}",
+        headers={"content-type": "application/json", "content-length": str(65 * 1024 * 1024)},
     )
     assert response.status_code == 413
 

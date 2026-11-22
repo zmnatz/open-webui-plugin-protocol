@@ -213,6 +213,7 @@ Besides the guard: the main handler (`_sync`) runs on the function's own lifecyc
 - The Launcher's header had a `description:` over several lines. Open-WebUI reads a header line by line, so it stored only the first one; it is one line in `plugin.yaml` now. The sentence about which function version it needs is gone, since the two ship together.
 - The Launcher's docstrings listed their parameters under `Parameters:`. Open-WebUI gives the model a parameter's description from a `:param name:` line, so they are written that way (same words).
 - `SKILL.md` has `access: public` in its front matter, so users who are not admins can read the skill, as the Launcher needs.
+- The Python is laid out by `ruff format`, and holds to the repository's lint rules: a `try`/`except`/`pass` is `contextlib.suppress`, `%` and `.format()` strings are f-strings, a variable named `l` is `light` or `lum`, the Launcher's `__user__: dict = {}` defaults are `None` (then `{}`), and `_handle_css_save` and `_handle_consult` are annotated with a `JSONResponse` imported at the top instead of a string naming one imported inside them. The comparison below was run again after these: nothing moved.
 - The bundle is 1.6 MB, against your 1.3 MB: the templates are embedded as JSON strings, whose escaping costs about 20%. It is still under 2 MB, the size Portainer's deployment notes treat as the limit for one function.
 
 ### How we checked it is the same

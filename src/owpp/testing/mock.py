@@ -1210,7 +1210,9 @@ class MockOpenWebUI:
             mock.completions.append(form_data)
             return {
                 "model": form_data.get("model"),
-                "choices": [{"index": 0, "message": {"role": "assistant", "content": mock.model_reply}}],
+                "choices": [
+                    {"index": 0, "message": {"role": "assistant", "content": mock.model_reply}}
+                ],
             }
 
         def replace_imports(content):
@@ -1327,7 +1329,9 @@ class MockOpenWebUI:
                     "open_webui.utils.chat", generate_chat_completion=generate_chat_completion
                 ),
                 "open_webui.utils.auth": module(
-                    "open_webui.utils.auth", get_current_user=get_current_user, decode_token=decode_token
+                    "open_webui.utils.auth",
+                    get_current_user=get_current_user,
+                    decode_token=decode_token,
                 ),
                 "open_webui.utils.plugin": module(
                     "open_webui.utils.plugin",

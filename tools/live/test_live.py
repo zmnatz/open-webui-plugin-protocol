@@ -155,12 +155,22 @@ def _get(path: str, token: str | None = None) -> tuple[int, str, str]:
     """A plain GET, as a page makes it: (status, content type, text)."""
     from conftest import URL
 
-    request = urllib.request.Request(URL + path, headers={"Authorization": f"Bearer {token}"} if token else {})
+    request = urllib.request.Request(
+        URL + path, headers={"Authorization": f"Bearer {token}"} if token else {}
+    )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:
-            return response.status, response.headers.get("content-type", ""), response.read().decode()
+            return (
+                response.status,
+                response.headers.get("content-type", ""),
+                response.read().decode(),
+            )
     except urllib.error.HTTPError as error:
-        return error.code, error.headers.get("content-type", ""), error.read().decode(errors="replace")
+        return (
+            error.code,
+            error.headers.get("content-type", ""),
+            error.read().decode(errors="replace"),
+        )
 
 
 def test_theme_designer_pros_routes_are_reached_ahead_of_open_webuis_own(api):

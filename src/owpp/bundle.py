@@ -288,7 +288,9 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
             content = plugin.read(tool["file"])
         else:
             code, from_lib = _bundle_code(
-                folder, "tool", omit(tool, ["id", "from", "access", "file", "valves", "include", "templates"])
+                folder,
+                "tool",
+                omit(tool, ["id", "from", "access", "file", "valves", "include", "templates"]),
             )
             # A tool bundle carries the runtime too (below), with just the ids to remove.
             libs = wanted(tool.get("include"), set(), f"{folder.name}/plugin.yaml")

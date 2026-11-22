@@ -88,7 +88,9 @@ class Designer:
                 continue
             name = re.search(r"^event: (.+)$", frame, re.M)
             data = re.search(r"^data: (.+)$", frame, re.M)
-            out.append((name.group(1) if name else "comment", json.loads(data.group(1)) if data else None))
+            out.append(
+                (name.group(1) if name else "comment", json.loads(data.group(1)) if data else None)
+            )
         return out
 
 

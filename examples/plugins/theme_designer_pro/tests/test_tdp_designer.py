@@ -101,7 +101,9 @@ def test_a_personal_designer_starts_from_the_instance_theme_without_its_gallery_
     """
     td.save(state=json.dumps({**td.STATE, "_activeThemeRef": 3}))
     td.valves(allow_personal_themes=True)
-    state = json.loads(td.script_value(td.page(td.user, "?scope=me").text, "__THEME_PRO_SAVED_STATE__"))
+    state = json.loads(
+        td.script_value(td.page(td.user, "?scope=me").text, "__THEME_PRO_SAVED_STATE__")
+    )
     assert state == td.STATE
 
 
@@ -162,7 +164,9 @@ def test_the_designer_carries_the_bootloader_set_for_its_previews(td):
     """
     td.valves(enable_canvas_fx=False, calm_chat_column=True, enable_canvas_api_access=True)
     page = td.page(td.admin).text
-    src = re.search(r'<script type="text/plain" id="bootloader-src">(.*?)</script>', page, re.S).group(1)
+    src = re.search(
+        r'<script type="text/plain" id="bootloader-src">(.*?)</script>', page, re.S
+    ).group(1)
     assert "var _themeActive = true;" in src and "var _personalEnabled = false;" in src
     assert "var embeddedState = null;" in src and "var _cachedCanvasOk = false;" in src
     assert "const _script = true ?" in src and "authToken: true &&" in src

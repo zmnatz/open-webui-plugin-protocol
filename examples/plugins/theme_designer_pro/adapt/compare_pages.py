@@ -35,7 +35,15 @@ SECTIONS = {
     "gradient": "",
     "custom": "/*[OWUI_CUSTOM_START]*/.x{color:red}/*[OWUI_CUSTOM_END]*/\n",
 }
-STATE = json.dumps({"dark": {"canvasEnabled": True, "canvasScript": "/* __THEME_ROUTE__ */ draw()", "themeShowAuth": True}})
+STATE = json.dumps(
+    {
+        "dark": {
+            "canvasEnabled": True,
+            "canvasScript": "/* __THEME_ROUTE__ */ draw()",
+            "themeShowAuth": True,
+        }
+    }
+)
 
 
 def upstream_folder(tmp: Path) -> Path:
@@ -43,7 +51,7 @@ def upstream_folder(tmp: Path) -> Path:
     d.mkdir()
     (d / "plugin.yaml").write_text(
         'protocol: "0.5"\nsource:\n  git: https://github.com/silentoplayz/theme-designer-pro-presets.git\n'
-        "  ref: 9a7e68c9afe51539effae22767e843f26205d895\n  path: \"\"\n"
+        '  ref: 9a7e68c9afe51539effae22767e843f26205d895\n  path: ""\n'
         "function:\n  file: event-function/theme_designer_pro_event.py\n"
     )
     return d
@@ -57,14 +65,23 @@ def run(kind: str) -> dict:
             if kind == "upstream":
                 plugin = owui.load(
                     upstream_folder(tmp),
-                    sources={"event-function/theme_designer_pro_event.py": upstream_file.read_text()},
+                    sources={
+                        "event-function/theme_designer_pro_event.py": upstream_file.read_text()
+                    },
                 )
             else:
-                shutil.copytree(plugin_dir, tmp / "theme_designer_pro", ignore=shutil.ignore_patterns("tests", "__pycache__"))
+                shutil.copytree(
+                    plugin_dir,
+                    tmp / "theme_designer_pro",
+                    ignore=shutil.ignore_patterns("tests", "__pycache__"),
+                )
                 plugin = owui.load(tmp / "theme_designer_pro")
             owui.startup()
             admin, ada = owui.admin, owui.add_user("Ada")
-            admin.token, ada.token = "session-admin-0123456789", "session-ada-0123456789"  # upstream refuses sk- keys
+            admin.token, ada.token = (
+                "session-admin-0123456789",
+                "session-ada-0123456789",
+            )  # upstream refuses sk- keys
             a, u, anon = owui.client(admin), owui.client(ada), owui.client()
 
             def rec(name, r):
@@ -73,10 +90,30 @@ def run(kind: str) -> dict:
             rec("designer, empty", a.get(BASE, headers=HTML))
             rec("theme.css, empty", anon.get(BASE + "/theme.css"))
             rec("state.json, empty", anon.get(BASE + "/state.json"))
-            rec("save", a.post(BASE, json={"css": CSS, "state": STATE, "sections": SECTIONS, "origin": "tab1"}, headers=SAME_ORIGIN))
-            rec("save again (no-op)", a.post(BASE, json={"css": CSS, "state": STATE, "sections": SECTIONS}, headers=SAME_ORIGIN))
-            rec("save from another site", a.post(BASE, json={"css": CSS}, headers={"sec-fetch-site": "cross-site"}))
-            rec("save as text/plain", a.post(BASE, content=b"{}", headers={**SAME_ORIGIN, "content-type": "text/plain"}))
+            rec(
+                "save",
+                a.post(
+                    BASE,
+                    json={"css": CSS, "state": STATE, "sections": SECTIONS, "origin": "tab1"},
+                    headers=SAME_ORIGIN,
+                ),
+            )
+            rec(
+                "save again (no-op)",
+                a.post(
+                    BASE,
+                    json={"css": CSS, "state": STATE, "sections": SECTIONS},
+                    headers=SAME_ORIGIN,
+                ),
+            )
+            rec(
+                "save from another site",
+                a.post(BASE, json={"css": CSS}, headers={"sec-fetch-site": "cross-site"}),
+            )
+            rec(
+                "save as text/plain",
+                a.post(BASE, content=b"{}", headers={**SAME_ORIGIN, "content-type": "text/plain"}),
+            )
             rec("theme.css", anon.get(BASE + "/theme.css"))
             rec("state.json", anon.get(BASE + "/state.json"))
             rec("library.json", a.get(BASE + "/library.json"))
@@ -93,7 +130,11 @@ def run(kind: str) -> dict:
                 {"enable_canvas_fx": False},
                 {"enable_auth_page_theming": False},
                 {"show_in_admin_panel": True, "show_in_admin_settings": False},
-                {"enable_canvas_api_access": True, "calm_chat_column": True, "allowed_import_domains": "a.com, b.org"},
+                {
+                    "enable_canvas_api_access": True,
+                    "calm_chat_column": True,
+                    "allowed_import_domains": "a.com, b.org",
+                },
                 {"draft_mode_default": True, "auto_sync": True, "enable_custom_css": False},
             ):
                 owui.set_valves("theme_designer_pro", **valves)
@@ -103,11 +144,21 @@ def run(kind: str) -> dict:
                 rec(f"state.json [{tag}]", anon.get(BASE + "/state.json"))
                 rec(f"loader.js [{tag}]", anon.get("/static/loader.js"))
                 rec(f"custom.css [{tag}]", anon.get("/static/custom.css"))
-                owui.set_valves("theme_designer_pro", **{k: plugin.instance.Valves.model_fields[k].default for k in valves})
+                owui.set_valves(
+                    "theme_designer_pro",
+                    **{k: plugin.instance.Valves.model_fields[k].default for k in valves},
+                )
 
             owui.set_valves("theme_designer_pro", allow_personal_themes=True)
             rec("personal designer", u.get(BASE + "?scope=me", headers=HTML))
-            rec("personal save", u.post(BASE + "/me", json={"css": CSS.replace("red", "blue"), "state": STATE}, headers=SAME_ORIGIN))
+            rec(
+                "personal save",
+                u.post(
+                    BASE + "/me",
+                    json={"css": CSS.replace("red", "blue"), "state": STATE},
+                    headers=SAME_ORIGIN,
+                ),
+            )
             rec("me/theme.css", u.get(BASE + "/me/theme.css"))
             rec("me/state.json", u.get(BASE + "/me/state.json"))
             rec("me/library.json", u.get(BASE + "/me/library.json"))
@@ -118,12 +169,16 @@ def run(kind: str) -> dict:
             rec("instance reset", a.post(BASE, json={"reset": True}, headers=SAME_ORIGIN))
             rec("theme.css after reset", anon.get(BASE + "/theme.css"))
             rec("custom.css after reset", anon.get("/static/custom.css"))
-            rec("x: designer, signed out, browser", owui.client(follow_redirects=False).get(BASE, headers={"accept": "text/html"}))
+            rec(
+                "x: designer, signed out, browser",
+                owui.client(follow_redirects=False).get(BASE, headers={"accept": "text/html"}),
+            )
             rec("x: designer, signed out, fetch", anon.get(BASE))
             rec("x: designer, a user", u.get(BASE, headers=HTML))
             rec("x: library.json, a user", u.get(BASE + "/library.json"))
             rec("x: save, signed out", anon.post(BASE, json={"css": "a"}, headers=SAME_ORIGIN))
-            key = owui.client(); key.headers["Authorization"] = "Bearer sk-api-key"
+            key = owui.client()
+            key.headers["Authorization"] = "Bearer sk-api-key"
             rec("x: page-background, signed out", anon.get(BASE + "/page-background"))
             owui.disable("theme_designer_pro")
             rec("x: theme.css, disabled", anon.get(BASE + "/theme.css"))
@@ -147,7 +202,9 @@ for name in up:
     if us == os_ and ub != ob:
         import difflib
 
-        for line in list(difflib.unified_diff(ub.splitlines(), ob.splitlines(), lineterm="", n=0))[:12]:
+        for line in list(difflib.unified_diff(ub.splitlines(), ob.splitlines(), lineterm="", n=0))[
+            :12
+        ]:
             print("   ", line[:200])
     elif ub != ob:
         print("    upstream:", ub[:200].replace("\n", "\\n"))
