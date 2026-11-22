@@ -102,17 +102,13 @@ def _dashboard_html(payload: dict[str, Any]) -> str:
         cls_attr = f" class='{cls}'" if cls else ""
         title_src = full if full not in (None, "") else value
         title_attr = (
-            f" title='{html.escape(str(title_src))}'"
-            if title_src not in (None, "")
-            else ""
+            f" title='{html.escape(str(title_src))}'" if title_src not in (None, "") else ""
         )
         return f"<td{cls_attr}{title_attr}>{esc(value)}</td>"
 
     def td_html(content: str, full: Any = None, cls: str = "") -> str:
         cls_attr = f" class='{cls}'" if cls else ""
-        title_attr = (
-            f" title='{html.escape(str(full))}'" if full not in (None, "") else ""
-        )
+        title_attr = f" title='{html.escape(str(full))}'" if full not in (None, "") else ""
         return f"<td{cls_attr}{title_attr}>{content}</td>"
 
     def chat_row(c: dict) -> str:
@@ -155,7 +151,7 @@ def _dashboard_html(payload: dict[str, Any]) -> str:
         chat_html = (
             ", ".join(
                 f"<a href='/c/{c.get('id')}' target='_blank'>{html.escape(t)}</a>"
-                for c, t in zip(chats, chat_titles)
+                for c, t in zip(chats, chat_titles, strict=False)
             )
             or "<span class='unk'>—</span>"
         )
@@ -238,10 +234,9 @@ async def _paginated(fetch, page_size: int = 500) -> list:
 
 async def _file_chat_map() -> dict[str, list[str]]:
     """Map file_id -> [chat_id] using the ``chat_file`` join table."""
-    from sqlalchemy import select
-
     from open_webui.internal.db import get_async_db_context
     from open_webui.models.chats import ChatFile
+    from sqlalchemy import select
 
     mapping: dict[str, list[str]] = {}
     async with get_async_db_context() as db:
@@ -289,11 +284,7 @@ async def _user_map(user_ids: set) -> dict[str, str]:
         return {}
 
     def display(u: Any) -> str:
-        return (
-            getattr(u, "name", None)
-            or getattr(u, "email", None)
-            or getattr(u, "id", "")
-        )
+        return getattr(u, "name", None) or getattr(u, "email", None) or getattr(u, "id", "")
 
     try:
         result = await Users.get_users(filter={"user_ids": ids}, limit=len(ids))
@@ -392,8 +383,7 @@ async def _load_stale_data(stale_hours: int) -> dict[str, Any]:
                         "filename": f.filename,
                         "user_id": f.user_id,
                         "chats": [
-                            {"id": cid, "title": chat_titles.get(cid, cid)}
-                            for cid in chat_ids
+                            {"id": cid, "title": chat_titles.get(cid, cid)} for cid in chat_ids
                         ],
                         "size": _fmt_size(meta.get("size")),
                         "content_type": meta.get("content_type"),
@@ -429,7 +419,9 @@ def _path(valves) -> str:
     return "/" + (valves.DASHBOARD_PATH or "/stale-data").strip().strip("/")
 
 
-async def _page(user: PluginAdmin):  # admins only: the page lists every user's chat titles, notes and file names
+async def _page(
+    user: PluginAdmin,
+):  # admins only: the page lists every user's chat titles, notes and file names
     valves = await plugin_stored_valves(Event.Valves, ttl=5)
     payload = await _load_stale_data(stale_hours=valves.STALE_THRESHOLD_HOURS)
     return HTMLResponse(_dashboard_html(payload))

@@ -23,6 +23,7 @@ libraries rather than copies of them, HTML in files rather than in Python string
 
 from __future__ import annotations
 
+import ast
 import datetime as _dt
 import json
 import re
@@ -624,7 +625,12 @@ def render_function(spec: PluginSpec) -> str:
     }[spec.type](spec)
     while lines and lines[-1] == "":
         lines.pop()
-    return add_lib_imports("\n".join(lines) + "\n", exports())
+    text = "\n".join(lines) + "\n"
+    if not any(isinstance(n, ast.Name) and n.id == "Field" for n in ast.walk(ast.parse(text))):
+        text = text.replace(
+            "from pydantic import BaseModel, Field\n", "from pydantic import BaseModel\n"
+        )
+    return add_lib_imports(text, exports())
 
 
 def render_tool(spec: PluginSpec) -> str:

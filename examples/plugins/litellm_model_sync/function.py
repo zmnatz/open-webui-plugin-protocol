@@ -1,4 +1,3 @@
-
 # Syncs LiteLLM's GET /model/info into Open-WebUI's model configs: display names, hidden
 # non-chat models, vision and tags. Skips non-LiteLLM connections, and only changes configs it
 # wrote, never on an empty or failed answer.
@@ -184,13 +183,17 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
                 data = await self.fetch_info(conn["base"], conn["key"])
             except Exception as e:
                 # Most connections are not LiteLLM (or are down); not an error.
-                log.info("LiteLLM Model Sync: %s has no /model/info (%s); skipping", conn["base"], e)
+                log.info(
+                    "LiteLLM Model Sync: %s has no /model/info (%s); skipping", conn["base"], e
+                )
                 failed = True
                 continue
             records = merge_models(data)
             if not records:
                 # An empty answer is not evidence the models are gone.
-                log.warning("LiteLLM Model Sync: %s returned no models; keeping its configs", conn["base"])
+                log.warning(
+                    "LiteLLM Model Sync: %s returned no models; keeping its configs", conn["base"]
+                )
                 failed = True
                 continue
             try:
@@ -234,7 +237,11 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
                 continue
             if await Models.delete_model_by_id(row.id):
                 removed += 1
-                log.info("LiteLLM Model Sync: removed %s (no longer returned by %s)", row.id, source or "gateway")
+                log.info(
+                    "LiteLLM Model Sync: removed %s (no longer returned by %s)",
+                    row.id,
+                    source or "gateway",
+                )
         return removed
 
     async def connections(self) -> list[dict]:
@@ -271,11 +278,13 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
         if key:
             headers["Authorization"] = f"Bearer {key}"
         timeout = aiohttp.ClientTimeout(total=self.valves.REQUEST_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-            async with session.get(url, headers=headers) as resp:
-                if resp.status != 200:
-                    raise RuntimeError(f"HTTP {resp.status}")
-                body = await resp.json()
+        async with (
+            aiohttp.ClientSession(timeout=timeout, trust_env=True) as session,
+            session.get(url, headers=headers) as resp,
+        ):
+            if resp.status != 200:
+                raise RuntimeError(f"HTTP {resp.status}")
+            body = await resp.json()
         data = body.get("data") if isinstance(body, dict) else None
         if not isinstance(data, list) or not any(
             isinstance(r, dict) and "model_name" in r for r in data
@@ -339,11 +348,15 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
                 grants.append(public)
                 grants_changed = True
 
-            if existing and not grants_changed and (
-                existing.name == display
-                and existing.is_active == active
-                and existing.meta.model_dump() == meta
-                and existing.params.model_dump() == params
+            if (
+                existing
+                and not grants_changed
+                and (
+                    existing.name == display
+                    and existing.is_active == active
+                    and existing.meta.model_dump() == meta
+                    and existing.params.model_dump() == params
+                )
             ):
                 continue
 

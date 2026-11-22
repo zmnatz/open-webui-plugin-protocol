@@ -158,6 +158,29 @@ class TestWhatItWrites:
         for path in files:
             assert missing_lib_imports(path.read_text(), exports()) == [], path
 
+    def test_every_generated_file_passes_ruff(self, written):
+        """Unused and missing imports, and import order: what an editor would flag."""
+        done = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "ruff",
+                "check",
+                "--no-cache",
+                "--isolated",
+                "--line-length",
+                "100",
+                "--select",
+                "F,I",
+                "--config",
+                "lint.isort.known-local-folder=['shared']",
+                str(written),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert done.returncode == 0, done.stdout
+
     def test_every_generated_manifest_records_the_protocol(self, written, from_git):
         for directory in (written, from_git):
             for folder in directory.iterdir():

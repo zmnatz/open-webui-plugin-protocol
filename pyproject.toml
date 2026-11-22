@@ -73,9 +73,21 @@ filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecate
 [tool.ruff]
 line-length = 100
 target-version = "py310"
-# The vendored libraries and the runtime are deployed byte for byte; never reformat them.
-extend-exclude = ["src/owpp/runtime", "examples"]
+# Classic298's Shared Assets Protocol, vendored byte for byte: never lint or reformat it.
+extend-exclude = ["src/owpp/runtime/lib/shared_assets.py", "src/owpp/runtime/lib/live_reload.py"]
+
+[tool.ruff.format]
+# The runtime and the libraries are copied into every bundle as written: keep their layout.
+exclude = ["src/owpp/runtime/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
 ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Checked for undefined and unused names only (their imports are real), not restyled.
+"src/owpp/runtime/**" = ["E", "UP", "B", "SIM", "I"]
+
+[tool.ruff.lint.isort]
+# A plugin's shared.py, imported as `from shared import NAME` (docs/bundling.md).
+known-local-folder = ["shared"]

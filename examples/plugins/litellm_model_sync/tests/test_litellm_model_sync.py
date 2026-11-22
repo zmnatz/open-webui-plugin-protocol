@@ -40,7 +40,14 @@ MODELS = [
 @pytest.fixture(autouse=True)
 def _clean_env(monkeypatch):
     monkeypatch.delenv("LITELLM_SYNC_MINUTES", raising=False)
-    for name in ("http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY", "all_proxy", "ALL_PROXY"):
+    for name in (
+        "http_proxy",
+        "https_proxy",
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "all_proxy",
+        "ALL_PROXY",
+    ):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -65,7 +72,9 @@ def gateway():
             self.wfile.write(json.dumps({"data": state["models"]}).encode())
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-    threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True).start()
+    threading.Thread(
+        target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
+    ).start()
     state["url"] = f"http://127.0.0.1:{server.server_address[1]}/v1"
     yield state
     server.shutdown()

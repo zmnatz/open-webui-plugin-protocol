@@ -159,7 +159,8 @@ def test_it_can_sit_beside_better_banners(plugin_dir):
     """
     # The ids, classes and socket event are renamed: nothing of the original is left to collide.
     text = "".join(
-        (plugin_dir / f).read_text() for f in ("assets/loader.js", "assets/custom.css", "function.py")
+        (plugin_dir / f).read_text()
+        for f in ("assets/loader.js", "assets/custom.css", "function.py")
     )
     for original in ("owui-better-banners", "obb-", "owui:better-banners", "__owuiBetterBanners"):
         assert original not in text, original

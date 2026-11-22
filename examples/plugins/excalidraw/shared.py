@@ -5,7 +5,8 @@ import logging
 import re
 import secrets
 import time
-from typing import Any, Callable, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from owpp.lib import ChatNotSaved, plugin_chat_read, plugin_chat_update, plugin_chat_write
 
@@ -20,9 +21,7 @@ EXCALIDRAW_VERSION = "0.18.0"
 NO_STORE = {"Cache-Control": "no-store"}
 # The Artifacts iframe has an opaque origin, so API calls are cross-origin and cookie-free.
 CORS = {**NO_STORE, "Access-Control-Allow-Origin": "*"}
-_ID = re.compile(
-    r"[A-Za-z0-9_:-]{1,128}"
-)  # chat UUIDs, plus "local:..." temporary chats
+_ID = re.compile(r"[A-Za-z0-9_:-]{1,128}")  # chat UUIDs, plus "local:..." temporary chats
 
 
 # A scene is {"version", "writer", "elements", "updated_at"} under chat.meta["excalidraw"].
@@ -37,27 +36,21 @@ def _empty() -> dict:
     return {"version": 0, "writer": "tool", "elements": []}
 
 
-async def _load(chat_id: str) -> Optional[dict]:
+async def _load(chat_id: str) -> dict | None:
     """The chat's scene, or None if it has none. Raises _NoChat."""
     scene = await plugin_chat_read(chat_id, META_KEY)
-    return (
-        scene
-        if isinstance(scene, dict) and isinstance(scene.get("elements"), list)
-        else None
-    )
+    return scene if isinstance(scene, dict) and isinstance(scene.get("elements"), list) else None
 
 
 async def _save(chat_id: str, scene: dict) -> None:
     await plugin_chat_write(chat_id, scene, META_KEY)
 
 
-async def _mutate(
-    chat_id: str, change: Callable, writer: str, pass_new: bool = False
-) -> dict:
+async def _mutate(chat_id: str, change: Callable, writer: str, pass_new: bool = False) -> dict:
     """Apply change(elements) under the chat's lock and save a new version.
     change may return None to keep the scene as it is."""
 
-    def apply(current: Optional[dict], is_new: bool) -> Optional[dict]:
+    def apply(current: dict | None, is_new: bool) -> dict | None:
         valid = isinstance(current, dict) and isinstance(current.get("elements"), list)
         scene = current if valid else _empty()
         elements = (
@@ -93,7 +86,7 @@ _KEEP = (
 )
 
 
-def _simplify(elements: List[dict]) -> List[dict]:
+def _simplify(elements: list[dict]) -> list[dict]:
     """Compact view for the model: drop deleted, fold bound text into `label`."""
     labels = {
         e["containerId"]: e.get("text", "")
@@ -120,27 +113,23 @@ def _simplify(elements: List[dict]) -> List[dict]:
     return out
 
 
-def _with_ids(elements: List[dict]) -> List[dict]:
+def _with_ids(elements: list[dict]) -> list[dict]:
     """Models often omit ids; give each element one so it can be read, updated
     and deleted later. (Nested label/start/end skeleton fields are untouched.)"""
-    return [
-        e if e.get("id") else {**e, "id": secrets.token_urlsafe(6)} for e in elements
-    ]
+    return [e if e.get("id") else {**e, "id": secrets.token_urlsafe(6)} for e in elements]
 
 
-def _merge(existing: List[dict], incoming: List[dict]) -> List[dict]:
+def _merge(existing: list[dict], incoming: list[dict]) -> list[dict]:
     incoming = _with_ids(incoming)
     by_id = {e["id"]: e for e in incoming}
     merged = [by_id.pop(e.get("id"), e) for e in existing]
     return merged + [e for e in incoming if e["id"] in by_id]
 
 
-def _as_list(elements: Any) -> List[dict]:
+def _as_list(elements: Any) -> list[dict]:
     """Models pass elements as a list, one object, or JSON text; accept all."""
     if isinstance(elements, str):
         elements = json.loads(elements)
     if isinstance(elements, dict):
         elements = [elements]
     return [json.loads(e) if isinstance(e, str) else e for e in elements or []]
-
-

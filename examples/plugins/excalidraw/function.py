@@ -2,11 +2,24 @@
 
 import json
 import re
-from typing import Any, List, Optional
+from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field
+
+from owpp.lib import (
+    WritableChat,
+    plugin_app,
+    plugin_check_token,
+    plugin_config,
+    plugin_ensure,
+    plugin_mount,
+    plugin_stored_valves,
+    plugin_template_text,
+    plugin_token,
+)
+
 from shared import (
     _ID,
     CORS,
@@ -19,18 +32,6 @@ from shared import (
     _mutate,
     _NoChat,
     log,
-)
-
-from owpp.lib import (
-    WritableChat,
-    plugin_app,
-    plugin_check_token,
-    plugin_config,
-    plugin_ensure,
-    plugin_mount,
-    plugin_stored_valves,
-    plugin_template_text,
-    plugin_token,
 )
 
 # Editor assets: the browser loads React and Excalidraw from esm.sh (no integrity check), or
@@ -46,7 +47,9 @@ def _assets_url() -> str:
     """Where this deployment hosts the editor's files (config.yaml: assets_url), or "" for esm.sh."""
     url = str(plugin_config().get("assets_url") or "").strip().rstrip("/")
     if url and not _ASSETS_URL.fullmatch(url):
-        log.warning("Excalidraw: assets_url %r is not a plain http(s) URL or path; using esm.sh", url)
+        log.warning(
+            "Excalidraw: assets_url %r is not a plain http(s) URL or path; using esm.sh", url
+        )
         return ""
     return url
 
@@ -55,7 +58,9 @@ def _editor_page(token: str) -> str:
     """The editor page for one signed-in view: the self-hosted head or the esm.sh one, the token."""
     url = _assets_url()
     keep, drop = ("hosted", "esm.sh") if url else ("esm.sh", "hosted")
-    html = re.sub(rf"<!--{re.escape(drop)}-->.*?<!--/{re.escape(drop)}-->\n?", "", VIEWER, flags=re.S)
+    html = re.sub(
+        rf"<!--{re.escape(drop)}-->.*?<!--/{re.escape(drop)}-->\n?", "", VIEWER, flags=re.S
+    )
     html = re.sub(rf"<!--/?{re.escape(keep)}-->\n?", "", html)
     return (
         html.replace("__ASSETS_URL__", url)
@@ -64,7 +69,7 @@ def _editor_page(token: str) -> str:
     )
 
 
-def _reply(body: dict) -> Optional[dict]:
+def _reply(body: dict) -> dict | None:
     """The assistant message this outlet run is for."""
     messages = body.get("messages") or []
     target = body.get("id")
@@ -86,7 +91,7 @@ def _shown(message: dict) -> str:
     )
 
 
-def _artifacts(output: List[dict]) -> List[str]:
+def _artifacts(output: list[dict]) -> list[str]:
     found = []
     for item in output:
         if item.get("type") != "function_call_output":
@@ -113,9 +118,7 @@ def _text(value: Any) -> str:
     if isinstance(value, str):
         return value
     if isinstance(value, list):
-        return "".join(
-            p.get("text", "") if isinstance(p, dict) else str(p) for p in value
-        )
+        return "".join(p.get("text", "") if isinstance(p, dict) else str(p) for p in value)
     return ""
 
 
@@ -146,9 +149,7 @@ class Filter:
         output = message.get("output") or []
         # The panel keeps blocks from every reply, so add the editor only once per chat.
         shown = "".join(
-            _shown(m)
-            for m in body.get("messages") or []
-            if m.get("role") == "assistant"
+            _shown(m) for m in body.get("messages") or [] if m.get("role") == "assistant"
         )
         blocks = []
         for html in _artifacts(output):

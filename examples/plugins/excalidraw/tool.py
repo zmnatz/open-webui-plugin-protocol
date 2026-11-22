@@ -1,7 +1,7 @@
 # Lets the model show, read and change the chat's drawing.
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any
 from urllib.parse import quote
 
 from shared import (
@@ -37,8 +37,8 @@ class Tools:
 
     async def show_excalidraw(
         self,
-        elements: Optional[List[Dict[str, Any]]] = None,
-        __metadata__: Optional[dict] = None,
+        elements: list[dict[str, Any]] | None = None,
+        __metadata__: dict | None = None,
     ) -> dict:
         """
         Show this chat's Excalidraw drawing to the user as a live editor they can
@@ -79,7 +79,7 @@ class Tools:
             MARKER: artifact,
         }
 
-    async def read_excalidraw(self, __metadata__: Optional[dict] = None) -> str:
+    async def read_excalidraw(self, __metadata__: dict | None = None) -> str:
         """
         Read the drawing as the user currently sees it, including their edits.
         Bound text is folded into each shape's `label`; arrows list `start` and
@@ -87,12 +87,10 @@ class Tools:
         editing.
         """
         scene = await _load(_tool_chat_id(__metadata__)) or _empty()
-        return json.dumps(
-            {"version": scene["version"], "elements": _simplify(scene["elements"])}
-        )
+        return json.dumps({"version": scene["version"], "elements": _simplify(scene["elements"])})
 
     async def upsert_excalidraw_elements(
-        self, elements: List[Dict[str, Any]], __metadata__: Optional[dict] = None
+        self, elements: list[dict[str, Any]], __metadata__: dict | None = None
     ) -> str:
         """
         Add elements to the drawing, or update existing ones by id. Elements not
@@ -110,7 +108,7 @@ class Tools:
         return f"Updated. The open editor will show it shortly (version {scene['version']})."
 
     async def replace_excalidraw_elements(
-        self, elements: List[Dict[str, Any]], __metadata__: Optional[dict] = None
+        self, elements: list[dict[str, Any]], __metadata__: dict | None = None
     ) -> str:
         """
         Replace everything in the drawing. This discards the user's edits, so use
@@ -123,7 +121,7 @@ class Tools:
         return f"Replaced (version {scene['version']})."
 
     async def delete_excalidraw_elements(
-        self, ids: List[str], __metadata__: Optional[dict] = None
+        self, ids: list[str], __metadata__: dict | None = None
     ) -> str:
         """
         Remove elements from the drawing by id (get ids from read_excalidraw).
@@ -134,9 +132,7 @@ class Tools:
         scene = await _mutate(
             _tool_chat_id(__metadata__),
             lambda current: [
-                e
-                for e in current
-                if e.get("id") not in drop and e.get("containerId") not in drop
+                e for e in current if e.get("id") not in drop and e.get("containerId") not in drop
             ],
             "tool",
         )
@@ -150,12 +146,10 @@ for _fn in (
     Tools.replace_excalidraw_elements,
 ):
     _head, _sep, _params = (_fn.__doc__ or "").partition(":param")
-    _fn.__doc__ = (
-        _head.rstrip() + "\n\n" + ELEMENT_DOC + "\n\n        " + _sep + _params
-    )
+    _fn.__doc__ = _head.rstrip() + "\n\n" + ELEMENT_DOC + "\n\n        " + _sep + _params
 
 
-def _tool_chat_id(__metadata__: Optional[dict]) -> str:
+def _tool_chat_id(__metadata__: dict | None) -> str:
     chat_id = (__metadata__ or {}).get("chat_id")
     if not chat_id or not _ID.fullmatch(chat_id):
         raise RuntimeError("No chat id: send a message first, then retry.")
