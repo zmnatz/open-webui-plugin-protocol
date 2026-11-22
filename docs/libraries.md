@@ -282,6 +282,8 @@ A `config.yaml` next to `plugin.yaml` (added automatically) holds structured set
 include: [live_reload, shared_assets]   # in this order
 ```
 
+Import the protocol's names from `owpp.lib` like any library's: `from owpp.lib import CUSTOM_CSS_PATH, asset_register, reload_active, reload_bootstrap, reload_on_event`. `live_reload`'s names load on first use, because the file imports `open_webui` at its top, so in a test they need the mock.
+
 Two other ways to use an existing protocol plugin:
 
 - **Unchanged, pinned.** `source: {git, ref, path}` with `function: {file: event.py}` bundles the upstream file verbatim, so the deployed code is exactly the pinned commit. Such a file already carries its own copy of both blocks; the bundler sees their end markers and inserts nothing twice.

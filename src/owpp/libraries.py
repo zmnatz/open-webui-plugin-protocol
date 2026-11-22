@@ -184,12 +184,10 @@ def public_names(path: Path) -> list[str]:
 @cache
 def exports() -> dict[str, str]:
     """Every name a plugin can import from owpp.lib, with the library it comes from
-    (`runtime` for the plugin runtime's). The vendored Shared Assets Protocol files are not in
-    it: plugins use them through the assets library."""
+    (`runtime` for the plugin runtime's), the Shared Assets Protocol's included."""
     names: dict[str, str] = {}
     for lib in LIBRARIES:
-        if lib.name not in VENDORED:
-            names.update(dict.fromkeys(public_names(LIB_DIR / f"{lib.file}.py"), lib.name))
+        names.update(dict.fromkeys(public_names(LIB_DIR / f"{lib.file}.py"), lib.name))
     names.update(dict.fromkeys(public_names(RUNTIME_FILE), FROM_RUNTIME))
     return names
 

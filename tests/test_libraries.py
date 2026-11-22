@@ -23,6 +23,7 @@ from owpp.libraries import (
     table,
     wanted,
 )
+from owpp.testing.mock import MockOpenWebUI
 
 CODE = '"""\ntitle: T\n"""\nx = 1\n'
 
@@ -111,12 +112,16 @@ def test_the_docs_table_has_a_row_per_library():
 
 
 def test_owpp_lib_exports_every_public_library_name_from_its_library():
-    """owpp.lib is what plugins import; the bundler decides what to include from exports()."""
+    """owpp.lib is what plugins import; the bundler decides what to include from exports().
+    live_reload's names load on first use, since it imports open_webui (the mock, here)."""
     assert sorted(owpp.lib.__all__) == sorted(exports())
-    for name, lib in exports().items():
-        module = "plugin_runtime" if lib == FROM_RUNTIME else f"lib.{BY_NAME[lib].file}"
-        source = importlib.import_module(f"owpp.runtime.{module}")
-        assert getattr(owpp.lib, name) is getattr(source, name), name
+    with MockOpenWebUI():
+        for name, lib in exports().items():
+            module = "plugin_runtime" if lib == FROM_RUNTIME else f"lib.{BY_NAME[lib].file}"
+            source = importlib.import_module(f"owpp.runtime.{module}")
+            assert getattr(owpp.lib, name) is getattr(source, name), name
+    with pytest.raises(AttributeError):
+        owpp.lib.nope  # noqa: B018
 
 
 def test_a_library_imports_only_libraries_it_pulls_in():
