@@ -757,16 +757,23 @@ class MockOpenWebUI:
 
     # ---- events ---------------------------------------------------------------------
 
-    def emit(self, name: str, subject: str | None = None, data: dict | None = None) -> None:
+    def emit(self, name: str, subject: str | dict | None = None, data: dict | None = None) -> None:
         """Send an Open-WebUI event: to every loaded Event function that is enabled (and to
         the subject of a `*_started` event, which is not yet), with its stored valves
-        applied, then to the event sinks."""
+        applied, then to the event sinks. `subject` is a function's id, or the subject itself
+        for an event about something else (`{"type": "user", "id": ...}`)."""
         self.run(self._emit(name, subject, data))
 
-    async def _emit(self, name: str, subject: str | None, data: dict | None) -> None:
+    async def _emit(self, name: str, subject: str | dict | None, data: dict | None) -> None:
+        if isinstance(subject, dict):
+            subject_of = dict(subject)
+            function_id = subject_of.get("id") if subject_of.get("type") == "function" else None
+        else:
+            subject_of = {"type": "function", "id": subject} if subject else None
+            function_id = subject
         event = {
             "event": name,
-            "subject": {"type": "function", "id": subject} if subject else None,
+            "subject": subject_of,
             "data": data or {},
             "timestamp": _now(),
         }
@@ -774,7 +781,7 @@ class MockOpenWebUI:
             row = self.functions.get(plugin.id)
             if row is None or not hasattr(plugin.instance, "event"):
                 continue
-            starting = name.endswith("_started") and subject == plugin.id
+            starting = name.endswith("_started") and function_id == plugin.id
             if not (row.is_active or starting):
                 continue
             self._apply_valves(plugin.instance, self.function_valves.get(plugin.id))

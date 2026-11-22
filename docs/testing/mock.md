@@ -12,7 +12,7 @@
 | `owui.set_valves(id, **valves)` | The admin saved the valves: they are stored, applied, and `function.valves_updated` is sent. |
 | `owui.update(id)` | Bundles the folder again, reloads the function and sends `function.updated`. |
 | `owui.delete(id)` | Removes the function and sends `function.deleted`. |
-| `owui.emit(name, subject=None, data=None)` | Any event. It goes to every enabled Event function (and to the subject of a `*_started` event), with its stored valves applied, then to the event sinks. |
+| `owui.emit(name, subject=None, data=None)` | Any event. It goes to every enabled Event function (and to the subject of a `*_started` event), with its stored valves applied, then to the event sinks. `subject` is a function's id, or the subject itself for an event about something else: `owui.emit("user.deleted", {"type": "user", "id": ada.id})`. |
 
 ## Calling the plugin
 

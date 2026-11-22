@@ -139,3 +139,29 @@ def test_a_filter_is_told_the_model_and_can_find_the_last_user_message(tmp_path)
         plugin = owui.load(folder)
         assert plugin.inlet({"messages": messages})["seen"] == ["mock-model", "last"]
         assert plugin.inlet({"messages": messages}, model="gpt-x")["seen"] == ["gpt-x", "last"]
+
+
+def test_an_event_can_be_about_something_other_than_a_function(tmp_path):
+    """Open-WebUI sends events about users and models too (`user.deleted`, `model.updated`), with
+    that thing as the subject. `emit` takes the subject itself for those; a plain id is still a
+    function, and a `*_started` event about a function still reaches it before it is enabled."""
+    folder = plugin_folder(
+        tmp_path,
+        """
+        SEEN = []
+
+
+        class Event:
+            async def event(self, event, __event_name__=None, **kwargs):
+                SEEN.append((__event_name__, event["subject"]))
+        """,
+    )
+    with MockOpenWebUI() as owui:
+        plugin = owui.load(folder, active=False)
+        owui.emit("user.deleted", {"type": "user", "id": "u1"})
+        owui.emit("function.enable_started", "demo")
+        owui.emit("function.updated", "demo")  # not enabled, not starting: not sent
+        assert plugin.module.SEEN == [("function.enable_started", {"type": "function", "id": "demo"})]
+        owui.functions["demo"].is_active = True
+        owui.emit("user.deleted", {"type": "user", "id": "u1"})
+        assert plugin.module.SEEN[-1] == ("user.deleted", {"type": "user", "id": "u1"})
