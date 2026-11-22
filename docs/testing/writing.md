@@ -48,6 +48,21 @@ Name the test as a sentence about the plugin: `test_a_message_without_an_image_s
 
 Done when every valve and every branch has a test with both paragraphs, `owpp test <id>` passes and `owpp check <id> --strict` reports nothing.
 
+## Testing logic directly
+
+A helper with no Open-WebUI in it (parsing, merging, building a page) can be tested by importing the plugin's files, the way an editor reads them. `from shared import ...` and `from owpp.lib import ...` would not work with a plain import, because every plugin has its own `shared.py` and its own library data, so use `plugin_source`:
+
+```python
+from owpp.testing import plugin_source
+
+
+def test_a_title_is_trimmed(plugin_dir):
+    src = plugin_source(plugin_dir)
+    assert src.shared.clean_title("  Notes ") == "Notes"
+```
+
+It returns `.shared`, `.function` and `.tool` as modules (`None` for a file the plugin does not have). Each file gets the plugin's own `shared.py`, and libraries built the way its bundle has them, with its templates and `config.yaml`. `shared.py` is imported once for each bundle, like in Open-WebUI: `.tool_shared` is the tool's copy. A file that imports `open_webui` at its top needs the mock installed first (take the `owui` fixture). Anything that runs inside Open-WebUI (the function's class, routes, events, the tool) still goes through `owui.load()`, which tests the bundle that is deployed.
+
 ## Tips
 
 - To change a file such as `config.yaml` for one test, copy the folder to `tmp_path` first and load the copy.

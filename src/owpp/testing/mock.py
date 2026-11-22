@@ -42,7 +42,7 @@ from ..manifest import read_manifest
 
 # Modules a test run leaves behind and the mock removes on close: Open-WebUI's, the loaded
 # plugins', and the state the libraries keep in sys.modules so it survives a reload.
-_OWNED_PREFIXES = ("open_webui", "function_", "tool_", "_plugin")
+_OWNED_PREFIXES = ("open_webui", "function_", "tool_", "_plugin", "_owpp_src_")
 
 
 class Record(types.SimpleNamespace):

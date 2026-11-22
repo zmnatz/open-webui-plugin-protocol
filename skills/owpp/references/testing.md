@@ -18,7 +18,7 @@ A plugin's tests are its **spec**: each one names a behaviour in the plugin's te
    ```
 
    The first paragraph says what it checks. **By hand** says where to click, what to set and what you should see on a live Open-WebUI; when the behaviour cannot be reached by hand, it says why ("not repeatable on Open-WebUI 0.13, which no longer writes replies this way").
-3. **Make it green**, through the mock rather than around it: `plugin.inlet(body, user=, model=)`, `plugin.outlet(...)`, `owui.set_valves(id, ...)`, `owui.tool(id).call(...)`, `owui.client(user).get(...)`, `owui.disable(id)`. A helper called directly skips the guards and the runtime the real plugin goes through.
+3. **Make it green**, through the mock rather than around it: `plugin.inlet(body, user=, model=)`, `plugin.outlet(...)`, `owui.set_valves(id, ...)`, `owui.tool(id).call(...)`, `owui.client(user).get(...)`, `owui.disable(id)`. A helper called directly skips the guards and the runtime the real plugin goes through. Pure logic with no Open-WebUI in it can be tested directly: `plugin_source(plugin_dir)` (from `owpp.testing`) imports the plugin's files as modules, each with its own `shared` and libraries, as `.shared`, `.function` and `.tool`.
 4. **Write the README's `## Test` list** from the By hand steps: the `owpp check`, `owpp bundle` and `owpp test` lines `owpp create` wrote, then one line of live checks.
 
 Done when every behaviour on the list has a test with both paragraphs, `owpp test <id>` passes, and `owpp check <id> --strict` reports no `FAIL` and no `warn`.

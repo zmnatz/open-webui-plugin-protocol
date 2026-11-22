@@ -724,6 +724,18 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
             f"{folder}: with an assets/ folder the function must define `class Event(PluginAssets)`, "
             "which publishes the files (or delete function.py to have it generated)"
         )
+    held, data = _library_data(folder, manifest, assets)
+    if from_lib:
+        libs = wanted(manifest.get("include"), held, f"{folder.name}/plugin.yaml")
+        _check_lib_imports(folder, from_lib, libs, has_resources, "include")
+    code = link(code, manifest.get("include"), folder.name, held, data)
+    if has_resources:
+        code += _runtime_source(res)
+    return code
+
+
+def _library_data(folder: Path, manifest: dict, assets: Any) -> tuple[set[str], dict]:
+    """What the plugin holds that turns libraries on, and the data each library embeds."""
     static = _read_static(folder, manifest)
     templates = _read_templates(folder)
     config = _read_config(folder)
@@ -746,11 +758,31 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
         "config": config,
         "jobs": jobs,
     }
-    if from_lib:
-        libs = wanted(manifest.get("include"), held, f"{folder.name}/plugin.yaml")
-        _check_lib_imports(folder, from_lib, libs, has_resources, "include")
-    code = link(code, manifest.get("include"), folder.name, held, data)
-    if has_resources:
+    return held, data
+
+
+def library_code(folder: Path | str, name: str = "function") -> str:
+    """The libraries `name`.py (function or tool) is bundled with, and the runtime when the bundle
+    has it, as the code of one module, with this plugin's data: what owpp.testing.plugin_source()
+    gives a plugin file in place of owpp.lib. shared.py is bundled into both, so it gets the
+    function's. A plugin folder on disk, not one that takes code from git."""
+    folder = Path(folder)
+    with Sources(_offline) as offline:
+        plugin = offline.resolve(folder)
+    manifest = plugin.manifest
+    header = '"""\n"""\n'
+    res = _plugin_resources(plugin)
+    if name == "tool":
+        tool = manifest.get("tool") if isinstance(manifest.get("tool"), dict) else {}
+        code = link(header, tool.get("include"), folder.name)
+        ids = {
+            "tools": [{"id": t["id"]} for t in res["tools"]],
+            "skills": [{"id": k["id"]} for k in res["skills"]],
+        }
+        return code + _runtime_source(ids)
+    held, data = _library_data(folder, manifest, _read_assets(folder, manifest))
+    code = link(header, manifest.get("include"), folder.name, held, data)
+    if res["tools"] or res["skills"]:
         code += _runtime_source(res)
     return code
 
