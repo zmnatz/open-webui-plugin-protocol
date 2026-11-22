@@ -625,6 +625,73 @@ class TestStaticAndTemplates:
         (fn,) = load_function_files(d)
         assert "tool page" not in embedded(fn.content)["tools"][0]["content"]  # it did not ask
 
+    TOOL_READS = {
+        "function.py": "class Filter:\n    pass\n",
+        "tool.py": (
+            "from owpp.lib import plugin_template_files\n\n"
+            "FILES = plugin_template_files()\n\nclass Tools:\n    pass\n"
+        ),
+        "templates/page.html": "<p>the function's page</p>\n",
+        "templates/card/card.html": "<p>card</p>\n",
+        "templates/card/card.css": "p {}\n",
+        "templates/embed.html": "<p>embed</p>\n",
+    }
+
+    def tool_files(self, d) -> list:
+        (fn,) = load_function_files(d)
+        tool = embedded(fn.content)["tools"][0]["content"]
+        ns: dict = {"__name__": "tool_t_" + "0" * 32}
+        exec(compile(tool, "tool.py", "exec"), ns)
+        return ns["FILES"], tool
+
+    def test_a_tool_embeds_only_the_templates_it_lists(self, plugin):
+        """`tool: templates:` names the files (or folders, with a trailing /) the tool embeds, so
+        a function's large page is not copied into its tool; the key is not a header line."""
+        d = plugin(
+            "function:\n  title: T\ntool:\n  id: t\n  include: [templates]\n"
+            "  templates: [card/, embed.html]\n",
+            self.TOOL_READS,
+        )
+        files, tool = self.tool_files(d)
+        assert files == ["card/card.css", "card/card.html", "embed.html"]
+        assert "the function's page" not in tool
+        assert "templates:" not in tool.split('"""')[1]  # not in the tool's header
+        (fn,) = load_function_files(d)
+        assert "the function's page" in fn.content  # the function still has every file
+
+    def test_without_the_list_a_tool_embeds_every_template(self, plugin):
+        d = plugin(
+            "function:\n  title: T\ntool:\n  id: t\n  include: [templates]\n", self.TOOL_READS
+        )
+        files, _ = self.tool_files(d)
+        assert files == ["card/card.css", "card/card.html", "embed.html", "page.html"]
+
+    @pytest.mark.parametrize(
+        ("listed", "error"),
+        [
+            ("[cards/]", r"tool\.templates: `cards/` is not in templates/"),
+            ("[card]", r"tool\.templates: `card` is not in templates/ \(a folder is written `card/`\)"),
+            ("card/", r"tool\.templates must be a list of paths in templates/"),
+            ("['']", r"tool\.templates must be a list of paths in templates/"),
+        ],
+    )
+    def test_a_template_list_that_names_nothing_is_refused(self, plugin, listed, error):
+        d = plugin(
+            "function:\n  title: T\ntool:\n  id: t\n  include: [templates]\n"
+            f"  templates: {listed}\n",
+            self.TOOL_READS,
+        )
+        with pytest.raises(OwppError, match=error):
+            load_function_files(d)
+
+    def test_a_template_list_needs_the_tool_to_include_templates(self, plugin):
+        d = plugin(
+            "function:\n  title: T\ntool:\n  id: t\n  templates: [embed.html]\n",
+            {**self.TOOL_READS, "tool.py": "class Tools:\n    pass\n"},
+        )
+        with pytest.raises(OwppError, match=r"tool\.templates needs `templates` in tool\.include"):
+            load_function_files(d)
+
     def test_both_folders_can_be_in_one_plugin(self, plugin):
         d = plugin(
             "function:\n  title: T\n", {**self.FN, "static/a.txt": "a", "templates/p.html": "p"}
