@@ -212,21 +212,52 @@ def parse_skill(file: str, text: str) -> tuple[dict, str]:
 # ---- reading files and folders ------------------------------------------------
 
 
+def _tool_templates(folder: Path, tool: dict) -> dict | None:
+    """The templates a tool embeds: every file in templates/, or only those `tool.templates`
+    lists (a file, or a folder written with a trailing /), so a function's large page is not
+    copied into its tool. An entry that matches nothing is refused: it is a typo."""
+    files = _read_templates(folder)
+    listed = tool.get("templates")
+    if listed is None or files is None:
+        return files
+    where = f"{folder.name}/plugin.yaml: tool.templates"
+    if not isinstance(listed, list) or not all(isinstance(e, str) and e.strip() for e in listed):
+        raise OwppError(f"{where} must be a list of paths in templates/ (a folder ends in /)")
+    chosen: dict = {}
+    for entry in (e.strip() for e in listed):
+        found = {
+            path: f
+            for path, f in files.items()
+            if (path.startswith(entry) if entry.endswith("/") else path == entry)
+        }
+        if not found:
+            folder_hint = any(p.startswith(entry + "/") for p in files)
+            hint = f" (a folder is written `{entry}/`)" if folder_hint else ""
+            raise OwppError(f"{where}: `{entry}` is not in templates/{hint}")
+        chosen.update(found)
+    return dict(sorted(chosen.items()))
+
+
 # How to read the data of each library a tool may ask for (Library.for_tools).
-TOOL_DATA_READERS = {"templates": lambda folder: _read_templates(folder)}
+TOOL_DATA_READERS = {"templates": _tool_templates}
 
 
 def _tool_data(folder: Path, tool: dict) -> dict:
     """What the tool's libraries embed: only the templates, and only when it asks for them
-    (`tool.include: [templates]`), so a function's templates are not copied into its tool."""
+    (`tool.include: [templates]`), so a function's templates are not copied into its tool;
+    `tool.templates` narrows them to the files it lists."""
     include = tool.get("include")
     asked = (
         [n for n in include if n in BY_NAME and BY_NAME[n].for_tools]
         if isinstance(include, list)
         else []
     )
+    if "templates" in tool and "templates" not in asked:
+        raise OwppError(
+            f"{folder.name}/plugin.yaml: tool.templates needs `templates` in tool.include"
+        )
     readers = TOOL_DATA_READERS
-    return {name: readers[name](folder) for name in asked}
+    return {name: readers[name](folder, tool) for name in asked}
 
 
 def _tool_valves(folder: Path, valves: Any) -> dict:
@@ -257,7 +288,9 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
             content = plugin.read(tool["file"])
         else:
             code, from_lib = _bundle_code(
-                folder, "tool", omit(tool, ["id", "from", "access", "file", "valves", "include"])
+                folder,
+                "tool",
+                omit(tool, ["id", "from", "access", "file", "valves", "include", "templates"]),
             )
             # A tool bundle carries the runtime too (below), with just the ids to remove.
             libs = wanted(tool.get("include"), set(), f"{folder.name}/plugin.yaml")

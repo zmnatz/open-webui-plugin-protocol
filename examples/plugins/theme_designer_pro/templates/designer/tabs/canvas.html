@@ -1,0 +1,36 @@
+        <div id="tab-canvas" class="tab-content" role="tabpanel" aria-labelledby="tab-btn-canvas" style="display:none; height: 100%;">
+            <div class="code-container">
+                <div class="section-title section-title-bar">
+                    <div>Canvas FX <span id="canvas-worker-badge" style="display:none; font-size: 0.55rem; font-weight: 800; padding: 2px 6px; border-radius: 12px; margin-left: 8px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.05em;"></span><span id="canvas-webgl-badge" style="display:none; font-size: 0.55rem; font-weight: 800; padding: 2px 6px; border-radius: 12px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.05em; color:#a78bfa; background-color: rgba(167, 139, 250, 0.1);">WebGL</span><span id="canvas-context-badge" style="display:none; font-size: 0.55rem; font-weight: 800; padding: 2px 6px; border-radius: 12px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.05em; color:#2dd4bf; background-color: rgba(45, 212, 191, 0.1);">Context</span><span id="canvas-theme-badge" style="display:none; font-size: 0.55rem; font-weight: 800; padding: 2px 6px; border-radius: 12px; margin-left: 6px; vertical-align: middle; text-transform: uppercase; letter-spacing: 0.05em; color:#f472b6; background-color: rgba(244, 114, 182, 0.1);">Follows Theme</span></div>
+                    <div class="flex-center">
+                        <label class="toggle-label" data-tooltip="Run animation script in background for this mode"><input type="checkbox" id="toggle-canvas-fx" class="cb-input"> Enabled</label>
+                        <label class="toggle-label" data-tooltip="Show animations on Login/Signup pages (Default: Visible)"><input type="checkbox" id="toggle-canvas-auth" class="cb-input"> Show on Auth Pages</label>
+                        <label class="toggle-label" data-tooltip="Show animations only on Login/Signup pages, not in the app (needs Show on Auth Pages)"><input type="checkbox" id="toggle-canvas-authonly" class="cb-input"> Only on Auth Pages</label>
+                    </div>
+                </div>
+
+                <div class="owui-code-block" style="min-height: 300px; max-height: 300px;">
+                    <div class="owui-code-header">
+                        <span class="owui-code-lang">javascript</span>
+                        <div class="owui-code-actions">
+                            <button class="owui-code-btn" id="save-canvas-btn" data-tooltip="Save Script to Gallery" data-action="save-canvas">Save</button>
+                            <button class="owui-code-btn" id="clear-canvas-btn" data-tooltip="Clear Canvas Script">Clear</button>
+                            <button class="owui-code-btn copy-css-btn" data-target="canvas-fx-editor" data-tooltip="Copy JS to Clipboard">Copy</button>
+                        </div>
+                    </div>
+                    <textarea id="canvas-fx-editor" spellcheck="false" placeholder="/* Enter Canvas animation script here.&#10;   When enabled, your script runs safely&#10;   in the background (if supported).&#10;   Open WebUI's structural wrappers will&#10;   turn transparent so the animation is&#10;   fully visible underneath! */"></textarea>
+                </div>
+
+                <details class="doc-sub-accordion canvas-settings" id="canvas-settings" style="display:none;">
+                    <summary><span>Animation Settings <span class="canvas-settings-count" id="canvas-settings-count"></span></span> <i data-icon="chevron"></i></summary>
+                    <div class="doc-sub-inner">
+                        <p class="canvas-settings-note">The script&rsquo;s own settings, read from its <code>CONFIG</code> block or the constants at its top. A change rewrites that value in the script above. <b>Reset</b> or Undo takes it back.</p>
+                        <div class="canvas-settings-body" id="canvas-settings-body"></div>
+                        <button type="button" class="owui-code-btn canvas-settings-reset" id="canvas-settings-reset" disabled>Reset to the script&rsquo;s values</button>
+                    </div>
+                </details>
+
+                <div id="gallery-toolbar-canvas"></div>
+            </div>
+        </div>
+

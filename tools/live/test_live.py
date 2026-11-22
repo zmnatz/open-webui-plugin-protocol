@@ -4,6 +4,7 @@ from tools/screenshots/aimock/ (docs/testing/live.md)."""
 from __future__ import annotations
 
 import json
+import urllib.error
 import urllib.request
 
 MODEL = "screenshot-model"
@@ -143,3 +144,84 @@ def test_an_inlet_can_send_a_message_with_an_image_to_another_model(api, user_ap
         api("POST", "/api/v1/functions/id/vision_router/valves/update", before)
     assert models["routed-check-9c1d"] == {"screenshot-vision"}
     assert models["plain-check-4b8e"] == {MODEL}
+
+
+# ---- Theme Designer Pro ---------------------------------------------------------------
+
+TDP = "/api/v1/theme-designer"
+
+
+def _get(path: str, token: str | None = None) -> tuple[int, str, str]:
+    """A plain GET, as a page makes it: (status, content type, text)."""
+    from conftest import URL
+
+    request = urllib.request.Request(
+        URL + path, headers={"Authorization": f"Bearer {token}"} if token else {}
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=30) as response:
+            return (
+                response.status,
+                response.headers.get("content-type", ""),
+                response.read().decode(),
+            )
+    except urllib.error.HTTPError as error:
+        return (
+            error.code,
+            error.headers.get("content-type", ""),
+            error.read().decode(errors="replace"),
+        )
+
+
+def test_theme_designer_pros_routes_are_reached_ahead_of_open_webuis_own(api):
+    """Its routes sit under /api/v1, where Open-WebUI's own API and its web app's catch-all also
+    answer; plugin_mount has to put them first. A signed-out page gets the theme (the sign-in
+    page is themed), and /static/loader.js carries the bootloader.
+
+    By hand: in a private window, open /api/v1/theme-designer/theme.css: CSS (empty with no
+    theme saved), not Open-WebUI's page or a 401.
+    """
+    status, kind, _ = _get(TDP + "/theme.css")
+    assert (status, kind.split(";")[0]) == (200, "text/css")
+    status, _, body = _get(TDP + "/state.json")
+    assert status == 200 and body.startswith("{")
+    assert "// owui-theme-designer-pro:start" in _get("/static/loader.js")[2]
+
+
+def test_theme_designer_pros_designer_is_for_admins(api, user_api):
+    """Only an admin opens the instance designer; a user is refused by owpp's guard.
+
+    By hand: as a user, open /api/v1/theme-designer: {"detail": "Admins only."}.
+    """
+    status, kind, body = _get(TDP, api.token)
+    assert status == 200 and "<title>Theme Designer Pro</title>" in body
+    assert _get(TDP, user_api.token)[0] == 403
+
+
+def test_theme_designer_pros_save_reaches_a_signed_out_page(api):
+    """A save is served at once to someone not signed in, then Global Reset takes it away.
+
+    By hand: save a theme in the designer; a private window's sign-in page reads it.
+    """
+    status, saved = api("POST", TDP, {"css": ":root { --tdp-live-check: 1; }\n", "state": "{}"})
+    assert status == 200, saved
+    try:
+        assert "--tdp-live-check" in _get(TDP + "/theme.css")[2]
+    finally:
+        api("POST", TDP, {"reset": True})
+    assert _get(TDP + "/theme.css")[2] == ""
+
+
+def test_theme_designer_pros_launcher_and_skill_reach_a_user(user_api):
+    """The function installs the Launcher and the skill with all seven files, and a user who is
+    not an admin can use both (the grant Open-WebUI checks).
+
+    By hand: as a user, Workspace > Tools lists Theme Designer Pro Launcher and Workspace >
+    Skills lists theme-designer-pro.
+    """
+    status, tools = user_api("GET", "/api/v1/tools/")
+    assert status == 200 and "theme_designer_pro_launcher" in {t["id"] for t in tools}
+    status, skills = user_api("GET", "/api/v1/skills/")
+    assert status == 200, skills
+    listed = skills.get("items", skills) if isinstance(skills, dict) else skills
+    assert "theme-designer-pro" in {s["id"] for s in listed}

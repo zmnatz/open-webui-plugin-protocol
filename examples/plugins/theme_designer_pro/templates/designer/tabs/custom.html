@@ -1,0 +1,28 @@
+        <div id="tab-custom" class="tab-content" role="tabpanel" aria-labelledby="tab-btn-custom" style="display:none; height: 100%;">
+            <div class="code-container">
+                <div class="section-title section-title-bar">
+                    <div>Mode-Specific Raw CSS</div>
+                    <div class="flex-center">
+                        <label class="toggle-label" data-tooltip="Toggle custom CSS for this mode"><input type="checkbox" id="toggle-custom-css" class="cb-input"> Enabled</label>
+                        <label class="toggle-label" data-tooltip="Wraps your CSS in mode selectors. Uncheck if your code uses manual mode prefixes."><input type="checkbox" id="toggle-auto-scope" checked class="cb-input"> Auto-Scope</label>
+                        <label class="toggle-label" data-tooltip="Show custom CSS on Login/Signup pages (Default: Visible)"><input type="checkbox" id="toggle-custom-auth" class="cb-input"> Show on Auth Pages</label>
+                        <label class="toggle-label" data-tooltip="Show custom CSS only on Login/Signup pages, not in the app (needs Show on Auth Pages)"><input type="checkbox" id="toggle-custom-authonly" class="cb-input"> Only on Auth Pages</label>
+                    </div>
+                </div>
+
+                <div class="owui-code-block" style="min-height: 300px; max-height: 300px;">
+                    <div class="owui-code-header">
+                        <span class="owui-code-lang">css</span>
+                        <div class="owui-code-actions">
+                            <button class="owui-code-btn" id="save-css-btn" data-tooltip="Save CSS to Gallery" data-action="save-css">Save</button>
+                            <button class="owui-code-btn" id="clear-css-btn" data-tooltip="Clear Custom CSS">Clear</button>
+                            <button class="owui-code-btn copy-css-btn" data-target="custom-css-editor" data-tooltip="Copy CSS to Clipboard">Copy</button>
+                        </div>
+                    </div>
+                    <textarea id="custom-css-editor" spellcheck="false" placeholder="/* Enter raw CSS here.&#10;   Leave 'Auto-Scope' OFF if you are writing global CSS&#10;   or using manual mode prefixes.&#10;   Turn 'Auto-Scope' ON to safely auto-wrap your CSS&#10;   for this specific mode! */&#10;&#10;#sidebar {&#10;  border-right: 2px solid var(--accent);&#10;}"></textarea>
+                </div>
+
+                <div id="gallery-toolbar-css"></div>
+            </div>
+        </div>
+
