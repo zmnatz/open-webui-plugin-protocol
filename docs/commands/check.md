@@ -24,7 +24,8 @@ Each line starts with what it is:
   - a valve with no `description` (the admin UI lists each valve with it),
   - a tool method with no docstring, a parameter with no type hint, or a parameter the docstring does not describe with `:param name:` (Open-WebUI builds the spec the model reads from those). Injected parameters such as `__user__` and `__metadata__` are ignored.
   - a name the plugin defines that is also a library's in its bundle (bundled, the two are one module, so the plugin's replaces the library's),
-  - a `from __future__` line in `shared.py` that `function.py` or `tool.py` lacks, or the other way round (they all move to the top of the bundle, so they apply to every file in it).
+  - a `from __future__` line in `shared.py` that `function.py` or `tool.py` lacks, or the other way round (they all move to the top of the bundle, so they apply to every file in it),
+  - a deprecated `{{file:NAME}}` ([bundling](../bundling.md#filename-deprecated)),
   - a `CHANGELOG.md` with no `## <version>` entry for the function's current version ([versions](version.md#changelogmd)),
   - a `plugin.yaml` with no `protocol:` key ([upgrading](../upgrading.md)).
 

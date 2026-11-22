@@ -560,6 +560,30 @@ class TestStaticAndTemplates:
             "page.html"
         ]
 
+    def test_a_tool_reads_the_templates_when_it_includes_them(self, plugin):
+        """tool.py has no other way to keep a page out of a Python string, now that
+        {{file:NAME}} is deprecated; a tool that does not ask is not given the files."""
+        d = plugin(
+            "function:\n  title: T\ntool:\n  id: t\n  include: [templates]\n",
+            {
+                "function.py": "class Filter:\n    pass\n",
+                "tool.py": (
+                    "from owpp.lib import plugin_template_text\n\n"
+                    'PAGE = plugin_template_text("page.html")\n\nclass Tools:\n    pass\n'
+                ),
+                "templates/page.html": "<p>tool page</p>\n",
+            },
+        )
+        (fn,) = load_function_files(d)
+        tool = embedded(fn.content)["tools"][0]["content"]
+        ns: dict = {"__name__": "tool_t_" + "0" * 32}
+        exec(compile(tool, "tool.py", "exec"), ns)
+        assert ns["PAGE"] == "<p>tool page</p>\n"
+        (d / "viz" / "plugin.yaml").write_text("function:\n  title: T\ntool:\n  id: t\n")
+        (d / "viz" / "tool.py").write_text("class Tools:\n    pass\n")
+        (fn,) = load_function_files(d)
+        assert "tool page" not in embedded(fn.content)["tools"][0]["content"]  # it did not ask
+
     def test_both_folders_can_be_in_one_plugin(self, plugin):
         d = plugin(
             "function:\n  title: T\n", {**self.FN, "static/a.txt": "a", "templates/p.html": "p"}

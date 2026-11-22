@@ -215,7 +215,32 @@ def lint_plugin(path: Path, shown: str) -> list[Finding]:
     for name in SOURCE_FILES:
         if (path / name).exists():
             findings += lint_source(path / name, f"{shown}/{name}")
-    return findings + _shadowed_library_names(path, shown) + _future_imports(path, shown)
+    return (
+        findings
+        + _shadowed_library_names(path, shown)
+        + _future_imports(path, shown)
+        + _file_tokens(path, shown)
+    )
+
+
+def _file_tokens(path: Path, shown: str) -> list[Finding]:
+    """`{{file:NAME}}`, deprecated: text put into the source, where templates/ is Python."""
+    findings = []
+    for name in SOURCE_FILES:
+        if not (path / name).exists():
+            continue
+        for number, line in enumerate(read_text(path / name).splitlines(), 1):
+            for m in re.finditer(r"\{\{file:([A-Za-z0-9_.-]+)\}\}", line):
+                findings.append(
+                    Finding(
+                        f"{shown}/{name}",
+                        number,
+                        f"{{{{file:{m.group(1)}}}}} is deprecated: move {m.group(1)} into "
+                        f'templates/ and read it with plugin_template_text("{m.group(1)}") '
+                        "(a tool adds `include: [templates]` under `tool:`)",
+                    )
+                )
+    return findings
 
 
 def _trees(path: Path) -> dict[str, ast.Module]:

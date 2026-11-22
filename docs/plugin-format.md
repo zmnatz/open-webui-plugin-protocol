@@ -10,7 +10,7 @@ plugins/<id>/
   shared.py        code both use: they `from shared import NAME`, and it is placed in front of each
   skills/<id>/     SKILL.md plus any supporting files, installed as a whole folder
   static/          files served as they are, to signed-in users unless `static:` says otherwise; index.html is the plugin's page
-  templates/       files the function renders itself (a page it fills in); embedded, never served
+  templates/       files the function (or a tool that includes templates) renders itself; embedded, never served
   assets/          loader.js and custom.css: this plugin's fragments of the shared /static files
   config.yaml      structured settings shipped with the plugin; read with plugin_config()
   README.md        required in practice: see "Documentation" in the authoring guide

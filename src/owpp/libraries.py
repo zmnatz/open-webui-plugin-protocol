@@ -218,8 +218,8 @@ def link(
         lib = BY_NAME[lib_name]
         if lib.data_needs and data.get(lib.name) is None:
             raise OwppError(
-                f"{where}: include: {lib.name} needs {HELD[lib.data_needs].replace('`', '')} "
-                "(it applies to the function bundle only)"
+                f"{where}: include: {lib.name} needs {HELD[lib.data_needs].replace('`', '')}"
+                + ("" if lib.name == "templates" else " (it applies to the function bundle only)")
             )
     add = ""
     for lib_name in libs:

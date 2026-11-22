@@ -34,9 +34,9 @@ from shared import PREFIX, _load
 - **No name both in shared.py and in the file.** They become one namespace, so one would replace the other. Importing the same module in both (`import json`) is fine.
 - **`function.py` and `tool.py` cannot import each other.** They are bundled into separate modules. Move what both need into shared.py.
 
-## `{{file:NAME}}`
+## `{{file:NAME}}` (deprecated)
 
-In `function.py` or `tool.py`, `{{file:NAME}}` is replaced by the text of the sibling file `NAME`. Use it to keep an HTML page or large literal out of a Python string. For files served over HTTP prefer a `public/` folder.
+In `function.py` or `tool.py`, `{{file:NAME}}` is replaced by the text of the sibling file `NAME`. It still works, but `owpp check` warns about it: it substitutes text into the source, so the file does not read as the Python that runs. Put the file in `templates/` and read it with `plugin_template_text("NAME")` instead ([templates](libraries.md#templates)); a tool adds `include: [templates]` under `tool:`. Files served over HTTP go in `static/`.
 
 ## Tool bundles carry the runtime too
 

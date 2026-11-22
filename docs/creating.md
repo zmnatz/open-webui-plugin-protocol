@@ -66,7 +66,7 @@ After the name, the wizard asks where the code lives. The answer decides the res
 
 ### Tools
 
-A tool written here gets a `tool.py` with one stub per method name. Each stub has a typed `query: str` parameter, a docstring with a `:param` line, and status events, so `owpp check --strict` passes before you change it. Rename the parameters and describe them for the model. The docstring and the type hints are what the model reads. A method that shows a page returns `embed.html` as an inline `HTMLResponse`, and the bundler puts the file into `tool.py` with `{{file:embed.html}}`. `access: public` lets every signed-in user use the tool. Without it, only admins can.
+A tool written here gets a `tool.py` with one stub per method name. Each stub has a typed `query: str` parameter, a docstring with a `:param` line, and status events, so `owpp check --strict` passes before you change it. Rename the parameters and describe them for the model. The docstring and the type hints are what the model reads. A method that shows a page returns `templates/tool.html`, read with `plugin_template_text()`, as an inline `HTMLResponse`: the tool asks for the templates with `include: [templates]` under `tool:`. `access: public` lets every signed-in user use the tool. Without it, only admins can.
 
 ### Skills
 

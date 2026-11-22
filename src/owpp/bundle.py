@@ -213,6 +213,15 @@ def parse_skill(file: str, text: str) -> tuple[dict, str]:
 # ---- reading files and folders ------------------------------------------------
 
 
+def _tool_data(folder: Path, tool: dict) -> dict:
+    """What the tool's libraries embed: only the templates, and only when it asks for them
+    (`tool.include: [templates]`), so a function's templates are not copied into its tool."""
+    include = tool.get("include")
+    if isinstance(include, list) and "templates" in include:
+        return {"templates": _read_templates(folder)}
+    return {}
+
+
 def _tool_valves(folder: Path, valves: Any) -> dict:
     if valves is None:
         return {}
@@ -246,7 +255,7 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
             # A tool bundle carries the runtime too (below), with just the ids to remove.
             libs = wanted(tool.get("include"), set(), f"{folder.name}/plugin.yaml")
             _check_lib_imports(folder, from_lib, libs, True, "tool.include")
-            content = link(code, tool.get("include"), folder.name)
+            content = link(code, tool.get("include"), folder.name, None, _tool_data(folder, tool))
         tools.append(
             {
                 "id": tool_id,
@@ -362,8 +371,8 @@ def _read_static(folder: Path, manifest: dict) -> dict | None:
 
 
 def _read_templates(folder: Path) -> dict | None:
-    """The plugin's templates/ folder: files embedded in the function bundle and read back with
-    plugin_template_text(). They are never served."""
+    """The plugin's templates/ folder: files embedded in the function bundle (and the tool's, when
+    it includes templates) and read back with plugin_template_text(). They are never served."""
     if not (folder / "templates").exists():
         return None
     files = {f["path"]: omit(f, ["path"]) for f in folder_files(folder / "templates")}
@@ -774,7 +783,7 @@ def library_code(folder: Path | str, name: str = "function") -> str:
     res = _plugin_resources(plugin)
     if name == "tool":
         tool = manifest.get("tool") if isinstance(manifest.get("tool"), dict) else {}
-        code = link(header, tool.get("include"), folder.name)
+        code = link(header, tool.get("include"), folder.name, None, _tool_data(folder, tool))
         ids = {
             "tools": [{"id": t["id"]} for t in res["tools"]],
             "skills": [{"id": k["id"]} for k in res["skills"]],

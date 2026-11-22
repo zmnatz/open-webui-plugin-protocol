@@ -649,7 +649,7 @@ def render_tool(spec: PluginSpec) -> str:
         "",
     ]
     if tool.rich_ui:
-        lines += ['EMBED = r"""{{file:embed.html}}"""  # embed.html, put here when bundled', ""]
+        lines += ['EMBED = plugin_template_text("tool.html")  # templates/tool.html', ""]
     lines += [
         "",
         "class Tools:",
@@ -750,8 +750,13 @@ def render_manifest(spec: PluginSpec) -> str:
             out.append(f"  title: {_yaml(t.title)}")
             if t.description:
                 out.append(f"  description: {_yaml(t.description)}")
-        if t.chat_data:
-            out.append("  include: [chat_data]")
+        tool_include = [
+            n
+            for n, on in (("chat_data", t.chat_data), ("templates", t.rich_ui and not t.file))
+            if on
+        ]
+        if tool_include:
+            out.append(f"  include: [{', '.join(tool_include)}]")
         if t.public:
             out.append(
                 "  access: public # every signed-in user may use it; later UI changes are kept"
@@ -1166,8 +1171,8 @@ def render(spec: PluginSpec, today: str | None = None) -> dict[str, str]:
     if spec.tool and not spec.tool.file:
         files["tool.py"] = render_tool(spec)
         if spec.tool.rich_ui:
-            files["embed.html"] = _PAGE_HTML.replace("__TITLE__", spec.tool.title).format(
-                note="Shown in the chat by the tool. It is put into tool.py when bundled."
+            files["templates/tool.html"] = _PAGE_HTML.replace("__TITLE__", spec.tool.title).format(
+                note="Shown in the chat by the tool, which reads it with plugin_template_text()."
             )
     if not spec.source:
         for s in spec.skills:

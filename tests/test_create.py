@@ -219,7 +219,7 @@ class TestWhatItWrites:
             "id": "full_filter_tool",
             "title": "Lookup",
             "description": "Looks things up.",
-            "include": ["chat_data"],
+            "include": ["chat_data", "templates"],  # templates: its rich UI page
             "access": "public",
         }
         assert m["include"] == ["routes", "chat_data"]

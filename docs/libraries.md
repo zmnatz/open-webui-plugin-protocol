@@ -188,7 +188,7 @@ Added automatically (with `routes`) when the plugin has a `static/` folder. Ever
 Added automatically when the plugin has a `templates/` folder (no manifest key). The files are embedded in the function bundle as JSON, so they can hold any quotes or backslashes, and are **never served**: the function reads one with `plugin_template_text("page.html")` and renders it. There is nothing to declare and nothing to guard, because nothing is reachable until the function chooses to return it from a route it has guarded.
 
 - `plugin_template_text(path)`: a file as text. `plugin_template_bytes(path)`: as bytes (binary files are stored as base64). `plugin_template_files()`: the paths, sorted. A missing path raises `FileNotFoundError`.
-- Function bundle only; a tool bundle does not get them.
+- The function bundle gets them. A tool gets them only when it asks, with `include: [templates]` under `tool:`, so a function's pages are not copied into its tool.
 - Reads come from memory, so a route may call them on every request.
 
 ```python

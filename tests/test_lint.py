@@ -181,6 +181,23 @@ class TestPlugins:
         )
         assert lint_plugin(tmp_path / "p", "p") == []
 
+    def test_a_file_token_is_deprecated(self, tmp_path):
+        """It substitutes text into the source, so the file does not read as the Python that
+        runs; templates/ and plugin_template_text do the same as ordinary Python."""
+        write_tree(
+            tmp_path / "p",
+            {
+                "plugin.yaml": "function:\n  title: T\n",
+                "function.py": 'class Filter:\n    PAGE = r"""{{file:page.html}}"""\n',
+                "page.html": "<p>page</p>\n",
+            },
+        )
+        assert [str(f) for f in lint_plugin(tmp_path / "p", "p")] == [
+            "p/function.py:2: {{file:page.html}} is deprecated: move page.html into templates/ "
+            'and read it with plugin_template_text("page.html") (a tool adds `include: '
+            "[templates]` under `tool:`)"
+        ]
+
     def test_code_taken_from_a_source_is_not_ours_to_lint(self, tmp_path):
         manifest = (
             "source: {git: https://example.com/o/r.git, ref: "
