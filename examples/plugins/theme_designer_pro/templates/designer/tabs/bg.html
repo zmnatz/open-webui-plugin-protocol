@@ -1,0 +1,146 @@
+        <div id="tab-bg" class="tab-content" role="tabpanel" aria-labelledby="tab-btn-bg" style="display:none;">
+            <div class="section-title section-title-bar">
+                <div>Gradient Background</div>
+                <div class="flex-center">
+                    <label class="toggle-label" data-tooltip="Enable gradient background for this mode"><input type="checkbox" id="toggle-gradient-bg" class="cb-input"> Enabled</label>
+                    <label class="toggle-label" data-tooltip="Slowly shift gradient position with a looping animation"><input type="checkbox" id="toggle-gradient-animation" class="cb-input"> Animate</label>
+                    <label class="toggle-label" data-tooltip="Show gradient on Login/Signup pages (Default: Visible)"><input type="checkbox" id="toggle-gradient-auth" checked class="cb-input"> Show on Auth Pages</label>
+                    <label class="toggle-label" data-tooltip="Show gradient only on Login/Signup pages, not in the app (needs Show on Auth Pages)"><input type="checkbox" id="toggle-gradient-authonly" class="cb-input"> Only on Auth Pages</label>
+                </div>
+            </div>
+
+            <div id="gradient-conflict-warning" style="display:none; background: rgba(217, 119, 6, 0.12); border: 1px solid rgba(217, 119, 6, 0.35); border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; font-size: 0.7rem; color: #f59e0b; line-height: 1.5;">
+                ⚠️ <strong>Gradient conflict detected</strong> — Your <em>Custom CSS Snippet</em> contains gradient background rules. Because the Custom CSS Snippet is injected <em>after</em> the Gradient Builder output in the final stylesheet, its <code>background-image</code> declaration will <strong>override</strong> the Gradient Builder's gradient via CSS cascade. To use the Gradient Builder's output, remove or disable the conflicting gradient rules in your <strong>Custom CSS Snippet</strong> on the <strong>Style Overrides</strong> tab.
+            </div>
+
+            <div class="control-group" id="gradient-controls-group">
+                <div style="margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                        <div class="sub-label">Gradient Type</div>
+                    </div>
+                    <div class="gradient-type-pills" id="gradient-type-pills" role="group" aria-label="Gradient type">
+                        <button class="gradient-type-pill active" data-gtype="linear" aria-pressed="true">Linear</button>
+                        <button class="gradient-type-pill" data-gtype="radial" aria-pressed="false">Radial</button>
+                        <button class="gradient-type-pill" data-gtype="mesh" aria-pressed="false">Mesh</button>
+
+                    </div>
+                </div>
+
+                <div id="gradient-radial-controls" style="display:none; margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--border);">
+                    <div class="sub-label-mb">Radial Settings</div>
+                    <div style="display: flex; gap: 16px; align-items: flex-start;">
+                        <div style="display: flex; flex-direction: column; align-items: center; flex-shrink: 0;">
+                            <div class="radial-xy-pad" id="radial-xy-pad" data-tooltip="Drag to set gradient center. Double-click to reset." role="application" aria-label="Gradient center position" tabindex="0">
+                                <div class="radial-xy-dot" id="radial-xy-dot" style="left:50%;top:50%;"></div>
+                            </div>
+                            <div class="radial-xy-label" id="radial-xy-label">50%, 50%</div>
+                        </div>
+                        <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                            <div>
+                                <div style="font-size: 0.6rem; color: var(--text-muted); font-weight: 700; margin-bottom: 6px;">Shape</div>
+                                <div class="radial-shape-pills" id="radial-shape-pills" role="group" aria-label="Radial shape">
+                                    <button class="radial-shape-pill active" data-shape="ellipse" aria-pressed="true">Ellipse</button>
+                                    <button class="radial-shape-pill" data-shape="circle" aria-pressed="false">Circle</button>
+                                </div>
+                            </div>
+                            <div>
+                                <div style="font-size: 0.6rem; color: var(--text-muted); font-weight: 700; margin-bottom: 6px;">Size</div>
+                                <div class="radial-size-pills" id="radial-size-pills" role="group" aria-label="Radial size">
+                                    <button class="radial-size-pill active" data-size="farthest-corner" data-tooltip="Extends to farthest corner" aria-pressed="true">Farthest Corner</button>
+                                    <button class="radial-size-pill" data-size="closest-side" data-tooltip="Extends to closest side" aria-pressed="false">Closest Side</button>
+                                    <button class="radial-size-pill" data-size="farthest-side" data-tooltip="Extends to farthest side" aria-pressed="false">Farthest Side</button>
+                                    <button class="radial-size-pill" data-size="closest-corner" data-tooltip="Extends to closest corner" aria-pressed="false">Closest Corner</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="gradient-mesh-controls" style="display:none; margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--border);">
+                    <div class="sub-label-mb">Mesh Editor</div>
+                    <div class="mesh-editor-pad" id="mesh-editor-pad" role="application" aria-label="Mesh gradient editor. Click to add points, drag to move, double-click to remove." tabindex="0"></div>
+                    <div class="mesh-hint" id="mesh-hint">Click to add · Drag to move · Double-click to remove</div>
+                    <div id="mesh-stops-section" style="margin-top: 14px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div class="sub-label">Color Stops</div>
+                            <div style="font-size: 0.6rem; color: var(--text-muted);" id="mesh-stop-count">0/16 points</div>
+                        </div>
+                        <div class="mesh-stops-list" id="mesh-stops-list"></div>
+                        <button class="gradient-add-stop" id="mesh-add-stop-btn" data-action="add-mesh-stop" style="margin-top:8px;">
+                            <i data-icon="plus"></i>
+                            Add Color Stop
+                        </button>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:10px; margin-top:12px;">
+                        <div style="font-size:0.6rem; color:var(--text-muted); font-weight:700;">Base Color</div>
+                        <div class="gradient-stop-swatch" id="mesh-bg-swatch" style="width:24px;height:24px;"><input type="color" id="mesh-bg-color" value="#0a0a12" aria-label="Mesh base color"></div>
+                        <div style="flex:1;"></div>
+                    </div>
+                </div>
+
+                <div id="gradient-preview-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+                    <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 10px;">Preview</div>
+                    <div class="gradient-preview-bar empty" id="gradient-preview-bar"></div>
+                </div>
+
+                <div id="gradient-stops-section" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                        <div class="sub-label">Color Stops</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);" id="gradient-stop-count">0/16 stops</div>
+                    </div>
+                    <div class="gradient-stops-list" id="gradient-stops-list"></div>
+                    <button class="gradient-add-stop" id="gradient-add-stop-btn" data-action="add-gradient-stop">
+                        <i data-icon="plus"></i>
+                        Add Color Stop
+                    </button>
+                </div>
+
+                <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
+                    <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px;">Controls</div>
+                    <div id="gradient-controls-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                        <div class="slider-row" id="gradient-angle-row">
+                            <label data-reset="gradient-angle"><span data-tooltip="Double-click to reset to 135°" style="cursor:pointer">Gradient Direction</span> <span class="slider-val" id="val-gradient-angle">135°</span></label>
+                            <input type="range" id="sl-gradient-angle" min="0" max="360" value="135" aria-label="Gradient direction">
+                        </div>
+                        <div class="slider-row">
+                            <label data-reset="gradient-intensity"><span data-tooltip="Double-click to reset to 85%" style="cursor:pointer">Color Intensity</span> <span class="slider-val" id="val-gradient-intensity">85%</span></label>
+                            <input type="range" id="sl-gradient-intensity" min="0" max="100" value="85" aria-label="Color intensity">
+                        </div>
+                    </div>
+                    <div id="gradient-speed-row-wrapper">
+                        <div class="slider-row" id="gradient-speed-row" style="margin-top: 10px; display: none;">
+                            <label data-reset="gradient-speed"><span data-tooltip="Double-click to reset to 8s" style="cursor:pointer">Animation Speed</span> <span class="slider-val" id="val-gradient-speed">8s</span></label>
+                            <input type="range" id="sl-gradient-speed" min="2" max="30" value="8" aria-label="Animation speed">
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border);">
+                    <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: 800; text-transform: uppercase; letter-spacing: 2px; margin-bottom: 14px;">Quick Actions</div>
+                    <div style="display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px;">
+                        <button class="btn btn-sm" data-action="reverse-gradient" data-tooltip="Reverse stop order (flip gradient)" id="gradient-reverse-btn" style="grid-column: span 2;">⇄ Reverse</button>
+                        <button class="btn btn-sm" data-action="distribute-gradient" data-tooltip="Space stops evenly across 0–100%" id="gradient-distribute-btn" style="grid-column: span 2;">⫶ Distribute</button>
+                        <button class="btn btn-sm" data-action="random-gradient" data-tooltip="Generate a random gradient" style="grid-column: span 2;">✦ Random</button>
+                        <button class="btn btn-sm" data-action="reset-gradient" data-tooltip="Clear all gradient stops" style="grid-column: span 3;">⟲ Reset</button>
+                        <button class="btn btn-sm" id="gradient-transfer-btn" data-tooltip="Copy current colors to other gradient types" data-action="toggle-transfer" style="grid-column: span 3;">⇌ Transfer Colors</button>
+                    </div>
+                    <div id="gradient-transfer-panel" style="display:none; margin-top: 12px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--bg-deep);">
+                        <div style="font-size: 0.65rem; font-weight: 700; color: var(--text-main); margin-bottom: 10px;">Transfer colors from <span id="transfer-source-label" style="color: var(--accent); font-weight:800;"></span> to:</div>
+                        <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom: 12px;" id="transfer-targets">
+                            <label id="transfer-target-linear" class="toggle-label-gap5"><input type="checkbox" class="cb-input" value="linear"> Linear</label>
+                            <label id="transfer-target-radial" class="toggle-label-gap5"><input type="checkbox" class="cb-input" value="radial"> Radial</label>
+                            <label id="transfer-target-mesh" class="toggle-label-gap5"><input type="checkbox" class="cb-input" value="mesh"> Mesh</label>
+                        </div>
+                        <div style="display:flex; gap:8px; justify-content:flex-end;">
+                            <button class="btn" style="font-size:0.62rem; padding:6px 14px;" data-action="toggle-transfer">Cancel</button>
+                            <button class="btn" style="font-size:0.62rem; padding:6px 14px; background:var(--accent-fill) !important; color:white !important; border:none;" data-action="execute-transfer">Transfer</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="margin-top: 24px;">
+                <div id="gallery-toolbar-gradient"></div>
+            </div>
+        </div>
+

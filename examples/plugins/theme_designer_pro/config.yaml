@@ -1,0 +1,15 @@
+# What one Open-WebUI worker holds for Theme Designer Pro's live updates, and how often one user
+# may ask the AI Consultant. The defaults are the original's; each value can be set from the
+# Open-WebUI container's environment, which is read when the function loads.
+
+# Live-update streams one worker keeps open. The stream is open to signed-out pages too (the
+# sign-in page is themed), so this bounds what anyone can make a worker hold. Past it, a page
+# is told to retry in a minute, and still refetches the theme when it is shown.
+sse_max_clients: ${TDP_SSE_MAX_CLIENTS:-8192}
+
+# Seconds between keep-alives on every stream. 15 keeps Cloudflare's proxy, and most others,
+# from closing an idle stream; lower it behind a proxy with a shorter idle timeout.
+sse_heartbeat_seconds: ${TDP_SSE_HEARTBEAT_SECONDS:-15}
+
+# Seconds between one user's AI Consultant requests, across every worker (with Redis).
+consult_interval_seconds: ${TDP_CONSULT_INTERVAL_SECONDS:-3}

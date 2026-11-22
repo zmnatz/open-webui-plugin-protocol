@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Theme Designer Pro</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: transparent;
+            overflow: hidden;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: flex-end;
+            padding: 6px 8px;
+        }
+
+        .popout {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-size: 11px;
+            color: #71717a;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 6px;
+            transition: color 0.2s;
+        }
+        .popout:hover {
+            color: #d4d4d8;
+        }
+
+        .frame-container {
+            width: 100%;
+            height: __HEIGHT__px;
+            overflow: hidden;
+            border-radius: 12px;
+        }
+
+        .notice {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #a1a1aa;
+            padding: 12px 14px;
+            border: 1px solid #27272a;
+            border-radius: 12px;
+        }
+
+        .designer-frame {
+            width: __INNER_WIDTH__%;
+            height: __INNER_HEIGHT__px;
+            border: none;
+            display: block;
+            background: #09090b;
+            transform: scale(__SCALE__);
+            transform-origin: 0 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <a href="__POPOUT_URL__" target="_blank" rel="noopener" class="popout">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+            Pop out
+        </a>
+    </div>
+    <div class="notice" id="tdp-sandbox-notice" hidden>
+        To open the designer here, turn on <b>Settings &gt; Interface &gt; iframe Sandbox Allow Same Origin</b>,
+        then ask again. You can also use <b>Pop out</b> above.
+    </div>
+    <div class="frame-container" id="tdp-frame">
+        <iframe
+            src="__FRAME_URL__"
+            class="designer-frame"
+            allow="clipboard-read; clipboard-write"
+        ></iframe>
+    </div>
+    <script>
+        // Without that setting, this frame has no origin, so the browser
+        // sends the designer no sign-in and it could only show an error.
+        if (window.origin === 'null') {
+            document.getElementById('tdp-frame').remove();
+            document.getElementById('tdp-sandbox-notice').hidden = false;
+        }
+    </script>
+</body>
+</html>

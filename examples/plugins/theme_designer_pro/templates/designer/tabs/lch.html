@@ -1,0 +1,80 @@
+        <div id="tab-lch" class="tab-content" role="tabpanel" aria-labelledby="tab-btn-lch" style="display:none;">
+            <div class="section-title" style="display: flex; justify-content: space-between; align-items: center;">
+                <div>Core Palette</div>
+                <div class="flex-center">
+                    <label class="toggle-label" data-tooltip="Enable or disable the generated color palette for this mode"><input type="checkbox" id="toggle-palette-enabled" class="cb-input"> Enabled</label>
+                    <label class="toggle-label" data-tooltip="Show theme colors on Login/Signup pages (Default: Visible)"><input type="checkbox" id="toggle-theme-auth" class="cb-input"> Show on Auth Pages</label>
+                    <label class="toggle-label" data-tooltip="Show theme colors only on Login/Signup pages, not in the app (needs Show on Auth Pages)"><input type="checkbox" id="toggle-theme-authonly" class="cb-input"> Only on Auth Pages</label>
+                </div>
+            </div>
+            <div class="control-group">
+                <div class="color-row">
+                    <div class="color-preview" id="prev-main"></div>
+                    <div style="flex:1">
+                        <div class="slider-row">
+                            <label data-reset="h"><span data-tooltip="Double-click to reset" style="cursor:pointer">Hue</span> <span class="slider-val" id="val-h">250°</span></label>
+                            <input type="range" id="sl-h" min="0" max="360" value="250" aria-label="Hue">
+                        </div>
+                    </div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                    <div class="slider-row">
+                        <label data-reset="c"><span data-tooltip="Double-click to reset" style="cursor:pointer">Chroma</span> <span class="slider-val" id="val-c">0.00</span></label>
+                        <input type="range" id="sl-c" min="0" max="150" value="0" aria-label="Chroma">
+                    </div>
+                    <div class="slider-row">
+                        <label data-reset="l"><span data-tooltip="Double-click to reset" style="cursor:pointer">Lightness</span> <span class="slider-val" id="val-l">20%</span></label>
+                        <input type="range" id="sl-l" min="0" max="100" value="20" aria-label="Lightness">
+                    </div>
+                </div>
+                <div class="slider-row accent-row">
+                    <label data-reset="accents"><span data-tooltip="Double-click to reset all three to automatic" style="cursor:pointer">Accent Colors</span> <span class="slider-val" id="val-accents" data-tooltip="Canvas FX scripts that follow the theme draw in these, and theme CSS reads them as var(--tdp-accent), var(--tdp-accent-2) and var(--tdp-accent-3)">Auto</span></label>
+                    <div class="var-grid accent-grid" id="accent-grid"></div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 16px; justify-content: flex-end;">
+                    <button class="btn" id="random-btn" data-tooltip="Generate random base colors" style="font-size: 0.62rem; padding: 8px 14px;">✦ Randomize</button>
+                    <button class="btn" id="extract-btn" data-tooltip="Paste or upload an image to extract palette" style="font-size: 0.62rem; padding: 8px 14px;">◎ Extract</button>
+                </div>
+            </div>
+
+            <div class="section-title" style="margin-top: 32px;">OKLCH Tonal Ramp</div>
+            <div id="ramp-gray" style="display: flex; height: 52px; margin-top: 10px; gap: 6px; margin-bottom: 16px;"></div>
+
+            <div class="section-title" style="margin-top: 20px;">Accessibility Contrast</div>
+            <!-- Deliberately NOT aria-live: this repaints on every colour-picker
+                 drag frame, so a live region would flood a screen reader with the
+                 whole report dozens of times a second. It is a labelled region
+                 instead, read on demand. -->
+            <div id="contrast-report" class="contrast-report" role="region" aria-label="Accessibility contrast report"></div>
+
+            <div class="section-title" style="align-items: center; margin-bottom: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px;">
+                <div>Individual Variable Overrides</div>
+                <div style="display:flex; gap:8px; flex-wrap: wrap; margin-left:auto;">
+                    <button class="var-action-btn var-action-static" id="lock-all-btn" data-tooltip="Lock All Variables" aria-label="Lock all variables"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:-1px; margin-right:2px;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>Lock All</button>
+                    <button class="var-action-btn var-action-static" id="unlock-all-btn" data-tooltip="Unlock All Variables" aria-label="Unlock all variables"><svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align:-1px; margin-right:2px;"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0" fill="none" stroke="currentColor" stroke-width="2.5"/></svg>Unlock All</button>
+                    <button class="var-action-btn var-action-static" id="reset-all-btn" data-tooltip="Reset Unlocked Overrides to Default" aria-label="Reset all unlocked overrides to default">⟲ Reset All</button>
+                </div>
+            </div>
+
+            <div class="var-scroll">
+                <div class="var-grid" id="variable-grid"></div>
+            </div>
+
+            <div class="section-title" style="margin-top: 28px; align-items: center; display: flex; justify-content: space-between;">
+                <div>Manual Variable Overrides</div>
+                <div class="flex-center">
+                    <label class="toggle-label" data-tooltip="Enable manual variable overrides for this mode"><input type="checkbox" id="toggle-manual-overrides" class="cb-input"> Enabled</label>
+                </div>
+            </div>
+            <div class="owui-code-block" style="min-height: 180px; max-height: 340px;">
+                <div class="owui-code-header">
+                    <span class="owui-code-lang">css variables</span>
+                    <div class="owui-code-actions">
+                        <button class="owui-code-btn" id="clear-manual-overrides-btn" data-tooltip="Clear Manual Overrides">Clear</button>
+                        <button class="owui-code-btn copy-css-btn" data-target="manual-overrides-editor" data-tooltip="Copy Overrides to Clipboard">Copy</button>
+                    </div>
+                </div>
+                <textarea id="manual-overrides-editor" spellcheck="false" style="min-height: 140px;" placeholder="/* Define raw CSS variable overrides here.&#10;   These are injected after the theme palette,&#10;   giving them final priority.&#10;   Use standard --variable-name: value; syntax.&#10;   One variable per line. */&#10;&#10;--color-gray-900: #1a1a2e;&#10;--color-gray-950: #0f0f1a;&#10;--color-gray-50: #e8e8f0;"></textarea>
+            </div>
+        </div>
+
