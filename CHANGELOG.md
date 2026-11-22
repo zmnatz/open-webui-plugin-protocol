@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Protocol 0.5: a plugin's files import what they use, and the bundler refuses one that does not. `owpp migrate` writes the imports into a 0.3 plugin ([upgrading](docs/upgrading.md#04-05)).
+- Protocol 0.5: a plugin's files import what they use, and the bundler refuses one that does not. `owpp migrate` writes the imports into a 0.3 plugin; a plugin taking 0.3-style code from git is refused until `owpp pull` moves it to a migrated commit ([upgrading](docs/upgrading.md#04-05)).
 - A plugin's files are ordinary Python: each imports what it uses, including its shared code (`from shared import NAME`) and the libraries (`from owpp.lib import PluginAdmin, plugin_mount`), so it reads, lints and type-checks on its own. The bundler removes those imports, says which library a name needs in `include:`, and refuses the forms that would break once bundled ([bundling](docs/bundling.md#imports-between-the-files)).
 - `owpp create` writes plugins that import the library names they use.
 - `{{file:NAME}}` is deprecated, and `owpp check` warns about it: use `templates/` and `plugin_template_text()`. A tool can now read the templates too, with `include: [templates]` under `tool:`; `owpp create` writes a rich-UI tool that way.
