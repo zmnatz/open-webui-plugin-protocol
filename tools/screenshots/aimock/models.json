@@ -109,6 +109,36 @@
     },
     {
       "match": {
+        "model": "screenshot-model",
+        "toolName": "create_theme",
+        "toolResultContains": "A card in the chat shows it"
+      },
+      "response": {
+        "content": "Here is Teal Lagoon: deep teal water under frosted glass. Press Apply on the card to put it on."
+      }
+    },
+    {
+      "match": {
+        "model": "screenshot-model",
+        "toolName": "create_theme"
+      },
+      "response": {
+        "toolCalls": [
+          {
+            "name": "create_theme",
+            "arguments": {
+              "name": "Teal Lagoon",
+              "hue": 195,
+              "chroma": 22,
+              "description": "Deep teal water under frosted glass.",
+              "gradient_colors": "#03161a,#0b3a40,#062328"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "match": {
         "model": "screenshot-model"
       },
       "response": {
