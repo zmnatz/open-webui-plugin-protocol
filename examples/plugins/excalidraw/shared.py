@@ -1,17 +1,11 @@
-# Shared by the function and the tool: imports, constants, the scene store, tokens and
-# element helpers.
+# Shared by the function and the tool: constants, the scene store, tokens and element helpers.
 
 import json
 import logging
 import re
 import secrets
 import time
-from typing import Any, Callable, Dict, List, Optional
-from urllib.parse import quote
-
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel, Field
+from typing import Any, Callable, List, Optional
 
 log = logging.getLogger(__name__)
 
