@@ -516,6 +516,8 @@ def env_references(folder: Path | str) -> list[tuple[str, str | None]]:
 # The library mixins that are PluginEvents classes themselves.
 _EVENT_BASES = {"PluginEvents", "PluginAssets", "PluginScheduledSync"}
 _MOUNTERS = {"include_router", "add_api_route", "add_route", "add_api_websocket_route", "mount"}
+# What changes a list in place: on app.routes it adds or removes routes past the guard.
+_LIST_CHANGES = {"insert", "append", "extend", "remove", "pop", "clear", "sort", "reverse"}
 
 
 def _refuse_direct_mounts(folder: Path, code: str) -> None:
@@ -533,6 +535,13 @@ def _refuse_direct_mounts(folder: Path, code: str) -> None:
             return node.attr == "app" or (node.attr == "router" and on_app(node.value))
         return False
 
+    def route_list(node: ast.AST) -> bool:
+        """`<app>.routes` or `<app>.router.routes`, or a subscript of it (`app.routes[:]`)."""
+        if isinstance(node, ast.Subscript):
+            node = node.value
+        return isinstance(node, ast.Attribute) and node.attr == "routes" and on_app(node.value)
+
+    found: list[tuple[int, str]] = []
     for node in ast.walk(tree):
         if (
             isinstance(node, ast.Call)
@@ -540,11 +549,42 @@ def _refuse_direct_mounts(folder: Path, code: str) -> None:
             and node.func.attr in _MOUNTERS
             and on_app(node.func.value)
         ):
-            raise OwppError(
-                f"{folder}: line {node.lineno}: `.{node.func.attr}()` on the app adds a route that "
-                "skips the sign-in check; mount routes with plugin_mount(), which requires a "
-                "signed-in user on every route"
+            found.append(
+                (
+                    node.lineno,
+                    f"`.{node.func.attr}()` on the app adds a route that skips the sign-in check",
+                )
             )
+        change = None
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in _LIST_CHANGES
+            and route_list(node.func.value)
+        ):
+            change = f"`{ast.unparse(node.func)}()`"
+        elif isinstance(node, ast.Delete) and any(route_list(t) for t in node.targets):
+            change = f"`{ast.unparse(node)}`"
+        elif isinstance(node, (ast.Assign, ast.AugAssign, ast.AnnAssign)):
+            targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+            hit = next((t for t in targets if route_list(t)), None)
+            if hit is not None:
+                op = "+=" if isinstance(node, ast.AugAssign) else "="
+                change = f"`{ast.unparse(hit)} {op} ...`"
+        if change:
+            found.append(
+                (
+                    node.lineno,
+                    f"{change} changes the app's route list directly, which adds routes that skip "
+                    "the sign-in check (or removes Open-WebUI's own)",
+                )
+            )
+    if found:
+        line, what = min(found)
+        raise OwppError(
+            f"{folder}: line {line}: {what}; mount routes with plugin_mount(), which requires a "
+            "signed-in user on every route"
+        )
 
 
 def _is_on_decorator(node: ast.expr) -> bool:

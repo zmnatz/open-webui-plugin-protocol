@@ -21,6 +21,7 @@ The runtime and libraries are copied into every bundle, so a new owpp changes th
 
 - **Nothing to migrate.** Manifests stay `protocol: "0.5"`: 0.6 adds a key and takes none away, and the bundles a deploy writes are the same as 0.5.0's unless a plugin uses the new key.
 - **`tool: templates:`** lists the files of `templates/` a tool embeds (`[launcher/]`); without it a tool that includes templates still embeds them all ([plugin format](plugin-format.md#tool)).
+- **From 0.6.1, a plugin that edits `app.routes` is refused** (`app.routes.insert(...)`, `app.routes[:] = ...`, `del app.routes[0]`, ...): it added routes past the sign-in guard. `owpp check` names the line; mount those routes with `plugin_mount` instead ([libraries](libraries.md#routes)). And `asset_vars()` values are filled in one pass, so a value holding another placeholder's text is served as written.
 - **Plugin tests:** `owui.emit` also takes the subject itself, for events about users and models, and the mock has `decode_token` and the chat pipeline a plugin calls to ask a model (`owui.model_reply`, `owui.completions`). A test that patched those stand-ins still works; it can use the mock's instead ([the mock](testing/mock.md)).
 
 ## 0.4 -> 0.5

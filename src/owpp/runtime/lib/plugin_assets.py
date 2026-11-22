@@ -6,6 +6,7 @@
 # which the bundler adds.
 
 import json as _json
+import re as _asset_re
 from typing import TYPE_CHECKING as _TYPE_CHECKING
 
 from .plugin_events import PluginEvents, on
@@ -38,8 +39,14 @@ def _asset_render(name: str) -> str:
     if cached and cached[0] == key:
         return cached[1]
     text = _ASSETS["files"][name]
-    for variable, value in key:
-        text = text.replace(f"__{variable}__", value)
+    if key:
+        # One pass over the file: a value is never read again, so one that holds another
+        # placeholder's text (a valve someone typed) is served as written. Longest names first,
+        # so no name matches inside a longer one.
+        values = dict(key)
+        names = sorted(values, key=len, reverse=True)
+        pattern = _asset_re.compile("|".join(_asset_re.escape(f"__{n}__") for n in names))
+        text = pattern.sub(lambda m: values[m.group()[2:-2]], text)
     if name == "loader.js" and _ASSETS["wrap"]:
         # The protocol's rule: one plugin's names and errors must not stop the others in the shared
         # file, so the script runs in its own function scope, in strict mode, inside a try/catch.

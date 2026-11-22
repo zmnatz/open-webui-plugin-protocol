@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed: the `assets` library fills `asset_vars()` placeholders in one pass, so a value that holds another placeholder's text (a valve someone typed) is served as written instead of being filled again ([#69](https://github.com/zmnatz/open-webui-plugin-protocol/issues/69), [libraries](docs/libraries.md#assets)).
+- Fixed: `owpp check` and the bundler refuse a function that changes the app's route list itself (`app.routes.insert(...)`, `app.routes[:] = ...`, `del app.routes[0]`, ...), which added routes past the sign-in guard as surely as `include_router` ([#68](https://github.com/zmnatz/open-webui-plugin-protocol/issues/68), [libraries](docs/libraries.md#routes)).
 - Docs: Theme Designer Pro is in the Examples menu, and the docs build fails on an example the menu leaves out.
 
 ## 0.6.0 (2026-11-22)
