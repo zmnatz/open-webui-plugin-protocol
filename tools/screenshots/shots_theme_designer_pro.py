@@ -1,48 +1,34 @@
-"""Theme Designer Pro on a real Open-WebUI: the designer, a chat before and after a theme, a
-user's own designer, the Admin Panel page, and a theme the Launcher built in a chat."""
+"""Theme Designer Pro on a real Open-WebUI: an admin makes a theme in the designer and a chat
+wears it, a user's own designer, the Admin Panel page, and a theme the Launcher built in a chat.
+
+The admin and the user sign in once for the whole module: Open-WebUI limits how often one
+account may sign in, and these steps need many pages."""
 
 from __future__ import annotations
 
 import time
 
 import pytest
-from conftest import URL
+from conftest import URL, sign_in
 
 ID = "theme_designer_pro"
 BASE = "/api/v1/theme-designer"
 MODEL = "theme-assistant"
 ASK = "Make my chat a deep teal lagoon."
 
-# A teal palette in Open-WebUI's own grey steps, as the designer writes them for dark mode.
-STEPS = {
-    50: 0.98,
-    100: 0.94,
-    200: 0.88,
-    300: 0.8,
-    400: 0.7,
-    500: 0.58,
-    600: 0.47,
-    700: 0.38,
-    800: 0.3,
-    850: 0.26,
-    900: 0.22,
-    950: 0.17,
-}
-TEAL = (
-    ":root, .dark {\n"
-    + "".join(
-        f"  --color-gray-{step}: oklch({lightness} {0.02 + 0.03 * (1 - abs(lightness - 0.5))} 195);\n"
-        for step, lightness in STEPS.items()
-    )
-    + "}\n"
-)
-TEAL_STATE = '{"dark": {"h": 195, "c": 22, "l": 17, "themeShowAuth": false}}'
+
+@pytest.fixture(scope="module")
+def admin_page(browser, admin_account):
+    page = sign_in(browser, admin_account)
+    yield page
+    page.context.close()
 
 
-def save_theme(api, css: str | None) -> None:
-    """The instance theme, as the designer's Live mode saves it (None: Global Reset)."""
-    body = {"reset": True} if css is None else {"css": css, "state": TEAL_STATE}
-    api("POST", BASE, body)
+@pytest.fixture(scope="module")
+def user_page(browser, user_account):
+    page = sign_in(browser, user_account)
+    yield page
+    page.context.close()
 
 
 def switch(api, on: bool) -> None:
@@ -52,9 +38,14 @@ def switch(api, on: bool) -> None:
         api("POST", f"/api/v1/functions/id/{ID}/toggle")
 
 
+def restore(api, valves: dict) -> None:
+    api("POST", f"/api/v1/functions/id/{ID}/valves/update", valves)
+
+
 @pytest.fixture(scope="module")
 def chat(api):
-    """An existing chat to open, so the theme is seen around a conversation."""
+    """An existing chat to open, with no theme saved yet; the theme is reset afterwards."""
+    api("POST", BASE, {"reset": True})
     now = int(time.time())
     messages = {
         "u1": {
@@ -89,139 +80,18 @@ def chat(api):
         },
     )
     yield created[0]["id"]
-    save_theme(api, None)
+    api("POST", BASE, {"reset": True})
 
 
 def open_chat(page, chat_id: str, themed: bool) -> None:
+    """The chat in Open-WebUI's dark mode, where a palette shows best."""
     page.goto(f"{URL}/c/{chat_id}")
+    page.evaluate("localStorage.setItem('theme', 'dark')")
+    page.reload()
     page.get_by_text("Saturday: Alfama").wait_for(timeout=30_000)
     if themed:
         page.locator("#owui-dev-live-theme").wait_for(state="attached", timeout=30_000)
     page.wait_for_timeout(1500)
-
-
-def test_a_chat_before_and_after_a_theme(admin, api, shot, chat):
-    """By hand: with the function off, open a chat: Open-WebUI's own look. Turn it on, save a
-    theme in the designer, and open the chat again: it wears the theme."""
-    switch(api, False)
-    try:
-        open_chat(admin, chat, themed=False)
-        shot(
-            admin,
-            "theme_designer_pro",
-            "chat-before",
-            "Before: the function off, a chat in Open-WebUI's own dark theme.",
-        )
-    finally:
-        switch(api, True)
-    save_theme(api, TEAL)
-    open_chat(admin, chat, themed=True)
-    shot(
-        admin,
-        "theme_designer_pro",
-        "chat-after",
-        "After: the function on and a teal theme saved; every page, this chat included, wears it "
-        "from its first paint.",
-        illustrates=[
-            "test_an_admin_saves_the_theme_and_every_page_gets_it",
-            "test_the_first_paint_stylesheet_carries_the_theme_colours",
-            "test_the_bootloader_is_on_every_page",
-        ],
-    )
-
-
-def test_the_designer_opens_for_an_admin(admin, shot):
-    """By hand: as an admin, open /api/v1/theme-designer. The designer opens on its Themes tab."""
-    admin.goto(f"{URL}{BASE}")
-    admin.locator("#theme-designer-container").wait_for(timeout=30_000)
-    admin.wait_for_timeout(2000)
-    shot(
-        admin,
-        "theme_designer_pro",
-        "designer",
-        "The designer, at its own URL: palette, custom CSS, Canvas FX, gradient, surfaces and "
-        "backgrounds tabs. Its page is templates/designer/, put together from thirty files.",
-        illustrates=[
-            "test_an_admin_opens_the_designer_on_the_instance_theme",
-            "test_the_page_is_its_files_put_together",
-        ],
-    )
-
-
-def test_the_palette_tab(admin, shot):
-    """By hand: in the designer, open the Palette tab: the OKLCH sliders and the colour ramp."""
-    admin.goto(f"{URL}{BASE}")
-    admin.locator("#tab-btn-lch").click()
-    admin.locator("#tab-lch").wait_for(timeout=30_000)
-    admin.wait_for_timeout(1000)
-    shot(
-        admin,
-        "theme_designer_pro",
-        "palette",
-        "The Palette tab: hue, chroma and lightness, and the ramp they make.",
-        illustrates=["test_each_valve_reaches_the_designer"],
-    )
-
-
-def test_a_user_designs_their_own_theme(user, api, shot):
-    """By hand: turn on Allow Personal Themes. As a user, open /api/v1/theme-designer?scope=me:
-    the designer edits your own theme, which only you see."""
-    before = api.valves(ID, allow_personal_themes=True)
-    try:
-        user.goto(f"{URL}{BASE}?scope=me")
-        user.locator("html[data-tdp-scope=me] #theme-designer-container").wait_for(timeout=30_000)
-        user.wait_for_timeout(2000)
-        shot(
-            user,
-            "theme_designer_pro",
-            "personal-designer",
-            "With Allow Personal Themes on, a user's own designer: the instance-only controls are "
-            "gone, and saves change only their theme.",
-            illustrates=[
-                "test_with_personal_themes_on_a_user_designs_their_own_theme",
-                "test_a_personal_theme_reaches_only_its_owner",
-            ],
-        )
-    finally:
-        api("POST", f"/api/v1/functions/id/{ID}/valves/update", before)
-
-
-def test_personal_themes_off_says_so(user, shot):
-    """By hand: with Allow Personal Themes off, a user opens /api/v1/theme-designer?scope=me: a
-    sentence says personal themes are off."""
-    user.goto(f"{URL}{BASE}?scope=me")
-    user.get_by_text("Personal themes are turned off on this instance.").wait_for(timeout=30_000)
-    shot(
-        user,
-        "theme_designer_pro",
-        "personal-off",
-        "Personal themes off (the default): a user's designer link answers with a sentence.",
-        illustrates=["test_with_personal_themes_off_a_user_gets_a_sentence_not_the_designer"],
-    )
-
-
-def test_the_admin_panel_has_a_themes_page(admin, api, shot):
-    """By hand: turn on Show In Admin Panel and open the Admin Panel: a Themes page sits between
-    Functions and Settings, with the designer in it."""
-    before = api.valves(ID, show_in_admin_panel=True)
-    try:
-        admin.goto(f"{URL}/admin/functions")
-        admin.get_by_role("link", name="Themes").or_(
-            admin.get_by_text("Themes", exact=True)
-        ).first.click()
-        admin.frame_locator("iframe").first.locator("#theme-designer-container").wait_for(
-            timeout=30_000
-        )
-        admin.wait_for_timeout(2000)
-        shot(
-            admin,
-            "theme_designer_pro",
-            "admin-panel-page",
-            "Show In Admin Panel on: a Themes page in the Admin Panel's top bar.",
-            illustrates=["test_the_themes_tab_and_page_follow_their_valves"],
-        )
-    finally:
-        api("POST", f"/api/v1/functions/id/{ID}/valves/update", before)
 
 
 def test_signed_out_the_designer_sends_you_to_sign_in(signed_out, shot):
@@ -237,6 +107,134 @@ def test_signed_out_the_designer_sends_you_to_sign_in(signed_out, shot):
         "Signed out, owpp's guard sends the designer's visitor to Open-WebUI's sign-in page.",
         illustrates=["test_someone_signed_out_is_sent_to_sign_in_first"],
     )
+
+
+def test_an_admin_makes_a_theme_and_a_chat_wears_it(admin_page, api, shot, chat):
+    """By hand: with the function off, open a chat in dark mode: Open-WebUI's own look. Turn it
+    on, open the designer, pick Dark, and on the Core Palette tab move Hue to 185 and Chroma to
+    60: it saves at once (Live mode). Open the chat again: it wears the theme."""
+    page = admin_page
+    switch(api, False)
+    try:
+        open_chat(page, chat, themed=False)
+        shot(
+            page,
+            "theme_designer_pro",
+            "chat-before",
+            "Before: the function off, a chat in Open-WebUI's own dark theme.",
+        )
+    finally:
+        switch(api, True)
+
+    page.goto(f"{URL}{BASE}")
+    page.locator("#theme-designer-container").wait_for(timeout=30_000)
+    page.locator('button[data-mode="dark"]').first.click()
+    page.locator("#tab-btn-lch").click()
+    page.locator("#sl-h").wait_for(timeout=30_000)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith(BASE) and r.ok, timeout=30_000
+    ):
+        page.evaluate(
+            """() => {
+                for (const [id, value] of [['sl-h', 185], ['sl-c', 60]]) {
+                    const el = document.getElementById(id);
+                    el.value = value;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }"""
+        )
+    page.wait_for_timeout(1500)
+    shot(
+        page,
+        "theme_designer_pro",
+        "designer",
+        "The designer's Core Palette tab, after moving Hue and Chroma: the ramp of Open-WebUI's "
+        "greys it makes, saved for everyone at once in Live mode. The page is templates/designer/, "
+        "put together from thirty files.",
+        illustrates=[
+            "test_an_admin_opens_the_designer_on_the_instance_theme",
+            "test_the_page_is_its_files_put_together",
+            "test_each_valve_reaches_the_designer",
+        ],
+    )
+
+    open_chat(page, chat, themed=True)
+    shot(
+        page,
+        "theme_designer_pro",
+        "chat-after",
+        "After: the function on and that palette saved; every page, this chat included, wears it "
+        "from its first paint.",
+        illustrates=[
+            "test_an_admin_saves_the_theme_and_every_page_gets_it",
+            "test_the_first_paint_stylesheet_carries_the_theme_colours",
+            "test_the_bootloader_is_on_every_page",
+        ],
+    )
+
+
+def test_personal_themes_off_says_so(user_page, shot):
+    """By hand: with Allow Personal Themes off, a user opens /api/v1/theme-designer?scope=me: a
+    sentence says personal themes are off."""
+    user_page.goto(f"{URL}{BASE}?scope=me")
+    user_page.get_by_text("Personal themes are turned off on this instance.").wait_for(
+        timeout=30_000
+    )
+    shot(
+        user_page,
+        "theme_designer_pro",
+        "personal-off",
+        "Personal themes off (the default): a user's designer link answers with a sentence.",
+        illustrates=["test_with_personal_themes_off_a_user_gets_a_sentence_not_the_designer"],
+    )
+
+
+def test_a_user_designs_their_own_theme(user_page, api, shot, chat):
+    """By hand: turn on Allow Personal Themes. As a user, open /api/v1/theme-designer?scope=me:
+    the designer edits your own theme, which only you see."""
+    before = api.valves(ID, allow_personal_themes=True)
+    try:
+        user_page.goto(f"{URL}{BASE}?scope=me")
+        user_page.locator("html[data-tdp-scope=me] #theme-designer-container").wait_for(
+            timeout=30_000
+        )
+        user_page.wait_for_timeout(2000)
+        shot(
+            user_page,
+            "theme_designer_pro",
+            "personal-designer",
+            "With Allow Personal Themes on, a user's own designer, starting from the instance theme: "
+            "the instance-only controls are gone, and saves change only their theme.",
+            illustrates=[
+                "test_with_personal_themes_on_a_user_designs_their_own_theme",
+                "test_a_personal_theme_reaches_only_its_owner",
+            ],
+        )
+    finally:
+        restore(api, before)
+
+
+def test_the_admin_panel_has_a_themes_page(admin_page, api, shot, chat):
+    """By hand: turn on Show In Admin Panel and open the Admin Panel: a Themes page sits between
+    Functions and Settings, with the designer in it."""
+    before = api.valves(ID, show_in_admin_panel=True)
+    try:
+        admin_page.goto(f"{URL}/admin/functions")
+        admin_page.get_by_role("link", name="Themes", exact=True).click(timeout=30_000)
+        admin_page.frame_locator(".tdp-admin-page iframe").locator(
+            "#theme-designer-container"
+        ).wait_for(timeout=30_000)
+        admin_page.wait_for_timeout(2000)
+        shot(
+            admin_page,
+            "theme_designer_pro",
+            "admin-panel-page",
+            "Show In Admin Panel on: a Themes page in the Admin Panel's top bar, with the designer in it.",
+            illustrates=["test_the_themes_tab_and_page_follow_their_valves"],
+        )
+    finally:
+        restore(api, before)
 
 
 @pytest.fixture(scope="module")
@@ -257,28 +255,25 @@ def theme_model(api):
     api("POST", "/api/v1/models/model/delete", {"id": MODEL})
 
 
-def test_the_launcher_builds_a_theme_in_a_chat(user, api, shot, theme_model):
-    """By hand: with Allow Personal Themes on, ask a model that has the Launcher "make my chat a
-    deep teal lagoon". A card shows the theme with a live preview and Apply."""
-    before = api.valves(ID, allow_personal_themes=True)
-    try:
-        user.goto(f"{URL}/?models={MODEL}")
-        user.locator("#chat-input").click()
-        user.keyboard.type(ASK)
-        user.keyboard.press("Enter")
-        user.get_by_text("Press Apply on the card").wait_for(timeout=60_000)
-        user.frame_locator("iframe").last.get_by_text("Teal Lagoon").first.wait_for(timeout=30_000)
-        user.wait_for_timeout(2500)  # the preview's animation frame
-        shot(
-            user,
-            "theme_designer_pro",
-            "launcher-card",
-            "The model called the Launcher's create_theme; its card shows the theme, with Apply "
-            "signed for this user only.",
-            illustrates=[
-                "test_a_described_theme_comes_back_as_a_card_that_applies_it",
-                "test_the_launcher_carries_only_its_own_templates",
-            ],
-        )
-    finally:
-        api("POST", f"/api/v1/functions/id/{ID}/valves/update", before)
+def test_the_launcher_builds_a_theme_in_a_chat(admin_page, api, shot, theme_model):
+    """By hand: ask a model that has the Launcher "make my chat a deep teal lagoon". A card
+    shows the theme with a live preview and Apply."""
+    page = admin_page
+    page.goto(f"{URL}/?models={MODEL}")
+    page.locator("#chat-input").click()
+    page.keyboard.type(ASK)
+    page.keyboard.press("Enter")
+    page.get_by_text("Press Apply on the card").wait_for(timeout=60_000)
+    page.frame_locator("iframe").last.get_by_text("Teal Lagoon").first.wait_for(timeout=30_000)
+    page.wait_for_timeout(2500)  # the preview's first frames
+    shot(
+        page,
+        "theme_designer_pro",
+        "launcher-card",
+        "The model called the Launcher's create_theme; its card shows the theme with a live "
+        "preview, and Apply signed for this user only.",
+        illustrates=[
+            "test_a_described_theme_comes_back_as_a_card_that_applies_it",
+            "test_the_launcher_carries_only_its_own_templates",
+        ],
+    )
