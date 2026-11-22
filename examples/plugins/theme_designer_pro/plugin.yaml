@@ -1,0 +1,29 @@
+protocol: "0.5"
+function:
+  title: Theme Designer Pro
+  author: "@G30"
+  author_url: https://openwebui.com/u/g30
+  funding_url: https://buymeacoffee.com/iamg30
+  version: 1.22.0
+  license: MIT
+  required_open_webui_version: 0.13.4
+  description: Instance-wide theme designer for Open WebUI. Replaces the built-in dark, light, OLED, and her modes with fully custom themes for all users, and optionally lets each user design a personal theme of their own. Registers an interactive UI at /api/v1/theme-designer, also opened from a Themes tab in Open WebUI's Admin Settings, and persists themes server-side, publishing them through the Shared Assets Protocol so every user sees the admin's theme from the first paint. Adapted from Theme Designer Pro by G30.
+tool:
+  id: theme_designer_pro_launcher
+  title: Theme Designer Pro Launcher
+  author: "@G30"
+  author_url: https://openwebui.com/u/g30
+  funding_url: https://buymeacoffee.com/iamg30
+  version: 2.1.2
+  license: MIT
+  required_open_webui_version: 0.10.0
+  description: Builds a theme someone describes in a chat (palette, accents, gradient, frosted glass, custom CSS, and an animated Canvas FX background from the catalog or newly written by the chat model) and shows it as a card with a live preview, Apply and Undo. Also opens the designer inside a chat when asked. Users get their own personal theme when the event function's Allow Personal Themes valve is on; admins can also change the instance theme. Adapted from Theme Designer Pro Launcher by G30.
+  include: [templates]
+  templates: [launcher/]  # the card and the frame; not the 1 MB designer the function serves
+  access: public
+# routes: plugin_mount and its markers. events: @on. jobs: plugin_claim. live_reload and
+# shared_assets (in this order): the Shared Assets Protocol, which the function registers itself.
+# templates/ and config.yaml bring in their own libraries.
+include: [routes, events, jobs, live_reload, shared_assets]
+requires:
+  iframe_sandbox_allow_same_origin: true  # the Launcher's Apply, and the designer inside a chat

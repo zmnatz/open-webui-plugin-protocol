@@ -108,7 +108,7 @@ def test_saving_the_valves_syncs_every_mcpo_server_as_a_tool_server(owui, plugin
 
 What it sends on the socket is in `owui.emitted`. Background work it starts runs until it finishes or waits before the call returns. A **scheduled sync** (the `jobs` library's `PluginScheduledSync`) runs at startup and when its valves are saved, so those two calls test it; its repeat on a timer is the library's, tested in this repository.
 
-Examples: [`mcpo_sync`](../examples/mcpo_sync.md), [`litellm_model_sync`](../examples/litellm_model_sync.md), [`page_banners`](../examples/page_banners.md).
+Examples: [`mcpo_sync`](../examples/mcpo_sync.md), [`litellm_model_sync`](../examples/litellm_model_sync.md), [`page_banners`](../examples/page_banners.md), [`theme_designer_pro`](../examples/theme_designer_pro.md) (handlers for users' and models' events, and shutdown).
 
 ## Pages and routes
 

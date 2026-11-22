@@ -52,3 +52,29 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 ```
 
 `examples/plugins/vision_router/function.py` is adapted from [Dynamic Vision Router](https://github.com/open-webui/functions/tree/main/functions/filters/dynamic_vision_router) 0.1.7 by open-webui and atgehrhardt, adapted to this repository's conventions with the same behaviour (the changes are listed at the top of the file). That repository has no licence file of its own; it is taken to fall under the [Open WebUI License](https://github.com/open-webui/open-webui/blob/main/LICENSE) (BSD 3-Clause plus a branding clause, which forbids removing "Open WebUI" branding and is not touched here), copyright (c) 2023- Open WebUI Inc., all rights reserved, and its redistribution terms apply to this file: the copyright notice above is retained, and the name of the copyright holder and its contributors is not used to endorse this project.
+
+`examples/plugins/theme_designer_pro/` is adapted from [Theme Designer Pro](https://github.com/silentoplayz/theme-designer-pro-presets/tree/9a7e68c9afe51539effae22767e843f26205d895) 1.22.0 and its Launcher 2.1.2 by G30, from [silentoplayz/theme-designer-pro-presets](https://github.com/silentoplayz/theme-designer-pro-presets), with the same behaviour: `function.py`, `tool.py`, `shared.py`, everything in `templates/` and `skills/` are derived from it (the changes are listed at the top of `function.py` and `tool.py`, and in full in that plugin's README), under its MIT licence:
+
+```
+MIT License
+
+Copyright (c) 2026 silentoplayz
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```

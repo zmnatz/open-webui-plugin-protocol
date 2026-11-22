@@ -72,6 +72,7 @@ A new filter is made global on first deploy (a filter that is not attached to a 
 | `access` | `public` makes it readable by every signed-in user when first installed (Open-WebUI's `user:*` read grant); later changes in the UI are kept. Without it, only admins can use the tool. |
 | `valves` | `{name: value}` enforced on every sync, for the declared keys only, validated against the tool's `Valves` class (a value it rejects is logged and skipped). |
 | `include` | Libraries for the tool bundle (the function's `include:` does not apply to it). |
+| `templates` | With `include: [templates]`, the files of `templates/` the tool embeds: a path, or a folder written with a trailing `/` (`[launcher/]`). Left out, the tool embeds every template. An entry that matches no file is refused. |
 
 ### `skills:`
 

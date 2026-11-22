@@ -1,0 +1,22 @@
+        <div id="tab-backgrounds" class="tab-content" role="tabpanel" aria-labelledby="tab-btn-backgrounds" style="display:none;">
+            <div class="section-title">
+                <div>Open WebUI Backgrounds</div>
+            </div>
+            <div class="control-group">
+                <div class="hidden-bg-note" id="hidden-bg-note"></div>
+                <label class="hidden-bg-behind-all">
+                    <input type="checkbox" class="cb-input" id="hidden-bg-behind">
+                    <span>Draw the Canvas FX animation over these images</span>
+                </label>
+                <div class="hidden-bg-note" id="hidden-bg-behind-hint">Off: these images cover the animation, more of it the higher their opacity. On: the animation stays on top of them at any opacity.</div>
+                <div class="hidden-bg-note" id="hidden-bg-behind-why" style="display:none;">This mode has no Canvas FX animation, so the images stay in front of the theme here.</div>
+                <div class="hidden-bg-dimming">
+                    <span class="hidden-bg-label">Dimming</span>
+                    <input type="range" id="hidden-bg-dimming" class="hidden-bg-slider" min="0" max="100" step="5" value="100" aria-label="Dimming over these images">
+                    <span class="hidden-bg-val" id="hidden-bg-dimming-val">100%</span>
+                </div>
+                <div class="hidden-bg-note">Open WebUI lays a dimming layer over these images, and the sign-in page picture gets the same one. At 100% it stays as Open WebUI draws it. Lower thins it to brighten them, until at 0% they show clear.</div>
+                <div class="hidden-bg-list" id="hidden-bg-list" role="group" aria-label="Opacity of each background image"></div>
+            </div>
+        </div>
+

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0 (2026-11-22)
+
+- A tool embeds only the templates it lists, with `tool: templates: [launcher/]`, so a function's large page is not copied into its tool ([plugin format](docs/plugin-format.md#tool)).
+- The mock sends events about users and models (`owui.emit("user.deleted", {"type": "user", "id": ...})`), has `decode_token`, and answers a plugin that asks a model itself: `owui.model_reply`, with what it was asked in `owui.completions` ([the mock](docs/testing/mock.md)).
+- A new example, [`theme_designer_pro`](examples/plugins/theme_designer_pro), adapted from G30's Theme Designer Pro: a 1.3 MB event function broken into templates, routes behind the sign-in guard, `@on` handlers, a tool and a skill, with what changed explained for its author.
+
 ## 0.5.0 (2026-11-22)
 
 - Protocol 0.5: a plugin's files import what they use, and the bundler refuses one that does not. `owpp migrate` writes the imports into a 0.3 plugin; a plugin taking 0.3-style code from git is refused until `owpp pull` moves it to a migrated commit ([upgrading](docs/upgrading.md#04-05)).

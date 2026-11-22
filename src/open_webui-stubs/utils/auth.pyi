@@ -3,4 +3,7 @@
 from typing import Any
 
 
+def decode_token(token: Any) -> Any: ...
+
+
 async def get_current_user(request: Any, response: Any = ..., background_tasks: Any = ..., auth_token: Any = ...) -> Any: ...

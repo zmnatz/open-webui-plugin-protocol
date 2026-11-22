@@ -324,11 +324,17 @@ class TestPublicNotes:
 
         assert lint_notes(tmp_path / "p", "p") == []
 
+    # Theme Designer Pro themes the sign-in page, so what that page reads is public: the theme,
+    # its live updates and the sign-in picture, at the designer URL and, for pages loaded before
+    # a Designer Url change, at the URLs it had before. Nothing else in the examples is.
+    PUBLIC = {"theme_designer_pro": 3}
+
     def test_the_examples_serve_nobody_publicly(self):
         from owpp.lint import lint_notes
 
         for folder in EXAMPLES.iterdir():
-            assert lint_notes(folder, folder.name) == [], folder.name
+            notes = lint_notes(folder, folder.name)
+            assert len(notes) == self.PUBLIC.get(folder.name, 0), (folder.name, notes)
 
     def test_owpp_check_prints_them_without_failing_even_when_strict(self, tmp_path, capsys):
         write_tree(

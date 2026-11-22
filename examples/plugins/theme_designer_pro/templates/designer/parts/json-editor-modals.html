@@ -1,0 +1,80 @@
+    <div id="css-view-modal" class="modal-overlay z-high" style="padding: 24px;" role="dialog" aria-modal="true" aria-label="Theme CSS">
+        <div style="width: 100%; max-width: 600px; max-height: 90%; display: flex; flex-direction: column; gap: 0; animation: containerShow 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+            <div class="owui-code-block" style="flex: 1; display: flex; flex-direction: column; min-height: 0; max-height: 100%;">
+                <div class="owui-code-header">
+                    <span class="owui-code-lang">css <label class="toggle-label-ml" data-tooltip="Compress output for production"><input type="checkbox" id="toggle-minify-css" class="cb-input"> Minify</label></span>
+                    <div class="owui-code-actions">
+                        <button class="owui-code-btn" id="download-css-btn" data-tooltip="Download CSS File">Download</button>
+                        <button class="owui-code-btn copy-css-btn" data-target="raw-css" data-tooltip="Copy CSS to Clipboard">Copy</button>
+                        <button class="owui-code-btn" id="css-close-btn" style="color: var(--text-muted);" data-tooltip="Close CSS">Close</button>
+                    </div>
+                </div>
+                <textarea id="raw-css" readonly spellcheck="false" style="flex: 1; min-height: min(400px, 40dvh); cursor: text; user-select: text;"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <div id="json-view-modal" class="modal-overlay z-high" style="padding: 24px;" role="dialog" aria-modal="true" aria-labelledby="json-view-modal-title">
+        <div style="width: 100%; max-width: 600px; max-height: 90%; display: flex; flex-direction: column; gap: 0; animation: containerShow 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+            <div class="owui-code-block" style="flex: 1; display: flex; flex-direction: column; min-height: 0; max-height: 100%;">
+                <div class="owui-code-header">
+                    <span class="owui-code-lang" id="json-view-modal-title">json</span>
+                    <div class="owui-code-actions">
+                        <button class="owui-code-btn" id="json-collapse-btn" data-tooltip="Collapse JSON">Collapse</button>
+                        <button class="owui-code-btn copy-css-btn" data-target="json-view-textarea" data-tooltip="Copy JSON to Clipboard">Copy</button>
+                        <button class="owui-code-btn" id="json-close-btn" style="color: var(--text-muted);" data-tooltip="Close JSON Viewer">Close</button>
+                    </div>
+                </div>
+                <textarea id="json-view-textarea" readonly spellcheck="false" style="flex: 1; min-height: min(400px, 40dvh); cursor: text; user-select: text;"></textarea>
+            </div>
+            <div style="display: flex; justify-content: flex-end; padding: 10px 0 0; gap: 8px;">
+                <span id="json-valid-badge" style="font-size: 0.65rem; font-weight: 700; color: #22c55e; opacity: 0.7;">Valid JSON</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="snapshot-json-edit-modal" class="modal-overlay z-high" style="padding: 24px;" role="dialog" aria-modal="true" aria-labelledby="snapshot-json-edit-modal-title">
+        <div style="width: 100%; max-width: 600px; max-height: 90%; display: flex; flex-direction: column; gap: 0; animation: containerShow 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+            <div class="owui-code-block" style="flex: 1; display: flex; flex-direction: column; min-height: 0; max-height: 100%;">
+                <div class="owui-code-header">
+                    <span class="owui-code-lang" id="snapshot-json-edit-modal-title">json — Manual Snapshot Editor</span>
+                    <div class="owui-code-actions">
+                        <button class="owui-code-btn" id="snapshot-json-collapse-btn" data-tooltip="Collapse JSON">Collapse</button>
+                        <button class="owui-code-btn copy-css-btn" data-target="snapshot-json-edit-textarea" data-tooltip="Copy JSON to Clipboard">Copy</button>
+                        <button class="owui-code-btn" id="snapshot-json-cancel-btn" style="color: var(--text-muted);" data-tooltip="Close without saving">Close</button>
+                    </div>
+                </div>
+                <textarea id="snapshot-json-edit-textarea" spellcheck="false" style="flex: 1; min-height: min(400px, 40dvh); cursor: text; user-select: text;"></textarea>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 0 0; gap: 8px;">
+                <span id="snapshot-json-valid-badge" style="font-size: 0.65rem; font-weight: 700; color: #22c55e; opacity: 0.7;">Valid JSON</span>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn" id="snapshot-json-discard-btn">Cancel</button>
+                    <button class="btn btn-primary" id="snapshot-json-save-btn">Save Changes</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="save-json-edit-modal" class="modal-overlay z-high" style="padding: 24px;" role="dialog" aria-modal="true" aria-labelledby="save-json-edit-modal-title">
+        <div style="width: 100%; max-width: 600px; max-height: 90%; display: flex; flex-direction: column; gap: 0; animation: containerShow 0.3s cubic-bezier(0.16, 1, 0.3, 1);">
+            <div class="owui-code-block" style="flex: 1; display: flex; flex-direction: column; min-height: 0; max-height: 100%;">
+                <div class="owui-code-header">
+                    <span class="owui-code-lang" id="save-json-edit-modal-title">json — New Theme Editor</span>
+                    <div class="owui-code-actions">
+                        <button class="owui-code-btn" id="save-json-collapse-btn" data-tooltip="Collapse JSON">Collapse</button>
+                        <button class="owui-code-btn copy-css-btn" data-target="save-json-edit-textarea" data-tooltip="Copy JSON to Clipboard">Copy</button>
+                        <button class="owui-code-btn" id="save-json-cancel-btn" style="color: var(--text-muted);" data-tooltip="Close without saving">Close</button>
+                    </div>
+                </div>
+                <textarea id="save-json-edit-textarea" spellcheck="false" style="flex: 1; min-height: min(400px, 40dvh); cursor: text; user-select: text;"></textarea>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 0 0; gap: 8px;">
+                <span id="save-json-valid-badge" style="font-size: 0.65rem; font-weight: 700; color: #22c55e; opacity: 0.7;">Valid JSON</span>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn" id="save-json-discard-btn">Cancel</button>
+                    <button class="btn btn-primary" id="save-json-save-btn">Save as New Theme</button>
+                </div>
+            </div>
+        </div>
+    </div>

@@ -1,7 +1,7 @@
 {
   "open_webui": "0.13.4",
-  "taken": "2026-11-21",
-  "commit": "d9e104f",
+  "taken": "2026-11-22",
+  "commit": "4c7b2e3",
   "shots": [
     {
       "file": "clear_thinking_tags/with.png",
@@ -163,6 +163,82 @@
         "test_only_admins_see_it"
       ],
       "script": "shots_stale_data.py::test_a_user_is_refused"
+    },
+    {
+      "file": "theme_designer_pro/admin-panel-page.png",
+      "plugin": "theme_designer_pro",
+      "caption": "Show In Admin Panel on: a Themes page in the Admin Panel's top bar, with the designer in it.",
+      "illustrates": [
+        "test_the_themes_tab_and_page_follow_their_valves"
+      ],
+      "script": "shots_theme_designer_pro.py::test_the_admin_panel_has_a_themes_page"
+    },
+    {
+      "file": "theme_designer_pro/chat-after.png",
+      "plugin": "theme_designer_pro",
+      "caption": "After: the function on and that palette saved; every page, this chat included, wears it from its first paint.",
+      "illustrates": [
+        "test_an_admin_saves_the_theme_and_every_page_gets_it",
+        "test_the_first_paint_stylesheet_carries_the_theme_colours",
+        "test_the_bootloader_is_on_every_page"
+      ],
+      "script": "shots_theme_designer_pro.py::test_an_admin_makes_a_theme_and_a_chat_wears_it"
+    },
+    {
+      "file": "theme_designer_pro/chat-before.png",
+      "plugin": "theme_designer_pro",
+      "caption": "Before: the function off, a chat in Open-WebUI's own dark theme.",
+      "illustrates": [],
+      "script": "shots_theme_designer_pro.py::test_an_admin_makes_a_theme_and_a_chat_wears_it"
+    },
+    {
+      "file": "theme_designer_pro/designer.png",
+      "plugin": "theme_designer_pro",
+      "caption": "The designer's Core Palette tab, after moving Hue and Chroma: the ramp of Open-WebUI's greys it makes, saved for everyone at once in Live mode. The page is templates/designer/, put together from thirty files.",
+      "illustrates": [
+        "test_an_admin_opens_the_designer_on_the_instance_theme",
+        "test_the_page_is_its_files_put_together",
+        "test_each_valve_reaches_the_designer"
+      ],
+      "script": "shots_theme_designer_pro.py::test_an_admin_makes_a_theme_and_a_chat_wears_it"
+    },
+    {
+      "file": "theme_designer_pro/launcher-card.png",
+      "plugin": "theme_designer_pro",
+      "caption": "The model called the Launcher's create_theme; its card shows the theme with a live preview, and Apply signed for this user only.",
+      "illustrates": [
+        "test_a_described_theme_comes_back_as_a_card_that_applies_it",
+        "test_the_launcher_carries_only_its_own_templates"
+      ],
+      "script": "shots_theme_designer_pro.py::test_the_launcher_builds_a_theme_in_a_chat"
+    },
+    {
+      "file": "theme_designer_pro/personal-designer.png",
+      "plugin": "theme_designer_pro",
+      "caption": "With Allow Personal Themes on, a user's own designer, starting from the instance theme: the instance-only controls are gone, and saves change only their theme.",
+      "illustrates": [
+        "test_with_personal_themes_on_a_user_designs_their_own_theme",
+        "test_a_personal_theme_reaches_only_its_owner"
+      ],
+      "script": "shots_theme_designer_pro.py::test_a_user_designs_their_own_theme"
+    },
+    {
+      "file": "theme_designer_pro/personal-off.png",
+      "plugin": "theme_designer_pro",
+      "caption": "Personal themes off (the default): a user's designer link answers with a sentence.",
+      "illustrates": [
+        "test_with_personal_themes_off_a_user_gets_a_sentence_not_the_designer"
+      ],
+      "script": "shots_theme_designer_pro.py::test_personal_themes_off_says_so"
+    },
+    {
+      "file": "theme_designer_pro/sign-in-first.png",
+      "plugin": "theme_designer_pro",
+      "caption": "Signed out, owpp's guard sends the designer's visitor to Open-WebUI's sign-in page.",
+      "illustrates": [
+        "test_someone_signed_out_is_sent_to_sign_in_first"
+      ],
+      "script": "shots_theme_designer_pro.py::test_signed_out_the_designer_sends_you_to_sign_in"
     },
     {
       "file": "vision_router/routed.png",
