@@ -41,6 +41,10 @@
 
 Signing in works like this: a request carries `Authorization: Bearer <user.token>` or a `token` cookie, and `get_current_user` returns that user. Chat access belongs to the owner, plus anyone given `grant_chat`.
 
+## In an editor
+
+owpp ships type stubs for `open_webui`, written from the mock: `open_webui-stubs`, installed with it. With owpp in the environment, an editor or a type checker resolves `from open_webui.models.chats import Chats` to what the mock has, which is what a test can reach. They are partial stubs: with the real Open-WebUI installed too, a module the mock does not have still resolves from it. In this repository, a test fails when an example imports an `open_webui` name the mock lacks, and another when the stubs are stale: rewrite them with `python -m owpp.testing.stubs` after changing the mock.
+
 ## What it is not
 
 The mock implements what plugins call, written against Open-WebUI v0.13. It does not run Open-WebUI. Behaviour that only the real server has is out of reach:
@@ -52,4 +56,4 @@ The mock implements what plugins call, written against Open-WebUI v0.13. It does
 
 **What it does not implement still imports.** Third-party plugins import parts of Open-WebUI the mock has no use for (`open_webui.models.messages`, `open_webui.models.users.User`, ...). Any `open_webui.*` module or name the mock lacks imports as a stand-in, so the plugin loads. Calling or using one raises `NotImplementedError` naming it ("the mock Open-WebUI has no open_webui.models.messages.Messages; add it to src/owpp/testing/mock.py"), so a test reaches it only by exercising code that really needs it.
 
-So keep the [live checks](live.md) in each plugin's README under `## Test`, and treat a passing `owpp test` as "the plugin's own logic works", not "it works in Open-WebUI". When a plugin needs an Open-WebUI call the mock does not have, add it to `src/owpp/testing/mock.py` in this repository, with a test in `tests/test_mock.py` ([contributing](../contributing.md)), or open an issue naming the call.
+So keep the [live checks](live.md) in each plugin's README under `## Test`, and treat a passing `owpp test` as "the plugin's own logic works", not "it works in Open-WebUI". When a plugin needs an Open-WebUI call the mock does not have, add it to `src/owpp/testing/mock.py` in this repository, with a test in `tests/test_mock.py`, and rewrite the stubs ([contributing](../contributing.md)), or open an issue naming the call.

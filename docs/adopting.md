@@ -11,6 +11,8 @@ OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deplo
 
 The deploy reads the instance and the credentials from [environment variables](environment-variables.md#the-instance). Then add the [GitHub Action](tooling.md#github-action).
 
+For an editor to resolve what a plugin imports, install owpp into the repository's environment as a development dependency, as for running its tests: `uv add --dev 'owpp[test]'`. That gives it `owpp.lib` (the [libraries](libraries.md)) and type stubs for the parts of `open_webui` the [mock](testing/mock.md#in-an-editor) has.
+
 ## Existing functions pasted into the UI
 
 1. Make a folder per function: `plugins/<id>/function.py`, with the docstring header moved into `plugin.yaml` under `function:` (or keep a flat `plugins/<id>.py` with its header).

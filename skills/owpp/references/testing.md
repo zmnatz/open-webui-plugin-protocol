@@ -25,4 +25,4 @@ Done when every behaviour on the list has a test with both paragraphs, `owpp tes
 
 ## When the mock lacks something
 
-A name the mock does not implement still imports, and calling it raises `NotImplementedError` naming it. Code that needs it is then out of the mock's reach: test what you can, and put the rest in By hand. In the owpp repository itself, add the name to `src/owpp/testing/mock.py`, with a test in `tests/test_mock.py`.
+A name the mock does not implement still imports, and calling it raises `NotImplementedError` naming it. Code that needs it is then out of the mock's reach: test what you can, and put the rest in By hand. In the owpp repository itself, add the name to `src/owpp/testing/mock.py`, with a test in `tests/test_mock.py`, and rewrite the `open_webui` stubs with `python -m owpp.testing.stubs`.

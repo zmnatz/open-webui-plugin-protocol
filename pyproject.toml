@@ -62,8 +62,12 @@ path = "src/owpp/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/owpp"]
 
+[tool.hatch.build.targets.wheel.force-include]
+# Type stubs for open_webui, from the mock, so an editor resolves what plugins import (PEP 561).
+"src/open_webui-stubs" = "open_webui-stubs"
+
 [tool.hatch.build.targets.sdist]
-include = ["src/owpp", "docs", "examples", "skills", "tests", "README.md", "LICENSE", "NOTICE.md", "CHANGELOG.md", "SECURITY.md"]
+include = ["src/owpp", "src/open_webui-stubs", "docs", "examples", "skills", "tests", "README.md", "LICENSE", "NOTICE.md", "CHANGELOG.md", "SECURITY.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "examples/plugins"]
@@ -74,7 +78,12 @@ filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecate
 line-length = 100
 target-version = "py310"
 # Classic298's Shared Assets Protocol, vendored byte for byte: never lint or reformat it.
-extend-exclude = ["src/owpp/runtime/lib/shared_assets.py", "src/owpp/runtime/lib/live_reload.py"]
+# The open_webui stubs are generated (python -m owpp.testing.stubs).
+extend-exclude = [
+  "src/owpp/runtime/lib/shared_assets.py",
+  "src/owpp/runtime/lib/live_reload.py",
+  "src/open_webui-stubs",
+]
 
 [tool.ruff.format]
 # The runtime and the libraries are copied into every bundle as written: keep their layout.
