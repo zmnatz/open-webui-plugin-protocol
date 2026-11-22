@@ -17,6 +17,12 @@ The runtime and libraries are copied into every bundle, so a new owpp changes th
 4. **Dry run.** `owpp deploy --dry-run` against your instance shows which functions, tools and skills the new bundles would update.
 5. **Commit** the pin and the manifest changes together, and deploy.
 
+## 0.5 -> 0.6
+
+- **Nothing to migrate.** Manifests stay `protocol: "0.5"`: 0.6 adds a key and takes none away, and the bundles a deploy writes are the same as 0.5.0's unless a plugin uses the new key.
+- **`tool: templates:`** lists the files of `templates/` a tool embeds (`[launcher/]`); without it a tool that includes templates still embeds them all ([plugin format](plugin-format.md#tool)).
+- **Plugin tests:** `owui.emit` also takes the subject itself, for events about users and models, and the mock has `decode_token` and the chat pipeline a plugin calls to ask a model (`owui.model_reply`, `owui.completions`). A test that patched those stand-ins still works; it can use the mock's instead ([the mock](testing/mock.md)).
+
 ## 0.4 -> 0.5
 
 - **Every file imports what it uses** ([why](adr/0002-plugin-source-is-python.md)). A plugin's `function.py`, `tool.py` and `shared.py` used to find the libraries and `shared.py`'s names already in scope; now they import them, `from owpp.lib import ...` and `from shared import ...`, and the bundler removes those lines ([bundling](bundling.md#imports-between-the-files)). A file that uses one without importing it is refused, so this release has no compatibility period: run `owpp migrate`. Its 0.3 -> 0.5 step writes the imports into each file, copies into `function.py` and `tool.py` the imports `shared.py` held for them and drops them from `shared.py`, makes `from __future__` lines the same in all three, and sets `protocol: "0.5"`. It reports any name it cannot place, and exits 1, for you to import yourself. Code taken from git is left alone, and a plugin that pins a 0.3-style commit is refused once its `plugin.yaml` says 0.5: `owpp pull` it to a commit that has been migrated upstream (this repository's examples are, from 0.5.0 on). Run `ruff check --fix` (or your formatter) afterwards to sort the imports your way.
