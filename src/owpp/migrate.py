@@ -1,8 +1,10 @@
-"""`owpp migrate`: bring a plugin.yaml up to the current protocol version.
+"""`owpp migrate`: bring a plugin up to the current protocol version.
 
-Each version has one step from the version before it. A step changes only the manifest text,
-so a migration leaves comments and layout alone and the change is there to review and commit.
-A manifest with no `protocol:` was written for 0.1, before the key existed.
+Each version has one step from the version before it. A step changes the manifest text, leaving
+comments and layout alone, and a step may also rewrite the plugin's code (0.3 -> 0.5 adds the
+imports, owpp.imports), so the change is there to review and commit. A manifest with no
+`protocol:` was written for 0.1, before the key existed. owpp 0.4 left the format at 0.3, so
+there is no 0.4: the protocol follows owpp's major.minor.
 """
 
 from __future__ import annotations
@@ -13,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import OwppError
+from .imports import Upgrade, upgrade
 from .manifest import get, parse_yaml, plugin_folders, read_text, rename_key, set_key, text_of
 from .protocol import VERSION, parse
 from .sources import ref_kind
@@ -48,16 +51,33 @@ def _to_0_3(text: str, manifest: dict, kind_of: KindOf) -> str:
     return set_key(text, "protocol", '"0.3"')
 
 
+def _to_0_5(text: str, manifest: dict, kind_of: KindOf) -> str:
+    """0.3 -> 0.5: record the version; the code step adds the imports (owpp.imports)."""
+    return set_key(text, "protocol", '"0.5"')
+
+
+def _code_to_0_5(folder: Path, manifest: dict) -> Upgrade:
+    """Each file imports what it used to find already in scope. Code taken from git is the
+    upstream's, and is left alone."""
+    return Upgrade() if manifest.get("source") else upgrade(folder)
+
+
 @dataclass(frozen=True)
 class Step:
-    """One migration: from one protocol version to the next."""
+    """One migration: from one protocol version to the next. `code` rewrites the plugin's
+    files, for a step that changes how they are written."""
 
     old: str
     new: str
     apply: Callable[[str, dict, KindOf], str]
+    code: Callable[[Path, dict], Upgrade] | None = None
 
 
-STEPS = (Step("0.1", "0.2", _to_0_2), Step("0.2", "0.3", _to_0_3))
+STEPS = (
+    Step("0.1", "0.2", _to_0_2),
+    Step("0.2", "0.3", _to_0_3),
+    Step("0.3", "0.5", _to_0_5, _code_to_0_5),
+)
 
 
 def migrate_text(
@@ -110,10 +130,32 @@ def migrate(
         if not steps:
             out(f"ok    {folder.name}: protocol {VERSION}")
             continue
+        code = _code_changes(folder, steps, parse_yaml(text) or {})
         verb = "would migrate" if dry_run else "migrated"
         versions = [old, *steps[1:], VERSION]  # steps are the versions migrated *from*
         out(f"new   {folder.name}: {verb} {' -> '.join(versions)}")
-        if not dry_run:
-            path.write_bytes(text.encode("utf-8"))
-            out("        wrote plugin.yaml")
+        for note in code.notes:
+            out(f"        {note}")
+        written = {"plugin.yaml": text, **code.files}
+        for name, content in written.items():
+            if dry_run:
+                out(f"        would write {name}")
+            else:
+                (folder / name).write_bytes(content.encode("utf-8"))
+                out(f"        wrote {name}")
+        if code.notes:
+            left += 1
     return 1 if left else 0
+
+
+def _code_changes(folder: Path, steps: list[str], manifest: dict) -> Upgrade:
+    """What the code steps among `steps` (the versions migrated from) do to the folder's files.
+    Each works on the files as they are; one step's changes are not seen by the next, which is
+    fine while only one step has code."""
+    out = Upgrade()
+    for step in STEPS:
+        if step.old in steps and step.code is not None:
+            done = step.code(folder, manifest)
+            out.files.update(done.files)
+            out.notes += done.notes
+    return out

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Protocol 0.5: a plugin's files import what they use, and the bundler refuses one that does not. `owpp migrate` writes the imports into a 0.3 plugin ([upgrading](docs/upgrading.md#04-05)).
 - A plugin's files are ordinary Python: each imports what it uses, including its shared code (`from shared import NAME`) and the libraries (`from owpp.lib import PluginAdmin, plugin_mount`), so it reads, lints and type-checks on its own. The bundler removes those imports, says which library a name needs in `include:`, and refuses the forms that would break once bundled ([bundling](docs/bundling.md#imports-between-the-files)).
 - `owpp create` writes plugins that import the library names they use.
 - owpp ships type stubs for `open_webui`, written from the mock, so an editor resolves what a plugin imports from Open-WebUI ([the mock](docs/testing/mock.md#in-an-editor)).

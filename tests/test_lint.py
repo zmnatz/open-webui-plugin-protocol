@@ -302,13 +302,13 @@ class TestPublicNotes:
             tmp_path / "p",
             {
                 "plugin.yaml": 'protocol: "0.2"\nfunction:\n  title: T\ninclude: [routes]\n',
-                "function.py": "class Event:\n    def go(self, app, router):\n        plugin_mount(app, router, '/hook', access='public')\n",
+                "function.py": "from owpp.lib import plugin_mount\n\nclass Event:\n    def go(self, app, router):\n        plugin_mount(app, router, '/hook', access='public')\n",
             },
         )
         assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 0
         out = capsys.readouterr().out
         assert (
-            'note  p/function.py:3: mounts routes that serve people who are not signed in (access="public")'
+            'note  p/function.py:5: mounts routes that serve people who are not signed in (access="public")'
             in out
         )
         assert "warning(s)" not in out

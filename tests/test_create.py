@@ -184,7 +184,7 @@ class TestWhatItWrites:
     def test_every_generated_manifest_records_the_protocol(self, written, from_git):
         for directory in (written, from_git):
             for folder in directory.iterdir():
-                assert read_manifest(folder)["protocol"] == "0.3", folder
+                assert read_manifest(folder)["protocol"] == "0.5", folder
 
     def test_owpp_check_strict_passes(self, written, capsys):
         assert main(["check", "--strict", "--dir", str(written)], env={}) == 0

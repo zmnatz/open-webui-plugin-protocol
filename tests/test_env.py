@@ -8,7 +8,7 @@ import sys
 import types
 
 import pytest
-from conftest import write_tree
+from conftest import write_plugin
 
 from owpp import envtemplate
 from owpp.bundle import bundle_function, env_references, load_function_files
@@ -120,7 +120,7 @@ class TestTheBundlerNeverReadsTheEnvironment:
     CODE = "class Event(PluginScheduledSync):\n    async def sync(self):\n        pass\n"
 
     def plugin(self, tmp_path, jobs="${N:-60}", config="flag: ${FLAG:-true}\n"):
-        write_tree(
+        write_plugin(
             tmp_path / "p",
             {
                 "plugin.yaml": f"function:\n  title: T\njobs:\n  sync_every_minutes: {jobs}\n",
@@ -206,7 +206,7 @@ class TestTheBundlerNeverReadsTheEnvironment:
 class TestMalformedTemplatesAreRefusedWhenBundling:
     @pytest.mark.parametrize("value", ["${}", "${1X}", "${N", "${N:60}", "${ N }", "x ${N-60}"])
     def test_config_values(self, tmp_path, value):
-        write_tree(
+        write_plugin(
             tmp_path / "p",
             {
                 "plugin.yaml": "function:\n  title: T\n",
@@ -218,7 +218,7 @@ class TestMalformedTemplatesAreRefusedWhenBundling:
             load_function_files(tmp_path)
 
     def test_an_escaped_one_is_fine(self, tmp_path):
-        write_tree(
+        write_plugin(
             tmp_path / "p",
             {
                 "plugin.yaml": "function:\n  title: T\n",
@@ -232,7 +232,7 @@ class TestMalformedTemplatesAreRefusedWhenBundling:
         "jobs", ["${N:-soon}", "${N:--5}", "${N:-1.5}", "every ${N} minutes", "${N}${M}", "a"]
     )
     def test_the_jobs_interval(self, tmp_path, jobs):
-        write_tree(
+        write_plugin(
             tmp_path / "p",
             {
                 "plugin.yaml": f'function:\n  title: T\njobs:\n  sync_every_minutes: "{jobs}"\n',
@@ -249,7 +249,7 @@ class TestMalformedTemplatesAreRefusedWhenBundling:
                 / jobs.replace("$", "").replace("{", "").replace("}", "").replace(":", "_")
                 / "p"
             )
-            write_tree(
+            write_plugin(
                 folder,
                 {
                     "plugin.yaml": f"function:\n  title: T\njobs:\n  sync_every_minutes: {jobs}\n",
@@ -261,7 +261,7 @@ class TestMalformedTemplatesAreRefusedWhenBundling:
 
 class TestWhichVariablesAPluginReads:
     def test_they_are_listed_with_their_defaults(self, tmp_path):
-        write_tree(
+        write_plugin(
             tmp_path / "p",
             {
                 "plugin.yaml": "function:\n  title: T\njobs:\n  sync_every_minutes: ${N:-60}\n",
@@ -272,7 +272,7 @@ class TestWhichVariablesAPluginReads:
         assert env_references(tmp_path / "p") == [("N", "60"), ("FLAG", "true"), ("HOST", None)]
 
     def test_owpp_check_prints_them_and_does_not_fail_on_them(self, tmp_path, capsys):
-        write_tree(
+        write_plugin(
             tmp_path / "p",
             {
                 "plugin.yaml": "function:\n  title: T\n",
@@ -285,7 +285,7 @@ class TestWhichVariablesAPluginReads:
         assert "env   FLAG (default true)" in out and "env   HOST (no default)" in out
 
     def test_a_plugin_with_none_prints_nothing(self, tmp_path, capsys):
-        write_tree(
+        write_plugin(
             tmp_path / "p",
             {"plugin.yaml": "function:\n  title: T\n", "function.py": "class Event:\n    pass\n"},
         )

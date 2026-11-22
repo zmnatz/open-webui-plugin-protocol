@@ -7,7 +7,7 @@ import sys
 import types
 
 import pytest
-from conftest import write_tree
+from conftest import write_plugin
 from pydantic import ValidationError
 
 from owpp.bundle import bundle_function, load_function_files
@@ -18,7 +18,7 @@ HEX = "0" * 32
 
 def load(tmp_path, code, manifest="function:\n  title: T\njobs: {}\n", name="demo"):
     folder = tmp_path / name
-    write_tree(folder, {"plugin.yaml": manifest, "function.py": code})
+    write_plugin(folder, {"plugin.yaml": manifest, "function.py": code})
     module = types.ModuleType(f"function_{name}_{HEX}")
     sys.modules[module.__name__] = module  # pydantic resolves annotations through it
     try:
@@ -107,7 +107,7 @@ class TestTheLibrarySuppliesTheValves:
 
     def test_it_works_beside_the_assets_mixin(self, tmp_path):
         folder = tmp_path / "p"
-        write_tree(
+        write_plugin(
             folder,
             {
                 "plugin.yaml": "function:\n  title: T\njobs: {sync_every_minutes: 9}\n",
@@ -142,7 +142,7 @@ class TestTheIntervalIsDeclaredInTheManifest:
 
     def test_the_key_brings_the_library_in_by_itself(self, tmp_path):
         folder = tmp_path / "p"
-        write_tree(
+        write_plugin(
             folder,
             {
                 "plugin.yaml": "function:\n  title: T\njobs: {sync_every_minutes: 5}\n",
@@ -170,7 +170,7 @@ class TestTheIntervalIsDeclaredInTheManifest:
     )
     def test_a_bad_interval_is_refused_when_bundling(self, tmp_path, value, message):
         folder = tmp_path / "p"
-        write_tree(
+        write_plugin(
             folder,
             {
                 "plugin.yaml": f"function:\n  title: T\njobs: {{sync_every_minutes: {value}}}\n",
@@ -186,7 +186,7 @@ class TestTheIntervalIsDeclaredInTheManifest:
             ("function:\n  title: T\njobs: {every: 5}\n", "unknown key every"),
         ):
             folder = tmp_path / "x" / "p"
-            write_tree(folder, {"plugin.yaml": manifest, "function.py": SIMPLE})
+            write_plugin(folder, {"plugin.yaml": manifest, "function.py": SIMPLE})
             with pytest.raises(OwppError, match=message):
                 load_function_files(tmp_path / "x")
 
@@ -246,6 +246,6 @@ class TestAdoptMarkers:
     def test_anything_but_a_list_of_markers_is_refused_when_bundling(self, tmp_path, value):
         folder = tmp_path / "p"
         manifest = f"function:\n  title: T\njobs:\n  adopt_markers: {value}\n"
-        write_tree(folder, {"plugin.yaml": manifest, "function.py": SIMPLE})
+        write_plugin(folder, {"plugin.yaml": manifest, "function.py": SIMPLE})
         with pytest.raises(OwppError, match="must be a list of markers"):
             load_function_files(tmp_path)

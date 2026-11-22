@@ -4,12 +4,16 @@
 owpp migrate [id ...] [--dry-run] [--dir FOLDER]
 ```
 
-Brings each `plugin.yaml` written for an older [protocol version](../plugin-format.md#protocol) up to the current one. It rewrites only what each version step changes, keeps comments and layout, and lists every `plugin.yaml` it writes, so the change is there to review and commit. A manifest already at the current version is left alone.
+Brings each plugin written for an older [protocol version](../plugin-format.md#protocol) up to the current one. It rewrites only what each version step changes, keeps comments and layout, and lists every file it writes, so the change is there to review and commit. A plugin already at the current version is left alone.
+
+Most steps change only `plugin.yaml`. 0.3 -> 0.5 also rewrites the plugin's `function.py`, `tool.py` and `shared.py`, so that each imports what it uses ([upgrading](../upgrading.md#04-05)). A name it cannot place is listed under the plugin, with its file and line, and the command exits 1: import it yourself. Code taken from git (`source:`) is not touched.
 
 ```
 $ owpp migrate --dry-run
-new   hello: would migrate 0.1 -> 0.2
-ok    notes: protocol 0.2
+new   hello: would migrate 0.3 -> 0.5
+        would write plugin.yaml
+        would write function.py
+ok    notes: protocol 0.5
 ```
 
 [`owpp check`](check.md) warns about a manifest with no `protocol:` key and notes an older one, pointing at this command. When to run it, and the rest of an upgrade: [upgrading owpp](../upgrading.md).

@@ -319,6 +319,35 @@ class TestToolAndSkills:
         with pytest.raises(OwppError, match=error):
             load_function_files(d)
 
+    @pytest.mark.parametrize(
+        ("source", "error"),
+        [
+            (
+                "class Filter:\n    m = plugin_mount\n",
+                r"function\.py:2: plugin_mount is used without importing it: add "
+                r"`from owpp\.lib import plugin_mount` \(`owpp migrate`",
+            ),
+            (
+                "class Filter:\n    x = SHARED\n",
+                r"function\.py:2: SHARED is shared\.py's, used without importing it: add "
+                r"`from shared import SHARED` \(`owpp migrate`",
+            ),
+            (
+                "class Filter:\n    x = json.dumps(1)\n",
+                r"function\.py:2: json is imported in shared\.py, not here: import it",
+            ),
+        ],
+    )
+    def test_refuses_names_used_without_their_import(self, plugin, source, error):
+        """Before protocol 0.5 a plugin used them as globals. Bundled they would still be there,
+        but the file would not read as Python on its own; owpp migrate adds the imports."""
+        d = plugin(
+            "function:\n  title: T\ninclude: [routes]\n",
+            {"shared.py": "import json\n\nSHARED = 1\n", "function.py": source},
+        )
+        with pytest.raises(OwppError, match=error):
+            load_function_files(d)
+
     def test_a_tool_checks_its_imports_against_its_own_include(self, plugin):
         files = {
             "function.py": "class Filter:\n    pass\n",
@@ -518,7 +547,10 @@ class TestStaticAndTemplates:
         d = plugin(
             "function:\n  title: T\n",
             {
-                "function.py": 'class Event:\n    pass\n\nPAGE = plugin_template_text("page.html")\n',
+                "function.py": (
+                    "from owpp.lib import plugin_template_text\n\n"
+                    'class Event:\n    pass\n\nPAGE = plugin_template_text("page.html")\n'
+                ),
                 "templates/page.html": 'a "quoted" \\ page\n',
             },
         )
@@ -724,7 +756,10 @@ class TestAssets:
         d = self.make(
             plugin,
             files={
-                "function.py": "class Event(PluginAssets):\n    def asset_vars(self):\n        return {}\n"
+                "function.py": (
+                    "from owpp.lib import PluginAssets\n\n"
+                    "class Event(PluginAssets):\n    def asset_vars(self):\n        return {}\n"
+                )
             },
         )
         (fn,) = load_function_files(d)
@@ -1132,7 +1167,7 @@ class TestProtocol:
         with pytest.raises(OwppError, match=r"`protocol:` must be a quoted major.minor string"):
             self.load(tmp_path, f"protocol: {value}\nfunction: {{title: T}}\n")
 
-    @pytest.mark.parametrize("value", ["0.4", "1.0"])
+    @pytest.mark.parametrize("value", ["0.6", "1.0"])
     def test_a_newer_version_is_refused(self, tmp_path, value):
         with pytest.raises(OwppError, match=rf"protocol {value} is newer than owpp supports"):
             self.load(tmp_path, f'protocol: "{value}"\nfunction: {{title: T}}\n')

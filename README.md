@@ -16,7 +16,7 @@ plugins/excalidraw/
 
 ```yaml
 # plugin.yaml
-protocol: "0.3"
+protocol: "0.5"
 function:
   title: Excalidraw
   version: 3.1.0

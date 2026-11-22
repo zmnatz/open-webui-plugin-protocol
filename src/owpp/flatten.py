@@ -13,6 +13,7 @@ since they become one namespace. Anything else is refused here, with the line it
 from __future__ import annotations
 
 import ast
+import symtable
 from collections.abc import Iterator
 
 from .errors import OwppError
@@ -156,6 +157,8 @@ def flatten(
                     raise fail(node, f"{alias.name} is not defined in shared.py")
             drop.append((node.lineno, node.end_lineno or node.lineno))
 
+    _refuse_unimported(text, where, lib, shared, shared_names)
+
     for own, line in defined(tree, imports=False).items():
         if own in shared_names:
             raise OwppError(
@@ -164,6 +167,33 @@ def flatten(
             )
 
     return _drop(text, drop), from_lib
+
+
+MIGRATE = "`owpp migrate` adds the imports a plugin written before protocol 0.5 is missing"
+
+
+def _refuse_unimported(
+    text: str, where: str, lib: dict[str, str], shared: str | None, shared_names: dict
+) -> None:
+    """A library or shared.py name used without being imported. Bundled, it would still be in
+    scope, but the file would not read as Python on its own, which is the point of importing."""
+    own = defined(_parse(shared, where), imports=False) if shared else {}
+    for name, line in sorted(unbound(text).items(), key=lambda item: item[1]):
+        if name in own:
+            raise OwppError(
+                f"{where}:{line}: {name} is shared.py's, used without importing it: add "
+                f"`from shared import {name}` ({MIGRATE})"
+            )
+        if name in shared_names:
+            raise OwppError(
+                f"{where}:{line}: {name} is imported in shared.py, not here: import it in this "
+                f"file too ({MIGRATE})"
+            )
+        if name in lib:
+            raise OwppError(
+                f"{where}:{line}: {name} is used without importing it: add "
+                f"`from owpp.lib import {name}` ({MIGRATE})"
+            )
 
 
 def _drop(text: str, spans: list[tuple[int, int]]) -> str:
@@ -220,24 +250,77 @@ def _separate(fail, node: ast.AST, name: str, other: str) -> OwppError:
     )
 
 
+def unbound(text: str) -> dict[str, int]:
+    """Names the module looks up as globals (from any scope) without binding them at its top
+    level, with the line of the first such use: what it expects to find already in scope,
+    builtins included. Resolved scope by scope, as the compiler does (symtable)."""
+    top = symtable.symtable(text, "<plugin>", "exec")
+    bound = {s.get_name() for s in top.get_symbols() if s.is_assigned() or s.is_imported()}
+    # Per scope (function and class bodies by their first line), the names it reads as globals.
+    globals_in: dict[tuple[str, int], set[str]] = {}
+
+    def visit(table: symtable.SymbolTable) -> None:
+        names = {
+            s.get_name()
+            for s in table.get_symbols()
+            if s.is_referenced() and (table.get_type() == "module" or s.is_global())
+        }
+        globals_in[(table.get_name(), table.get_lineno())] = names
+        for child in table.get_children():
+            visit(child)
+
+    visit(top)
+    tree = ast.parse(text)
+    # Annotations name globals too, even postponed ones (`from __future__ import annotations`)
+    # that symtable leaves out: FastAPI and pydantic look them up in the module at run time.
+    annotated: dict[str, int] = {}
+    for node in ast.walk(tree):
+        notes = []
+        if isinstance(node, ast.arg) and node.annotation is not None:
+            notes.append(node.annotation)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.returns:
+            notes.append(node.returns)
+        elif isinstance(node, ast.AnnAssign):
+            notes.append(node.annotation)
+        for note in notes:
+            for name in ast.walk(note):
+                if isinstance(name, ast.Name):
+                    annotated[name.id] = min(annotated.get(name.id, name.lineno), name.lineno)
+    wanted = (set().union(*globals_in.values()) | set(annotated)) - bound
+    lines: dict[str, int] = {n: line for n, line in annotated.items() if n in wanted}
+
+    def walk(node: ast.AST, scope: set[str]) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            for part in (
+                *node.decorator_list,
+                *getattr(node, "bases", ()),
+                *getattr(node, "keywords", ()),
+            ):
+                walk(part, scope)
+            if not isinstance(node, ast.ClassDef):
+                for default in (*node.args.defaults, *node.args.kw_defaults):
+                    if default is not None:
+                        walk(default, scope)
+            inner = globals_in.get((node.name, node.lineno), scope)
+            if node.decorator_list:  # symtable gives a decorated def the line of its def
+                inner = globals_in.get((node.name, node.decorator_list[0].lineno), inner)
+            for child in node.body:
+                walk(child, inner)
+            return
+        is_load = isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load)
+        if is_load and node.id in wanted and node.id in scope:
+            lines[node.id] = min(lines.get(node.id, node.lineno), node.lineno)
+        for child in ast.iter_child_nodes(node):
+            walk(child, scope)
+
+    walk(tree, globals_in[("top", 0)] | set(annotated))
+    return {name: lines.get(name, 1) for name in sorted(wanted)}
+
+
 def missing_lib_imports(text: str, lib: dict[str, str]) -> list[str]:
     """Names of owpp.lib that `text` uses but never binds or imports: what it is missing to
     import, written the way bundles used to work, with the libraries simply above the file."""
-    tree = ast.parse(text)
-    bound: set[str] = set()
-    used: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Name):
-            (used if isinstance(node.ctx, ast.Load) else bound).add(node.id)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            bound.add(node.name)
-        elif isinstance(node, ast.arg):
-            bound.add(node.arg)
-        elif isinstance(node, (ast.Import, ast.ImportFrom)):
-            bound.update((a.asname or a.name).split(".")[0] for a in node.names)
-        elif isinstance(node, ast.ExceptHandler) and node.name:
-            bound.add(node.name)
-    return sorted((n for n in used - bound if n in lib), key=_isort)
+    return sorted((n for n in unbound(text) if n in lib), key=_isort)
 
 
 def _isort(name: str) -> tuple[int, str]:

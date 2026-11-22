@@ -126,7 +126,7 @@ It writes no code, only `plugin.yaml`, a README and tests:
 
 ```yaml
 # plugin.yaml
-protocol: "0.3"
+protocol: "0.5"
 source:
   git: "https://github.com/Classic298/open-webui-plugins.git"
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea
