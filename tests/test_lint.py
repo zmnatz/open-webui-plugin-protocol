@@ -122,6 +122,65 @@ class TestPlugins:
         )
         assert len(lint_plugin(tmp_path / "p", "p")) == 1
 
+    def test_a_name_that_replaces_a_library_name_in_the_bundle(self, tmp_path):
+        """Bundled, the plugin's files and its libraries are one module, so a plugin's own `on`
+        would replace the events library's, which its handlers need."""
+        write_tree(
+            tmp_path / "p",
+            {
+                "plugin.yaml": "function:\n  title: T\ninclude: [events]\n",
+                "function.py": "def on(*names):\n    pass\n\nclass Event:\n    pass\n",
+            },
+        )
+        assert [str(f) for f in lint_plugin(tmp_path / "p", "p")] == [
+            "p/function.py:1: on is also the events library's (owpp.lib): bundled, this "
+            "definition replaces it. Rename it"
+        ]
+
+    def test_a_library_name_is_the_plugins_own_when_the_library_is_not_in_the_bundle(
+        self, tmp_path
+    ):
+        """A plugin calling the Shared Assets Protocol itself defines `register`, which the
+        assets library also has; without assets/ that library is not there."""
+        write_tree(
+            tmp_path / "p",
+            {
+                "plugin.yaml": "function:\n  title: T\ninclude: [shared_assets]\n",
+                "function.py": "def register(app):\n    pass\n\nclass Event:\n    pass\n",
+            },
+        )
+        assert lint_plugin(tmp_path / "p", "p") == []
+
+    def test_future_imports_that_differ_between_the_files(self, tmp_path):
+        """They move to the top of the bundle, so one file's applies to every file there:
+        each file should say so, for the editor to read it the way it runs."""
+        future = "from __future__ import annotations\n"
+        write_tree(
+            tmp_path / "p",
+            {
+                "plugin.yaml": "function:\n  title: T\ntool:\n  id: t\n",
+                "shared.py": future + "X = 1\n",
+                "function.py": "class Event:\n    pass\n",
+                "tool.py": future + "class Tools:\n    pass\n",
+            },
+        )
+        assert [str(f) for f in lint_plugin(tmp_path / "p", "p")] == [
+            "p/function.py:1: has no `from __future__ import annotations`, which shared.py has: "
+            "bundled, it applies here too, so add it to read this file the way it runs"
+        ]
+
+    def test_future_imports_without_shared_py_do_not_meet(self, tmp_path):
+        """function.py and tool.py are separate bundles; only shared.py goes into both."""
+        write_tree(
+            tmp_path / "p",
+            {
+                "plugin.yaml": "function:\n  title: T\ntool:\n  id: t\n",
+                "function.py": "from __future__ import annotations\n\nclass Event:\n    pass\n",
+                "tool.py": "class Tools:\n    pass\n",
+            },
+        )
+        assert lint_plugin(tmp_path / "p", "p") == []
+
     def test_code_taken_from_a_source_is_not_ours_to_lint(self, tmp_path):
         manifest = (
             "source: {git: https://example.com/o/r.git, ref: "

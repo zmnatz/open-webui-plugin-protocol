@@ -4,6 +4,7 @@
 
 - A plugin's files are ordinary Python: each imports what it uses, including its shared code (`from shared import NAME`) and the libraries (`from owpp.lib import PluginAdmin, plugin_mount`), so it reads, lints and type-checks on its own. The bundler removes those imports, says which library a name needs in `include:`, and refuses the forms that would break once bundled ([bundling](docs/bundling.md#imports-between-the-files)).
 - `owpp create` writes plugins that import the library names they use.
+- `owpp check` warns about a plugin name that replaces a library name in its bundle, and about `from __future__` lines that differ between `shared.py` and the files it goes in front of.
 - The runtime's `_plugin_ensure()` is now `plugin_ensure()`, imported from `owpp.lib`.
 - `include: [static]` brings in `routes`, which it mounts its files with.
 

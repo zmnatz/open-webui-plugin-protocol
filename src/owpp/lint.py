@@ -8,15 +8,25 @@ Both are about what the people using the plugin see:
   mystery setting.
 - **Tools.** Open-WebUI builds the tool spec the model reads from each method's type hints and
   its docstring's `:param name:` lines, so a method without them gives the model a poor spec.
+
+And two about the files becoming one module when bundled (docs/bundling.md):
+
+- **A library name defined again.** The plugin's definition replaces the library's.
+- **`from __future__` lines that differ.** They move to the top of the bundle, so shared.py's
+  apply to function.py and tool.py too, which an editor reading one file cannot know.
 """
 
 from __future__ import annotations
 
 import ast
 import re
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
+from .errors import OwppError
+from .flatten import defined
+from .libraries import exports, wanted
 from .manifest import read_manifest, read_text
 
 SOURCE_FILES = ("function.py", "tool.py", "shared.py")
@@ -205,4 +215,95 @@ def lint_plugin(path: Path, shown: str) -> list[Finding]:
     for name in SOURCE_FILES:
         if (path / name).exists():
             findings += lint_source(path / name, f"{shown}/{name}")
+    return findings + _shadowed_library_names(path, shown) + _future_imports(path, shown)
+
+
+def _trees(path: Path) -> dict[str, ast.Module]:
+    trees = {}
+    for name in SOURCE_FILES:
+        if (path / name).exists():
+            with suppress(SyntaxError):  # `owpp check` reports it
+                trees[name] = ast.parse(read_text(path / name))
+    return trees
+
+
+def _bundle_libraries(path: Path) -> dict[str, set[str]]:
+    """The libraries each source file is bundled with: the function's, the tool's, both for
+    shared.py. Empty when plugin.yaml names a library that does not exist (`owpp check` says so)."""
+    manifest = read_manifest(path)
+    held = {
+        key
+        for key, present in (
+            ("static/", (path / "static").is_dir()),
+            ("templates/", (path / "templates").is_dir()),
+            ("assets/", (path / "assets").is_dir()),
+            ("config.yaml", (path / "config.yaml").is_file()),
+            ("jobs:", manifest.get("jobs") is not None),
+        )
+        if present
+    }
+    tool = manifest.get("tool")
+    try:
+        function = set(wanted(manifest.get("include"), held, "plugin.yaml"))
+        tool = (
+            set(wanted(tool.get("include"), set(), "plugin.yaml"))
+            if isinstance(tool, dict)
+            else set()
+        )
+    except OwppError:
+        return {}
+    return {"function.py": function, "tool.py": tool, "shared.py": function | tool}
+
+
+def _shadowed_library_names(path: Path, shown: str) -> list[Finding]:
+    libraries, lib = _bundle_libraries(path), exports()
+    findings = []
+    for name, tree in _trees(path).items():
+        for own, line in defined(tree, imports=False).items():
+            if lib.get(own) in libraries.get(name, ()):
+                findings.append(
+                    Finding(
+                        f"{shown}/{name}",
+                        line,
+                        f"{own} is also the {lib[own]} library's (owpp.lib): bundled, this "
+                        "definition replaces it. Rename it",
+                    )
+                )
     return findings
+
+
+def _futures(tree: ast.Module) -> set[str]:
+    return {
+        alias.name
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module == "__future__"
+        for alias in node.names
+    }
+
+
+def _future_imports(path: Path, shown: str) -> list[Finding]:
+    """shared.py goes in front of function.py and of tool.py, and the bundle's `from __future__`
+    lines are all of theirs: each of the three should have the same ones."""
+    trees = _trees(path)
+    if "shared.py" not in trees:
+        return []
+    findings = []
+    for name in ("function.py", "tool.py"):
+        if name not in trees:
+            continue
+        mine, shared = _futures(trees[name]), _futures(trees["shared.py"])
+        for feature, missing_in, has in sorted(
+            [
+                *((f, name, "shared.py") for f in shared - mine),
+                *((f, "shared.py", name) for f in mine - shared),
+            ]
+        ):
+            findings.append(
+                Finding(
+                    f"{shown}/{missing_in}",
+                    1,
+                    f"has no `from __future__ import {feature}`, which {has} has: bundled, it "
+                    "applies here too, so add it to read this file the way it runs",
+                )
+            )
+    return list(dict.fromkeys(findings))
