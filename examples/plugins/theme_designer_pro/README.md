@@ -229,7 +229,7 @@ Adapting it changed owpp, and found two things to fix there:
 - `tool: templates:`, so a tool embeds only the templates it uses (above).
 - The mock can send events about users and models (`owui.emit("user.deleted", {"type": "user", "id": ...})`), which `user.deleted` needed; it has `decode_token`, which your `_cookie_user_id` calls; and it has enough of the chat pipeline for a plugin that asks a model itself, as your AI Consultant does (`owui.model_reply`, `owui.completions`).
 - Its `tests/` is the first example's with a `conftest.py`, and is a package (`tests/__init__.py`) so its fixtures do not take the module name `conftest` from owpp's own tests when one pytest run collects both.
-- Found, not changed yet: owpp refuses a function that calls `include_router` or `mount` on the app, but your `app.routes.insert(...)` would have passed that check; and the `assets/` library fills its placeholders one after another, so a saved value holding another placeholder's text would be filled too (your `_loader_fragment` fills the saved state last for exactly that reason).
+- Two gaps, fixed in owpp 0.6.1. owpp refused a function that calls `include_router` or `mount` on the app, but your `app.routes.insert(...)` passed that check; it now refuses every change to the app's route list ([#68](https://github.com/zmnatz/open-webui-plugin-protocol/issues/68)). And the `assets/` library filled its placeholders one after another, so a saved value holding another placeholder's text was filled too, which is why your `_loader_fragment` fills the saved state last; it now fills them in one pass ([#69](https://github.com/zmnatz/open-webui-plugin-protocol/issues/69)).
 
 ### Moving to a newer upstream release
 
