@@ -33,7 +33,7 @@ from pathlib import Path
 from .bundle import VALID_ID, VALID_SKILL_ID
 from .errors import OwppError
 from .events import problem_with
-from .flatten import add_lib_imports
+from .imports import add_lib_imports
 from .libraries import exports
 from .protocol import VERSION as PROTOCOL_VERSION
 from .sources import GIT_URL, SHA40, TRACK

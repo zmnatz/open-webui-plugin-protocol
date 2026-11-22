@@ -24,7 +24,7 @@ from owpp.create import (
     write_plugin,
 )
 from owpp.errors import OwppError
-from owpp.flatten import missing_lib_imports
+from owpp.imports import missing_lib_imports
 from owpp.libraries import exports
 from owpp.lint import lint_plugin
 from owpp.manifest import read_manifest

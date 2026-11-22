@@ -25,8 +25,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .errors import OwppError
-from .flatten import defined
-from .libraries import exports, wanted
+from .flatten import FILE_TOKEN, defined
+from .libraries import exports
 from .manifest import read_manifest, read_text
 
 SOURCE_FILES = ("function.py", "tool.py", "shared.py")
@@ -230,7 +230,7 @@ def _file_tokens(path: Path, shown: str) -> list[Finding]:
         if not (path / name).exists():
             continue
         for number, line in enumerate(read_text(path / name).splitlines(), 1):
-            for m in re.finditer(r"\{\{file:([A-Za-z0-9_.-]+)\}\}", line):
+            for m in FILE_TOKEN.finditer(line):
                 findings.append(
                     Finding(
                         f"{shown}/{name}",
@@ -253,31 +253,14 @@ def _trees(path: Path) -> dict[str, ast.Module]:
 
 
 def _bundle_libraries(path: Path) -> dict[str, set[str]]:
-    """The libraries each source file is bundled with: the function's, the tool's, both for
-    shared.py. Empty when plugin.yaml names a library that does not exist (`owpp check` says so)."""
-    manifest = read_manifest(path)
-    held = {
-        key
-        for key, present in (
-            ("static/", (path / "static").is_dir()),
-            ("templates/", (path / "templates").is_dir()),
-            ("assets/", (path / "assets").is_dir()),
-            ("config.yaml", (path / "config.yaml").is_file()),
-            ("jobs:", manifest.get("jobs") is not None),
-        )
-        if present
-    }
-    tool = manifest.get("tool")
+    """The libraries each source file is bundled with (bundle.file_libraries); empty when the
+    plugin does not bundle, which `owpp check` reports itself."""
+    from .bundle import file_libraries
+
     try:
-        function = set(wanted(manifest.get("include"), held, "plugin.yaml"))
-        tool = (
-            set(wanted(tool.get("include"), set(), "plugin.yaml"))
-            if isinstance(tool, dict)
-            else set()
-        )
+        return file_libraries(path)
     except OwppError:
         return {}
-    return {"function.py": function, "tool.py": tool, "shared.py": function | tool}
 
 
 def _shadowed_library_names(path: Path, shown: str) -> list[Finding]:

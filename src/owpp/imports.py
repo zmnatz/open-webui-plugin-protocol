@@ -1,5 +1,6 @@
-"""`owpp migrate`'s 0.3 -> 0.5 step for a plugin's code: give each file the imports it used to
-do without (docs/adr/0002-plugin-source-is-python.md).
+"""Writing imports into a plugin's source: the `from owpp.lib import` line `owpp create` gives a
+file it generates (add_lib_imports), and `owpp migrate`'s 0.3 -> 0.5 step, which gives each file
+the imports it used to do without (upgrade; docs/adr/0002-plugin-source-is-python.md).
 
 Before protocol 0.5, function.py and tool.py relied on shared.py and the libraries being pasted
 in above them, and shared.py held imports only the next file used. This works out, for each
@@ -23,7 +24,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .flatten import LIB, SHARED, _isort, defined, import_line, unbound
+from .flatten import LIB, SHARED, bound_name, defined, unbound
 from .libraries import exports
 
 FILES = ("shared.py", "function.py", "tool.py")
@@ -43,18 +44,13 @@ class Upgrade:
 
 @dataclass(frozen=True)
 class _Import:
-    """One name a top-level import binds: `import module [as alias]` or
-    `from module import name [as alias]`."""
+    """One name a top-level import binds: `import module [as alias]` (name None) or
+    `from module import name [as alias]`, and the name it binds (`bound`)."""
 
     module: str
-    name: str | None = None  # None for `import module`
-    alias: str | None = None
-
-    @property
-    def bound(self) -> str:
-        if self.alias:
-            return self.alias
-        return self.name if self.name is not None else self.module.split(".")[0]
+    name: str | None
+    alias: str | None
+    bound: str
 
 
 def _imports(tree: ast.Module) -> dict[str, _Import]:
@@ -63,16 +59,43 @@ def _imports(tree: ast.Module) -> dict[str, _Import]:
     for node in tree.body:
         if isinstance(node, ast.Import):
             for a in node.names:
-                imp = _Import(a.name, None, a.asname)
-                out.setdefault(imp.bound, imp)
+                out.setdefault(
+                    bound_name(a, False), _Import(a.name, None, a.asname, bound_name(a, False))
+                )
         elif isinstance(node, ast.ImportFrom) and not node.level and node.module:
             if node.module == "__future__" or node.module.split(".")[0] in (SHARED, "owpp"):
                 continue
             for a in node.names:
                 if a.name != "*":
-                    imp = _Import(node.module, a.name, a.asname)
-                    out.setdefault(imp.bound, imp)
+                    bound = bound_name(a, True)
+                    out.setdefault(bound, _Import(node.module, a.name, a.asname, bound))
     return out
+
+
+def isort_key(name: str) -> tuple[int, str]:
+    """isort's (and ruff's) order inside one import: constants, then classes, then the rest."""
+    return (0 if name.isupper() else 1 if name[0].isupper() else 2, name.lower())
+
+
+def import_line(module: str, names: list[str], width: int = 100) -> str:
+    """`from <module> import <names>` on one line, or one name per line when it is too long."""
+    line = f"from {module} import {', '.join(names)}\n"
+    if len(line) <= width + 1:
+        return line
+    return f"from {module} import (\n" + "".join(f"    {n},\n" for n in names) + ")\n"
+
+
+def missing_lib_imports(text: str, lib: dict[str, str]) -> list[str]:
+    """Names of owpp.lib that `text` uses but never binds or imports: what it is missing to
+    import, written the way bundles used to work, with the libraries simply above the file."""
+    return sorted((n for n in unbound(text) if n in lib), key=isort_key)
+
+
+def add_lib_imports(text: str, lib: dict[str, str]) -> str:
+    """`text` with a `from owpp.lib import ...` for the library names it uses without importing,
+    after its other top-level imports (ahead of `from shared import`). Unchanged if none."""
+    names = missing_lib_imports(text, lib)
+    return _add_imports(text, [import_line(LIB, names)]) if names else text
 
 
 def _group(module: str) -> int:
@@ -97,64 +120,63 @@ def _render(imports: list[_Import]) -> list[str]:
                     i.name + (f" as {i.alias}" if i.alias else "")
                 )
         for module in sorted(by_module):
-            lines.append(import_line(module, sorted(set(by_module[module]), key=_isort)))
+            lines.append(import_line(module, sorted(set(by_module[module]), key=isort_key)))
         if lines:
             blocks.append("".join(lines))
     return blocks
 
 
-def _insert_point(lines: list[str], tree: ast.Module) -> int:
-    """After the leading docstring, comments and imports: where new imports go."""
+def _header_end(lines: list[str], tree: ast.Module) -> int:
+    """The line after the module's docstring, or after its leading `#` comments: where its first
+    statement may go (a `from __future__` line must be first)."""
+    first = tree.body[0] if tree.body else None
+    if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+        return first.end_lineno or first.lineno
     at = 0
+    while at < len(lines) and lines[at].startswith("#"):
+        at += 1
+    return at
+
+
+def _insert_point(lines: list[str], tree: ast.Module) -> int:
+    """Where new imports go: after the header and the leading imports, but ahead of a
+    `from shared import`, which comes last (the plugin's own code)."""
+    at = _header_end(lines, tree)
     for node in tree.body:
-        is_doc = isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
-        if isinstance(node, (ast.Import, ast.ImportFrom)) or (is_doc and node is tree.body[0]):
+        if isinstance(node, ast.ImportFrom) and node.module == SHARED and not node.level:
+            return node.lineno - 1
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
             at = node.end_lineno or node.lineno
-        else:
+        elif not (node is tree.body[0] and isinstance(node, ast.Expr)):
             break
-    if at == 0:
-        while at < len(lines) and lines[at].startswith("#"):
-            at += 1
     return at
 
 
 def _add_imports(text: str, blocks: list[str]) -> str:
+    """`text` with the import `blocks` (each a group of statements) at the insert point, a blank
+    line between groups and around them: two before a top-level def or class, as PEP 8 wants."""
     if not blocks:
         return text
     tree = ast.parse(text)
     lines = text.splitlines(keepends=True)
     at = _insert_point(lines, tree)
-    block = "\n".join(blocks)
     before = "\n" if at and lines[at - 1].strip() else ""
     rest = lines[at:]
     while rest and not rest[0].strip():
         rest.pop(0)
-    # Two blank lines before a top-level def or class, as PEP 8 (and ruff) want; one otherwise.
     top_level = rest and rest[0].startswith(("def ", "async def ", "class ", "@"))
     gap = "\n\n" if top_level else "\n" if rest else ""
-    return "".join(lines[:at]) + before + block + gap + "".join(rest)
+    return "".join(lines[:at]) + before + "\n".join(blocks) + gap + "".join(rest)
 
 
 def _add_future(text: str, features: set[str]) -> str:
     """`text` with `from __future__ import X` for each feature in `features` it lacks, first."""
     tree = ast.parse(text)
-    have = {
-        a.name
-        for n in tree.body
-        if isinstance(n, ast.ImportFrom) and n.module == "__future__"
-        for a in n.names
-    }
-    missing = sorted(features - have)
+    missing = sorted(features - _futures(tree))
     if not missing:
         return text
     lines = text.splitlines(keepends=True)
-    first = tree.body[0] if tree.body else None
-    if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
-        at = first.end_lineno or first.lineno
-    else:
-        at = 0
-        while at < len(lines) and lines[at].startswith("#"):
-            at += 1
+    at = _header_end(lines, tree)
     line = f"from __future__ import {', '.join(missing)}\n"
     before = "\n" if at and lines[at - 1].strip() else ""
     after = "\n" if at < len(lines) and lines[at].strip() else ""
@@ -169,12 +191,8 @@ def _drop_unused(text: str, unused: set[str]) -> str:
     for node in tree.body:
         if not isinstance(node, (ast.Import, ast.ImportFrom)):
             continue
-        keep = [
-            a
-            for a in node.names
-            if (a.asname or (a.name if isinstance(node, ast.ImportFrom) else a.name.split(".")[0]))
-            not in unused
-        ]
+        from_import = isinstance(node, ast.ImportFrom)
+        keep = [a for a in node.names if bound_name(a, from_import) not in unused]
         if len(keep) == len(node.names):
             continue
         new = ""
@@ -239,9 +257,9 @@ def upgrade(folder: Path, skip: set[str] | frozenset[str] = frozenset()) -> Upgr
                 )
         blocks = _render(needed)
         if from_lib:
-            blocks.append(import_line(LIB, sorted(from_lib, key=_isort)))
+            blocks.append(import_line(LIB, sorted(from_lib, key=isort_key)))
         if from_shared:
-            blocks.append(import_line(SHARED, sorted(from_shared, key=_isort)))
+            blocks.append(import_line(SHARED, sorted(from_shared, key=isort_key)))
         texts[name] = _add_imports(texts[name], blocks)
 
     if "shared.py" in texts and copied:

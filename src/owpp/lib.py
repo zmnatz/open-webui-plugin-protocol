@@ -11,6 +11,7 @@ loaded on first use rather than with this module.
 
 from typing import TYPE_CHECKING
 
+from .libraries import LIB_DIR, public_names
 from .runtime.lib.plugin_assets import (  # assets
     PluginAssets,
     plugin_assets_register,
@@ -107,22 +108,9 @@ if TYPE_CHECKING:
         reload_tasks,
     )
 
-_LIVE_RELOAD = (
-    "RELOAD_EXEC_ID",
-    "RELOAD_FUNCTION_ID",
-    "RELOAD_IMPL_VERSION",
-    "RELOAD_STATE_ATTR",
-    "reload_active",
-    "reload_bootstrap",
-    "reload_channel",
-    "reload_ensure_listener",
-    "reload_log",
-    "reload_mark_loaded",
-    "reload_on_event",
-    "reload_publish",
-    "reload_state",
-    "reload_tasks",
-)
+# Read from the file, so a new upstream name needs no edit here (only the TYPE_CHECKING list, for
+# editors, which tests/test_libraries.py checks).
+_LIVE_RELOAD = frozenset(public_names(LIB_DIR / "live_reload.py"))
 
 
 def __getattr__(name: str):

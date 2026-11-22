@@ -150,3 +150,9 @@ def test_library_files_import_on_their_own_with_their_defaults():
             importlib.import_module(f"owpp.runtime.lib.{lib.file}")
     importlib.import_module("owpp.runtime.plugin_runtime")
     assert RUNTIME_FILE.exists()
+
+
+def test_every_library_a_tool_may_ask_for_has_a_reader_for_its_data():
+    from owpp.bundle import TOOL_DATA_READERS
+
+    assert sorted(TOOL_DATA_READERS) == sorted(lib.name for lib in LIBRARIES if lib.for_tools)

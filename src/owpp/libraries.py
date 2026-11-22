@@ -51,6 +51,8 @@ class Library:
     data_needs: str | None = None
     # The data when the bundle has none (a tool bundle).
     default: Any = None
+    # A tool can ask for it, data included (`tool.include:`); otherwise its data is the function's.
+    for_tools: bool = False
 
 
 # In the order they are added to a bundle: each is a vendored, byte-identical copy put right after
@@ -89,6 +91,7 @@ LIBRARIES: tuple[Library, ...] = (
         on_when="templates/",
         placeholder="__TEMPLATES_DATA__",
         data_needs="templates/",
+        for_tools=True,
     ),
     Library(
         "assets",
@@ -219,7 +222,7 @@ def link(
         if lib.data_needs and data.get(lib.name) is None:
             raise OwppError(
                 f"{where}: include: {lib.name} needs {HELD[lib.data_needs].replace('`', '')}"
-                + ("" if lib.name == "templates" else " (it applies to the function bundle only)")
+                + ("" if lib.for_tools else " (it applies to the function bundle only)")
             )
     add = ""
     for lib_name in libs:

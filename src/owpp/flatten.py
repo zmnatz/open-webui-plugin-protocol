@@ -1,5 +1,7 @@
 """Turning a plugin's files, written as ordinary Python, into the one module Open-WebUI stores.
 
+This module only reads source; owpp.imports writes imports into it (for create and migrate).
+
 `function.py` and `tool.py` import what they use, including the plugin's own code
 (`from shared import NAME`) and the libraries (`from owpp.lib import NAME`). Those are real
 imports for an editor and for tests. In the bundle, shared.py and the libraries are already
@@ -13,6 +15,7 @@ since they become one namespace. Anything else is refused here, with the line it
 from __future__ import annotations
 
 import ast
+import re
 import symtable
 from collections.abc import Iterator
 
@@ -22,6 +25,8 @@ SHARED = "shared"
 LIB = "owpp.lib"
 # function.py and tool.py are bundled into separate modules, so neither can import the other.
 SEPARATE = ("function", "tool")
+# `{{file:NAME}}`, replaced by the sibling file's text (deprecated: templates/ does it as Python).
+FILE_TOKEN = re.compile(r"\{\{file:([A-Za-z0-9_.-]+)\}\}")
 
 
 def _top_level(body: list[ast.stmt]) -> Iterator[ast.stmt]:
@@ -375,49 +380,3 @@ def unbound(text: str) -> dict[str, int]:
 
     walk(tree, globals_in[("top", 0)] | set(annotated))
     return {name: lines.get(name, 1) for name in sorted(wanted)}
-
-
-def missing_lib_imports(text: str, lib: dict[str, str]) -> list[str]:
-    """Names of owpp.lib that `text` uses but never binds or imports: what it is missing to
-    import, written the way bundles used to work, with the libraries simply above the file."""
-    return sorted((n for n in unbound(text) if n in lib), key=_isort)
-
-
-def _isort(name: str) -> tuple[int, str]:
-    """isort's (and ruff's) order inside one import: constants, then classes, then the rest."""
-    return (0 if name.isupper() else 1 if name[0].isupper() else 2, name.lower())
-
-
-def import_line(module: str, names: list[str], width: int = 100) -> str:
-    """`from <module> import <names>` on one line, or one name per line when it is too long."""
-    line = f"from {module} import {', '.join(names)}\n"
-    if len(line) <= width + 1:
-        return line
-    return f"from {module} import (\n" + "".join(f"    {n},\n" for n in names) + ")\n"
-
-
-def add_lib_imports(text: str, lib: dict[str, str]) -> str:
-    """`text` with a `from owpp.lib import ...` for the library names it uses without importing,
-    after its other top-level imports (ahead of `from shared import`). Unchanged if none."""
-    names = missing_lib_imports(text, lib)
-    if not names:
-        return text
-    tree = ast.parse(text)
-    lines = text.splitlines(keepends=True)
-    leading = []
-    for node in tree.body:
-        if isinstance(node, (ast.Import, ast.ImportFrom)):
-            leading.append(node)
-        elif not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)):
-            break
-    shared = [n for n in leading if isinstance(n, ast.ImportFrom) and n.module == SHARED]
-    if shared:
-        at, block = shared[0].lineno - 1, import_line(LIB, names) + "\n"
-    elif leading:
-        at, block = leading[-1].end_lineno or 0, "\n" + import_line(LIB, names)
-    else:
-        at = 0
-        while at < len(lines) and lines[at].startswith("#"):
-            at += 1
-        block = ("\n" if at else "") + import_line(LIB, names) + "\n"
-    return "".join(lines[:at]) + block + "".join(lines[at:])
