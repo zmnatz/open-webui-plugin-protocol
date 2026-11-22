@@ -16,7 +16,7 @@ The runtime only updates or removes objects carrying its function's marker. A to
 - at Open-WebUI startup (a global function is loaded then);
 - on every function lifecycle event (`function.enabled`, `.disabled`, `.updated`, `.deleted`), through `EVENT_SINKS`;
 - when an admin saves the function's valves (`function.valves_updated`; a user saving their own UserValves does not count), so `INSTALL_TOOLS`, `INSTALL_SKILLS` and `TOOL_VALVES` apply on save;
-- from a throttled `_plugin_ensure()` called in the function's `inlet` (retries a failed startup sync);
+- from a throttled `plugin_ensure()` called in the function's `inlet` (retries a failed startup sync; `from owpp.lib import plugin_ensure`);
 - when the tool's module loads (`_plugin_check_parent`), for a restart that happened while the function was disabled.
 
 A sync **installs and updates** the tool and skills while the function is enabled, and **removes** them when it is disabled or deleted.

@@ -12,6 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+from owpp.lib import PluginAssets, on
+
 SOCKET_EVENT = "owui:page-banners"  # distinct from Better Banners', so both can be installed
 BANNERS_UPDATED_EVENT = "config.banners.updated"
 

@@ -32,6 +32,8 @@ from pathlib import Path
 from .bundle import VALID_ID, VALID_SKILL_ID
 from .errors import OwppError
 from .events import problem_with
+from .flatten import add_lib_imports
+from .libraries import exports
 from .protocol import VERSION as PROTOCOL_VERSION
 from .sources import GIT_URL, SHA40, TRACK
 from .versioning import changelog_text
@@ -622,7 +624,7 @@ def render_function(spec: PluginSpec) -> str:
     }[spec.type](spec)
     while lines and lines[-1] == "":
         lines.pop()
-    return "\n".join(lines) + "\n"
+    return add_lib_imports("\n".join(lines) + "\n", exports())
 
 
 def render_tool(spec: PluginSpec) -> str:
@@ -680,7 +682,7 @@ def render_tool(spec: PluginSpec) -> str:
         ]
     while lines[-1] == "":
         lines.pop()
-    return "\n".join(lines) + "\n"
+    return add_lib_imports("\n".join(lines) + "\n", exports())
 
 
 def _yaml(value: str) -> str:

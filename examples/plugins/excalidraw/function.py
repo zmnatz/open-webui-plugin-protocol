@@ -1,5 +1,4 @@
 # Serves the editor, adds it to replies as an artifact and keeps the Excalidraw tool installed.
-# plugin_* come from the libraries, which the bundler puts above this file.
 
 import json
 import re
@@ -20,6 +19,18 @@ from shared import (
     _mutate,
     _NoChat,
     log,
+)
+
+from owpp.lib import (
+    WritableChat,
+    plugin_app,
+    plugin_check_token,
+    plugin_config,
+    plugin_ensure,
+    plugin_mount,
+    plugin_stored_valves,
+    plugin_template_text,
+    plugin_token,
 )
 
 # Editor assets: the browser loads React and Excalidraw from esm.sh (no integrity check), or
@@ -123,7 +134,7 @@ class Filter:
 
     async def inlet(self, body: dict, __request__=None) -> dict:
         self._ensure(__request__)
-        await _plugin_ensure()
+        await plugin_ensure()
         return body
 
     # ----------------------------------------------------------- artifact

@@ -24,6 +24,8 @@ from owpp.create import (
     write_plugin,
 )
 from owpp.errors import OwppError
+from owpp.flatten import missing_lib_imports
+from owpp.libraries import exports
 from owpp.lint import lint_plugin
 from owpp.manifest import read_manifest
 from owpp.wizard import Prompter, resolve_ref, run_wizard
@@ -148,6 +150,13 @@ class TestWhatItWrites:
             assert fn.type == ("filter" if spec.type == "installer" else spec.type)
             assert check_bundle(fn.content, f"{spec.id}.py") is None, spec.id
             assert lint_plugin(written / spec.id, spec.id) == [], spec.id
+
+    def test_every_generated_file_imports_the_library_names_it_uses(self, written):
+        """So the plugin reads, lints and type-checks as ordinary Python, like a hand-written one."""
+        files = [p for p in written.glob("*/*.py") if p.name in ("function.py", "tool.py")]
+        assert files
+        for path in files:
+            assert missing_lib_imports(path.read_text(), exports()) == [], path
 
     def test_every_generated_manifest_records_the_protocol(self, written, from_git):
         for directory in (written, from_git):

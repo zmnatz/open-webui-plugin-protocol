@@ -279,6 +279,57 @@ class TestToolAndSkills:
         with pytest.raises(OwppError, match=error):
             load_function_files(d)
 
+    def test_owpp_lib_imports_are_removed_and_their_libraries_are_inlined_above(self, plugin):
+        """`from owpp.lib import NAME` resolves for an editor and tests; Open-WebUI has no owpp,
+        so the line goes and the library is already in the bundle, from shared.py too."""
+        d = plugin(
+            "function:\n  title: T\ninclude: [routes, chat_data]\n",
+            {
+                "shared.py": "from owpp.lib import plugin_chat_read\n\nREAD = plugin_chat_read\n",
+                "function.py": "from owpp.lib import (\n    plugin_mount,\n)\n\nclass Filter:\n    m = plugin_mount\n",
+            },
+        )
+        (fn,) = load_function_files(d)
+        c = fn.content
+        assert "from owpp" not in c and "from ." not in c
+        assert c.index("def plugin_mount(") < c.index("READ = ") < c.index("class Filter:")
+
+    @pytest.mark.parametrize(
+        ("source", "error"),
+        [
+            ("from owpp.lib import plugin_mount as m\n", r"function\.py:1: .*`as`"),
+            ("import owpp.lib\n", r"function\.py:1: .*`from owpp\.lib import NAME`"),
+            ("from owpp import lib\n", r"function\.py:1: .*`from owpp\.lib import NAME`"),
+            ("from owpp.runtime.lib.plugin_core import plugin_app\n", r"function\.py:1: .*owpp"),
+            ("def f():\n    from owpp.lib import plugin_app\n", r"function\.py:2: .*top level"),
+            ("from owpp.lib import *\n", r"function\.py:1: .*name what you use"),
+            ("from owpp.lib import nope\n", r"function\.py:1: owpp\.lib has no nope"),
+            (
+                "from owpp.lib import plugin_chat_read\n",
+                r"function\.py:1: plugin_chat_read is from the chat_data library.*include",
+            ),
+            (
+                "from owpp.lib import plugin_ensure\n",
+                r"function\.py:1: plugin_ensure is the plugin runtime's.*tool or skills",
+            ),
+        ],
+    )
+    def test_refuses_owpp_imports_that_would_break_once_flattened(self, plugin, source, error):
+        d = plugin("function:\n  title: T\ninclude: [routes]\n", {"function.py": source})
+        with pytest.raises(OwppError, match=error):
+            load_function_files(d)
+
+    def test_a_tool_checks_its_imports_against_its_own_include(self, plugin):
+        files = {
+            "function.py": "class Filter:\n    pass\n",
+            "tool.py": "from owpp.lib import plugin_chat_read\n\nclass Tools:\n    pass\n",
+        }
+        bad = plugin("function:\n  title: T\ninclude: [chat_data]\ntool:\n  id: t\n", files)
+        with pytest.raises(OwppError, match=r"tool\.py:1: .*chat_data.*tool\.include"):
+            load_function_files(bad)
+        good = plugin("function:\n  title: T\ntool:\n  id: t\n  include: [chat_data]\n", files)
+        load_function_files(good)
+
     def test_tool_py_cannot_import_from_function_py(self, plugin):
         d = plugin(
             "function:\n  title: T\ntool:\n  id: t\n  title: T\n",

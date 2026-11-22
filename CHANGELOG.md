@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- A plugin's files are ordinary Python: each imports what it uses, including its shared code (`from shared import NAME`) and the libraries (`from owpp.lib import PluginAdmin, plugin_mount`), so it reads, lints and type-checks on its own. The bundler removes those imports, says which library a name needs in `include:`, and refuses the forms that would break once bundled ([bundling](docs/bundling.md#imports-between-the-files)).
+- `owpp create` writes plugins that import the library names they use.
+- The runtime's `_plugin_ensure()` is now `plugin_ensure()`, imported from `owpp.lib`.
+- `include: [static]` brings in `routes`, which it mounts its files with.
+
 ## 0.4.1 (2026-11-21)
 
 - Project: releases follow gitflow. Changes merge into `develop`; a release is started from the Actions tab, and merging it into `main` tags it, publishes it and merges `main` back into `develop`. `main` and the docs site are now always the latest release ([contributing](docs/contributing.md#releasing)).

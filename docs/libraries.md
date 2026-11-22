@@ -1,6 +1,14 @@
 # Libraries
 
-Libraries are plain Python files in `src/owpp/runtime/lib/`, inserted into a bundle by `include:` (see [bundling](bundling.md#order)). They are **vendored**: the bundle contains a byte-identical copy, so a plugin has no runtime dependency on this repository. Public names start with `plugin_`; private helpers start with `_<lib>_` so nothing collides with plugin code. Each file ends with a marker comment (`# end plugin <lib> library`) used to avoid inserting it twice.
+Libraries are plain Python files in `src/owpp/runtime/lib/`, inserted into a bundle by `include:` (see [bundling](bundling.md#order)). They are **vendored**: the bundle contains a copy, so a plugin has no runtime dependency on this repository. Public names start with `plugin_`; private helpers start with `_<lib>_` so nothing collides with plugin code. Each file ends with a marker comment (`# end plugin <lib> library`) used to avoid inserting it twice.
+
+A plugin imports what it uses from **`owpp.lib`**, which re-exports every library's public names:
+
+```python
+from owpp.lib import PluginAdmin, plugin_mount
+```
+
+The import is for an editor and for tests; owpp is a development dependency, not something Open-WebUI has. The bundler removes the line and inlines the library, so it must be a top-level `from owpp.lib import NAME`, without `as`. The library must also be in the bundle: asked for with `include:`, or turned on by what the plugin holds. The bundler names the library when it is not. The libraries import each other the same way, relatively (`from .plugin_core import plugin_app`), and those imports go too. Each library also gives its data placeholder a default (`__CONFIG_DATA__ = '{}'`), so it imports on its own; in a bundle the plugin's data takes its place.
 
 | Library | Adds |
 | --- | --- |

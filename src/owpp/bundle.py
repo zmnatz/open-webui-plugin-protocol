@@ -40,7 +40,16 @@ from . import envtemplate
 from .errors import OwppError
 from .events import problem_with
 from .flatten import flatten
-from .libraries import BY_NAME, hoist_future, json_literal, link
+from .libraries import (
+    BY_NAME,
+    FROM_RUNTIME,
+    exports,
+    fill,
+    hoist_future,
+    json_literal,
+    link,
+    wanted,
+)
 from .manifest import (
     coalesce,
     folder_files,
@@ -130,18 +139,25 @@ def _has_code(folder: Path, name: str) -> bool:
     return (folder / f"{name}.py").exists()
 
 
-def _bundle_code(folder: Path, name: str, keys: dict) -> str:
+def _bundle_code(folder: Path, name: str, keys: dict) -> tuple[str, dict[str, str]]:
     """Header, then shared.py (code both the function and the tool need), then
-    function.py or tool.py. The built-in libraries are added after this (with_includes)."""
+    function.py or tool.py, with their imports of each other and of owpp.lib removed. The
+    built-in libraries are added after this (link). Returns the code and the names imported
+    from owpp.lib, each with where it is imported (`path:line`), for _check_lib_imports."""
     file = folder / f"{name}.py"
     if not file.exists():
         raise OwppError(f"{folder}: no {name}.py")
     shared_file = folder / "shared.py"
     shared = read_text(shared_file) if shared_file.exists() else None
+    lib = exports()
+    from_lib: dict[str, str] = {}
+    shared_code = ""
     if shared is not None:
-        flatten("shared", shared, None, f"{shared_file}")
-    code = flatten(name, read_text(file), shared, f"{file}")
-    shared = shared or ""
+        shared_code, names = flatten("shared", shared, None, f"{shared_file}", lib)
+        from_lib |= {n: f"{shared_file}:{line}" for n, line in names.items()}
+    code, names = flatten(name, read_text(file), shared, f"{file}", lib)
+    from_lib |= {n: f"{file}:{line}" for n, line in names.items()}
+    shared = shared_code
     source = shared + code
     if shared:
         lines, rest = hoist_future(source)
@@ -157,7 +173,28 @@ def _bundle_code(folder: Path, name: str, keys: dict) -> str:
             ) from e
 
     body = re.sub(r"\{\{file:([A-Za-z0-9_.-]+)\}\}", include, source)
-    return render_header(folder, keys) + body
+    return render_header(folder, keys) + body, from_lib
+
+
+def _check_lib_imports(
+    folder: Path, from_lib: dict[str, str], libs: list[str], runtime: bool, include: str
+) -> None:
+    """Each name imported from owpp.lib must come from a library the bundle has (`libs`), or
+    from the runtime when it has that. `include` names the manifest key, for the message."""
+    lib = exports()
+    for name, where in from_lib.items():
+        source = lib[name]
+        if source == FROM_RUNTIME:
+            if not runtime:
+                raise OwppError(
+                    f"{where}: {name} is the plugin runtime's, which a bundle has only when "
+                    "the plugin has a tool or skills"
+                )
+        elif source not in libs:
+            raise OwppError(
+                f"{where}: {name} is from the {source} library, which this bundle does not "
+                f"have: add it to {include} in {folder}/plugin.yaml"
+            )
 
 
 def parse_skill(file: str, text: str) -> tuple[dict, str]:
@@ -187,7 +224,7 @@ def _tool_valves(folder: Path, valves: Any) -> dict:
 
 
 def _runtime_source(data: dict) -> str:
-    return read_text(RUNTIME).replace("__PLUGIN_DATA__", json_literal(data), 1)
+    return fill(read_text(RUNTIME), "__PLUGIN_DATA__", json_literal(data))
 
 
 def _plugin_resources(plugin: ResolvedPlugin) -> dict:
@@ -203,15 +240,13 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
         elif tool.get("file"):
             content = plugin.read(tool["file"])
         else:
-            content = link(
-                _bundle_code(
-                    folder,
-                    "tool",
-                    omit(tool, ["id", "from", "access", "file", "valves", "include"]),
-                ),
-                tool.get("include"),
-                folder.name,
+            code, from_lib = _bundle_code(
+                folder, "tool", omit(tool, ["id", "from", "access", "file", "valves", "include"])
             )
+            # A tool bundle carries the runtime too (below), with just the ids to remove.
+            libs = wanted(tool.get("include"), set(), f"{folder.name}/plugin.yaml")
+            _check_lib_imports(folder, from_lib, libs, True, "tool.include")
+            content = link(code, tool.get("include"), folder.name)
         tools.append(
             {
                 "id": tool_id,
@@ -613,7 +648,7 @@ class Filter:
         self.valves = self.Valves()
 
     async def inlet(self, body: dict, **kwargs) -> dict:
-        await _plugin_ensure()
+        await plugin_ensure()
         return body
 '''
 
@@ -646,6 +681,7 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
             return bundle_function(offline.resolve(plugin))
     folder, manifest = plugin.root, plugin.manifest
     fn = manifest.get("function")
+    from_lib: dict[str, str] = {}
     res = _plugin_resources(plugin)
     has_resources = bool(res["tools"] or res["skills"])
     if not isinstance(fn, dict):
@@ -678,7 +714,7 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
     elif not _has_code(folder, "function") and has_resources:
         code = render_header(folder, keys) + _stub_parent(res)
     else:
-        code = _bundle_code(folder, "function", keys)
+        code, from_lib = _bundle_code(folder, "function", keys)
         _refuse_direct_mounts(folder, code)
         _check_events(folder, code)
     if assets is not None and not re.search(
@@ -710,6 +746,9 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
         "config": config,
         "jobs": jobs,
     }
+    if from_lib:
+        libs = wanted(manifest.get("include"), held, f"{folder.name}/plugin.yaml")
+        _check_lib_imports(folder, from_lib, libs, has_resources, "include")
     code = link(code, manifest.get("include"), folder.name, held, data)
     if has_resources:
         code += _runtime_source(res)

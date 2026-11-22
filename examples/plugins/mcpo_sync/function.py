@@ -11,6 +11,8 @@ from urllib.parse import quote
 import aiohttp
 from pydantic import BaseModel, Field
 
+from owpp.lib import PluginScheduledSync, plugin_config, plugin_function_id, plugin_sync_markers
+
 log = logging.getLogger(__name__)
 
 # mcpo's root description lists servers as "- [name](/name/docs)".

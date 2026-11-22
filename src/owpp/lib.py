@@ -1,0 +1,113 @@
+"""The built-in libraries, for plugins to import: `from owpp.lib import PluginAssets, plugin_config`.
+
+A plugin's files import from here so an editor and tests can resolve the names. The bundler
+removes the import and inlines each library the plugin uses, so a deployed plugin does not need
+owpp. Which library a name comes from decides what the plugin must `include:` (docs/libraries.md).
+The list is checked against the libraries by tests/test_libraries.py.
+"""
+
+from .runtime.lib.plugin_assets import (  # assets
+    PluginAssets,
+    plugin_assets_register,
+    register,
+)
+from .runtime.lib.plugin_chat_data import (  # chat_data
+    ChatNotSaved,
+    plugin_chat_is_temp,
+    plugin_chat_read,
+    plugin_chat_update,
+    plugin_chat_write,
+)
+from .runtime.lib.plugin_config import (  # config
+    plugin_config,
+)
+from .runtime.lib.plugin_core import (  # core
+    plugin_app,
+    plugin_env,
+    plugin_function_id,
+    plugin_is_active,
+    plugin_stored_valves,
+)
+from .runtime.lib.plugin_events import (  # events
+    PluginEvents,
+    on,
+)
+from .runtime.lib.plugin_jobs import (  # jobs
+    PluginScheduledSync,
+    plugin_claim,
+    plugin_every,
+    plugin_spawn,
+    plugin_stop_jobs,
+    plugin_sync_markers,
+    plugin_unclaim,
+)
+from .runtime.lib.plugin_routes import (  # routes
+    PluginAdmin,
+    PluginUser,
+    ReadableChat,
+    WritableChat,
+    plugin_chat_guard,
+    plugin_check_token,
+    plugin_guard,
+    plugin_mount,
+    plugin_require_active,
+    plugin_token,
+    plugin_user,
+)
+from .runtime.lib.plugin_static import (  # static
+    plugin_static_ensure,
+    plugin_static_files,
+    plugin_static_serve,
+)
+from .runtime.lib.plugin_templates import (  # templates
+    plugin_template_bytes,
+    plugin_template_files,
+    plugin_template_text,
+)
+from .runtime.plugin_runtime import (  # runtime
+    plugin_ensure,
+)
+
+__all__ = [
+    "ChatNotSaved",
+    "on",
+    "plugin_app",
+    "plugin_assets_register",
+    "plugin_chat_guard",
+    "plugin_chat_is_temp",
+    "plugin_chat_read",
+    "plugin_chat_update",
+    "plugin_chat_write",
+    "plugin_check_token",
+    "plugin_claim",
+    "plugin_config",
+    "plugin_ensure",
+    "plugin_env",
+    "plugin_every",
+    "plugin_function_id",
+    "plugin_guard",
+    "plugin_is_active",
+    "plugin_mount",
+    "plugin_require_active",
+    "plugin_spawn",
+    "plugin_static_ensure",
+    "plugin_static_files",
+    "plugin_static_serve",
+    "plugin_stop_jobs",
+    "plugin_stored_valves",
+    "plugin_sync_markers",
+    "plugin_template_bytes",
+    "plugin_template_files",
+    "plugin_template_text",
+    "plugin_token",
+    "plugin_unclaim",
+    "plugin_user",
+    "PluginAdmin",
+    "PluginAssets",
+    "PluginEvents",
+    "PluginScheduledSync",
+    "PluginUser",
+    "ReadableChat",
+    "register",
+    "WritableChat",
+]

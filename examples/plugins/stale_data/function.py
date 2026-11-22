@@ -11,6 +11,14 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
+from owpp.lib import (
+    PluginAdmin,
+    PluginEvents,
+    on,
+    plugin_mount,
+    plugin_stored_valves,
+    plugin_template_text,
+)
 
 _INDEX = plugin_template_text("index.html")  # templates/index.html, filled in per request below
 

@@ -26,11 +26,11 @@ import json
 from shared import PREFIX, _load
 ```
 
-`from shared import ...` resolves in an editor and in tests. The bundle has no `shared` module: shared.py is already above the file, so the bundler removes the line. Removing it is only safe for some forms, and the bundler refuses the others, naming the line:
+`from shared import ...` resolves in an editor and in tests. The bundle has no `shared` module: shared.py is already above the file, so the bundler removes the line. The same goes for `from owpp.lib import ...`: the libraries are inlined above, and Open-WebUI has no owpp ([libraries](libraries.md)). Removing an import is only safe for some forms, and the bundler refuses the others, naming the line:
 
-- **Only a top-level `from shared import NAME`.** Not `import shared`, not `from shared import *`, and not an import inside a function.
+- **Only a top-level `from shared import NAME` or `from owpp.lib import NAME`.** Not `import shared` or `import owpp.lib`, not `*`, and not an import inside a function.
 - **No `as`.** Once the line is gone, an alias would be undefined.
-- **The name must be defined in shared.py.**
+- **The name must be defined in shared.py**, or be one owpp.lib exports. A library name also needs its library in the bundle (`include:`, or `tool.include` for the tool), and a name from the [runtime](runtime.md) needs a tool or skills.
 - **No name both in shared.py and in the file.** They become one namespace, so one would replace the other. Importing the same module in both (`import json`) is fine.
 - **`function.py` and `tool.py` cannot import each other.** They are bundled into separate modules. Move what both need into shared.py.
 

@@ -11,6 +11,8 @@ from urllib.parse import urlparse
 import aiohttp
 from pydantic import BaseModel, Field
 
+from owpp.lib import PluginScheduledSync, plugin_function_id, plugin_sync_markers
+
 log = logging.getLogger(__name__)
 
 CAPABILITIES = ("vision", "tools", "reasoning")
