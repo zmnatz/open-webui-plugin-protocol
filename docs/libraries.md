@@ -118,7 +118,7 @@ So **`guard=` covers the API, not the page.** The page has to be loaded by a sig
 
 This is revisited if Open-WebUI gives artifacts a way to obtain a scoped credential.
 
-**No way around it in code.** `owpp` refuses a `function.py` that calls `include_router`, `add_api_route`, `add_route` or `mount` on the app (`app`, `__app__`, `request.app`, `app.router`), because that adds a route the guard never sees. Mount with `plugin_mount`.
+**No way around it in code, by mistake.** `owpp` refuses a `function.py` that calls `include_router`, `add_api_route`, `add_route` or `mount` on the app (`app`, `__app__`, `request.app`, `app.router`), or that changes the app's route list itself: `insert`, `append`, `extend`, `remove`, `pop`, `clear`, `sort` or `reverse` on `app.routes` or `app.router.routes`, or assigning to it, `+=` on it or `del` from it (as older functions did to put their routes ahead of the web app, or drop the ones an earlier load added). All of these add a route the guard never sees, or remove Open-WebUI's own. Mount with `plugin_mount`, which also drops the routes an earlier load mounted. Reading the list is fine. It is a check of the plugin's own code, so it catches the usual patterns and mistakes, not an author set on getting round it (`r = app.routes; r.insert(...)`): a plugin runs with Open-WebUI's rights either way, and a reviewer reads its code ([reviewing](reviewing.md)).
 
 `await plugin_require_active(function_id=None)`: raises 404 unless the function is still enabled. The guard calls it for you. Do not use it directly as a dependency (it would expose `function_id` as a query parameter).
 

@@ -678,6 +678,47 @@ class TestNothingMountsStraightOntoTheApp:
         with pytest.raises(OwppError, match="skips the sign-in check"):
             load_function_files(tmp_path)
 
+    @pytest.mark.parametrize(
+        "line",
+        [
+            "app.routes.insert(0, route)",
+            "__app__.routes.append(route)",
+            "app.router.routes.extend([route])",
+            "request.app.routes.remove(route)",
+            "__request__.app.router.routes.pop()",
+            "application.routes.clear()",
+            "app.routes[:] = [r for r in app.routes if r is not route]",
+            "app.routes[0] = route",
+            "app.router.routes = []",
+            "app.routes += [route]",
+            "del app.routes[0]",
+        ],
+    )
+    def test_changing_the_route_list_itself_is_refused(self, tmp_path, line):
+        """Editing app.routes adds or removes routes as surely as include_router does (Theme
+        Designer Pro's original inserts its routes there), and removing can take away
+        Open-WebUI's own."""
+        code = f"class Event:\n    def event(self, app, request, __app__, __request__, route, application):\n        {line}\n"
+        folder = tmp_path / "p"
+        write_plugin(folder, {"plugin.yaml": "function:\n  title: T\n", "function.py": code})
+        with pytest.raises(OwppError, match=r"app's route list.*skip the sign-in check"):
+            load_function_files(tmp_path)
+
+    def test_reading_the_route_list_is_fine(self, tmp_path):
+        code = (
+            "class Event:\n"
+            "    def event(self, app, routes):\n"
+            "        n = len(app.routes)\n"
+            "        paths = [r.path for r in app.router.routes]\n"
+            "        for r in app.routes:\n"
+            "            pass\n"
+            "        routes.append(1)  # a list of its own\n"
+            "        return n, paths\n"
+        )
+        folder = tmp_path / "p"
+        write_plugin(folder, {"plugin.yaml": "function:\n  title: T\n", "function.py": code})
+        assert load_function_files(tmp_path)[0].type == "event"
+
     def test_the_sanctioned_ways_are_fine(self, tmp_path):
         code = (
             "# not app.include_router(router): a comment is not a call\n"

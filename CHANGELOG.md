@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed: `owpp check` and the bundler refuse a function that changes the app's route list itself (`app.routes.insert(...)`, `app.routes[:] = ...`, `del app.routes[0]`, ...), which added routes past the sign-in guard as surely as `include_router` ([#68](https://github.com/zmnatz/open-webui-plugin-protocol/issues/68), [libraries](docs/libraries.md#routes)).
 - Docs: Theme Designer Pro is in the Examples menu, and the docs build fails on an example the menu leaves out.
 
 ## 0.6.0 (2026-11-22)
