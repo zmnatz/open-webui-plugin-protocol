@@ -28,6 +28,10 @@ It needs Docker, reachable by your user ([taking screenshots](../screenshots.md#
 | `test_a_deployed_tool_is_offered_to_the_model_and_the_model_calls_it` | `tool_ids` puts the deployed tool's functions in front of the model, and the model's call comes back. |
 | `test_an_outlet_turns_unfinished_reasoning_into_the_answer` | `clear_thinking_tags`'s outlet runs through `/api/chat/completed` and changes the reply. |
 | `test_an_inlet_can_send_a_message_with_an_image_to_another_model` | `vision_router`'s inlet changes which model a request goes to, set by a valve. |
+| `test_theme_designer_pros_routes_are_reached_ahead_of_open_webuis_own` | Routes `plugin_mount` puts under `/api/v1`, where Open-WebUI's own API and its web app's catch-all also answer, are reached, by someone signed out too. |
+| `test_theme_designer_pros_designer_is_for_admins` | A route marked `PluginAdmin` refuses a user who is not an admin on the real server. |
+| `test_theme_designer_pros_save_reaches_a_signed_out_page` | `theme_designer_pro`'s save is served at once to a page with no session. |
+| `test_theme_designer_pros_launcher_and_skill_reach_a_user` | A tool and a skill an event function installs are given to a user who is not an admin. |
 
 To add one, write a `test_*.py` in `tools/live/` with the `api` (admin) and `user_api` fixtures. Each call returns `(status, body)`, with the body on an error too, so put it in the assertion message: Open-WebUI says what went wrong in `detail`. To see what Open-WebUI sent the model, read aimock's journal (`_requests()` in `test_live.py`).
 
@@ -51,6 +55,8 @@ The stack has no real model and needs no API key. Its models are [aimock](https:
 | a last user message containing `[reasoning only]` | reasoning and no answer | [`clear_thinking_tags`](../examples/clear_thinking_tags.md) |
 | `show_excalidraw` offered, and its result in the request | "Here is the diagram: ..." | [`excalidraw`](../examples/excalidraw.md): the answer once the tool has run. |
 | `show_excalidraw` offered | a call to it, with a fixed drawing | `excalidraw`: so "draw something" gives the same drawing every time. |
+| `create_theme` offered, and its result in the request | "Here is Teal Lagoon: ..." | [`theme_designer_pro`](../examples/theme_designer_pro.md): the answer under the Launcher's card. |
+| `create_theme` offered | a call to it: Teal Lagoon, hue 195 | `theme_designer_pro`: the same theme card every time. |
 | Open-WebUI's title and tag tasks | fixed JSON | stable chat titles in the screenshots |
 | anything else for `screenshot-model` | "Hello! I am the screenshot model: ..." | every other chat |
 

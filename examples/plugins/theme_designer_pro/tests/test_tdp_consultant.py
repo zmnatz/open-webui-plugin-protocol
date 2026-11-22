@@ -1,8 +1,7 @@
 """Theme Designer Pro's AI Consultant: a description in words, a model on the instance, a palette
 back. Run with `owpp test theme_designer_pro`.
 
-The mock has no chat pipeline, so the model's two calls (the pipeline inlet filters and the chat
-completion) are stood in for; what the consultant does around them is the plugin's own."""
+The mock's model answers `owui.model_reply` and keeps what it was asked in `owui.completions`."""
 
 import pytest
 
@@ -10,25 +9,11 @@ URL = "/api/v1/theme-designer/consult"
 
 
 @pytest.fixture
-def model(owui, monkeypatch):
-    """A model "theme-model" on the instance, answering with `answer["text"]`; what it was asked
-    is kept in `answer["asked"]`."""
-    import open_webui.routers.pipelines as pipelines
-    import open_webui.utils.chat as chat
-
-    answer = {"text": '{"hue": 210, "chroma": 18, "lightness": 14, "gradient": true, "name": "Deep  Harbour"}'}
-
-    async def inlet(request, payload, user, models):
-        return payload
-
-    async def complete(request, form_data, user):
-        answer["asked"] = form_data
-        return {"choices": [{"message": {"content": answer["text"]}}]}
-
-    monkeypatch.setattr(pipelines, "process_pipeline_inlet_filter", inlet, raising=False)
-    monkeypatch.setattr(chat, "generate_chat_completion", complete, raising=False)
+def model(owui):
+    """A model "theme-model" on the instance, answering with a palette."""
+    owui.model_reply = '{"hue": 210, "chroma": 18, "lightness": 14, "gradient": true, "name": "Deep  Harbour"}'
     owui.app.state.MODELS = {"theme-model": {"id": "theme-model"}}
-    return answer
+    return owui
 
 
 def test_the_consultant_turns_a_description_into_a_palette(td, model):
@@ -43,8 +28,10 @@ def test_the_consultant_turns_a_description_into_a_palette(td, model):
     assert response.json() == {
         "hue": 210, "chroma": 18, "lightness": 14, "gradient": True, "name": "Deep Harbour", "model": "theme-model",
     }
-    assert model["asked"]["messages"][1] == {"role": "user", "content": "a calm harbour at night"}
-    assert model["asked"]["messages"][0]["content"].startswith("You design color themes for Open WebUI.")
+    (asked,) = model.completions
+    assert asked["model"] == "theme-model" and asked["metadata"] == {"task": "theme_designer_pro_consultant"}
+    assert asked["messages"][1] == {"role": "user", "content": "a calm harbour at night"}
+    assert asked["messages"][0]["content"].startswith("You design color themes for Open WebUI.")
 
 
 def test_without_a_model_to_ask_the_consultant_says_where_to_set_one(td, model):
@@ -75,7 +62,7 @@ def test_with_no_model_set_the_task_model_is_asked(owui, td, model, monkeypatch)
     monkeypatch.setattr(tasks, "apply_task_model_params", lambda p, m, i, params: {**p, **params}, raising=False)
     owui.config["task.model.default"] = "theme-model"
     assert td.admin.post(URL, json={"description": "warm"}).json()["model"] == "theme-model"
-    assert model["asked"]["temperature"] == 0
+    assert model.completions[-1]["temperature"] == 0
 
 
 def test_one_person_asks_at_most_every_few_seconds(td, model):
@@ -107,7 +94,7 @@ def test_the_models_answer_is_checked(td, model, text, status):
     answer had no theme in it".
     """
     td.valves(ai_consultant_model="theme-model")
-    model["text"] = text
+    model.model_reply = text
     response = td.admin.post(URL, json={"description": "x"})
     assert response.status_code == status
     if status == 200:
