@@ -263,6 +263,7 @@ class TestTheImportsArriveIn0_5:
         )
         code, out = run(tmp_path, dry_run=True)
         assert "would write function.py" in out
+        assert "          +from shared import PREFIX, _load" in out  # what it would add
         assert "would write shared.py" not in out  # it still uses every import it has
         assert (tmp_path / "p" / "function.py").read_text() == FUNCTION
 
@@ -282,6 +283,20 @@ class TestTheImportsArriveIn0_5:
         write_tree(tmp_path, {"p/plugin.yaml": V03, "p/function.py": function})
         assert run(tmp_path)[0] == 0
         assert "from owpp.lib import PluginAdmin\n" in (tmp_path / "p" / "function.py").read_text()
+
+    def test_a_local_file_beside_code_taken_from_git_is_migrated(self, tmp_path):
+        """With only the tool taken from git, the function is the folder's, and the bundler
+        refuses it without imports."""
+        manifest = (
+            f'protocol: "0.3"\nsource: {{git: {GIT}, ref: {SHA}, path: p}}\n'
+            "function:\n  title: T\ninclude: [events]\ntool:\n  id: t\n  file: tool.py\n"
+        )
+        write_tree(
+            tmp_path, {"p/plugin.yaml": manifest, "p/function.py": FUNCTION, "p/tool.py": TOOL}
+        )
+        run(tmp_path)
+        assert "from owpp.lib import" in (tmp_path / "p" / "function.py").read_text()
+        assert (tmp_path / "p" / "tool.py").read_text() == TOOL  # the bundler takes git's
 
     def test_code_taken_from_git_is_left_alone(self, tmp_path):
         manifest = f'protocol: "0.3"\nsource: {{git: {GIT}, ref: {SHA}, path: p}}\nfunction:\n  file: f.py\n'

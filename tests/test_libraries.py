@@ -138,6 +138,7 @@ def test_a_library_imports_only_libraries_it_pulls_in():
 
 
 def test_fill_drops_the_default_and_puts_the_data_where_it_is_read():
+    """A library imports with its default; a bundle has the plugin's data in its place."""
     text = "__X_DATA__ = '{}'  # for imports\n_X = _json.loads(__X_DATA__)\n"
     assert fill(text, "__X_DATA__", '"[1]"') == '_X = _json.loads("[1]")\n'
 

@@ -62,8 +62,64 @@ def defined(tree: ast.Module, imports: bool = True) -> dict[str, int]:
         elif imports and isinstance(node, (ast.Import, ast.ImportFrom)):
             for alias in node.names:
                 if alias.name != "*":
-                    names.setdefault((alias.asname or alias.name).split(".")[0], node.lineno)
+                    from_import = isinstance(node, ast.ImportFrom)
+                    names.setdefault(bound_name(alias, from_import), node.lineno)
     return names
+
+
+def bound_name(alias: ast.alias, from_import: bool) -> str:
+    """The name an import alias binds: `as` name, else the name (`import a.b` binds `a`)."""
+    if alias.asname:
+        return alias.asname
+    return alias.name if from_import else alias.name.split(".")[0]
+
+
+def bindings(tree: ast.Module) -> list[tuple[str, int, str | None]]:
+    """Every binding of a module-level name, in order: (name, line, module) where module is
+    what an import binds it from (None for any other binding). Covers assignments, defs and
+    classes, imports, `for`/`with`/`except`/`match` targets, `:=`, and a `global` name that a
+    function assigns."""
+    out: list[tuple[str, int, str | None]] = []
+    comprehensions = (ast.ListComp, ast.SetComp, ast.DictComp, ast.GeneratorExp)
+
+    def walk(node: ast.AST) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            out.append((node.name, node.lineno, None))
+            for part in (*node.decorator_list, *getattr(node, "bases", ())):
+                walk(part)
+            _global_assignments(node)
+            return
+        if isinstance(node, (ast.Lambda, *comprehensions)):
+            return
+        if isinstance(node, ast.Name) and isinstance(node.ctx, (ast.Store, ast.Del)):
+            out.append((node.id, node.lineno, None))
+        elif isinstance(node, ast.Import):
+            out.extend([(bound_name(a, False), node.lineno, a.name) for a in node.names])
+        elif isinstance(node, ast.ImportFrom):
+            module = "." * node.level + (node.module or "")
+            out.extend(
+                [(bound_name(a, True), node.lineno, module) for a in node.names if a.name != "*"]
+            )
+        elif isinstance(node, (ast.ExceptHandler, ast.MatchAs, ast.MatchStar)) and node.name:
+            out.append((node.name, node.lineno, None))
+        elif isinstance(node, ast.MatchMapping) and node.rest:
+            out.append((node.rest, node.lineno, None))
+        for child in ast.iter_child_nodes(node):
+            walk(child)
+
+    def _global_assignments(scope: ast.AST) -> None:
+        declared = {n for g in ast.walk(scope) if isinstance(g, ast.Global) for n in g.names}
+        for node in ast.walk(scope):
+            if (
+                isinstance(node, ast.Name)
+                and isinstance(node.ctx, ast.Store)
+                and node.id in declared
+            ):
+                out.append((node.id, node.lineno, None))
+
+    for statement in tree.body:
+        walk(statement)
+    return out
 
 
 def _parse(text: str, where: str) -> ast.Module:
@@ -84,10 +140,32 @@ def flatten(
     tree = _parse(text, where)
     top = set(map(id, tree.body))
     others = [other for other in SEPARATE if other != name]
-    shared_names = defined(_parse(shared, where.rsplit("/", 1)[0] + "/shared.py")) if shared else {}
+    shared_where = where.rsplit("/", 1)[0] + "/shared.py"
+    shared_tree = _parse(shared, shared_where) if shared is not None else ast.Module([], [])
+    shared_bound = defined(shared_tree)  # what shared.py binds, its imports included
+    shared_own = {n for n, _, module in bindings(shared_tree) if module is None}
 
     def fail(node: ast.AST, message: str) -> OwppError:
         return OwppError(f"{where}:{node.lineno}: {message}")
+
+    def removable(node: ast.ImportFrom, module: str, scope: str) -> None:
+        """What the bundler can remove without leaving a name undefined: a top-level
+        `from <module> import NAME`, no `*`, no `as`. `scope` says what is in scope instead."""
+        if id(node) not in top:
+            raise fail(
+                node,
+                f"`from {module} import` must be at the top level of the file: the bundler "
+                f"removes it there, and {scope} are in scope everywhere below",
+            )
+        for alias in node.names:
+            if alias.name == "*":
+                raise fail(node, f"`from {module} import *`: name what you use")
+            if alias.asname:
+                raise fail(
+                    node,
+                    f"`from {module} import {alias.name} as {alias.asname}`: no `as`. The "
+                    f"bundler removes the line, so {alias.asname} would be undefined",
+                )
 
     drop: list[tuple[int, int]] = []
     from_lib: dict[str, int] = {}
@@ -105,65 +183,47 @@ def flatten(
                     )
                 if root in others:
                     raise _separate(fail, node, name, root)
-        elif isinstance(node, ast.ImportFrom):
-            module = (node.module or "").split(".")[0]
-            if module == "owpp" and not node.level:
-                if node.module != LIB:
-                    raise fail(node, _owpp_form(f"from {node.module} import ..."))
-                if id(node) not in top:
-                    raise fail(
-                        node,
-                        "`from owpp.lib import` must be at the top level of the file: the "
-                        "bundler removes it there, and the libraries are in scope everywhere below",
-                    )
-                for alias in node.names:
-                    if alias.name == "*":
-                        raise fail(node, "`from owpp.lib import *`: name what you use")
-                    if alias.asname:
-                        raise fail(
-                            node,
-                            f"`from owpp.lib import {alias.name} as {alias.asname}`: no `as`. The "
-                            f"bundler removes the line, so {alias.asname} would be undefined",
-                        )
-                    if alias.name not in lib:
-                        raise fail(node, f"owpp.lib has no {alias.name}")
-                    from_lib.setdefault(alias.name, node.lineno)
-                drop.append((node.lineno, node.end_lineno or node.lineno))
-                continue
-            if node.level and module == SHARED:
-                raise fail(node, "write `from shared import NAME`, without the dot")
-            if module in others and not node.level:
-                raise _separate(fail, node, name, module)
-            if module != SHARED or node.level:
-                continue
-            if id(node) not in top:
-                raise fail(
-                    node,
-                    "`from shared import` must be at the top level of the file: the bundler "
-                    "removes it there, and shared.py's names are in scope everywhere below",
-                )
+            continue
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        module = (node.module or "").split(".")[0]
+        if node.level:  # the bundle is not in a package, so nothing is relative to it
+            sibling = module or next((a.name for a in node.names if a.name in others), "")
+            if sibling in others:
+                raise _separate(fail, node, name, sibling)
+            raise fail(
+                node,
+                "a relative import has no package to resolve against once bundled: write "
+                "`from shared import NAME` for the plugin's own code",
+            )
+        if module == "owpp":
+            if node.module != LIB:
+                raise fail(node, _owpp_form(f"from {node.module} import ..."))
+            removable(node, LIB, "the libraries")
+            for alias in node.names:
+                if alias.name not in lib:
+                    raise fail(node, f"owpp.lib has no {alias.name}")
+                from_lib.setdefault(alias.name, node.lineno)
+            drop.append((node.lineno, node.end_lineno or node.lineno))
+        elif module in others:
+            raise _separate(fail, node, name, module)
+        elif module == SHARED:
+            removable(node, SHARED, "shared.py's names")
             if shared is None:
                 raise fail(node, "`from shared import` but the plugin has no shared.py")
             for alias in node.names:
-                if alias.name == "*":
-                    raise fail(node, "`from shared import *`: name what you use")
-                if alias.asname:
-                    raise fail(
-                        node,
-                        f"`from shared import {alias.name} as {alias.asname}`: no `as`. The "
-                        f"bundler removes the line, so {alias.asname} would be undefined",
-                    )
-                if alias.name not in shared_names:
+                if alias.name not in shared_bound:
                     raise fail(node, f"{alias.name} is not defined in shared.py")
             drop.append((node.lineno, node.end_lineno or node.lineno))
 
-    _refuse_unimported(text, where, lib, shared, shared_names)
+    _refuse_unimported(text, where, lib, shared_own, shared_bound)
 
-    for own, line in defined(tree, imports=False).items():
-        if own in shared_names:
+    # shared.py's own names (not what it imports) may be bound here only by importing them.
+    for bound, line, module in bindings(tree):
+        if bound in shared_own and module != SHARED:
             raise OwppError(
-                f"{where}:{line}: {own} is defined here and in shared.py. They are one "
-                "namespace once bundled, so one would replace the other: rename one"
+                f"{where}:{line}: {bound} is defined in shared.py and bound here too. They are "
+                "one namespace once bundled, so one would replace the other: rename one"
             )
 
     return _drop(text, drop), from_lib
@@ -173,18 +233,18 @@ MIGRATE = "`owpp migrate` adds the imports a plugin written before protocol 0.5 
 
 
 def _refuse_unimported(
-    text: str, where: str, lib: dict[str, str], shared: str | None, shared_names: dict
+    text: str, where: str, lib: dict[str, str], shared_own: set[str], shared_bound: dict
 ) -> None:
     """A library or shared.py name used without being imported. Bundled, it would still be in
-    scope, but the file would not read as Python on its own, which is the point of importing."""
-    own = defined(_parse(shared, where), imports=False) if shared else {}
+    scope, but the file would not read as Python on its own, which is the point of importing.
+    `shared_own` is what shared.py defines itself, `shared_bound` that and what it imports."""
     for name, line in sorted(unbound(text).items(), key=lambda item: item[1]):
-        if name in own:
+        if name in shared_own:
             raise OwppError(
                 f"{where}:{line}: {name} is shared.py's, used without importing it: add "
                 f"`from shared import {name}` ({MIGRATE})"
             )
-        if name in shared_names:
+        if name in shared_bound:
             raise OwppError(
                 f"{where}:{line}: {name} is imported in shared.py, not here: import it in this "
                 f"file too ({MIGRATE})"

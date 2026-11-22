@@ -169,6 +169,22 @@ class TestPlugins:
             "bundled, it applies here too, so add it to read this file the way it runs"
         ]
 
+    def test_a_future_import_in_tool_py_reaches_function_py_through_shared_py(self, tmp_path):
+        """shared.py is in both bundles, so once it has the line, so should the function."""
+        write_tree(
+            tmp_path / "p",
+            {
+                "plugin.yaml": "function:\n  title: T\ntool:\n  id: t\n",
+                "shared.py": "X = 1\n",
+                "function.py": "class Event:\n    pass\n",
+                "tool.py": "from __future__ import annotations\n\nclass Tools:\n    pass\n",
+            },
+        )
+        assert sorted(f.file for f in lint_plugin(tmp_path / "p", "p")) == [
+            "p/function.py",
+            "p/shared.py",
+        ]
+
     def test_future_imports_without_shared_py_do_not_meet(self, tmp_path):
         """function.py and tool.py are separate bundles; only shared.py goes into both."""
         write_tree(

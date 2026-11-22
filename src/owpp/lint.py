@@ -307,28 +307,28 @@ def _futures(tree: ast.Module) -> set[str]:
 
 
 def _future_imports(path: Path, shown: str) -> list[Finding]:
-    """shared.py goes in front of function.py and of tool.py, and the bundle's `from __future__`
-    lines are all of theirs: each of the three should have the same ones."""
+    """shared.py goes in front of function.py and of tool.py, and a bundle's `from __future__`
+    lines are all of its files': with shared.py in both bundles, one file's line reaches the other
+    two (through shared.py), so all three should have the same ones."""
     trees = _trees(path)
     if "shared.py" not in trees:
         return []
+    futures = {name: _futures(tree) for name, tree in trees.items()}
     findings = []
-    for name in ("function.py", "tool.py"):
-        if name not in trees:
-            continue
-        mine, shared = _futures(trees[name]), _futures(trees["shared.py"])
-        for feature, missing_in, has in sorted(
-            [
-                *((f, name, "shared.py") for f in shared - mine),
-                *((f, "shared.py", name) for f in mine - shared),
-            ]
-        ):
+    for name, mine in futures.items():
+        for feature in sorted(set().union(*futures.values()) - mine):
+            # shared.py when it has it: the file both bundles share
+            has = (
+                "shared.py"
+                if feature in futures["shared.py"]
+                else next(other for other, theirs in futures.items() if feature in theirs)
+            )
             findings.append(
                 Finding(
-                    f"{shown}/{missing_in}",
+                    f"{shown}/{name}",
                     1,
                     f"has no `from __future__ import {feature}`, which {has} has: bundled, it "
                     "applies here too, so add it to read this file the way it runs",
                 )
             )
-    return list(dict.fromkeys(findings))
+    return findings

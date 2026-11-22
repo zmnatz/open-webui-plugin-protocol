@@ -200,9 +200,13 @@ def _futures(tree: ast.Module) -> set[str]:
     }
 
 
-def upgrade(folder: Path) -> Upgrade:
-    """The 0.3 -> 0.5 rewrite of the plugin's code in `folder` (nothing for code from git)."""
-    texts = {n: (folder / n).read_text(encoding="utf-8") for n in FILES if (folder / n).exists()}
+def upgrade(folder: Path, skip: set[str] | frozenset[str] = frozenset()) -> Upgrade:
+    """The 0.3 -> 0.5 rewrite of the plugin's code in `folder`, leaving the files in `skip`."""
+    texts = {
+        n: (folder / n).read_text(encoding="utf-8")
+        for n in FILES
+        if (folder / n).exists() and n not in skip
+    }
     original = dict(texts)
     result = Upgrade()
     texts = {n: re.sub(r"\b_plugin_ensure\b", "plugin_ensure", t) for n, t in texts.items()}

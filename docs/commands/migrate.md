@@ -13,6 +13,7 @@ $ owpp migrate --dry-run
 new   hello: would migrate 0.3 -> 0.5
         would write plugin.yaml
         would write function.py
+          +from owpp.lib import PluginEvents, on
 ok    notes: protocol 0.5
 ```
 

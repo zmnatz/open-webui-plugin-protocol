@@ -9,6 +9,7 @@ there is no 0.4: the protocol follows owpp's major.minor.
 
 from __future__ import annotations
 
+import difflib
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -57,9 +58,15 @@ def _to_0_5(text: str, manifest: dict, kind_of: KindOf) -> str:
 
 
 def _code_to_0_5(folder: Path, manifest: dict) -> Upgrade:
-    """Each file imports what it used to find already in scope. Code taken from git is the
-    upstream's, and is left alone."""
-    return Upgrade() if manifest.get("source") else upgrade(folder)
+    """Each file imports what it used to find already in scope. Only the files in the folder are
+    read: one the bundler takes from git instead (`function: {file}`, `tool: {file}`) is the
+    upstream's, so a local file of that name is not bundled and is left alone."""
+    from_git = {
+        f"{key}.py"
+        for key in ("function", "tool")
+        if isinstance(manifest.get(key), dict) and manifest[key].get("file")
+    }
+    return upgrade(folder, skip=from_git)
 
 
 @dataclass(frozen=True)
@@ -140,12 +147,21 @@ def migrate(
         for name, content in written.items():
             if dry_run:
                 out(f"        would write {name}")
+                if name in code.files:  # code is less obvious than a version line: show it
+                    for line in _changed_lines(read_text(folder / name), content):
+                        out(f"          {line}")
             else:
                 (folder / name).write_bytes(content.encode("utf-8"))
                 out(f"        wrote {name}")
         if code.notes:
             left += 1
     return 1 if left else 0
+
+
+def _changed_lines(old: str, new: str) -> list[str]:
+    """The lines `new` adds (+) and drops (-), without the diff's headers and context."""
+    diff = difflib.unified_diff(old.splitlines(), new.splitlines(), lineterm="", n=0)
+    return [line for line in diff if line[:1] in "+-" and line[:3] not in ("+++", "---")]
 
 
 def _code_changes(folder: Path, steps: list[str], manifest: dict) -> Upgrade:
