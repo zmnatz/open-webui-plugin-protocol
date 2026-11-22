@@ -8,7 +8,7 @@ import sys
 import types
 
 import pytest
-from conftest import write_tree
+from conftest import write_plugin
 
 from owpp.bundle import bundle_function, load_function_files
 from owpp.errors import OwppError
@@ -18,7 +18,7 @@ HEX = "0" * 32
 
 def load(tmp_path, code, include="[events]", name="demo"):
     folder = tmp_path / name
-    write_tree(
+    write_plugin(
         folder,
         {"plugin.yaml": f"function:\n  title: T\ninclude: {include}\n", "function.py": code},
     )
@@ -264,7 +264,7 @@ class Event(PluginEvents):
 class TestWhatOwppCheckRefuses:
     def bundle(self, tmp_path, code, include="[events]"):
         folder = tmp_path / "p"
-        write_tree(
+        write_plugin(
             folder,
             {"plugin.yaml": f"function:\n  title: T\ninclude: {include}\n", "function.py": code},
         )
@@ -341,7 +341,7 @@ class TestTheLibraryMixinsAreEventsClasses:
 
     def test_jobs_brings_events_and_core_in_ahead_of_itself(self, tmp_path):
         folder = tmp_path / "p"
-        write_tree(
+        write_plugin(
             folder,
             {
                 "plugin.yaml": "function:\n  title: T\ninclude: [jobs]\n",
@@ -364,7 +364,9 @@ class TestTheLibraryMixinsAreEventsClasses:
 
     def test_assets_brings_events_in_too(self, tmp_path):
         folder = tmp_path / "p"
-        write_tree(folder, {"plugin.yaml": "function:\n  title: T\n", "assets/custom.css": "a{}\n"})
+        write_plugin(
+            folder, {"plugin.yaml": "function:\n  title: T\n", "assets/custom.css": "a{}\n"}
+        )
         (fn,) = load_function_files(tmp_path)
         assert fn.content.count("end plugin events library") == 1
         assert fn.content.index("end plugin events library") < fn.content.index(
@@ -383,12 +385,12 @@ class TestTheLibraryMixinsAreEventsClasses:
     )
     def test_on_handlers_are_accepted_on_a_class_using_either(self, tmp_path, base, files):
         code = f"class Event({base}):\n    @on('chat.created')\n    def h(self):\n        pass\n"
-        write_tree(tmp_path / "p", {**files, "function.py": code})
+        write_plugin(tmp_path / "p", {**files, "function.py": code})
         assert load_function_files(tmp_path)[0].type == "event"
 
     def test_the_mixins_compose_and_each_handler_runs_once(self, tmp_path):
         folder = tmp_path / "p"
-        write_tree(
+        write_plugin(
             folder,
             {
                 "plugin.yaml": "function:\n  title: T\ninclude: [jobs]\n",

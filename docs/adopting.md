@@ -11,13 +11,15 @@ OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deplo
 
 The deploy reads the instance and the credentials from [environment variables](environment-variables.md#the-instance). Then add the [GitHub Action](tooling.md#github-action).
 
+For an editor to resolve what a plugin imports, install owpp into the repository's environment as a development dependency, as for running its tests: `uv add --dev 'owpp[test]'`. That gives it `owpp.lib` (the [libraries](libraries.md)) and type stubs for the parts of `open_webui` the [mock](testing/mock.md#in-an-editor) has.
+
 ## Existing functions pasted into the UI
 
 1. Make a folder per function: `plugins/<id>/function.py`, with the docstring header moved into `plugin.yaml` under `function:` (or keep a flat `plugins/<id>.py` with its header).
 2. The id must equal the id the function already has in Open-WebUI, or the deploy will create a second copy. Ids cannot contain hyphens.
 3. The first deploy **updates** a same-id function and marks it as managed. Its valves and active/global state are kept.
 4. Replace copied helpers with libraries (`routes`, `jobs`, `chat_data`, `static`, `templates`) as you go; `owpp check` reports anything left undefined.
-5. Run `uvx owpp migrate` to record `protocol: "0.3"` in each manifest (or add the line yourself). A manifest with no key is treated as 0.1, which `owpp check` warns about and `owpp check --strict` fails on; see [the protocol key](plugin-format.md#protocol).
+5. Run `uvx owpp migrate` to record `protocol: "0.5"` in each manifest (or add the line yourself). A manifest with no key is treated as 0.1, which `owpp check` warns about and `owpp check --strict` fails on; see [the protocol key](plugin-format.md#protocol).
 
 ## Third-party functions
 

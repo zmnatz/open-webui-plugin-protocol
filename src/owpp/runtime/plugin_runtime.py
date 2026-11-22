@@ -16,6 +16,7 @@ from typing import Optional as _Optional
 
 _plog = _logging.getLogger(__name__ + ".plugin")
 # {"tools": [{id, name, access, self, valves, content}], "skills": [{id, name, description, access, files: [{path, content, encoding?}]}]}
+__PLUGIN_DATA__ = '{"tools": [], "skills": []}'  # for imports; the bundler drops it
 _PLUGIN = _json.loads(__PLUGIN_DATA__)
 _PLUGIN_TAG = "plugin:"  # skills carry plugin:<function id> in their tags
 _PLUGIN_EVENTS = {
@@ -284,7 +285,7 @@ async def _plugin_remove(function_id: str, tools: bool = True, skills: bool = Tr
             _plog.info("plugin %s: removed skill %r (function disabled or gone)", function_id, item["id"])
 
 
-async def _plugin_ensure() -> None:
+async def plugin_ensure() -> None:
     """Sync now unless a sync ran in the last few seconds. Cheap enough to call
     from a Filter's inlet, which retries a sync that failed at startup."""
     function_id = _plugin_module_id("function")
@@ -363,7 +364,7 @@ def _plugin_start() -> None:
             EVENT_SINKS.append(state.sink)
         if state.sink is not None:
             state.sink.function_id = function_id
-        loop.create_task(_plugin_ensure())
+        loop.create_task(plugin_ensure())
     elif _plugin_module_id("tool"):
         loop.create_task(_plugin_check_parent())
 

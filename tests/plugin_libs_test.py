@@ -8,19 +8,25 @@ import sys
 import types
 import unittest
 
+from owpp.flatten import strip_relative_imports
+from owpp.libraries import fill
+
 LIB = pathlib.Path(__file__).resolve().parent.parent / "src" / "owpp" / "runtime" / "lib"
 HEX = "0123456789abcdef0123456789abcdef"
 
 
+def lib_text(name, placeholder=None, data=None):
+    """A library's text as the bundler inlines it: no relative imports, its data filled in."""
+    text = strip_relative_imports((LIB / f"{name}.py").read_text(), f"{name}.py")
+    return fill(text, placeholder, json.dumps(json.dumps(data))) if placeholder else text
+
+
 def load(name, module_name):
-    text = (LIB / f"{name}.py").read_text()
-    text = text.replace("__JOBS_DATA__", json.dumps(json.dumps({"sync_every_minutes": 60})))
+    text = lib_text(name, "__JOBS_DATA__", {"sync_every_minutes": 60})
     if name in ("plugin_routes", "plugin_jobs", "plugin_static"):
-        text = (
-            (LIB / "plugin_core.py").read_text() + "\n" + text
-        )  # the bundler adds core ahead of these
+        text = lib_text("plugin_core") + "\n" + text  # the bundler adds core ahead of these
     if name == "plugin_jobs":  # and the events library, which the sync mixin is built on
-        text = (LIB / "plugin_events.py").read_text() + "\n" + text
+        text = lib_text("plugin_events") + "\n" + text
     module = types.ModuleType(module_name)
     sys.modules[module_name] = module
     exec(compile(text, str(LIB / f"{name}.py"), "exec"), module.__dict__)
@@ -475,7 +481,6 @@ class StaticLib(unittest.TestCase):
     ACCESS = "user"
 
     def setUp(self):
-        import json
 
         class Request:
             def __init__(self, headers=None):
@@ -541,16 +546,12 @@ class StaticLib(unittest.TestCase):
 
         self.addCleanup(restore)
         data = {"prefix": "/demo", "access": self.ACCESS, "files": self.FILES}
-        routes_src = (LIB / "plugin_routes.py").read_text()
-        static_src = (
-            (LIB / "plugin_static.py")
-            .read_text()
-            .replace("__STATIC_DATA__", json.dumps(json.dumps(data)))
-        )
+        routes_src = lib_text("plugin_routes")
+        static_src = lib_text("plugin_static", "__STATIC_DATA__", data)
         self.module = types.ModuleType(f"function_demo_{HEX}")
         sys.modules[self.module.__name__] = self.module
         exec(
-            compile((LIB / "plugin_core.py").read_text(), "plugin_core.py", "exec"),
+            compile(lib_text("plugin_core"), "plugin_core.py", "exec"),
             self.module.__dict__,
         )
         exec(compile(routes_src, "plugin_routes.py", "exec"), self.module.__dict__)
@@ -633,10 +634,8 @@ class TemplatesLib(unittest.TestCase):
     }
 
     def setUp(self):
-        import json
 
-        src = (LIB / "plugin_templates.py").read_text()
-        src = src.replace("__TEMPLATES_DATA__", json.dumps(json.dumps(self.FILES)))
+        src = lib_text("plugin_templates", "__TEMPLATES_DATA__", self.FILES)
         self.module = types.ModuleType("templates_demo")
         exec(compile(src, "plugin_templates.py", "exec"), self.module.__dict__)
 
@@ -657,8 +656,7 @@ class TemplatesLib(unittest.TestCase):
 class PluginConfigTests(unittest.TestCase):
     def load(self, data):
         # the bundler adds core (plugin_env) ahead of the config library
-        src = (LIB / "plugin_core.py").read_text() + "\n" + (LIB / "plugin_config.py").read_text()
-        src = src.replace("__CONFIG_DATA__", json.dumps(json.dumps(data)))
+        src = lib_text("plugin_core") + "\n" + lib_text("plugin_config", "__CONFIG_DATA__", data)
         module = types.ModuleType("config_demo")
         exec(compile(src, "plugin_config.py", "exec"), module.__dict__)
         return module

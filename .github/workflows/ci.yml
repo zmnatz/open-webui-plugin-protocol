@@ -29,19 +29,11 @@ jobs:
       - name: The built wheel runs and carries the runtime
         run: uvx --from dist/*.whl owpp check --dir examples/plugins mcpo_sync
   release:
-    # A release or hotfix pull request into main (docs/contributing.md#releasing): check now what
-    # publish.yml checks after the merge, that v<__version__> is new and CHANGELOG.md has a dated
-    # section for it with entries.
-    if: >-
-      github.base_ref == 'main' &&
-      (startsWith(github.head_ref, 'release/') || startsWith(github.head_ref, 'hotfix/'))
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - run: |
-          tag="v$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/owpp/__init__.py)"
-          if git ls-remote --exit-code origin "refs/tags/$tag" >/dev/null; then
-            echo "::error::$tag is already released: set the new version (tools/release.py prepare)"
-            exit 1
-          fi
-          python3 tools/release_notes.py "$tag"
+    # A release or hotfix pull request into main (docs/contributing.md#releasing): checks now what
+    # releasing needs after the merge, that v<__version__> is new and CHANGELOG.md has a dated
+    # section for it with entries. Skipped on other pull requests.
+    uses: zmnatz/github-workflows/.github/workflows/gitflow-release-check.yml@v1
+    with:
+      version-command: >-
+        sed -n 's/^__version__ = "\(.*\)"/\1/p' src/owpp/__init__.py
+      notes-command: python3 tools/release_notes.py "v$VERSION"

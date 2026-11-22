@@ -7,6 +7,7 @@ import base64 as _base64
 import json as _json
 
 # {path: {"content", "encoding"?}}
+__TEMPLATES_DATA__ = '{}'  # for imports; the bundler drops it
 _TEMPLATES = _json.loads(__TEMPLATES_DATA__)
 
 

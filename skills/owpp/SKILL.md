@@ -7,7 +7,7 @@ description: Open-WebUI plugins kept in git with owpp, the Open-WebUI plugin pro
 
 A **plugin** is a folder, `plugins/<id>/`, with a `plugin.yaml`: a function (the parent) and, optionally, a tool and skills that the function installs when it is enabled and removes when it is disabled. `owpp` bundles the folder into the single file Open-WebUI stores, tests it against a mock Open-WebUI, and deploys it.
 
-Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.4.1`). `uvx owpp <command> --help` is the reference for every flag, and each command has a page at https://zmnatz.github.io/open-webui-plugin-protocol/commands/<command>/. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
+Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.5.0`). `uvx owpp <command> --help` is the reference for every flag, and each command has a page at https://zmnatz.github.io/open-webui-plugin-protocol/commands/<command>/. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
 
 Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#owpp_plugins_dir), else `./plugins`.
 
@@ -67,7 +67,7 @@ Done when the deploy's report lists every plugin as the user expected, and the R
 
 - **One function class** at the top level of `function.py`: `Filter`, `Action`, `Event` or `Pipe`. The header (`title`, `version`, `description`, ...) lives under `function:` in `plugin.yaml`, one line per value, never in a docstring of `function.py`.
 - **Ids** are `[a-z_][a-z0-9_]*`: the folder name is the function id, so no hyphens.
-- **Libraries are globals.** `include: [routes, jobs, events, chat_data]` in `plugin.yaml` inserts the library's code into the bundle, so its names (`plugin_mount`, `PluginAdmin`, `on`, `PluginEvents`, `plugin_chat_read`, `plugin_template_text`, ...) are used directly, with no import. `static/`, `templates/`, `assets/` and `config.yaml` bring theirs in by being there. Library reference: https://zmnatz.github.io/open-webui-plugin-protocol/libraries/
+- **Every file imports what it uses**, as ordinary Python. Library names come from `from owpp.lib import plugin_mount, PluginAdmin, on, ...`, and a `tool.py` or `function.py` takes the plugin's own shared code with `from shared import NAME`. The bundler removes those two kinds of import, so write them only at the top level and without `as`; `function.py` and `tool.py` never import each other. A library name also needs its library in the bundle: `include: [routes, jobs, events, chat_data]` in `plugin.yaml`, while `static/`, `templates/`, `assets/` and `config.yaml` bring theirs in by being there. The bundler says which one is missing. Library reference: https://zmnatz.github.io/open-webui-plugin-protocol/libraries/
 - **Open-WebUI's own modules** (`open_webui.*`) are imported inside the function that uses them, so the plugin also loads in the mock.
 - **Valves** are `UPPER_SNAKE`, each a `Field(default=..., description="...")`. A valve's description is what the admin sees.
 - **Tool methods** are what the model sees: a type hint on every parameter, a docstring that says when to call it, and one `:param name:` line per parameter. Helpers start with `_`.

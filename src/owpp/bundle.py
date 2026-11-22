@@ -39,7 +39,17 @@ import yaml
 from . import envtemplate
 from .errors import OwppError
 from .events import problem_with
-from .libraries import BY_NAME, hoist_future, json_literal, link
+from .flatten import FILE_TOKEN, flatten
+from .libraries import (
+    BY_NAME,
+    FROM_RUNTIME,
+    exports,
+    fill,
+    hoist_future,
+    json_literal,
+    link,
+    wanted,
+)
 from .manifest import (
     coalesce,
     folder_files,
@@ -129,16 +139,26 @@ def _has_code(folder: Path, name: str) -> bool:
     return (folder / f"{name}.py").exists()
 
 
-def _bundle_code(folder: Path, name: str, keys: dict) -> str:
+def _bundle_code(folder: Path, name: str, keys: dict) -> tuple[str, dict[str, str]]:
     """Header, then shared.py (code both the function and the tool need), then
-    function.py or tool.py. The built-in libraries are added after this (with_includes)."""
+    function.py or tool.py, with their imports of each other and of owpp.lib removed. The
+    built-in libraries are added after this (link). Returns the code and the names imported
+    from owpp.lib, each with where it is imported (`path:line`), for _check_lib_imports."""
     file = folder / f"{name}.py"
     if not file.exists():
         raise OwppError(f"{folder}: no {name}.py")
     shared_file = folder / "shared.py"
-    shared = read_text(shared_file) if shared_file.exists() else ""
-    source = shared + read_text(file)
-    if shared:
+    shared = read_text(shared_file) if shared_file.exists() else None
+    lib = exports()
+    from_lib: dict[str, str] = {}
+    shared_code = ""
+    if shared is not None:
+        shared_code, names = flatten("shared", shared, None, f"{shared_file}", lib)
+        from_lib |= {n: f"{shared_file}:{line}" for n, line in names.items()}
+    code, names = flatten(name, read_text(file), shared, f"{file}", lib)
+    from_lib |= {n: f"{file}:{line}" for n, line in names.items()}
+    source = shared_code + code
+    if shared_code:
         lines, rest = hoist_future(source)
         source = lines + rest
 
@@ -151,8 +171,29 @@ def _bundle_code(folder: Path, name: str, keys: dict) -> str:
                 "in the plugin folder"
             ) from e
 
-    body = re.sub(r"\{\{file:([A-Za-z0-9_.-]+)\}\}", include, source)
-    return render_header(folder, keys) + body
+    body = FILE_TOKEN.sub(include, source)
+    return render_header(folder, keys) + body, from_lib
+
+
+def _check_lib_imports(
+    folder: Path, from_lib: dict[str, str], libs: list[str], *, runtime: bool, include: str
+) -> None:
+    """Each name imported from owpp.lib must come from a library the bundle has (`libs`), or
+    from the runtime when it has that. `include` names the manifest key, for the message."""
+    lib = exports()
+    for name, where in from_lib.items():
+        source = lib[name]
+        if source == FROM_RUNTIME:
+            if not runtime:
+                raise OwppError(
+                    f"{where}: {name} is the plugin runtime's, which a bundle has only when "
+                    "the plugin has a tool or skills"
+                )
+        elif source not in libs:
+            raise OwppError(
+                f"{where}: {name} is from the {source} library, which this bundle does not "
+                f"have: add it to {include} in {folder}/plugin.yaml"
+            )
 
 
 def parse_skill(file: str, text: str) -> tuple[dict, str]:
@@ -171,6 +212,23 @@ def parse_skill(file: str, text: str) -> tuple[dict, str]:
 # ---- reading files and folders ------------------------------------------------
 
 
+# How to read the data of each library a tool may ask for (Library.for_tools).
+TOOL_DATA_READERS = {"templates": lambda folder: _read_templates(folder)}
+
+
+def _tool_data(folder: Path, tool: dict) -> dict:
+    """What the tool's libraries embed: only the templates, and only when it asks for them
+    (`tool.include: [templates]`), so a function's templates are not copied into its tool."""
+    include = tool.get("include")
+    asked = (
+        [n for n in include if n in BY_NAME and BY_NAME[n].for_tools]
+        if isinstance(include, list)
+        else []
+    )
+    readers = TOOL_DATA_READERS
+    return {name: readers[name](folder) for name in asked}
+
+
 def _tool_valves(folder: Path, valves: Any) -> dict:
     if valves is None:
         return {}
@@ -182,7 +240,7 @@ def _tool_valves(folder: Path, valves: Any) -> dict:
 
 
 def _runtime_source(data: dict) -> str:
-    return read_text(RUNTIME).replace("__PLUGIN_DATA__", json_literal(data), 1)
+    return fill(read_text(RUNTIME), "__PLUGIN_DATA__", json_literal(data))
 
 
 def _plugin_resources(plugin: ResolvedPlugin) -> dict:
@@ -198,15 +256,13 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
         elif tool.get("file"):
             content = plugin.read(tool["file"])
         else:
-            content = link(
-                _bundle_code(
-                    folder,
-                    "tool",
-                    omit(tool, ["id", "from", "access", "file", "valves", "include"]),
-                ),
-                tool.get("include"),
-                folder.name,
+            code, from_lib = _bundle_code(
+                folder, "tool", omit(tool, ["id", "from", "access", "file", "valves", "include"])
             )
+            # A tool bundle carries the runtime too (below), with just the ids to remove.
+            libs = wanted(tool.get("include"), set(), f"{folder.name}/plugin.yaml")
+            _check_lib_imports(folder, from_lib, libs, runtime=True, include="tool.include")
+            content = link(code, tool.get("include"), folder.name, None, _tool_data(folder, tool))
         tools.append(
             {
                 "id": tool_id,
@@ -322,8 +378,8 @@ def _read_static(folder: Path, manifest: dict) -> dict | None:
 
 
 def _read_templates(folder: Path) -> dict | None:
-    """The plugin's templates/ folder: files embedded in the function bundle and read back with
-    plugin_template_text(). They are never served."""
+    """The plugin's templates/ folder: files embedded in the function bundle (and the tool's, when
+    it includes templates) and read back with plugin_template_text(). They are never served."""
     if not (folder / "templates").exists():
         return None
     files = {f["path"]: omit(f, ["path"]) for f in folder_files(folder / "templates")}
@@ -608,7 +664,7 @@ class Filter:
         self.valves = self.Valves()
 
     async def inlet(self, body: dict, **kwargs) -> dict:
-        await _plugin_ensure()
+        await plugin_ensure()
         return body
 '''
 
@@ -641,6 +697,7 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
             return bundle_function(offline.resolve(plugin))
     folder, manifest = plugin.root, plugin.manifest
     fn = manifest.get("function")
+    from_lib: dict[str, str] = {}
     res = _plugin_resources(plugin)
     has_resources = bool(res["tools"] or res["skills"])
     if not isinstance(fn, dict):
@@ -673,7 +730,7 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
     elif not _has_code(folder, "function") and has_resources:
         code = render_header(folder, keys) + _stub_parent(res)
     else:
-        code = _bundle_code(folder, "function", keys)
+        code, from_lib = _bundle_code(folder, "function", keys)
         _refuse_direct_mounts(folder, code)
         _check_events(folder, code)
     if assets is not None and not re.search(
@@ -683,6 +740,18 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
             f"{folder}: with an assets/ folder the function must define `class Event(PluginAssets)`, "
             "which publishes the files (or delete function.py to have it generated)"
         )
+    held, data = _library_data(folder, manifest, assets)
+    if from_lib:
+        libs = wanted(manifest.get("include"), held, f"{folder.name}/plugin.yaml")
+        _check_lib_imports(folder, from_lib, libs, runtime=has_resources, include="include")
+    code = link(code, manifest.get("include"), folder.name, held, data)
+    if has_resources:
+        code += _runtime_source(res)
+    return code
+
+
+def _library_data(folder: Path, manifest: dict, assets: Any) -> tuple[set[str], dict]:
+    """What the plugin holds that turns libraries on, and the data each library embeds."""
     static = _read_static(folder, manifest)
     templates = _read_templates(folder)
     config = _read_config(folder)
@@ -705,8 +774,43 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
         "config": config,
         "jobs": jobs,
     }
-    code = link(code, manifest.get("include"), folder.name, held, data)
-    if has_resources:
+    return held, data
+
+
+def file_libraries(folder: Path) -> dict[str, set[str]]:
+    """The libraries each source file is bundled with: the function's, the tool's, and both
+    for shared.py, which goes into each."""
+    manifest = read_manifest(folder)
+    held, _ = _library_data(folder, manifest, _read_assets(folder, manifest))
+    tool = manifest.get("tool") if isinstance(manifest.get("tool"), dict) else {}
+    where = f"{folder.name}/plugin.yaml"
+    function = set(wanted(manifest.get("include"), held, where))
+    tool_libs = set(wanted(tool.get("include"), set(), where)) if tool else set()
+    return {"function.py": function, "tool.py": tool_libs, "shared.py": function | tool_libs}
+
+
+def library_code(folder: Path | str, name: str = "function") -> str:
+    """The libraries `name`.py (function or tool) is bundled with, and the runtime when the bundle
+    has it, as the code of one module, with this plugin's data: what owpp.testing.plugin_source()
+    gives a plugin file in place of owpp.lib. shared.py is bundled into both, so it gets the
+    function's. A plugin folder on disk, not one that takes code from git."""
+    folder = Path(folder)
+    with Sources(_offline) as offline:
+        plugin = offline.resolve(folder)
+    manifest = plugin.manifest
+    header = '"""\n"""\n'
+    res = _plugin_resources(plugin)
+    if name == "tool":
+        tool = manifest.get("tool") if isinstance(manifest.get("tool"), dict) else {}
+        code = link(header, tool.get("include"), folder.name, None, _tool_data(folder, tool))
+        ids = {
+            "tools": [{"id": t["id"]} for t in res["tools"]],
+            "skills": [{"id": k["id"]} for k in res["skills"]],
+        }
+        return code + _runtime_source(ids)
+    held, data = _library_data(folder, manifest, _read_assets(folder, manifest))
+    code = link(header, manifest.get("include"), folder.name, held, data)
+    if res["tools"] or res["skills"]:
         code += _runtime_source(res)
     return code
 

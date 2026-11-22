@@ -1,61 +1,27 @@
 name: publish
-# Publishes a release when one merges into main (docs/contributing.md#releasing): main moves only
-# for a release or hotfix, so a push to main whose __version__ has no v<version> tag yet is one.
-# Tags the merge, publishes the package to PyPI and creates the GitHub release. A v* tag pushed by
-# hand publishes the same way.
+# Releases a v* tag (docs/contributing.md#releasing): tag.yml pushes it when a release merges into
+# main, or push one by hand. Publishes the package to PyPI and creates the GitHub release.
 on:
   push:
-    branches: [main]
     tags: ["v*"]
-permissions:
-  contents: read
-concurrency:
-  group: publish
 jobs:
-  tag:
+  notes:
     # Before anything is published: the tag is v<the package's version>, and CHANGELOG.md has a
     # dated section for it, which becomes the GitHub release's notes.
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    outputs:
-      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
-      - id: tag
-        run: |
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
-            tag="$GITHUB_REF_NAME"
-          else
-            tag="v$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/owpp/__init__.py)"
-            if git ls-remote --exit-code origin "refs/tags/$tag" >/dev/null; then
-              echo "$tag is already tagged: nothing to release"
-              exit 0
-            fi
-          fi
-          python3 tools/release_notes.py "$tag" > notes.md
-          if [ "$GITHUB_REF_TYPE" != tag ]; then
-            # With the workflow's own token, so pushing the tag does not start this workflow again.
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git tag -a "$tag" -m "owpp ${tag#v}"
-            git push origin "$tag"
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-      - if: steps.tag.outputs.tag
-        uses: actions/upload-artifact@v4
+      - run: python3 tools/release_notes.py "$GITHUB_REF_NAME" > notes.md
+      - uses: actions/upload-artifact@v4
         with: { name: notes, path: notes.md }
   pypi:
-    needs: tag
-    if: needs.tag.outputs.tag
+    needs: notes
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       id-token: write # PyPI trusted publishing: no token to store
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.tag.outputs.tag }}
       - uses: astral-sh/setup-uv@v6
       - run: uv build
       - run: uv publish --trusted-publishing always
@@ -63,7 +29,7 @@ jobs:
         with: { name: dist, path: dist/ }
   release:
     # The GitHub release for the tag, with the changelog section and the built package.
-    needs: [tag, pypi]
+    needs: pypi
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -72,9 +38,8 @@ jobs:
       - env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ needs.tag.outputs.tag }}
         run: >-
-          gh release create "$TAG" dist/*
+          gh release create "$GITHUB_REF_NAME" dist/*
           --verify-tag --latest
-          --title "owpp ${TAG#v}"
+          --title "owpp ${GITHUB_REF_NAME#v}"
           --notes-file notes/notes.md

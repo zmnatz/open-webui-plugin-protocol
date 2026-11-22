@@ -11,7 +11,7 @@ import sys
 import types
 
 import pytest
-from conftest import write_tree
+from conftest import write_plugin
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
@@ -111,7 +111,7 @@ def site(monkeypatch):
 
 def plugin(tmp_path, manifest="function:\n  title: T\ninclude: [routes]\n", files=None):
     folder = tmp_path / "demo"
-    write_tree(
+    write_plugin(
         folder,
         {"plugin.yaml": manifest, "function.py": "class Event:\n    pass\n", **(files or {})},
     )
@@ -608,7 +608,7 @@ class TestTheStaticSectionOfTheManifest:
     FILES = {"function.py": "class Event:\n    pass\n", "static/a.txt": "a"}
 
     def load(self, tmp_path, static):
-        write_tree(
+        write_plugin(
             tmp_path / "p",
             {"plugin.yaml": f"function:\n  title: T\nstatic: {static}\n", **self.FILES},
         )
@@ -628,7 +628,7 @@ class TestTheStaticSectionOfTheManifest:
     def test_the_old_plugin_wide_key_is_refused_not_silently_ignored(self, tmp_path):
         # `routes:` used to set a level for every route. Ignoring it would leave an author believing a
         # plugin is admin-only while it is open to every signed-in user.
-        write_tree(
+        write_plugin(
             tmp_path / "p",
             {"plugin.yaml": "function:\n  title: T\nroutes: {access: admin}\n", **self.FILES},
         )
@@ -639,7 +639,7 @@ class TestTheStaticSectionOfTheManifest:
 
     def test_the_old_public_key_is_refused_and_says_where_everything_went(self, tmp_path):
         # `public: {access: admin}` ignored would leave a folder open to every signed-in user.
-        write_tree(
+        write_plugin(
             tmp_path / "p",
             {"plugin.yaml": "function:\n  title: T\npublic: {access: admin}\n", **self.FILES},
         )
@@ -652,7 +652,7 @@ class TestTheStaticSectionOfTheManifest:
         assert _data(fn.content, "_STATIC")["access"] == access
 
     def test_the_default_is_user(self, tmp_path):
-        write_tree(tmp_path / "p", {"plugin.yaml": "function:\n  title: T\n", **self.FILES})
+        write_plugin(tmp_path / "p", {"plugin.yaml": "function:\n  title: T\n", **self.FILES})
         (fn,) = load_function_files(tmp_path)
         assert _data(fn.content, "_STATIC")["access"] == "user"
 
@@ -674,7 +674,7 @@ class TestNothingMountsStraightOntoTheApp:
     def test_refused(self, tmp_path, line):
         code = f"class Event:\n    def event(self, app, request, __app__, __request__, router, handler, sub, application):\n        {line}\n"
         folder = tmp_path / "p"
-        write_tree(folder, {"plugin.yaml": "function:\n  title: T\n", "function.py": code})
+        write_plugin(folder, {"plugin.yaml": "function:\n  title: T\n", "function.py": code})
         with pytest.raises(OwppError, match="skips the sign-in check"):
             load_function_files(tmp_path)
 
@@ -688,7 +688,7 @@ class TestNothingMountsStraightOntoTheApp:
             "        plugin_mount(app, router, '/x')\n"
         )
         folder = tmp_path / "p"
-        write_tree(
+        write_plugin(
             folder,
             {"plugin.yaml": "function:\n  title: T\ninclude: [routes]\n", "function.py": code},
         )
@@ -846,7 +846,7 @@ class TestAMountsNameIsItsIdentity:
 
     def test_another_functions_routes_are_never_dropped(self, site, tmp_path):
         mine = site.load(plugin(tmp_path / "a"))
-        write_tree(
+        write_plugin(
             tmp_path / "b" / "demo",
             {
                 "plugin.yaml": "function:\n  title: T\ninclude: [routes]\n",
@@ -881,7 +881,7 @@ class TestTokens:
 
     def tokens(self, site, tmp_path, name="demo"):
         folder = tmp_path / name
-        write_tree(
+        write_plugin(
             folder,
             {
                 "plugin.yaml": "function:\n  title: T\ninclude: [routes]\n",

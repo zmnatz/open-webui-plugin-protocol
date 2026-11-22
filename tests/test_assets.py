@@ -8,7 +8,7 @@ import sys
 import types
 
 import pytest
-from conftest import write_tree
+from conftest import write_plugin
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
@@ -22,7 +22,7 @@ CSS = "/static/custom.css"
 def load(tmp_path, plugin_id, files, manifest="function:\n  title: T\n"):
     """Bundle a plugin folder and run it as Open-WebUI would: a module named function_<id>_<hex>."""
     folder = tmp_path / plugin_id
-    write_tree(folder, {"plugin.yaml": manifest, **files})
+    write_plugin(folder, {"plugin.yaml": manifest, **files})
     namespace: dict = {"__name__": f"function_{plugin_id}_{HEX}"}
     exec(compile(bundle_function(folder), f"{plugin_id}.py", "exec"), namespace)
     return namespace

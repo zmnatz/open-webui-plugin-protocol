@@ -15,6 +15,8 @@
 import inspect as _inspect
 import logging as _logging
 
+from .plugin_core import plugin_app, plugin_function_id
+
 _events_log = _logging.getLogger(__name__ + ".events")
 
 

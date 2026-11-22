@@ -24,6 +24,8 @@ from owpp.create import (
     write_plugin,
 )
 from owpp.errors import OwppError
+from owpp.imports import missing_lib_imports
+from owpp.libraries import exports
 from owpp.lint import lint_plugin
 from owpp.manifest import read_manifest
 from owpp.wizard import Prompter, resolve_ref, run_wizard
@@ -149,10 +151,40 @@ class TestWhatItWrites:
             assert check_bundle(fn.content, f"{spec.id}.py") is None, spec.id
             assert lint_plugin(written / spec.id, spec.id) == [], spec.id
 
+    def test_every_generated_file_imports_the_library_names_it_uses(self, written):
+        """So the plugin reads, lints and type-checks as ordinary Python, like a hand-written one."""
+        files = [p for p in written.glob("*/*.py") if p.name in ("function.py", "tool.py")]
+        assert files
+        for path in files:
+            assert missing_lib_imports(path.read_text(), exports()) == [], path
+
+    def test_every_generated_file_passes_ruff(self, written):
+        """Unused and missing imports, and import order: what an editor would flag."""
+        done = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "ruff",
+                "check",
+                "--no-cache",
+                "--isolated",
+                "--line-length",
+                "100",
+                "--select",
+                "F,I",
+                "--config",
+                "lint.isort.known-local-folder=['shared']",
+                str(written),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        assert done.returncode == 0, done.stdout
+
     def test_every_generated_manifest_records_the_protocol(self, written, from_git):
         for directory in (written, from_git):
             for folder in directory.iterdir():
-                assert read_manifest(folder)["protocol"] == "0.3", folder
+                assert read_manifest(folder)["protocol"] == "0.5", folder
 
     def test_owpp_check_strict_passes(self, written, capsys):
         assert main(["check", "--strict", "--dir", str(written)], env={}) == 0
@@ -187,7 +219,7 @@ class TestWhatItWrites:
             "id": "full_filter_tool",
             "title": "Lookup",
             "description": "Looks things up.",
-            "include": ["chat_data"],
+            "include": ["chat_data", "templates"],  # templates: its rich UI page
             "access": "public",
         }
         assert m["include"] == ["routes", "chat_data"]

@@ -7,6 +7,9 @@
 import copy as _copy
 import json as _json
 
+from .plugin_core import plugin_env
+
+__CONFIG_DATA__ = '{}'  # for imports; the bundler drops it
 _CONFIG = _json.loads(__CONFIG_DATA__)
 
 

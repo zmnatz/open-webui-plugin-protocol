@@ -7,10 +7,10 @@ plugins/<id>/
   plugin.yaml      required
   function.py      the function (omit it for a plugin that is only a tool and skills)
   tool.py          the tool
-  shared.py        code placed in front of function.py and of tool.py
+  shared.py        code both use: they `from shared import NAME`, and it is placed in front of each
   skills/<id>/     SKILL.md plus any supporting files, installed as a whole folder
   static/          files served as they are, to signed-in users unless `static:` says otherwise; index.html is the plugin's page
-  templates/       files the function renders itself (a page it fills in); embedded, never served
+  templates/       files the function (or a tool that includes templates) renders itself; embedded, never served
   assets/          loader.js and custom.css: this plugin's fragments of the shared /static files
   config.yaml      structured settings shipped with the plugin; read with plugin_config()
   README.md        required in practice: see "Documentation" in the authoring guide
@@ -20,20 +20,20 @@ A plugin may also be a single `<id>.py` (a function with no tool or skills). The
 
 ## `plugin.yaml`
 
-All sections are optional except that a tool or skills need a `function:` section: the function is the parent. The current protocol version is `0.2`.
+All sections are optional except that a tool or skills need a `function:` section: the function is the parent. The current protocol version is `0.5`.
 
 ### `protocol:`
 
 ```yaml
-protocol: "0.3"   # the version of the plugin format this manifest was written for
+protocol: "0.5"   # the version of the plugin format this manifest was written for
 ```
 
-A quoted major.minor string that tracks owpp's major.minor. It changes only when a release changes what a manifest key means or takes one away; `owpp init`, `owpp create` and the examples in this repository write `protocol: "0.3"`. It is a manifest key: unlike `function:`'s keys, it is not copied into the deployed header.
+A quoted major.minor string that tracks owpp's major.minor. It changes only when a release changes what a manifest key means, takes one away, or changes how the plugin's code must be written (0.5: every file imports what it uses); there was no 0.4, because owpp 0.4 changed nothing; `owpp init`, `owpp create` and the examples in this repository write `protocol: "0.5"`. It is a manifest key: unlike `function:`'s keys, it is not copied into the deployed header.
 
-- **Write the quotes.** Unquoted `0.3` is a YAML number and is refused, as is a patch version such as `"0.3.0"`.
+- **Write the quotes.** Unquoted `0.5` is a YAML number and is refused, as is a patch version such as `"0.5.0"`.
 - A **newer** version than the owpp reading the manifest is refused: its keys may mean something else. Upgrade owpp first.
 - An **older** version is accepted; `owpp check` prints a note pointing at the migration. A manifest with **no key** is a 0.1 plugin, from before the key existed: `owpp check` warns and `owpp check --strict` fails.
-- [`owpp migrate`](commands/migrate.md) brings old manifests up to 0.3, one version step at a time: 0.1 -> 0.2 adds the `protocol:` line, and 0.2 -> 0.3 turns `source: track:` into `branch:` or `tag:`. See [upgrading owpp](upgrading.md).
+- [`owpp migrate`](commands/migrate.md) brings old plugins up to 0.5, one version step at a time: 0.1 -> 0.2 adds the `protocol:` line, 0.2 -> 0.3 turns `source: track:` into `branch:` or `tag:`, and 0.3 -> 0.5 gives each file the imports it used to do without. See [upgrading owpp](upgrading.md).
 
 ### `function:`
 
@@ -107,7 +107,7 @@ Makes `tool: {file}`, `function: {file}` and `skills: {<id>: {file|dir}}` read f
 When the folder at `path` is an owpp plugin itself (it has a `plugin.yaml`, like the [examples](../examples/plugins)), take all of it with `plugin: true`:
 
 ```yaml
-protocol: "0.3"
+protocol: "0.5"
 source:
   git: https://github.com/zmnatz/open-webui-plugin-protocol.git
   path: examples/plugins/excalidraw
@@ -192,7 +192,7 @@ Structured settings that ship with the plugin, read by the function with `plugin
 ## Example: a plugin with every part
 
 ```yaml
-protocol: "0.3"
+protocol: "0.5"
 function:
   title: Excalidraw
   author: you

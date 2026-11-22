@@ -8,13 +8,16 @@ it pulls in, to the code after its docstring header, in catalogue order.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 from typing import Any
 
 from .errors import OwppError
+from .flatten import defined, strip_relative_imports
 from .manifest import read_text
 
 LIB_DIR = Path(__file__).resolve().parent / "runtime" / "lib"
@@ -48,6 +51,8 @@ class Library:
     data_needs: str | None = None
     # The data when the bundle has none (a tool bundle).
     default: Any = None
+    # A tool can ask for it, data included (`tool.include:`); otherwise its data is the function's.
+    for_tools: bool = False
 
 
 # In the order they are added to a bundle: each is a vendored, byte-identical copy put right after
@@ -74,7 +79,7 @@ LIBRARIES: tuple[Library, ...] = (
         "static",
         "plugin_static",
         "end plugin static library",
-        ("core",),
+        ("core", "routes"),  # it mounts its files with plugin_mount
         on_when="static/",
         placeholder="__STATIC_DATA__",
         data_needs="static/",
@@ -86,6 +91,7 @@ LIBRARIES: tuple[Library, ...] = (
         on_when="templates/",
         placeholder="__TEMPLATES_DATA__",
         data_needs="templates/",
+        for_tools=True,
     ),
     Library(
         "assets",
@@ -155,8 +161,42 @@ def wanted(include: Any, held: set[str], where: str) -> list[str]:
     return closure(list(dict.fromkeys([*asked, *on])))
 
 
+def fill(text: str, placeholder: str, literal: str) -> str:
+    """`text` with its data placeholder filled. The file gives the placeholder a default on a
+    line of its own (`__X_DATA__ = '{}'`), so it can be imported; the bundle has the data instead:
+    that line goes and the placeholder's use gets the literal."""
+    text = re.sub(rf"^{placeholder} = .*\n", "", text, count=1, flags=re.MULTILINE)
+    return text.replace(placeholder, literal, 1)
+
+
 def _text(lib: Library) -> str:
-    return re.sub(r"\A(#.*\n)+\n?", "", read_text(LIB_DIR / f"{lib.file}.py"))
+    text = re.sub(r"\A(#.*\n)+\n?", "", read_text(LIB_DIR / f"{lib.file}.py"))
+    return strip_relative_imports(text, f"runtime/lib/{lib.file}.py")
+
+
+# The plugin runtime: its names can be imported from owpp.lib too, by a plugin that has it.
+RUNTIME_FILE = LIB_DIR.parent / "plugin_runtime.py"
+FROM_RUNTIME = "runtime"
+
+
+def public_names(path: Path) -> list[str]:
+    """The names a library file defines at its top level for plugins: not starting with `_`."""
+    return [name for name in defined(ast.parse(read_text(path)), imports=False) if name[0] != "_"]
+
+
+@cache
+def exports() -> dict[str, str]:
+    """Every name a plugin can import from owpp.lib, with the library it comes from
+    (`runtime` for the plugin runtime's), the Shared Assets Protocol's included."""
+    names: dict[str, str] = {}
+    for lib in LIBRARIES:
+        names.update(dict.fromkeys(public_names(LIB_DIR / f"{lib.file}.py"), lib.name))
+    names.update(dict.fromkeys(public_names(RUNTIME_FILE), FROM_RUNTIME))
+    return names
+
+
+# Classic298's files, kept byte-identical: they are not ours to add imports to.
+VENDORED = ("live_reload", "shared_assets")
 
 
 def link(
@@ -181,8 +221,8 @@ def link(
         lib = BY_NAME[lib_name]
         if lib.data_needs and data.get(lib.name) is None:
             raise OwppError(
-                f"{where}: include: {lib.name} needs {HELD[lib.data_needs].replace('`', '')} "
-                "(it applies to the function bundle only)"
+                f"{where}: include: {lib.name} needs {HELD[lib.data_needs].replace('`', '')}"
+                + ("" if lib.for_tools else " (it applies to the function bundle only)")
             )
     add = ""
     for lib_name in libs:
@@ -192,8 +232,8 @@ def link(
         text = _text(lib)
         if lib.placeholder:
             value = data.get(lib.name)
-            text = text.replace(
-                lib.placeholder, json_literal(lib.default if value is None else value), 1
+            text = fill(
+                text, lib.placeholder, json_literal(lib.default if value is None else value)
             )
         add += "\n" + text
     out = code
