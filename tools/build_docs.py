@@ -123,6 +123,14 @@ def assemble(out: Path = OUT) -> list[str]:
             parts[i] = re.sub(r"(\]\()([^)\s]+)(\))", relink, parts[i])
         (out / uri).parent.mkdir(parents=True, exist_ok=True)
         (out / uri).write_text("".join(parts))
+    # An example's page is built whether or not the menu names it, so one left out of
+    # zensical.toml's nav is reachable only by its address: refuse that.
+    in_menu = {page for _, section in _nav() for _, page in section}
+    for plugin in _plugins():
+        if f"examples/{plugin.name}.md" not in in_menu:
+            problems.append(
+                f"zensical.toml: the Examples menu has no entry for examples/{plugin.name}.md"
+            )
     _write_llms(out, pages)
     return problems
 

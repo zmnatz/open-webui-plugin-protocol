@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Docs: Theme Designer Pro is in the Examples menu, and the docs build fails on an example the menu leaves out.
+
 ## 0.6.0 (2026-11-22)
 
 - A tool embeds only the templates it lists, with `tool: templates: [launcher/]`, so a function's large page is not copied into its tool ([plugin format](docs/plugin-format.md#tool)).
