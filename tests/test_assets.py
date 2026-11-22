@@ -197,6 +197,25 @@ class TestVariables:
         assert "--accent: #4f46e5;" in css and "--other: __UNKNOWN__;" in css
         assert "var accent = '#4f46e5';" in get(app, LOADER).text
 
+    def test_a_value_is_served_as_written_even_when_it_holds_a_placeholder(self, tmp_path, app):
+        """Every placeholder is filled in one pass: a value (often a valve someone typed) that
+        holds another placeholder's text is not filled again, whatever order the names sort in,
+        and a placeholder used twice is filled both times (#69)."""
+        ns = load(
+            tmp_path,
+            "stamp",
+            {
+                "function.py": (
+                    "class Event(PluginAssets):\n"
+                    "    def asset_vars(self):\n"
+                    "        return {'NOTE': 'see __ROUTE__ or __A__', 'ROUTE': '/r', 'A': 'x __NOTE__'}\n"
+                ),
+                "assets/loader.js": "log('__NOTE__', '__ROUTE__', '__A__', '__ROUTE__');\n",
+            },
+        )
+        started(ns, app)
+        assert "log('see __ROUTE__ or __A__', '/r', 'x __NOTE__', '/r');" in get(app, LOADER).text
+
     def test_a_changed_value_reaches_the_next_request(self, tmp_path, app):
         ns = self.build(tmp_path)
         started(ns, app)
