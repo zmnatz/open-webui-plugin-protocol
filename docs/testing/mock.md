@@ -36,6 +36,7 @@
 | `owui.functions`, `function_valves`, `tools`, `tool_valves`, `skills`, `models`, `users`, `config` | The tables, as dicts. `models` are model configs (`Models`, with v0.13.4's `ModelForm`, `ModelMeta` and `ModelParams`); `config` is what `Config.get` and `Config.upsert` read and write, the OpenAI connections (`openai.api_base_urls`, ...) included. |
 | `owui.emitted` | `[(event, data)]` sent on the socket (`sio.emit`). |
 | `owui.chat_events` | `[(chat_id, event)]` sent through `__event_emitter__`. |
+| `owui.model_reply`, `owui.completions` | For a plugin that asks a model itself (`generate_chat_completion`): the model's answer, and every request it was sent. The pipelines' inlet (`process_pipeline_inlet_filter`) hands the request back, as with no pipelines, and the task model is used as named (`get_task_model_generation_config`). |
 | `owui.data_dir` | A temporary `DATA_DIR`, with `uploads/`, `cache/` and `build/` in it: `open_webui.config`'s `DATA_DIR`, `UPLOAD_DIR` and `CACHE_DIR`, and `open_webui.env`'s `FRONTEND_BUILD_DIR`. Removed when the mock closes. |
 | `owui.app`, `owui.static_dir`, `owui.event_sinks` | The FastAPI app, with Open-WebUI's `/static` mount and its catch-all web app at `/`. Also `STATIC_DIR` and `EVENT_SINKS`. |
 

@@ -405,6 +405,9 @@ class MockOpenWebUI:
         self.chat_access: dict[tuple[str, str], str] = {}  # (chat_id, user_id) -> "read" | "write"
         self.emitted: list[tuple[str, Any]] = []
         self.chat_events: list[tuple[str | None, dict]] = []
+        # generate_chat_completion: what a plugin asked a model, and what the model answers
+        self.completions: list[dict] = []
+        self.model_reply: str = ""
         self.event_sinks: list = []
         self.plugins: dict[str, LoadedPlugin] = {}
         self._tool_modules: dict[str, tuple[str, LoadedTool]] = {}
@@ -1183,6 +1186,33 @@ class MockOpenWebUI:
                     return user
             raise HTTPException(status_code=401, detail="Not authenticated")
 
+        def decode_token(token):
+            """A session token's claims ({"id": ...}), or None: Open-WebUI checks only the
+            signature and the expiry here, without reading the database."""
+            for user in mock.users.values():
+                if token and token == user.token:
+                    return {"id": user.id}
+            return None
+
+        # The chat pipeline, as far as a plugin asking a model needs it: no pipelines (their
+        # inlet hands the request back), the task model as named, and a model that answers
+        # `mock.model_reply` and keeps what it was asked in `mock.completions`.
+        async def process_pipeline_inlet_filter(request, payload, user, models):
+            return payload
+
+        async def get_task_model_generation_config(task_model_id, models):
+            return task_model_id, None
+
+        def apply_task_model_params(payload, models, model_id, params):
+            return {**payload, **(params or {})}
+
+        async def generate_chat_completion(request, form_data, user=None, **kwargs):
+            mock.completions.append(form_data)
+            return {
+                "model": form_data.get("model"),
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": mock.model_reply}}],
+            }
+
         def replace_imports(content):
             return content
 
@@ -1222,6 +1252,7 @@ class MockOpenWebUI:
             "open_webui.models",
             "open_webui.utils",
             "open_webui.internal",
+            "open_webui.routers",
             "open_webui.socket",
         )
         modules = {name: module(name, __path__=[]) for name in packages}
@@ -1283,8 +1314,20 @@ class MockOpenWebUI:
                     PRINCIPAL_TYPE_ANYONE="anyone",
                     WILDCARD_PRINCIPAL_ID="*",
                 ),
+                "open_webui.routers.pipelines": module(
+                    "open_webui.routers.pipelines",
+                    process_pipeline_inlet_filter=process_pipeline_inlet_filter,
+                ),
+                "open_webui.routers.tasks": module(
+                    "open_webui.routers.tasks",
+                    get_task_model_generation_config=get_task_model_generation_config,
+                    apply_task_model_params=apply_task_model_params,
+                ),
+                "open_webui.utils.chat": module(
+                    "open_webui.utils.chat", generate_chat_completion=generate_chat_completion
+                ),
                 "open_webui.utils.auth": module(
-                    "open_webui.utils.auth", get_current_user=get_current_user
+                    "open_webui.utils.auth", get_current_user=get_current_user, decode_token=decode_token
                 ),
                 "open_webui.utils.plugin": module(
                     "open_webui.utils.plugin",

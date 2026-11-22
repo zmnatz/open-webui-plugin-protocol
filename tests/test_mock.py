@@ -165,3 +165,33 @@ def test_an_event_can_be_about_something_other_than_a_function(tmp_path):
         owui.functions["demo"].is_active = True
         owui.emit("user.deleted", {"type": "user", "id": "u1"})
         assert plugin.module.SEEN[-1] == ("user.deleted", {"type": "user", "id": "u1"})
+
+
+def test_a_session_token_decodes_to_its_user(tmp_path):
+    """`decode_token` gives a token's claims without a database read, as Theme Designer Pro
+    uses it to tell whose live-update stream a cookie opened; anything else is None."""
+    with MockOpenWebUI() as owui:
+        from open_webui.utils.auth import decode_token
+
+        ada = owui.add_user("Ada")
+        assert decode_token(ada.token) == {"id": ada.id}
+        assert decode_token("forged") is None and decode_token("") is None
+
+
+def test_a_plugin_can_ask_a_model(tmp_path):
+    """A plugin that asks a model itself (Theme Designer Pro's AI Consultant) goes through the
+    pipelines' inlet, which the mock has none of, and gets `owui.model_reply`; what it asked is
+    in `owui.completions`."""
+    with MockOpenWebUI() as owui:
+        from open_webui.routers.pipelines import process_pipeline_inlet_filter
+        from open_webui.routers.tasks import apply_task_model_params, get_task_model_generation_config
+        from open_webui.utils.chat import generate_chat_completion
+
+        owui.model_reply = "blue"
+        asked = {"model": "m", "messages": [{"role": "user", "content": "a colour?"}]}
+        assert owui.run(process_pipeline_inlet_filter(None, asked, None, {})) is asked
+        assert owui.run(get_task_model_generation_config("m", {})) == ("m", None)
+        assert apply_task_model_params(asked, {}, "m", {"temperature": 0})["temperature"] == 0
+        reply = owui.run(generate_chat_completion(None, form_data=asked, user=None))
+        assert reply["choices"][0]["message"]["content"] == "blue"
+        assert owui.completions == [asked]
