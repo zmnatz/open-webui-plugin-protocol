@@ -54,6 +54,31 @@ def write_tree(root: Path, files: dict[str, str | bytes]) -> Path:
     return root
 
 
+CODE_FILES = ("function.py", "tool.py", "shared.py")
+
+
+def with_imports(code: str) -> str:
+    """`code` with the `from owpp.lib import ...` a plugin writes for the library names it uses,
+    for fixtures written to exercise the libraries rather than the imports."""
+    from owpp.imports import add_lib_imports
+    from owpp.libraries import exports
+
+    return add_lib_imports(code, exports())
+
+
+def write_plugin(root: Path, files: dict[str, str | bytes]) -> Path:
+    """write_tree, with each plugin source file given its library imports (with_imports)."""
+    return write_tree(
+        root,
+        {
+            name: with_imports(content)
+            if name in CODE_FILES and isinstance(content, str)
+            else content
+            for name, content in files.items()
+        },
+    )
+
+
 def embedded(code: str) -> dict:
     """The data the runtime reads back: the JSON string literal in the bundle."""
     m = re.search(r'_PLUGIN = _json\.loads\((".*")\)\n', code)

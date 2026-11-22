@@ -13,7 +13,11 @@ import mimetypes as _mimetypes
 from fastapi import APIRouter as _APIRouter, Request as _Request
 from fastapi.responses import Response as _Response
 
+from .plugin_core import plugin_app
+from .plugin_routes import plugin_mount
+
 # {"prefix": "/id", "access": "user" | "admin" | "public", "files": {path: {"content", "encoding"?}}}
+__STATIC_DATA__ = '{"prefix": "", "files": {}}'  # for imports; the bundler drops it
 _STATIC = _json.loads(__STATIC_DATA__)
 
 

@@ -184,7 +184,9 @@ def test_the_api_refuses_a_missing_wrong_or_other_chats_token(owui, ada, chat):
     other = owui.add_chat(ada)
     api = owui.client()
     assert api.get(f"/excalidraw/api/scenes/{chat}").status_code == 404
-    assert api.get(f"/excalidraw/api/scenes/{chat}", params={"t": "s.9999999999.x"}).status_code == 404
+    assert (
+        api.get(f"/excalidraw/api/scenes/{chat}", params={"t": "s.9999999999.x"}).status_code == 404
+    )
     other_token = token_for(owui, ada, other)
     assert api.get(f"/excalidraw/api/scenes/{chat}", params={"t": other_token}).status_code == 404
 
@@ -220,7 +222,9 @@ def test_a_malformed_save_is_refused(owui, ada, chat):
     """
     token = token_for(owui, ada, chat)
     for body in ("not json", '{"elements": []}', '{"client": "c", "elements": {}}'):
-        got = owui.client().post(f"/excalidraw/api/scenes/{chat}", params={"t": token}, content=body)
+        got = owui.client().post(
+            f"/excalidraw/api/scenes/{chat}", params={"t": token}, content=body
+        )
         assert got.status_code == 400, body
 
 
@@ -234,7 +238,9 @@ def test_once_disabled_nothing_is_served(owui, ada, chat):
     token = token_for(owui, ada, chat)
     owui.disable("excalidraw")
     assert owui.client(ada).get(f"/excalidraw/view/{chat}").status_code == 404
-    assert owui.client().get(f"/excalidraw/api/scenes/{chat}", params={"t": token}).status_code == 404
+    assert (
+        owui.client().get(f"/excalidraw/api/scenes/{chat}", params={"t": token}).status_code == 404
+    )
 
 
 def test_a_new_version_replaces_the_routes_instead_of_adding_to_them(owui, plugin, chat):

@@ -179,7 +179,10 @@ def test_the_built_module_exports_what_the_page_imports(plugin_dir):
     viewer = (plugin_dir / "templates" / "viewer.html").read_text()
     hosted = re.search(r"<!--hosted-->\nwindow.*?<!--/hosted-->", viewer, re.S).group(0)
     wanted = set(
-        re.search(r"const \{([^}]*)\} =\s*await import", hosted).group(1).replace(" ", "").split(",")
+        re.search(r"const \{([^}]*)\} =\s*await import", hosted)
+        .group(1)
+        .replace(" ", "")
+        .split(",")
     )
     entry = (plugin_dir / "self-host" / "editor.js").read_text()
     exported = set(re.search(r"export \{([^}]*)\}", entry).group(1).replace(" ", "").split(","))

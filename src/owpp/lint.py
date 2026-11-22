@@ -8,15 +8,25 @@ Both are about what the people using the plugin see:
   mystery setting.
 - **Tools.** Open-WebUI builds the tool spec the model reads from each method's type hints and
   its docstring's `:param name:` lines, so a method without them gives the model a poor spec.
+
+And two about the files becoming one module when bundled (docs/bundling.md):
+
+- **A library name defined again.** The plugin's definition replaces the library's.
+- **`from __future__` lines that differ.** They move to the top of the bundle, so shared.py's
+  apply to function.py and tool.py too, which an editor reading one file cannot know.
 """
 
 from __future__ import annotations
 
 import ast
 import re
+from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
 
+from .errors import OwppError
+from .flatten import FILE_TOKEN, defined
+from .libraries import exports
 from .manifest import read_manifest, read_text
 
 SOURCE_FILES = ("function.py", "tool.py", "shared.py")
@@ -205,4 +215,103 @@ def lint_plugin(path: Path, shown: str) -> list[Finding]:
     for name in SOURCE_FILES:
         if (path / name).exists():
             findings += lint_source(path / name, f"{shown}/{name}")
+    return (
+        findings
+        + _shadowed_library_names(path, shown)
+        + _future_imports(path, shown)
+        + _file_tokens(path, shown)
+    )
+
+
+def _file_tokens(path: Path, shown: str) -> list[Finding]:
+    """`{{file:NAME}}`, deprecated: text put into the source, where templates/ is Python."""
+    findings = []
+    for name in SOURCE_FILES:
+        if not (path / name).exists():
+            continue
+        for number, line in enumerate(read_text(path / name).splitlines(), 1):
+            for m in FILE_TOKEN.finditer(line):
+                findings.append(
+                    Finding(
+                        f"{shown}/{name}",
+                        number,
+                        f"{{{{file:{m.group(1)}}}}} is deprecated: move {m.group(1)} into "
+                        f'templates/ and read it with plugin_template_text("{m.group(1)}") '
+                        "(a tool adds `include: [templates]` under `tool:`)",
+                    )
+                )
+    return findings
+
+
+def _trees(path: Path) -> dict[str, ast.Module]:
+    trees = {}
+    for name in SOURCE_FILES:
+        if (path / name).exists():
+            with suppress(SyntaxError):  # `owpp check` reports it
+                trees[name] = ast.parse(read_text(path / name))
+    return trees
+
+
+def _bundle_libraries(path: Path) -> dict[str, set[str]]:
+    """The libraries each source file is bundled with (bundle.file_libraries); empty when the
+    plugin does not bundle, which `owpp check` reports itself."""
+    from .bundle import file_libraries
+
+    try:
+        return file_libraries(path)
+    except OwppError:
+        return {}
+
+
+def _shadowed_library_names(path: Path, shown: str) -> list[Finding]:
+    libraries, lib = _bundle_libraries(path), exports()
+    findings = []
+    for name, tree in _trees(path).items():
+        for own, line in defined(tree, imports=False).items():
+            if lib.get(own) in libraries.get(name, ()):
+                findings.append(
+                    Finding(
+                        f"{shown}/{name}",
+                        line,
+                        f"{own} is also the {lib[own]} library's (owpp.lib): bundled, this "
+                        "definition replaces it. Rename it",
+                    )
+                )
+    return findings
+
+
+def _futures(tree: ast.Module) -> set[str]:
+    return {
+        alias.name
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module == "__future__"
+        for alias in node.names
+    }
+
+
+def _future_imports(path: Path, shown: str) -> list[Finding]:
+    """shared.py goes in front of function.py and of tool.py, and a bundle's `from __future__`
+    lines are all of its files': with shared.py in both bundles, one file's line reaches the other
+    two (through shared.py), so all three should have the same ones."""
+    trees = _trees(path)
+    if "shared.py" not in trees:
+        return []
+    futures = {name: _futures(tree) for name, tree in trees.items()}
+    findings = []
+    for name, mine in futures.items():
+        for feature in sorted(set().union(*futures.values()) - mine):
+            # shared.py when it has it: the file both bundles share
+            has = (
+                "shared.py"
+                if feature in futures["shared.py"]
+                else next(other for other, theirs in futures.items() if feature in theirs)
+            )
+            findings.append(
+                Finding(
+                    f"{shown}/{name}",
+                    1,
+                    f"has no `from __future__ import {feature}`, which {has} has: bundled, it "
+                    "applies here too, so add it to read this file the way it runs",
+                )
+            )
     return findings

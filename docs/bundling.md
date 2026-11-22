@@ -15,9 +15,28 @@ A bundle is always, in this order, with no numbering or naming scheme to maintai
 
 A function bundle and a tool bundle are separate Open-WebUI modules. They share code through `shared.py` (each gets a copy) and, where state must be shared, through `sys.modules` (the `chat_data` library does this for temporary chats).
 
-## `{{file:NAME}}`
+## Imports between the files
 
-In `function.py` or `tool.py`, `{{file:NAME}}` is replaced by the text of the sibling file `NAME`. Use it to keep an HTML page or large literal out of a Python string. For files served over HTTP prefer a `public/` folder.
+Each file imports what it uses, as in any Python project, so it reads, lints and type-checks on its own ([why](adr/0002-plugin-source-is-python.md)). That includes the plugin's own code:
+
+```python
+# function.py
+import json
+
+from shared import PREFIX, _load
+```
+
+`from shared import ...` resolves in an editor and in tests. The bundle has no `shared` module: shared.py is already above the file, so the bundler removes the line. The same goes for `from owpp.lib import ...`: the libraries are inlined above, and Open-WebUI has no owpp ([libraries](libraries.md)). Removing an import is only safe for some forms, and the bundler refuses the others, naming the line:
+
+- **Only a top-level `from shared import NAME` or `from owpp.lib import NAME`.** Not `import shared` or `import owpp.lib`, not `*`, and not an import inside a function.
+- **No `as`.** Once the line is gone, an alias would be undefined.
+- **The name must be defined in shared.py**, or be one owpp.lib exports. A library name also needs its library in the bundle (`include:`, or `tool.include` for the tool), and a name from the [runtime](runtime.md) needs a tool or skills.
+- **No name both in shared.py and in the file.** They become one namespace, so one would replace the other. Importing the same module in both (`import json`) is fine.
+- **`function.py` and `tool.py` cannot import each other.** They are bundled into separate modules. Move what both need into shared.py.
+
+## `{{file:NAME}}` (deprecated)
+
+In `function.py` or `tool.py`, `{{file:NAME}}` is replaced by the text of the sibling file `NAME`. It still works, but `owpp check` warns about it: it substitutes text into the source, so the file does not read as the Python that runs. Put the file in `templates/` and read it with `plugin_template_text("NAME")` instead ([templates](libraries.md#templates)); a tool adds `include: [templates]` under `tool:`. Files served over HTTP go in `static/`.
 
 ## Tool bundles carry the runtime too
 

@@ -6,8 +6,16 @@
 # which the bundler adds.
 
 import json as _json
+from typing import TYPE_CHECKING as _TYPE_CHECKING
+
+from .plugin_events import PluginEvents, on
+from .shared_assets import CUSTOM_CSS_PATH, LOADER_PATH, asset_register, asset_withdraw_deleted
+
+if _TYPE_CHECKING:  # optional: used only when the live_reload library is in the bundle too
+    from .live_reload import reload_active, reload_bootstrap, reload_on_event
 
 # {"id": "<plugin id>", "order": 0, "wrap": true, "files": {"loader.js": text, "custom.css": text}}
+__ASSETS_DATA__ = '{"id": "", "order": 0, "wrap": true, "files": {}}'  # for imports; the bundler drops it
 _ASSETS = _json.loads(__ASSETS_DATA__)
 _ASSET_PATHS = {"loader.js": LOADER_PATH, "custom.css": CUSTOM_CSS_PATH}
 # instance: the Event (its asset_vars() fills __NAME__ placeholders); app: where we registered;

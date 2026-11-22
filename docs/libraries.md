@@ -1,6 +1,14 @@
 # Libraries
 
-Libraries are plain Python files in `src/owpp/runtime/lib/`, inserted into a bundle by `include:` (see [bundling](bundling.md#order)). They are **vendored**: the bundle contains a byte-identical copy, so a plugin has no runtime dependency on this repository. Public names start with `plugin_`; private helpers start with `_<lib>_` so nothing collides with plugin code. Each file ends with a marker comment (`# end plugin <lib> library`) used to avoid inserting it twice.
+Libraries are plain Python files in `src/owpp/runtime/lib/`, inserted into a bundle by `include:` (see [bundling](bundling.md#order)). They are **vendored**: the bundle contains a copy, so a plugin has no runtime dependency on this repository. Public names start with `plugin_`; private helpers start with `_<lib>_` so nothing collides with plugin code. Each file ends with a marker comment (`# end plugin <lib> library`) used to avoid inserting it twice.
+
+A plugin imports what it uses from **`owpp.lib`**, which re-exports every library's public names:
+
+```python
+from owpp.lib import PluginAdmin, plugin_mount
+```
+
+The import is for an editor and for tests; owpp is a development dependency, not something Open-WebUI has. The bundler removes the line and inlines the library, so it must be a top-level `from owpp.lib import NAME`, without `as`. The library must also be in the bundle: asked for with `include:`, or turned on by what the plugin holds. The bundler names the library when it is not. The libraries import each other the same way, relatively (`from .plugin_core import plugin_app`), and those imports go too. Each library also gives its data placeholder a default (`__CONFIG_DATA__ = '{}'`), so it imports on its own; in a bundle the plugin's data takes its place.
 
 | Library | Adds |
 | --- | --- |
@@ -180,7 +188,7 @@ Added automatically (with `routes`) when the plugin has a `static/` folder. Ever
 Added automatically when the plugin has a `templates/` folder (no manifest key). The files are embedded in the function bundle as JSON, so they can hold any quotes or backslashes, and are **never served**: the function reads one with `plugin_template_text("page.html")` and renders it. There is nothing to declare and nothing to guard, because nothing is reachable until the function chooses to return it from a route it has guarded.
 
 - `plugin_template_text(path)`: a file as text. `plugin_template_bytes(path)`: as bytes (binary files are stored as base64). `plugin_template_files()`: the paths, sorted. A missing path raises `FileNotFoundError`.
-- Function bundle only; a tool bundle does not get them.
+- The function bundle gets them. A tool gets them only when it asks, with `include: [templates]` under `tool:`, so a function's pages are not copied into its tool.
 - Reads come from memory, so a route may call them on every request.
 
 ```python
@@ -273,6 +281,8 @@ A `config.yaml` next to `plugin.yaml` (added automatically) holds structured set
 ```yaml
 include: [live_reload, shared_assets]   # in this order
 ```
+
+Import the protocol's names from `owpp.lib` like any library's: `from owpp.lib import CUSTOM_CSS_PATH, asset_register, reload_active, reload_bootstrap, reload_on_event`. `live_reload`'s names load on first use, because the file imports `open_webui` at its top, so in a test they need the mock.
 
 Two other ways to use an existing protocol plugin:
 

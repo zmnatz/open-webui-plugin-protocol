@@ -21,8 +21,12 @@ A folder `owpp build` writes: each plugin's bundle and what the deploy needs bes
 _Avoid_: artifact, package, dist
 
 **Library**:
-Built-in code owpp links into a plugin's bundle, asked for with `include:` or turned on by what the plugin holds (a `static/` folder, a `config.yaml`).
+Built-in code owpp links into a plugin's bundle, asked for with `include:` or turned on by what the plugin holds (a `static/` folder, a `config.yaml`). A plugin imports its names from `owpp.lib`.
 _Avoid_: lib, mixin, include
+
+**Flattening**:
+What the bundler does to a plugin's files, written as ordinary Python: it inlines `shared.py` and the libraries above `function.py` (or `tool.py`) and removes the imports of them, so they become the one module Open-WebUI stores.
+_Avoid_: concatenation, inlining
 
 **Library catalogue**:
 The list of every library with what it pulls in, what turns it on and what data it carries.

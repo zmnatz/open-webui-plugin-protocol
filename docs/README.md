@@ -58,7 +58,7 @@ plugins/<id>/
 
 ```yaml
 # plugin.yaml
-protocol: "0.3"
+protocol: "0.5"
 function:
   title: My Plugin
   author: me

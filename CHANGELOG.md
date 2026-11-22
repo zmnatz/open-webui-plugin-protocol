@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Protocol 0.5: a plugin's files import what they use, and the bundler refuses one that does not. `owpp migrate` writes the imports into a 0.3 plugin ([upgrading](docs/upgrading.md#04-05)).
+- A plugin's files are ordinary Python: each imports what it uses, including its shared code (`from shared import NAME`) and the libraries (`from owpp.lib import PluginAdmin, plugin_mount`), so it reads, lints and type-checks on its own. The bundler removes those imports, says which library a name needs in `include:`, and refuses the forms that would break once bundled ([bundling](docs/bundling.md#imports-between-the-files)).
+- `owpp create` writes plugins that import the library names they use.
+- `{{file:NAME}}` is deprecated, and `owpp check` warns about it: use `templates/` and `plugin_template_text()`. A tool can now read the templates too, with `include: [templates]` under `tool:`; `owpp create` writes a rich-UI tool that way.
+- owpp ships type stubs for `open_webui`, written from the mock, so an editor resolves what a plugin imports from Open-WebUI ([the mock](docs/testing/mock.md#in-an-editor)).
+- `owpp.testing.plugin_source(path)` imports a plugin's files as modules for tests of their logic, each plugin with its own `shared.py` and libraries ([writing a test](docs/testing/writing.md#testing-logic-directly)).
+- `owpp check` warns about a plugin name that replaces a library name in its bundle, and about `from __future__` lines that differ between `shared.py` and the files it goes in front of.
+- The runtime's `_plugin_ensure()` is now `plugin_ensure()`, imported from `owpp.lib`.
+- `include: [static]` brings in `routes`, which it mounts its files with.
+
 ## 0.4.1 (2026-11-21)
 
 - Project: releases follow gitflow. Changes merge into `develop`; a release is started from the Actions tab, and merging it into `main` tags it, publishes it and merges `main` back into `develop`. `main` and the docs site are now always the latest release ([contributing](docs/contributing.md#releasing)).

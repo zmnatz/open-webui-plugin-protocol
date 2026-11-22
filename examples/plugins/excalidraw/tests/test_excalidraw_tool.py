@@ -249,7 +249,14 @@ def test_read_shows_the_model_a_compact_drawing(owui, tool, ada):
     assert read["version"] == 1
     assert read["elements"] == [
         {**RECT, "label": "API"},
-        {"id": "r", "type": "arrow", "x": 0, "y": 0, "points": [[0, 0], [1, 0]], "start": {"id": "a"}},
+        {
+            "id": "r",
+            "type": "arrow",
+            "x": 0,
+            "y": 0,
+            "points": [[0, 0], [1, 0]],
+            "start": {"id": "a"},
+        },
     ]
 
 

@@ -1,4 +1,3 @@
-
 # Syncs the servers listed in mcpo's /openapi.json into Open-WebUI as OpenAPI tool servers.
 
 from __future__ import annotations
@@ -10,6 +9,8 @@ from urllib.parse import quote
 
 import aiohttp
 from pydantic import BaseModel, Field
+
+from owpp.lib import PluginScheduledSync, plugin_config, plugin_function_id, plugin_sync_markers
 
 log = logging.getLogger(__name__)
 
@@ -37,9 +38,7 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
         )
         PRUNE_MANAGED: bool = Field(
             default=True,
-            description=(
-                "Remove previously synced servers that no longer exist in mcpo."
-            ),
+            description="Remove previously synced servers that no longer exist in mcpo.",
         )
         REQUEST_TIMEOUT: int = Field(
             default=15,
@@ -81,12 +80,14 @@ class Event(PluginScheduledSync):  # event / repeat: the jobs library
         url = f"{base}/openapi.json"
         headers = {"Authorization": f"Bearer {key}", "Accept": "application/json"}
         timeout = aiohttp.ClientTimeout(total=self.valves.REQUEST_TIMEOUT)
-        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
-            async with session.get(url, headers=headers) as resp:
-                if resp.status != 200:
-                    body = await resp.text()
-                    raise RuntimeError(f"HTTP {resp.status}: {body[:300]}")
-                data = await resp.json()
+        async with (
+            aiohttp.ClientSession(timeout=timeout, trust_env=True) as session,
+            session.get(url, headers=headers) as resp,
+        ):
+            if resp.status != 200:
+                body = await resp.text()
+                raise RuntimeError(f"HTTP {resp.status}: {body[:300]}")
+            data = await resp.json()
 
         description = (data.get("info") or {}).get("description") or ""
         return [route for _label, route in MCPO_SERVER_LINK.findall(description)]

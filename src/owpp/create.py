@@ -23,6 +23,7 @@ libraries rather than copies of them, HTML in files rather than in Python string
 
 from __future__ import annotations
 
+import ast
 import datetime as _dt
 import json
 import re
@@ -32,6 +33,8 @@ from pathlib import Path
 from .bundle import VALID_ID, VALID_SKILL_ID
 from .errors import OwppError
 from .events import problem_with
+from .imports import add_lib_imports
+from .libraries import exports
 from .protocol import VERSION as PROTOCOL_VERSION
 from .sources import GIT_URL, SHA40, TRACK
 from .versioning import changelog_text
@@ -622,7 +625,12 @@ def render_function(spec: PluginSpec) -> str:
     }[spec.type](spec)
     while lines and lines[-1] == "":
         lines.pop()
-    return "\n".join(lines) + "\n"
+    text = "\n".join(lines) + "\n"
+    if not any(isinstance(n, ast.Name) and n.id == "Field" for n in ast.walk(ast.parse(text))):
+        text = text.replace(
+            "from pydantic import BaseModel, Field\n", "from pydantic import BaseModel\n"
+        )
+    return add_lib_imports(text, exports())
 
 
 def render_tool(spec: PluginSpec) -> str:
@@ -641,7 +649,7 @@ def render_tool(spec: PluginSpec) -> str:
         "",
     ]
     if tool.rich_ui:
-        lines += ['EMBED = r"""{{file:embed.html}}"""  # embed.html, put here when bundled', ""]
+        lines += ['EMBED = plugin_template_text("tool.html")  # templates/tool.html', ""]
     lines += [
         "",
         "class Tools:",
@@ -680,7 +688,7 @@ def render_tool(spec: PluginSpec) -> str:
         ]
     while lines[-1] == "":
         lines.pop()
-    return "\n".join(lines) + "\n"
+    return add_lib_imports("\n".join(lines) + "\n", exports())
 
 
 def _yaml(value: str) -> str:
@@ -742,8 +750,13 @@ def render_manifest(spec: PluginSpec) -> str:
             out.append(f"  title: {_yaml(t.title)}")
             if t.description:
                 out.append(f"  description: {_yaml(t.description)}")
-        if t.chat_data:
-            out.append("  include: [chat_data]")
+        tool_include = [
+            n
+            for n, on in (("chat_data", t.chat_data), ("templates", t.rich_ui and not t.file))
+            if on
+        ]
+        if tool_include:
+            out.append(f"  include: [{', '.join(tool_include)}]")
         if t.public:
             out.append(
                 "  access: public # every signed-in user may use it; later UI changes are kept"
@@ -1158,8 +1171,8 @@ def render(spec: PluginSpec, today: str | None = None) -> dict[str, str]:
     if spec.tool and not spec.tool.file:
         files["tool.py"] = render_tool(spec)
         if spec.tool.rich_ui:
-            files["embed.html"] = _PAGE_HTML.replace("__TITLE__", spec.tool.title).format(
-                note="Shown in the chat by the tool. It is put into tool.py when bundled."
+            files["templates/tool.html"] = _PAGE_HTML.replace("__TITLE__", spec.tool.title).format(
+                note="Shown in the chat by the tool, which reads it with plugin_template_text()."
             )
     if not spec.source:
         for s in spec.skills:

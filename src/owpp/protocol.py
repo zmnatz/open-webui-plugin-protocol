@@ -13,7 +13,7 @@ from typing import Any
 
 from .errors import OwppError
 
-VERSION = "0.3"
+VERSION = "0.5"
 OLDEST = "0.1"  # a manifest with no `protocol:` was written before the key existed
 CURRENT = tuple(map(int, VERSION.split(".")))
 FORMAT = re.compile(r"^(\d+)\.(\d+)$")

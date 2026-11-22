@@ -238,6 +238,184 @@ class TestToolAndSkills:
         assert tool.startswith('"""\ntitle: T\n"""\nSHARED = 1\nclass Tools:')
         assert "def plugin_mount(" not in tool  # include applies to the function only
 
+    def test_from_shared_imports_are_removed_once_shared_py_is_inlined(self, plugin):
+        """`from shared import NAME` is a real import for the editor and the tests; in the bundle
+        shared.py is already above the file, so the line goes, however many lines it spans."""
+        d = plugin(
+            "function:\n  title: T\ntool:\n  id: t\n  title: T\n",
+            {
+                "shared.py": "import json\n\nSHARED = 1\nOTHER = json.dumps(2)\n",
+                "function.py": "# top\nfrom shared import SHARED\n\nclass Filter:\n    x = SHARED\n",
+                "tool.py": "from shared import (\n    OTHER,\n    SHARED,\n)\n\nclass Tools:\n    y = OTHER\n",
+            },
+        )
+        (fn,) = load_function_files(d)
+        tool = embedded(fn.content)["tools"][0]["content"]
+        for code in (fn.content, tool):
+            assert "from shared" not in code and "    OTHER,\n" not in code
+            assert code.index("SHARED = 1") < code.index("class ")
+        assert "# top\n\nclass Filter:" in fn.content
+        assert "\n\nclass Tools:" in tool
+
+    @pytest.mark.parametrize(
+        ("source", "error"),
+        [
+            ("from shared import SHARED as S\n", r"function\.py:1: .*`as`"),
+            ("import shared\n", r"function\.py:1: .*`from shared import NAME`"),
+            ("def f():\n    from shared import SHARED\n", r"function\.py:2: .*top level"),
+            ("from shared import *\n", r"function\.py:1: .*import \*`: name what you use"),
+            (
+                "from shared import MISSING\n",
+                r"function\.py:1: .*MISSING.*not defined in shared\.py",
+            ),
+            ("from shared import SHARED\nSHARED = 2\n", r"function\.py:2: .*SHARED.*shared\.py"),
+            ("def SHARED():\n    pass\n", r"function\.py:1: .*SHARED.*shared\.py"),
+            ("from tool import X\n", r"function\.py:1: .*tool\.py.*separate.*shared\.py"),
+            ("import tool\n", r"function\.py:1: .*tool\.py.*separate.*shared\.py"),
+            ("from . import tool\n", r"function\.py:1: .*tool\.py.*separate.*shared\.py"),
+            ("from .tool import X\n", r"function\.py:1: .*tool\.py.*separate.*shared\.py"),
+            ("from .helpers import X\n", r"function\.py:1: a relative import has no package"),
+        ],
+    )
+    def test_refuses_imports_that_would_break_once_flattened(self, plugin, source, error):
+        """The bundler removes `from shared import` lines; each refused form would leave a name
+        undefined, or import something that is not there, once the files are one module."""
+        d = plugin("function:\n  title: T\n", {"shared.py": "SHARED = 1\n", "function.py": source})
+        with pytest.raises(OwppError, match=error):
+            load_function_files(d)
+
+    def test_owpp_lib_imports_are_removed_and_their_libraries_are_inlined_above(self, plugin):
+        """`from owpp.lib import NAME` resolves for an editor and tests; Open-WebUI has no owpp,
+        so the line goes and the library is already in the bundle, from shared.py too."""
+        d = plugin(
+            "function:\n  title: T\ninclude: [routes, chat_data]\n",
+            {
+                "shared.py": "from owpp.lib import plugin_chat_read\n\nREAD = plugin_chat_read\n",
+                "function.py": "from owpp.lib import (\n    plugin_mount,\n)\n\nclass Filter:\n    m = plugin_mount\n",
+            },
+        )
+        (fn,) = load_function_files(d)
+        c = fn.content
+        assert "from owpp" not in c and "from ." not in c
+        assert c.index("def plugin_mount(") < c.index("READ = ") < c.index("class Filter:")
+
+    @pytest.mark.parametrize(
+        ("source", "error"),
+        [
+            ("from owpp.lib import plugin_mount as m\n", r"function\.py:1: .*`as`"),
+            ("import owpp.lib\n", r"function\.py:1: .*`from owpp\.lib import NAME`"),
+            ("from owpp import lib\n", r"function\.py:1: .*`from owpp\.lib import NAME`"),
+            ("from owpp.runtime.lib.plugin_core import plugin_app\n", r"function\.py:1: .*owpp"),
+            ("def f():\n    from owpp.lib import plugin_app\n", r"function\.py:2: .*top level"),
+            ("from owpp.lib import *\n", r"function\.py:1: .*name what you use"),
+            ("from owpp.lib import nope\n", r"function\.py:1: owpp\.lib has no nope"),
+            (
+                "from owpp.lib import plugin_chat_read\n",
+                r"function\.py:1: plugin_chat_read is from the chat_data library.*include",
+            ),
+            (
+                "from owpp.lib import plugin_ensure\n",
+                r"function\.py:1: plugin_ensure is the plugin runtime's.*tool or skills",
+            ),
+        ],
+    )
+    def test_refuses_owpp_imports_that_would_break_once_flattened(self, plugin, source, error):
+        """owpp is not installed in Open-WebUI: only a top-level `from owpp.lib import NAME`,
+        for a name whose library is in the bundle, can be removed and still work."""
+        d = plugin("function:\n  title: T\ninclude: [routes]\n", {"function.py": source})
+        with pytest.raises(OwppError, match=error):
+            load_function_files(d)
+
+    @pytest.mark.parametrize(
+        ("source", "error"),
+        [
+            (
+                "class Filter:\n    m = plugin_mount\n",
+                r"function\.py:2: plugin_mount is used without importing it: add "
+                r"`from owpp\.lib import plugin_mount` \(`owpp migrate`",
+            ),
+            (
+                "class Filter:\n    x = SHARED\n",
+                r"function\.py:2: SHARED is shared\.py's, used without importing it: add "
+                r"`from shared import SHARED` \(`owpp migrate`",
+            ),
+            (
+                "class Filter:\n    x = json.dumps(1)\n",
+                r"function\.py:2: json is imported in shared\.py, not here: import it",
+            ),
+        ],
+    )
+    def test_refuses_names_used_without_their_import(self, plugin, source, error):
+        """Before protocol 0.5 a plugin used them as globals. Bundled they would still be there,
+        but the file would not read as Python on its own; owpp migrate adds the imports."""
+        d = plugin(
+            "function:\n  title: T\ninclude: [routes]\n",
+            {"shared.py": "import json\n\nSHARED = 1\n", "function.py": source},
+        )
+        with pytest.raises(OwppError, match=error):
+            load_function_files(d)
+
+    def test_a_tool_checks_its_imports_against_its_own_include(self, plugin):
+        """The tool is its own bundle, with the libraries `tool.include` asks for."""
+        files = {
+            "function.py": "class Filter:\n    pass\n",
+            "tool.py": "from owpp.lib import plugin_chat_read\n\nclass Tools:\n    pass\n",
+        }
+        bad = plugin("function:\n  title: T\ninclude: [chat_data]\ntool:\n  id: t\n", files)
+        with pytest.raises(OwppError, match=r"tool\.py:1: .*chat_data.*tool\.include"):
+            load_function_files(bad)
+        good = plugin("function:\n  title: T\ntool:\n  id: t\n  include: [chat_data]\n", files)
+        load_function_files(good)
+
+    @pytest.mark.parametrize(
+        "source",
+        [
+            "from os.path import join as SHARED\n",
+            "for SHARED in range(2):\n    pass\n",
+            "with open(__file__) as SHARED:\n    pass\n",
+            "try:\n    pass\nexcept Exception as SHARED:\n    pass\n",
+            "if (SHARED := 3):\n    pass\n",
+            "def f():\n    global SHARED\n    SHARED = 2\n",
+            "match 1:\n    case SHARED:\n        pass\n",
+            "from json import loads as SHARED\nfrom shared import SHARED\n",
+        ],
+    )
+    def test_any_binding_of_a_shared_py_name_is_refused(self, plugin, source):
+        """Not only an assignment or a def: every way a module binds a name would replace
+        shared.py's once the two are one module."""
+        d = plugin("function:\n  title: T\n", {"shared.py": "SHARED = 1\n", "function.py": source})
+        with pytest.raises(OwppError, match=r"SHARED is defined in shared\.py and bound here too"):
+            load_function_files(d)
+
+    def test_a_name_shared_py_imports_may_be_imported_here_too(self, plugin):
+        """The same module, imported in both: one object, nothing replaced."""
+        d = plugin(
+            "function:\n  title: T\n",
+            {
+                "shared.py": "import json\n\nX = json\n",
+                "function.py": "import json\n\nclass Filter:\n    j = json\n",
+            },
+        )
+        load_function_files(d)
+
+    def test_tool_py_cannot_import_from_function_py(self, plugin):
+        """They are separate modules in Open-WebUI, so the import would find nothing."""
+        d = plugin(
+            "function:\n  title: T\ntool:\n  id: t\n  title: T\n",
+            {
+                "function.py": "class Filter:\n    pass\n",
+                "tool.py": "from function import Filter\n\nclass Tools:\n    pass\n",
+            },
+        )
+        with pytest.raises(OwppError, match=r"tool\.py:1: .*function\.py.*separate.*shared\.py"):
+            load_function_files(d)
+
+    def test_from_shared_without_a_shared_py(self, plugin):
+        """There is nothing to put above the file, so the name would be undefined."""
+        d = plugin("function:\n  title: T\n", {"function.py": "from shared import X\n"})
+        with pytest.raises(OwppError, match=r"function\.py:1: .*no shared\.py"):
+            load_function_files(d)
+
     def test_future_imports_move_above_the_libraries_and_shared_py(self, plugin):
         d = plugin(
             "function:\n  title: T\ninclude: [jobs]\n",
@@ -410,7 +588,10 @@ class TestStaticAndTemplates:
         d = plugin(
             "function:\n  title: T\n",
             {
-                "function.py": 'class Event:\n    pass\n\nPAGE = plugin_template_text("page.html")\n',
+                "function.py": (
+                    "from owpp.lib import plugin_template_text\n\n"
+                    'class Event:\n    pass\n\nPAGE = plugin_template_text("page.html")\n'
+                ),
                 "templates/page.html": 'a "quoted" \\ page\n',
             },
         )
@@ -419,6 +600,30 @@ class TestStaticAndTemplates:
         assert ns["PAGE"] == 'a "quoted" \\ page\n' and ns["plugin_template_files"]() == [
             "page.html"
         ]
+
+    def test_a_tool_reads_the_templates_when_it_includes_them(self, plugin):
+        """tool.py has no other way to keep a page out of a Python string, now that
+        {{file:NAME}} is deprecated; a tool that does not ask is not given the files."""
+        d = plugin(
+            "function:\n  title: T\ntool:\n  id: t\n  include: [templates]\n",
+            {
+                "function.py": "class Filter:\n    pass\n",
+                "tool.py": (
+                    "from owpp.lib import plugin_template_text\n\n"
+                    'PAGE = plugin_template_text("page.html")\n\nclass Tools:\n    pass\n'
+                ),
+                "templates/page.html": "<p>tool page</p>\n",
+            },
+        )
+        (fn,) = load_function_files(d)
+        tool = embedded(fn.content)["tools"][0]["content"]
+        ns: dict = {"__name__": "tool_t_" + "0" * 32}
+        exec(compile(tool, "tool.py", "exec"), ns)
+        assert ns["PAGE"] == "<p>tool page</p>\n"
+        (d / "viz" / "plugin.yaml").write_text("function:\n  title: T\ntool:\n  id: t\n")
+        (d / "viz" / "tool.py").write_text("class Tools:\n    pass\n")
+        (fn,) = load_function_files(d)
+        assert "tool page" not in embedded(fn.content)["tools"][0]["content"]  # it did not ask
 
     def test_both_folders_can_be_in_one_plugin(self, plugin):
         d = plugin(
@@ -616,7 +821,10 @@ class TestAssets:
         d = self.make(
             plugin,
             files={
-                "function.py": "class Event(PluginAssets):\n    def asset_vars(self):\n        return {}\n"
+                "function.py": (
+                    "from owpp.lib import PluginAssets\n\n"
+                    "class Event(PluginAssets):\n    def asset_vars(self):\n        return {}\n"
+                )
             },
         )
         (fn,) = load_function_files(d)
@@ -1024,7 +1232,7 @@ class TestProtocol:
         with pytest.raises(OwppError, match=r"`protocol:` must be a quoted major.minor string"):
             self.load(tmp_path, f"protocol: {value}\nfunction: {{title: T}}\n")
 
-    @pytest.mark.parametrize("value", ["0.4", "1.0"])
+    @pytest.mark.parametrize("value", ["0.6", "1.0"])
     def test_a_newer_version_is_refused(self, tmp_path, value):
         with pytest.raises(OwppError, match=rf"protocol {value} is newer than owpp supports"):
             self.load(tmp_path, f'protocol: "{value}"\nfunction: {{title: T}}\n')

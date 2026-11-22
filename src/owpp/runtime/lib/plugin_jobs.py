@@ -9,9 +9,19 @@ import sys as _sys
 import time as _time
 import types as _types
 
+from .plugin_core import (
+    plugin_app,
+    plugin_env,
+    plugin_function_id,
+    plugin_is_active,
+    plugin_stored_valves,
+)
+from .plugin_events import PluginEvents, on
+
 _jlog = _logging.getLogger(__name__ + ".jobs")
 
 # {"sync_every_minutes": 60 | "${NAME:-60}", "adopt_markers": [...]}, from plugin.yaml's `jobs:`
+__JOBS_DATA__ = '{"sync_every_minutes": 60}'  # for imports; the bundler drops it
 _JOBS = _json.loads(__JOBS_DATA__)
 
 

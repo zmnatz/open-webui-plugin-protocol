@@ -21,6 +21,8 @@ from fastapi import (
     Response as _Response,
 )
 
+from .plugin_core import plugin_function_id, plugin_is_active
+
 
 
 _routes_log = _logging.getLogger(__name__ + ".routes")

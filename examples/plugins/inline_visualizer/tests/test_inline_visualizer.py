@@ -97,7 +97,10 @@ def test_a_new_upstream_commit_updates_them_in_place(owui, plugin, plugin_dir):
     newer = TOOL.replace("rendered", "drew")
     owui.load(plugin_dir, sources={"tool.py": newer, "SKILL.md": SKILL.replace("charts", "maps")})
     owui.emit("function.updated", "inline_visualizer")
-    assert owui.tool("inline_visualizer").call("render", html="x") == "drew 1 characters with theme dark"
+    assert (
+        owui.tool("inline_visualizer").call("render", html="x")
+        == "drew 1 characters with theme dark"
+    )
     assert owui.skills["visualize"].description == "Draw diagrams and maps inline."
 
 
