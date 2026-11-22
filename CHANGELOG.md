@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (2026-11-22)
 
 - A tool embeds only the templates it lists, with `tool: templates: [launcher/]`, so a function's large page is not copied into its tool ([plugin format](docs/plugin-format.md#tool)).
 - The mock sends events about users and models (`owui.emit("user.deleted", {"type": "user", "id": ...})`), has `decode_token`, and answers a plugin that asks a model itself: `owui.model_reply`, with what it was asked in `owui.completions` ([the mock](docs/testing/mock.md)).
