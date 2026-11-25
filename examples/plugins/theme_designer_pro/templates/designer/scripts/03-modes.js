@@ -33,13 +33,13 @@
     // and blurs what shows through. The backdrop is the page behind an open
     // dialog, tinted black; the top fade has opacity only.
     const SURFACE_LAYERS = [
-        { key: 'Sidebar', label: 'Sidebar', hint: 'The open sidebar. The collapsed rail stays clear.', color: ['var(--color-gray-950)', 'var(--color-gray-50)'] },
-        { key: 'Composer', label: 'Message input', hint: 'The box you type in.', color: ['var(--color-gray-850)', '#fff'] },
-        { key: 'Panel', label: 'Tabs drawer', hint: 'The drawer tabs open in on a narrow screen. On a wider one each tab looks like the page or chat it shows.', color: ['var(--color-gray-900)', '#fff'] },
-        { key: 'Cards', label: 'Cards and panels', hint: 'The rounded panels on a page: note cards, the calendar, workspace and admin cards.', color: ['var(--color-gray-900)', '#fff'] },
-        { key: 'Buttons', label: 'Buttons', hint: 'The grey buttons on a page, such as Create, single or split. Switches and the black and white action buttons keep their fill.', color: ['var(--color-gray-850)', 'var(--color-gray-50)'] },
-        { key: 'Menu', label: 'Menus and tooltips', hint: 'Dropdowns, submenus, the model picker, Model controls, tooltips and toasts.', color: ['var(--color-gray-850)', '#fff'] },
-        { key: 'Dialog', label: 'Dialogs', hint: 'Settings and the other windows that open over the page.', color: ['var(--color-gray-900)', '#fff'] },
+        { key: 'Sidebar', label: 'Sidebar', hint: 'The open sidebar. The collapsed rail stays clear.', color: ['var(--color-base-950)', 'var(--color-base-50)'] },
+        { key: 'Composer', label: 'Message input', hint: 'The box you type in.', color: ['var(--color-base-850)', 'var(--color-base-0)'] },
+        { key: 'Panel', label: 'Tabs drawer', hint: 'The drawer tabs open in on a narrow screen. On a wider one each tab looks like the page or chat it shows.', color: ['var(--color-base-900)', 'var(--color-base-0)'] },
+        { key: 'Cards', label: 'Cards and panels', hint: 'The rounded panels on a page: note cards, the calendar, workspace and admin cards.', color: ['var(--color-base-900)', 'var(--color-base-0)'] },
+        { key: 'Buttons', label: 'Buttons', hint: 'The grey buttons on a page, such as Create, single or split. Switches and the black and white action buttons keep their fill.', color: ['var(--color-base-850)', 'var(--color-base-50)'] },
+        { key: 'Menu', label: 'Menus and tooltips', hint: 'Dropdowns, submenus, the model picker, Model controls, tooltips and toasts.', color: ['var(--color-base-850)', 'var(--color-base-0)'] },
+        { key: 'Dialog', label: 'Dialogs', hint: 'Settings and the other windows that open over the page.', color: ['var(--color-base-900)', 'var(--color-base-0)'] },
         { key: 'Backdrop', label: 'Behind dialogs', hint: 'The page behind an open dialog: how much it darkens and blurs.', color: null },
         { key: 'Fade', label: 'Top fade', hint: 'The fade at the top of a chat, under the title bar.', color: null, noBlur: true }
     ];
@@ -980,16 +980,26 @@ self.onmessage = (e) => {
         return Storage.get('theme', {});
     })();
 
+    // Open WebUI 0.13.5 dropped its OLED Dark theme: a stored 'oled-dark'
+    // becomes 'dark' plus a black custom colour on the next page load. So
+    // OLED leaves 'theme' at 'dark' and says OLED under a key of its own,
+    // read with it here and by the bootloader on every page.
+    const OLED_KEY = 'owui_tdp_oled';
+    function owuiTheme() {
+        const theme = localStorage.getItem('theme');
+        return theme === 'dark' && localStorage.getItem(OLED_KEY) === '1' ? 'oled-dark' : theme;
+    }
+
     let activeMode = 'dark'; // 'dark', 'oled', 'light', 'her' or 'system'
 
     // Auto-detect OWUI theme to match designer appearance
     (function() {
         try {
-            const owuiTheme = localStorage.getItem('theme') || 'dark';
-            if (owuiTheme === 'light') { activeMode = 'light'; document.body.classList.add('light-mode'); }
-            else if (owuiTheme === 'her') { activeMode = 'her'; document.body.classList.add('light-mode'); }
-            else if (owuiTheme === 'oled-dark') { activeMode = 'oled'; }
-            else if (owuiTheme === 'system') {
+            const current = owuiTheme() || 'dark';
+            if (current === 'light') { activeMode = 'light'; document.body.classList.add('light-mode'); }
+            else if (current === 'her') { activeMode = 'her'; document.body.classList.add('light-mode'); }
+            else if (current === 'oled-dark') { activeMode = 'oled'; }
+            else if (current === 'system') {
                 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
                 if (!prefersDark) { activeMode = 'light'; document.body.classList.add('light-mode'); }
             }

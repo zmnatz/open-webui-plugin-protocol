@@ -92,16 +92,16 @@ def test_the_limits_default_to_the_originals(td):
 
 def test_a_valve_that_changes_the_look_tells_open_pages(td):
     """Saving the valves pushes the change to open pages when it changes how they look (Canvas
-    FX, sidebar, overlays), and not otherwise.
+    FX), and not otherwise.
 
-    By hand: with a chat open in another browser, set Sidebar Transparency to translucent: the
-    chat's sidebar turns to glass without a reload.
+    By hand: with an animated theme on a chat open in another browser, turn Enable Canvas FX
+    off: the animation stops there without a reload.
     """
     td.save()
     page = td.stream()
-    td.valves(auto_sync=True)
+    td.valves(auto_sync=False)
     assert td.heard(page) == []
-    td.valves(sidebar_transparency="translucent")
+    td.valves(enable_canvas_fx=False)
     assert [n for n, _ in td.heard(page)] == ["theme-update"]
 
 
@@ -186,6 +186,7 @@ def test_a_changed_model_image_tells_the_pages(owui, td):
 
     By hand: edit a model's background in Workspace > Models: open chats with it update.
     """
+    td.valves(allow_personal_themes=False)
     td.save(state=json.dumps({"_hiddenBackgrounds": {"models": {"m1": True}}}))
     signed_in, signed_out = td.stream(td.ada), td.stream()
     owui.emit("model.updated", {"type": "model", "id": "m1"})

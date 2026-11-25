@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 
 import pytest
-from conftest import URL, sign_in
+from conftest import URL, send, sign_in
 
 ID = "theme_designer_pro"
 BASE = "/api/v1/theme-designer"
@@ -83,6 +83,31 @@ def chat(api):
     api("POST", BASE, {"reset": True})
 
 
+def design(page, mode: str, hue: int, chroma: int) -> None:
+    """In the designer: pick a mode, and on the Core Palette tab move Hue and Chroma. It saves
+    at once (Live mode)."""
+    page.goto(f"{URL}{BASE}")
+    page.locator("#theme-designer-container").wait_for(timeout=30_000)
+    page.locator(f'button[data-mode="{mode}"]').first.click()
+    page.locator("#tab-btn-lch").click()
+    page.locator("#sl-h").wait_for(timeout=30_000)
+    with page.expect_response(
+        lambda r: r.request.method == "POST" and r.url.endswith(BASE) and r.ok, timeout=30_000
+    ):
+        page.evaluate(
+            """([hue, chroma]) => {
+                for (const [id, value] of [['sl-h', hue], ['sl-c', chroma]]) {
+                    const el = document.getElementById(id);
+                    el.value = value;
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }""",
+            [hue, chroma],
+        )
+    page.wait_for_timeout(1500)
+
+
 def open_chat(page, chat_id: str, themed: bool) -> None:
     """The chat in Open-WebUI's dark mode, where a palette shows best."""
     page.goto(f"{URL}/c/{chat_id}")
@@ -126,25 +151,7 @@ def test_an_admin_makes_a_theme_and_a_chat_wears_it(admin_page, api, shot, chat)
     finally:
         switch(api, True)
 
-    page.goto(f"{URL}{BASE}")
-    page.locator("#theme-designer-container").wait_for(timeout=30_000)
-    page.locator('button[data-mode="dark"]').first.click()
-    page.locator("#tab-btn-lch").click()
-    page.locator("#sl-h").wait_for(timeout=30_000)
-    with page.expect_response(
-        lambda r: r.request.method == "POST" and r.url.endswith(BASE) and r.ok, timeout=30_000
-    ):
-        page.evaluate(
-            """() => {
-                for (const [id, value] of [['sl-h', 185], ['sl-c', 60]]) {
-                    const el = document.getElementById(id);
-                    el.value = value;
-                    el.dispatchEvent(new Event('input', { bubbles: true }));
-                    el.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-            }"""
-        )
-    page.wait_for_timeout(1500)
+    design(page, "dark", hue=185, chroma=60)
     shot(
         page,
         "theme_designer_pro",
@@ -174,20 +181,24 @@ def test_an_admin_makes_a_theme_and_a_chat_wears_it(admin_page, api, shot, chat)
     )
 
 
-def test_personal_themes_off_says_so(user_page, shot):
-    """By hand: with Allow Personal Themes off, a user opens /api/v1/theme-designer?scope=me: a
-    sentence says personal themes are off."""
-    user_page.goto(f"{URL}{BASE}?scope=me")
-    user_page.get_by_text("Personal themes are turned off on this instance.").wait_for(
-        timeout=30_000
-    )
-    shot(
-        user_page,
-        "theme_designer_pro",
-        "personal-off",
-        "Personal themes off (the default): a user's designer link answers with a sentence.",
-        illustrates=["test_with_personal_themes_off_a_user_gets_a_sentence_not_the_designer"],
-    )
+def test_personal_themes_off_says_so(user_page, api, shot):
+    """By hand: turn Allow Personal Themes off, then as a user open
+    /api/v1/theme-designer?scope=me: a sentence says personal themes are off."""
+    before = api.valves(ID, allow_personal_themes=False)
+    try:
+        user_page.goto(f"{URL}{BASE}?scope=me")
+        user_page.get_by_text("Personal themes are turned off on this instance.").wait_for(
+            timeout=30_000
+        )
+        shot(
+            user_page,
+            "theme_designer_pro",
+            "personal-off",
+            "Personal themes off: a user's designer link answers with a sentence.",
+            illustrates=["test_with_personal_themes_off_a_user_gets_a_sentence_not_the_designer"],
+        )
+    finally:
+        restore(api, before)
 
 
 def test_a_user_designs_their_own_theme(user_page, api, shot, chat):
@@ -260,9 +271,7 @@ def test_the_launcher_builds_a_theme_in_a_chat(admin_page, api, shot, theme_mode
     shows the theme with a live preview and Apply."""
     page = admin_page
     page.goto(f"{URL}/?models={MODEL}")
-    page.locator("#chat-input").click()
-    page.keyboard.type(ASK)
-    page.keyboard.press("Enter")
+    send(page, ASK)
     page.get_by_text("Press Apply on the card").wait_for(timeout=60_000)
     page.frame_locator("iframe").last.get_by_text("Teal Lagoon").first.wait_for(timeout=30_000)
     page.wait_for_timeout(2500)  # the preview's first frames
@@ -277,3 +286,45 @@ def test_the_launcher_builds_a_theme_in_a_chat(admin_page, api, shot, theme_mode
             "test_the_launcher_carries_only_its_own_templates",
         ],
     )
+
+
+# What the page says about its mode and greys: Open-WebUI's stored theme, the designer's OLED
+# key, Open-WebUI 0.13.5's own colours, and the grey the chat's background is drawn from.
+MODE = """() => ({
+    theme: localStorage.getItem('theme'),
+    oled: localStorage.getItem('owui_tdp_oled'),
+    ownColours: localStorage.getItem('themeColors'),
+    dataTheme: document.documentElement.getAttribute('data-theme'),
+    grey: getComputedStyle(document.documentElement).getPropertyValue('--color-base-950').trim(),
+})"""
+
+
+def test_oled_holds_on_open_webui_0_13_5(admin_page, shot, chat):
+    """By hand (Open-WebUI 0.13.5): pick OLED in the designer and give it a hue, then open a chat
+    and reload it: it still wears the OLED palette, Settings > General > Colors has nothing set,
+    and the designer opens on OLED again."""
+    page = admin_page
+    try:
+        design(page, "oled", hue=300, chroma=60)
+        page.goto(f"{URL}/c/{chat}")
+        page.get_by_text("Saturday: Alfama").wait_for(timeout=30_000)
+        page.reload()
+        page.get_by_text("Saturday: Alfama").wait_for(timeout=30_000)
+        page.wait_for_timeout(1500)
+        state = page.evaluate(MODE)
+        assert (state["theme"], state["oled"], state["dataTheme"]) == ("dark", "1", "oled-dark")
+        assert state["ownColours"] is None and state["grey"].endswith(" 300)"), state
+        shot(
+            page,
+            "theme_designer_pro",
+            "oled",
+            "OLED picked in the designer, after a reload: still OLED's palette. Open-WebUI 0.13.5 "
+            "has no OLED theme of its own; the designer keeps OLED under a key of its own.",
+            illustrates=["test_oled_is_kept_under_its_own_key_so_open_webui_leaves_it_alone"],
+        )
+        page.goto(f"{URL}{BASE}")
+        page.locator('.mode-btn.active[data-mode="oled"]').wait_for(timeout=30_000)
+    finally:
+        page.evaluate(
+            "localStorage.removeItem('owui_tdp_oled'); localStorage.setItem('theme', 'dark')"
+        )

@@ -21,14 +21,14 @@
         '[data-tdp-open="personal"]>.tdp-settings-panel[data-tdp-key="personal"],[data-tdp-open="admin"]>.tdp-settings-panel[data-tdp-key="admin"]{display:flex}',
         '[data-tdp-open]>:not(.tdp-settings-panel){display:none!important}',
         '.tdp-settings-panel iframe{flex:1 1 auto;width:100%;min-height:0;border:0;border-radius:.75rem;background:transparent}',
-        '.tdp-settings-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--color-gray-500,#9b9b9b);pointer-events:none}',
+        '.tdp-settings-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--color-base-500,#9b9b9b);pointer-events:none}',
         // The tab whose theme this page shows
         '.tdp-theme-dot{width:6px;height:6px;margin-left:auto;flex-shrink:0;border-radius:9999px;background:#22c55e}',
         // A ring for the instance theme, where the Admin tab isn't there to show it
         '.tdp-theme-dot.tdp-theme-dot-instance{background:transparent;box-shadow:inset 0 0 0 1.5px #22c55e}',
         // The dialog's own tab keeps its selected look while ours is open; drop it.
-        '#settings-tabs-container[data-tdp-active] [data-tdp-was]{font-weight:400;color:var(--color-gray-600,#676767);background:transparent}',
-        'html.dark #settings-tabs-container[data-tdp-active] [data-tdp-was]{color:var(--color-gray-400,#b4b4b4)}'
+        '#settings-tabs-container[data-tdp-active] [data-tdp-was]{font-weight:400;color:var(--color-base-600,#676767);background:transparent}',
+        'html.dark #settings-tabs-container[data-tdp-active] [data-tdp-was]{color:var(--color-base-400,#b4b4b4)}'
     ].join('');
     // tabButtonClass in SettingsModal.svelte, read from the dialog's own tabs when it has them.
     var activeClass = 'flex items-center gap-1.5 h-7 px-2 md:w-full shrink-0 rounded-lg text-xs text-left transition-colors duration-75 font-medium text-gray-900 dark:text-white bg-gray-50 dark:bg-white/[0.04]';

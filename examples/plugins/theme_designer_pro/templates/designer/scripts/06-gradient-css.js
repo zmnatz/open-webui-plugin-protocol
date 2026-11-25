@@ -61,7 +61,7 @@
         const sidebarBlur = 'blur(12px)';
         const overlayFrom = hexToRgba(baseColor, 0.7);
         const overlayTo = hexToRgba(baseColor, 0.35);
-        return `\n/*[OWUI_GRADIENT_START]*/\n/* ${comment} */\n${selector} body {\n${bodyBg}\n  background-attachment: fixed !important;\n${animCss}\n}\n${selector} body::before { content: none !important; display: none !important; }\n${selector} #chat-container .bg-linear-to-t:not(.bg-cover + div) {\n  background-image: linear-gradient(to top, ${overlayFrom}, ${overlayTo}) !important;\n}\n${selector} #sidebar:not(.h-full) { /*[FX]*/\n  background-color: ${sidebarRgba} !important;\n  backdrop-filter: ${sidebarBlur} !important;\n}\n${selector} #sidebar :is(.sidebar-bg-gradient-to-t, .sidebar-bg-gradient-to-b) {\n  --tw-gradient-from: ${sidebarRgba} !important;\n}\n${selector} #navbar-bg-gradient-to-b {\n  --tw-gradient-from: ${hexToRgba(baseColor, 0.9)} !important;\n  --tw-gradient-via: ${hexToRgba(baseColor, 0.5)} !important;\n}\n${keyframesCss}/*[OWUI_GRADIENT_END]*/\n`;
+        return `\n/*[OWUI_GRADIENT_START]*/\n/* ${comment} */\n${selector} body {\n${bodyBg}\n  background-attachment: fixed !important;\n${animCss}\n}\n${selector} body::before { content: none !important; display: none !important; }\n${selector} #chat-container .bg-linear-to-t:not(.bg-cover + div) {\n  background-image: linear-gradient(to top, ${overlayFrom}, ${overlayTo}) !important;\n}\n${selector} #sidebar:not(.h-full) {\n  background-color: ${sidebarRgba} !important;\n  backdrop-filter: ${sidebarBlur} !important;\n}\n${selector} #sidebar :is(.sidebar-bg-gradient-to-t, .sidebar-bg-gradient-to-b) {\n  --tw-gradient-from: ${sidebarRgba} !important;\n}\n${selector} #navbar-bg-gradient-to-b {\n  --tw-gradient-from: ${hexToRgba(baseColor, 0.9)} !important;\n  --tw-gradient-via: ${hexToRgba(baseColor, 0.5)} !important;\n}\n${keyframesCss}/*[OWUI_GRADIENT_END]*/\n`;
     }
 
     function buildGradientCss(modeData, selector) {
@@ -124,9 +124,8 @@
 
     // The flat CSS (the CSS viewer, /theme.css, localStorage cache). Each
     // section carries its own /*[OWUI_*]*/ markers, so concatenation is enough.
-    // 'extra' holds the server's valve-appended rules and is empty here.
     function assembleThemeCss(s) {
-        return s.vars + s.structural + s.gradient + s.custom + (s.extra || '');
+        return s.vars + s.structural + s.gradient + s.custom;
     }
 
     function generateCoreCSS(varsCache) {
@@ -148,10 +147,9 @@
         const withUtilClass = (elements, ex, utils) => utils.flatMap(u => elements.flatMap(el =>
             [`${el}[class^="${u}"]${ex}`, `${el}[class*=" ${u}"]${ex}`])).join(', ');
 
-        // The Surfaces tab. Off: nothing, and the instance's Sidebar and
-        // Overlay Transparency settings apply. On: these rules, which outrank
-        // those settings' rules through the :not() of three IDs no element
-        // has (specificity only, it matches everything).
+        // The Surfaces tab. Off: nothing, and Open WebUI's own look stays. On:
+        // these rules, which outrank the theme's other rules through the :not()
+        // of three IDs no element has (specificity only, it matches everything).
         const buildSurfaceCss = (modeData, scope, dark) => {
             if (!modeData.surfacesEnabled) return '';
             const at = scope + ':not(#tdp-surface#tdp-surface#tdp-surface)';
@@ -169,23 +167,33 @@
             const onPage = `:not(#sidebar *):not(#messages-container *):not(#message-input-container *):not(#controls-container *:not(${pageTab} *)):not(#auth-page *)`;
             // Below 768px the Tabs drawer is a dialog outside .app
             const onPages = (sel, tail = '') => `${at} .app :where(${sel})${tail}, ${at} #controls-container ${pageTab} :where(${sel})${tail}`;
-            const so = num('surfaceSidebarOpacity');
-            let css = `/* --- Surfaces --- */\n`;
-            css += `${at} #sidebar:not(.h-full) { ${decl(fill(color('Sidebar'), so), num('surfaceSidebarBlur'))} }\n`;
-            css += `${at} #sidebar .sidebar-bg-gradient-to-t, ${at} #sidebar .sidebar-bg-gradient-to-b { display: ${so >= 100 ? 'block' : 'none'} !important; }\n`;
-            css += `${at} #message-input-container { ${decl(fill(color('Composer'), num('surfaceComposerOpacity')), num('surfaceComposerBlur'))} }\n`;
+            // A layer left at its defaults writes nothing, so it keeps Open
+            // WebUI's own look and turning the switch on changes nothing yet
+            const moved = (key) => ['Opacity', 'Blur'].some(part => {
+                const k = `surface${key}${part}`;
+                return k in DEFAULT_MODE_DATA && num(k) !== DEFAULT_MODE_DATA[k];
+            });
+            let css = '';
+            if (moved('Sidebar')) {
+                const so = num('surfaceSidebarOpacity');
+                css += `${at} #sidebar:not(.h-full) { ${decl(fill(color('Sidebar'), so), num('surfaceSidebarBlur'))} }\n`;
+                css += `${at} #sidebar .sidebar-bg-gradient-to-t, ${at} #sidebar .sidebar-bg-gradient-to-b { display: ${so >= 100 ? 'block' : 'none'} !important; }\n`;
+            }
+            if (moved('Composer')) {
+                css += `${at} :is(#message-input-container, [data-composer-id^="note-chat-input-"]) { ${decl(fill(color('Composer'), num('surfaceComposerOpacity')), num('surfaceComposerBlur'))} }\n`;
+            }
             // From 768px each tab, alone or in a split, is the page or chat it
             // shows. Below that the fill goes to the Tabs drawer, whose own
             // solid panel clears so the fill shows.
-            const panel = decl(fill(color('Panel'), num('surfacePanelOpacity')), num('surfacePanelBlur'));
-            css += `${at} #controls-container:not(.absolute) { ${panel} }\n`;
-            css += `${at} :has(> div > #controls-container:not(.absolute)) { background-color: transparent !important; }\n`;
+            if (moved('Panel')) {
+                css += `${at} #controls-container:not(.absolute) { ${decl(fill(color('Panel'), num('surfacePanelOpacity')), num('surfacePanelBlur'))} }\n`;
+                css += `${at} :has(> div > #controls-container:not(.absolute)) { background-color: transparent !important; }\n`;
+            }
             // Rounded panels on a page stay solid under the background
-            // clearing; at 100% and no blur they keep Open WebUI's own look.
-            // A chat's messages, the sidebar, the message input and the side
-            // panel have their own layers or stay as they are.
+            // clearing. A chat's messages, the sidebar, the message input and
+            // the side panel have their own layers or stay as they are.
             const co = num('surfaceCardsOpacity'), cb = num('surfaceCardsBlur');
-            if (co < 100 || cb > 0) {
+            if (moved('Cards')) {
                 // A group of buttons, such as the split Create button, keeps its look
                 const cex = ':not(button):not(a):not(input):not(select):not(label):not(span):not(svg):not(img):not(:has(> button:first-child))' + onPage;
                 const cards = withUtilClass(['div[class*="rounded"]'], cex, PANEL_UTILS);
@@ -193,28 +201,32 @@
                 // Cards that light up under the pointer still do
                 css += `${onPages(cards, '[class*="hover:bg-"]:hover')} { background-color: ${fill(color('Cards'), Math.min(100, co + 10))} !important; }\n`;
             }
-            // Grey buttons and button groups on a page, at 100% and no blur
-            // Open WebUI's own. Switches show on and off by their fill. Black
-            // and white action buttons (Save, Send) can carry grey classes
-            // too; their text gives them away: white in Light mode, dark in Dark.
+            // Grey buttons and button groups on a page. Switches show on and
+            // off by their fill. Black and white action buttons (Save, Send)
+            // can carry grey classes too; their text gives them away: white in
+            // Light mode, dark in Dark.
             const bo = num('surfaceButtonsOpacity'), bb = num('surfaceButtonsBlur');
-            if (bo < 100 || bb > 0) {
+            if (moved('Buttons')) {
                 const bex = '[class*="rounded"]:not([role="switch"]):not([role="checkbox"])' +
                     ':not([class^="text-white"]):not([class*=" text-white"]):not([class*="dark:text-black"]):not([class*="dark:text-gray-9"]):not([class*="dark:text-gray-8"]):not([class*="dark:text-base-9"]):not([class*="dark:text-base-8"])' + onPage;
                 const btn = withUtilClass(['button', 'div:has(> button:first-child)'], bex, GREY_UTILS);
                 css += `${onPages(btn)} { ${decl(fill(color('Buttons'), bo), bb)} }\n`;
                 css += `${onPages(btn, '[class*="hover:bg-"]:hover')} { background-color: ${fill(color('Buttons'), Math.min(100, bo + 15))} !important; }\n`;
             }
-            css += `${at} .app-dropdown-menu, ${at} .tippy-box, ${at} [data-sonner-toast], ${at} body > div${pex} :where(${tokens}) { ${decl(fill(color('Menu'), num('surfaceMenuOpacity')), num('surfaceMenuBlur'))} }\n`;
-            css += `${at} .modal > div:where([class*="bg-white"], [class*="bg-gray-"], [class*="bg-base-"]) { ${decl(fill(color('Dialog'), num('surfaceDialogOpacity')), num('surfaceDialogBlur'))} }\n`;
-            // Overlay Transparency also tints the pieces inside a dialog; hand
-            // them back to Open WebUI's own classes, which sit in a cascade layer
-            const inner = withUtilClass(['div'], '', PANEL_UTILS);
-            css += `${at} .modal > div :where(${inner}) { background-color: revert-layer !important; backdrop-filter: revert-layer !important; -webkit-backdrop-filter: revert-layer !important; }\n`;
-            css += `${at} .modal { ${decl(`rgb(0 0 0 / ${num('surfaceBackdropOpacity')}%)`, num('surfaceBackdropBlur'))} }\n`;
-            const fo = num('surfaceFadeOpacity');
-            css += `${at} #navbar-bg-gradient-to-b { display: ${fo > 0 ? 'block' : 'none'} !important; opacity: ${fo / 100} !important; }\n`;
-            return css;
+            if (moved('Menu')) {
+                css += `${at} .app-dropdown-menu, ${at} .tippy-box, ${at} [data-sonner-toast], ${at} body > div${pex} :where(${tokens}) { ${decl(fill(color('Menu'), num('surfaceMenuOpacity')), num('surfaceMenuBlur'))} }\n`;
+            }
+            if (moved('Dialog')) {
+                css += `${at} .modal > div:where([class*="bg-white"], [class*="bg-gray-"], [class*="bg-base-"]) { ${decl(fill(color('Dialog'), num('surfaceDialogOpacity')), num('surfaceDialogBlur'))} }\n`;
+            }
+            if (moved('Backdrop')) {
+                css += `${at} .modal { ${decl(`rgb(0 0 0 / ${num('surfaceBackdropOpacity')}%)`, num('surfaceBackdropBlur'))} }\n`;
+            }
+            if (moved('Fade')) {
+                const fo = num('surfaceFadeOpacity');
+                css += `${at} #navbar-bg-gradient-to-b { display: ${fo > 0 ? 'block' : 'none'} !important; opacity: ${fo / 100} !important; }\n`;
+            }
+            return css && `/* --- Surfaces --- */\n${css}`;
         };
 
         const getBgRules = (mode, selector, bgBody, bgSidebar) => {
@@ -251,12 +263,12 @@ ${selector} #auth-page :where(${gWhere}):where(:not(#auth-login-card *)) { backg
 ${selector} .app :where(nav, .sticky:not([class*="bg-black"]), [class*="bg-gradient"]:not(.sidebar-bg-gradient-to-t):not(.sidebar-bg-gradient-to-b), [class*="bg-linear-to"]:not(.bg-cover + div):not(.sidebar-bg-gradient-to-t):not(.sidebar-bg-gradient-to-b):not(#navbar-bg-gradient-to-b)) { background-color: transparent !important; background-image: none !important; }
 ${selector} .app .file-code-editor { --editor-bg: transparent !important; }
 /*[${clear}_END]*/
-${selector} #sidebar:not(.h-full) { /*[FX]*/ background-color: var(${bgSidebar}) !important; }
+${selector} #sidebar:not(.h-full) { background-color: var(${bgSidebar}) !important; }
 `;
             } else {
                 return `
 ${selector} body { background-color: var(${bgBody}) !important; }
-${selector} #sidebar:not(.h-full) { /*[FX]*/ background-color: var(${bgSidebar}) !important; }
+${selector} #sidebar:not(.h-full) { background-color: var(${bgSidebar}) !important; }
 `;
             }
         };
@@ -275,14 +287,14 @@ ${selector} #sidebar:not(.h-full) { /*[FX]*/ background-color: var(${bgSidebar})
         // data-theme entry that matched descendants before, so precedence
         // against theme custom CSS is unchanged.
         const modes =[
-            { id: 'light', name: 'LIGHT MODE', sel: ':root:not(.dark):not(.her):not([data-theme="dark"]):not([data-theme="oled-dark"]):not([data-theme="her"])', scope: ':root:not(.dark):not(.her):not([data-theme="dark"]):not([data-theme="oled-dark"]):not([data-theme="her"])', bgBody: '--color-gray-50', bgSidebar: '--color-gray-50' },
-            { id: 'dark', name: 'DARK MODE', sel: 'html.dark:not([data-theme="oled-dark"]), html[data-theme="dark"]', scope: ':is(html[data-theme="dark"], html:where(.dark:not([data-theme="oled-dark"])))', bgBody: '--color-gray-900', bgSidebar: '--color-gray-950' },
-            { id: 'oled', name: 'OLED DARK MODE', sel: 'html.dark[data-theme="oled-dark"], html[data-theme="oled-dark"]', scope: 'html[data-theme="oled-dark"]', bgBody: '--color-gray-900', bgSidebar: '--color-gray-950' },
-            { id: 'her', name: 'HER MODE', sel: 'html.her, html[data-theme="her"]', scope: ':is(html[data-theme="her"], html:where(.her))', bgBody: '--color-gray-50', bgSidebar: '--color-gray-50' }
+            { id: 'light', name: 'LIGHT MODE', sel: ':root:not(.dark):not(.her):not([data-theme="dark"]):not([data-theme="oled-dark"]):not([data-theme="her"])', scope: ':root:not(.dark):not(.her):not([data-theme="dark"]):not([data-theme="oled-dark"]):not([data-theme="her"])', bgBody: '--color-base-0', bgSidebar: '--color-base-50' },
+            { id: 'dark', name: 'DARK MODE', sel: 'html.dark:not([data-theme="oled-dark"]), html[data-theme="dark"]', scope: ':is(html[data-theme="dark"], html:where(.dark:not([data-theme="oled-dark"])))', bgBody: '--color-base-900', bgSidebar: '--color-base-950' },
+            { id: 'oled', name: 'OLED DARK MODE', sel: 'html.dark[data-theme="oled-dark"], html[data-theme="oled-dark"]', scope: 'html[data-theme="oled-dark"]', bgBody: '--color-base-900', bgSidebar: '--color-base-950' },
+            { id: 'her', name: 'HER MODE', sel: 'html.her, html[data-theme="her"]', scope: ':is(html[data-theme="her"], html:where(.her))', bgBody: '--color-base-0', bgSidebar: '--color-base-50' }
         ];
 
         const formatOverrideLine = (line, indent = '  ') => {
-            return _overrideDecls(line).map(d => `${indent}${d.name}: ${d.value} !important;\n`).join('');
+            return _overrideDecls(line).map(d => `${indent}${baseStepName(d.name)}: ${d.value} !important;\n`).join('');
         };
 
         let varsCss = `/*[OWUI_VARS_START]*/\n`;
@@ -290,30 +302,19 @@ ${selector} #sidebar:not(.h-full) { /*[FX]*/ background-color: var(${bgSidebar})
             const modeTag = m.id.toUpperCase();
             const modeData = themeData[m.id];
 
-            // Palette off still emits the mode's defaults, so OLED keeps its
-            // darker greys (l=0) and the others match Open WebUI's @theme
-            let vars;
-            if (modeData.paletteEnabled === false) {
-                vars = {};
-                steps.forEach(step => {
-                    vars[`--color-gray-${step}`] = getDefaultColorForStep(m.id, step);
-                });
-            } else {
-                vars = (varsCache && varsCache[m.id]) || getVariablesMap(modeData);
-            }
+            // Palette off sets none of the base scale, so Open WebUI's own
+            // colours apply, a user's Theme Colors included
+            const base = modeData.paletteEnabled === false ? {}
+                : baseScaleVars((varsCache && varsCache[m.id]) || getVariablesMap(modeData), modeData, m.id);
             // The accents, palette on or off, so theme CSS can always use them
-            vars = { ...vars, ...accentVars(modeData, m.id) };
+            const accents = accentVars(modeData, m.id);
+            const block = (sel, vars, indent) => Object.keys(vars).length
+                ? `${indent}${sel} {\n${Object.entries(vars).map(([k, v]) => `${indent}  ${k}: ${v} !important;\n`).join('')}${indent}}\n` : '';
 
             varsCss += `/*[OWUI_PAL_${modeTag}_START]*/\n`;
-            varsCss += `/* --- ${m.name} VARIABLES --- */\n${m.sel} {\n`;
-            Object.entries(vars).forEach(([k, v]) => { varsCss += `  ${k}: ${v} !important;\n`; });
-            varsCss += `}\n`;
-            varsCss += wrapSystemMedia(m.id, (sel) => {
-                let inner = `  ${sel} {\n`;
-                Object.entries(vars).forEach(([k, v]) => { inner += `    ${k}: ${v} !important;\n`; });
-                inner += `  }`;
-                return inner;
-            });
+            varsCss += `/* --- ${m.name} VARIABLES --- */\n`;
+            varsCss += block(ownColorsYield(m.sel), base, '') + block(m.sel, accents, '');
+            varsCss += wrapSystemMedia(m.id, (sel) => (block(ownColorsYield(sel), base, '  ') + block(sel, accents, '  ')).replace(/\n$/, ''));
             varsCss += `\n/*[OWUI_PAL_${modeTag}_END]*/\n`;
 
             // After the palette, so the overrides win
@@ -383,16 +384,16 @@ ${selector} #sidebar:not(.h-full) { /*[FX]*/ background-color: var(${bgSidebar})
         const isDark = dm === 'dark' || dm === 'oled';
         const dc = isDark ? chrome : null, lc = isDark ? null : chrome;
 
-        const darkTextMain = dc ? dc.textMain.hex : "var(--color-gray-50, #fafafa)";
-        const darkTextMuted = dc ? dc.textMuted.hex : "var(--color-gray-400, #a1a1aa)";
-        const darkBorder = washedOut.dark ? "rgba(0,0,0,0.2)" : "var(--color-gray-800, oklch(0.26 0 0))";
-        const darkBgSurface = dc ? dc.backgrounds.surface : "var(--color-gray-850, oklch(0.23 0 0))";
-        const darkBgElevated = dc ? dc.backgrounds.elevated : "var(--color-gray-800, oklch(0.26 0 0))";
+        const darkTextMain = dc ? dc.textMain.hex : "var(--app-base-50, #fafafa)";
+        const darkTextMuted = dc ? dc.textMuted.hex : "var(--app-base-400, #a1a1aa)";
+        const darkBorder = washedOut.dark ? "rgba(0,0,0,0.2)" : "var(--app-base-800, oklch(0.26 0 0))";
+        const darkBgSurface = dc ? dc.backgrounds.surface : "var(--app-base-850, oklch(0.23 0 0))";
+        const darkBgElevated = dc ? dc.backgrounds.elevated : "var(--app-base-800, oklch(0.26 0 0))";
 
-        const lightTextMain = lc ? lc.textMain.hex : washedOut.light ? "#18181b" : "var(--color-gray-950, #09090b)";
-        const lightTextMuted = lc ? lc.textMuted.hex : washedOut.light ? "#52525b" : "var(--color-gray-600, #52525b)";
-        const lightBorder = washedOut.light ? "rgba(0,0,0,0.2)" : "var(--color-gray-200, #e4e4e7)";
-        const lightBgElevated = washedOut.light ? "rgba(0,0,0,0.05)" : "var(--color-gray-100, #f4f4f5)";
+        const lightTextMain = lc ? lc.textMain.hex : washedOut.light ? "#18181b" : "var(--app-base-950, #09090b)";
+        const lightTextMuted = lc ? lc.textMuted.hex : washedOut.light ? "#52525b" : "var(--app-base-600, #52525b)";
+        const lightBorder = washedOut.light ? "rgba(0,0,0,0.2)" : "var(--app-base-200, #e4e4e7)";
+        const lightBgElevated = washedOut.light ? "rgba(0,0,0,0.05)" : "var(--app-base-100, #f4f4f5)";
         const lightBgSurface = lc ? lc.backgrounds.surface : "#ffffff";
         // Fallbacks are the stylesheet's own --accent, --accent-knob and --panel-tint
         const chromeAccentVars = c => c ? `--accent: ${c.accent.hex} !important; --accent-knob: ${c.knob.hex} !important; --panel-tint: ${c.tint} !important;` : '';
@@ -441,7 +442,7 @@ ${selector} #sidebar:not(.h-full) { /*[FX]*/ background-color: var(${bgSidebar})
             ` : ''}
             
             body#tool-body {
-                --bg-deep: var(--color-gray-900, oklch(0.20 0 0)) !important;
+                --bg-deep: var(--app-base-900, oklch(0.20 0 0)) !important;
                 --bg-surface: ${darkBgSurface} !important;
                 --bg-elevated: ${darkBgElevated} !important;
                 --border: ${darkBorder} !important;
@@ -450,7 +451,7 @@ ${selector} #sidebar:not(.h-full) { /*[FX]*/ background-color: var(${bgSidebar})
                 ${chromeAccentVars(dc)}
             }
             body#tool-body.light-mode {
-                --bg-deep: var(--color-gray-50, #f4f4f5) !important;
+                --bg-deep: var(--app-base-50, #f4f4f5) !important;
                 --bg-surface: ${lightBgSurface} !important;
                 --bg-elevated: ${lightBgElevated} !important;
                 --border: ${lightBorder} !important;
@@ -496,7 +497,10 @@ ${selector} #sidebar:not(.h-full) { /*[FX]*/ background-color: var(${bgSidebar})
             // A draft previews the mode in this tab only, never in other tabs
             // or the admin's live session
             if (!_draftMode) {
-                localStorage.setItem('theme', MODE_CONFIG[mode]?.dataTheme || mode);
+                // OLED first, so another tab reading 'theme' sees both
+                if (mode === 'oled') localStorage.setItem(OLED_KEY, '1');
+                else localStorage.removeItem(OLED_KEY);
+                localStorage.setItem('theme', mode === 'oled' ? 'dark' : (MODE_CONFIG[mode]?.dataTheme || mode));
             }
         } catch(e) { console.warn('Theme Pro:', e); }
     }
@@ -537,10 +541,10 @@ ${selector} #sidebar:not(.h-full) { /*[FX]*/ background-color: var(${bgSidebar})
                     liveStyle.textContent = css;
                 }
                 // Live mode leaves the cross-tab css_cache write to the POST
-                // response in syncToServer(): the server returns the
-                // valve-postprocessed CSS, and the raw CSS here would make other
-                // tabs' 'storage' listeners apply opaque /*[FX]*/ sidebar rules
-                // for a couple of seconds until the SSE refetch. A draft writes
+                // response in syncToServer(): the server returns the CSS as the
+                // Enable Canvas FX valve delivers it, and the raw CSS here would
+                // make other tabs' 'storage' listeners apply rules that valve
+                // drops for a couple of seconds until the SSE refetch. A draft writes
                 // now, since Storage routes it to this tab's sessionStorage.
                 if (_draftMode) Storage.setRaw('css_cache', css);
                 const stateStr = themeStateStr();
@@ -550,7 +554,7 @@ ${selector} #sidebar:not(.h-full) { /*[FX]*/ background-color: var(${bgSidebar})
                 // replaced it with the server's previous state
                 syncToServer(css, s, stateStr);
 
-                const pTheme = localStorage.getItem('theme');
+                const pTheme = owuiTheme();
                 if (pTheme && document.documentElement.getAttribute('data-theme') !== pTheme) {
                     document.documentElement.setAttribute('data-theme', pTheme);
                 }

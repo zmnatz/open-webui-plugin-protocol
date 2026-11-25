@@ -51,7 +51,7 @@ def upstream_folder(tmp: Path) -> Path:
     d.mkdir()
     (d / "plugin.yaml").write_text(
         'protocol: "0.5"\nsource:\n  git: https://github.com/silentoplayz/theme-designer-pro-presets.git\n'
-        '  ref: 9a7e68c9afe51539effae22767e843f26205d895\n  path: ""\n'
+        '  ref: 34345eaffb8678ddfd38b45d7bc173f5b0d27132\n  path: ""\n'
         "function:\n  file: event-function/theme_designer_pro_event.py\n"
     )
     return d
@@ -125,8 +125,6 @@ def run(kind: str) -> dict:
             rec("me/library.json signed out", anon.get(BASE + "/me/library.json"))
 
             for valves in (
-                {"overlay_transparency": "translucent"},
-                {"sidebar_transparency": "transparent"},
                 {"enable_canvas_fx": False},
                 {"enable_auth_page_theming": False},
                 {"show_in_admin_panel": True, "show_in_admin_settings": False},
