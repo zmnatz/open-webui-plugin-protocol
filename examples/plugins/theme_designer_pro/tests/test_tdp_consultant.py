@@ -163,7 +163,7 @@ def test_users_ask_only_when_they_can_have_a_personal_theme(td, model):
 
     By hand: with Allow Personal Themes on, a user's Themes tab has the AI Consultant.
     """
-    td.valves(ai_consultant_model="theme-model")
+    td.valves(ai_consultant_model="theme-model", allow_personal_themes=False)
     assert td.user.post(URL, json={"description": "x"}).json() == {"error": "Access denied"}
     assert td.anon.post(URL, json={"description": "x"}).status_code == 401
     td.valves(allow_personal_themes=True)

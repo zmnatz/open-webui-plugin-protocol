@@ -1,4 +1,4 @@
-**Adapted from [Theme Designer Pro](https://github.com/silentoplayz/theme-designer-pro-presets/tree/9a7e68c9afe51539effae22767e843f26205d895) 1.22.0 and its Launcher 2.1.2 by G30**, under the MIT licence (the notice is in [`NOTICE.md`](../../../NOTICE.md)). It does what the original does; what changed is where the code lives and what owpp does for it, all listed below in [How owpp broke it down](#how-owpp-broke-it-down).
+**Adapted from [Theme Designer Pro](https://github.com/silentoplayz/theme-designer-pro-presets/tree/34345eaffb8678ddfd38b45d7bc173f5b0d27132) 1.23.0 and its Launcher 2.1.2 by G30**, under the MIT licence (the notice is in [`NOTICE.md`](../../../NOTICE.md)). It does what the original does, with one change so that its OLED mode keeps working on Open-WebUI v0.13.5 ([below](#what-changed-for-open-webui-v0135)); the rest of what changed is where the code lives and what owpp does for it, all listed below in [How owpp broke it down](#how-owpp-broke-it-down).
 
 # Theme Designer Pro
 
@@ -9,7 +9,7 @@ Enabling the function installs two things, and disabling it removes them:
 - the **Theme Designer Pro Launcher** tool: in a chat, it builds a theme someone describes ("make my chat a koi pond") and shows it as a card with a live preview and Apply, or opens the designer inside the chat;
 - the **theme-designer-pro** skill, with its references and templates, which tells the chat model how to design a theme and write a new animation.
 
-It is the largest example in this repository, chosen for that: a 1.3 MB, 21,000-line single file, kept working exactly as its author wrote it while it was broken into the plugin format.
+It is the largest example in this repository, chosen for that: a 1.3 MB, 20,900-line single file, kept working exactly as its author wrote it while it was broken into the plugin format.
 
 ## Valves
 
@@ -28,10 +28,8 @@ The function's, in Admin Panel > Functions > Theme Designer Pro > Valves. Every 
 | `draft_mode_default` | off | The designer opens in Draft mode. |
 | `show_in_admin_settings` | on | A Themes tab in the Admin part of Settings. |
 | `show_in_admin_panel` | off | A Themes page in the Admin Panel's top bar. |
-| `allow_personal_themes` | off | A personal theme for every user, from their own Settings. |
-| `auto_sync` | off | Skip the Selective Sync dialog. |
-| `sidebar_transparency` | opaque | opaque, translucent (frosted) or transparent sidebar. |
-| `overlay_transparency` | opaque | opaque or translucent settings dialog and menus. |
+| `allow_personal_themes` | on | A personal theme for every user, from their own Settings. |
+| `auto_sync` | on | Skip the Selective Sync dialog. |
 | `enable_canvas_api_access` | off | Gives every animation each viewer's token. Leave it off unless you audited every script. |
 | `enable_url_import` | on | The Load from URL controls. |
 | `allowed_import_domains` | empty | Domains the designer may fetch from; empty is any. |
@@ -44,7 +42,7 @@ The Launcher's, in Workspace > Tools > Theme Designer Pro Launcher > Valves: `de
 
 ## Requirements
 
-- Open-WebUI 0.13.4 or newer (the original's `required_open_webui_version`).
+- Open-WebUI 0.13.4 or newer (the original's `required_open_webui_version`). Checked on v0.13.5, with the change [below](#what-changed-for-open-webui-v0135).
 - **iframe Sandbox Allow Same Origin**, for the Launcher's Apply and for the designer inside a chat: without it, the chat's frame has no origin and the browser sends the designer no sign-in. `plugin.yaml` says so (`requires:`), and `owpp deploy` warns when it is off. Turn it on per user under Settings > Interface, or for everyone under Admin Settings > General > Default Interface Settings. It applies to every artifact, not only this plugin's: HTML a model writes then runs with Open-WebUI's origin and can act as the user, so turn it on only where what models put into artifacts is trusted ([the cost, in full](../../../docs/libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin)).
 - Live updates stream from the function: behind nginx, `proxy_buffering off;` for `/api/v1/theme-designer/events`.
 
@@ -58,13 +56,13 @@ Your function is three things in one file: the Python that runs on the server, a
 
 | | The original | This plugin |
 | --- | --- | --- |
-| Python | about 3,900 of its 21,076 lines, between the strings | [`function.py`](function.py): 3,718 lines, only Python |
+| Python | about 3,900 of its 20,872 lines, between the strings | [`function.py`](function.py): 3,648 lines, only Python |
 | The designer page | one 943 KB raw string in `_build_html` | [`templates/designer/`](templates/designer): 30 files, the page an outline of them |
 | The bootloader, the Settings tab, the Admin Panel page | three class attributes, 156 KB | [`templates/bootloader.js`](templates/bootloader.js), [`settings_tab.js`](templates/settings_tab.js), [`admin_page.js`](templates/admin_page.js) |
-| The Launcher | a 1,134-line file with its HTML in Python strings | [`tool.py`](tool.py) (641 lines) and [`templates/launcher/`](templates/launcher) |
+| The Launcher | a 1,134-line file with its HTML in Python strings | [`tool.py`](tool.py) (735 lines) and [`templates/launcher/`](templates/launcher) |
 | The signed Apply link | written twice, once in each file | [`shared.py`](shared.py), bundled into both |
 | The header | a docstring in each file | [`plugin.yaml`](plugin.yaml) |
-| Shared Assets Protocol, live reload | pasted in (395 lines) | owpp's copies, by `include:` |
+| Shared Assets Protocol, live reload | pasted in (403 lines) | owpp's copies, by `include:` |
 | Sign-in checks, route insertion, stale-route cleanup | written by hand | owpp's `routes` library |
 | `event()` | one 160-line method of `if` checks | `@on` handlers |
 | The skill | [`skills/theme-designer-pro/`](skills/theme-designer-pro) | the same folder, one line added |
@@ -73,31 +71,31 @@ Nothing in `templates/` was edited: every file is a slice of your strings, cut a
 
 ### Where each part of your file went
 
-Line numbers are those of [`event-function/theme_designer_pro_event.py`](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py) at 1.22.0.
+Line numbers are those of [`event-function/theme_designer_pro_event.py`](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py) at 1.23.0 (commit `34345ea`, one fix after the release).
 
 | Your lines | What | Here |
 | --- | --- | --- |
-| [1-10](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L1-L10) | the header | `plugin.yaml`, `function:` |
-| [31-229](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L31-L229) | live reload (`RELOAD_IMPL_VERSION = 1`) | `include: [live_reload]`: owpp's copy, version 2 (below) |
-| [230-425](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L230-L425) | the shared asset block | `include: [shared_assets]`: byte-identical to yours |
-| [429-548](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L429-L548) | `Valves` | `function.py`, unchanged |
-| [550-2634](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L550-L2634) | `BOOTLOADER_SCRIPT` | `templates/bootloader.js`, without the `<!-- -->` and `<script>` wrapper `_bootloader_body()` stripped on every call, so that method now just returns it |
-| [2833-3137](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L2833-L3137) | `ADMIN_TAB_SCRIPT` | `templates/settings_tab.js` |
-| [3139-3350](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L3139-L3350) | `ADMIN_PAGE_SCRIPT` | `templates/admin_page.js` |
-| [3352-4177](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L3352-L4177) | fragments, storage, delivery caches, legacy index cleanup | `function.py`, unchanged |
-| [4178-4273](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L4178-L4273) | `_require_admin`, `_require_user`, `_signed_in_user` | gone: owpp's guard ([sign-in](#sign-in-and-routes-the-routes-library)); `_cookie_user_id` stays |
-| [4275-4931](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L4275-L4931) | `_register_route` | `function.py`, rewritten around `plugin_mount`, the handler bodies yours |
-| [4932-5135](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L4932-L5135) | `_handle_css_save` | `function.py`, unchanged |
-| [5136-5148](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L5136-L5148) | `CONSULT_PROMPT` | `templates/consult_prompt.txt` |
-| [5149-5340](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L5149-L5340) | the token prefixes, `_read_apply_token`, the AI Consultant | `shared.py` has the token format; the rate limit is `plugin_claim`; the rest is unchanged |
-| [5392-5549](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L5392-L5549) | `PERSONAL_DESIGNER_BLOCK` | `templates/designer/personal.html`, used as you used it |
-| [5552-5569](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L5552-L5569) | `_notice_page` | `templates/notice.html`, the same one line, with `__TITLE__` and `__DETAIL__` |
-| [5577-19522](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L5577-L19522) | `html_content` | `templates/designer/` ([the designer page](#the-designer-page)) |
-| [19645-19759](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L19645-L19759) | the markup `_build_html` builds in Python | `templates/designer/parts/`: it never depends on a valve, so it was built once and kept as HTML |
-| [19760-19785](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L19760-L19785) | the personal swaps and the final `.replace()` chain | `function.py`, unchanged but for the four placeholders that are files now |
-| [19787-20885](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L19787-L20885) | post-processing, SSE, Redis relay, peer valve sync, shutdown | `function.py`, unchanged; two limits read from `config.yaml` |
-| [20886-21051](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L20886-L21051) | `event()` | six `@on` handlers ([events](#events-the-events-library)) |
-| [21052-21076](https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py#L21052-L21076) | `register(app)` | `function.py`, unchanged |
+| [1-10](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L1-L10) | the header | `plugin.yaml`, `function:` |
+| [31-237](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L31-L237) | live reload (`RELOAD_IMPL_VERSION = 2`) | `include: [live_reload]`: owpp's copy, the same version (below) |
+| [238-433](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L238-L433) | the shared asset block | `include: [shared_assets]`: byte-identical to yours |
+| [437-534](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L437-L534) | `Valves` | `function.py`, unchanged |
+| [536-2627](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L536-L2627) | `BOOTLOADER_SCRIPT` | `templates/bootloader.js`, without the `<!-- -->` and `<script>` wrapper `_bootloader_body()` stripped on every call, so that method now just returns it |
+| [2826-3130](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L2826-L3130) | `ADMIN_TAB_SCRIPT` | `templates/settings_tab.js` |
+| [3132-3343](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L3132-L3343) | `ADMIN_PAGE_SCRIPT` | `templates/admin_page.js` |
+| [3345-4153](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L3345-L4153) | fragments, storage, delivery caches, legacy index cleanup | `function.py`, unchanged |
+| [4154-4249](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L4154-L4249) | `_require_admin`, `_require_user`, `_signed_in_user` | gone: owpp's guard ([sign-in](#sign-in-and-routes-the-routes-library)); `_cookie_user_id` stays |
+| [4251-4907](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L4251-L4907) | `_register_route` | `function.py`, rewritten around `plugin_mount`, the handler bodies yours |
+| [4908-5111](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L4908-L5111) | `_handle_css_save` | `function.py`, unchanged |
+| [5112-5124](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L5112-L5124) | `CONSULT_PROMPT` | `templates/consult_prompt.txt` |
+| [5125-5316](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L5125-L5316) | the token prefixes, `_read_apply_token`, the AI Consultant | `shared.py` has the token format; the rate limit is `plugin_claim`; the rest is unchanged |
+| [5368-5525](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L5368-L5525) | `PERSONAL_DESIGNER_BLOCK` | `templates/designer/personal.html`, used as you used it |
+| [5528-5545](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L5528-L5545) | `_notice_page` | `templates/notice.html`, the same one line, with `__TITLE__` and `__DETAIL__` |
+| [5553-19526](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L5553-L19526) | `html_content` | `templates/designer/` ([the designer page](#the-designer-page)) |
+| [19647-19761](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L19647-L19761) | the markup `_build_html` builds in Python | `templates/designer/parts/`: it never depends on a valve, so it was built once and kept as HTML |
+| [19762-19786](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L19762-L19786) | the personal swaps and the final `.replace()` chain | `function.py`, unchanged but for the four placeholders that are files now |
+| [19788-20685](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L19788-L20685) | post-processing, SSE, Redis relay, peer valve sync, shutdown | `function.py`, unchanged; two limits read from `config.yaml` |
+| [20686-20847](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L20686-L20847) | `event()` | six `@on` handlers ([events](#events-the-events-library)) |
+| [20848-20872](https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py#L20848-L20872) | `register(app)` | `function.py`, unchanged |
 
 ### The designer page
 
@@ -106,10 +104,10 @@ Line numbers are those of [`event-function/theme_designer_pro_event.py`](https:/
 ```
 templates/designer/
   page.html               the head, the tab bar, the footer, the modals: what the page is made of
-  styles/designer.css     your <style> block (803 lines)
+  styles/designer.css     your <style> block (805 lines)
   styles/skin.css         <style id="owui-skin">, the look inside Settings and the Admin Panel
   tabs/*.html             the seven tab panels: themes, lch (Palette), custom, canvas, bg, surfaces, backgrounds
-  docs.html               the in-designer documentation (1,559 lines)
+  docs.html               the in-designer documentation (1,558 lines)
   parts/*.html            the save and rename metadata grids, the Selective Sync options, the JSON editors
   scripts/01-core.js      the script, as sixteen files cut at your own "// --- Name ---" headers:
   ...                     core, storage and saves, modes, AI Consultant, animation settings,
@@ -169,7 +167,7 @@ Your aliases (the read-only routes kept at every Designer Url this app served, f
 
 #### The Shared Assets Protocol and live reload: `include:`
 
-Your two pasted blocks are owpp's copies now. The shared asset block is byte-identical to yours (`ASSET_IMPL_VERSION` 5). Live reload is the protocol's newer copy (`RELOAD_IMPL_VERSION` 2): it ignores the events that arrive between a disable and its commit, and the newest copy in a process replaces the listener. You register the fragments yourself, and still do: `_publish_fragments` calls `asset_register` with your markers and order 100. owpp also has an `assets/` folder for plugins whose fragments are files, and it was not used here, on purpose: your loader fragment is the bootloader *and* the designer's preview script with other values, and it stays published while the function is off (with `__THEME_ACTIVE__` false, which clears the theme a page kept), which `assets/` would withdraw.
+Your two pasted blocks are owpp's copies now. The shared asset block is byte-identical to yours (`ASSET_IMPL_VERSION` 5). Live reload is the protocol's copy at the same version as yours (`RELOAD_IMPL_VERSION` 2): it ignores the events that arrive between a disable and its commit, and the newest copy in a process replaces the listener. You register the fragments yourself, and still do: `_publish_fragments` calls `asset_register` with your markers and order 100. owpp also has an `assets/` folder for plugins whose fragments are files, and it was not used here, on purpose: your loader fragment is the bootloader *and* the designer's preview script with other values, and it stays published while the function is off (with `__THEME_ACTIVE__` false, which clears the theme a page kept), which `assets/` would withdraw.
 
 #### The signed link: `shared.py`
 
@@ -208,6 +206,16 @@ The disabled case has one visible effect: your stream stayed open while the func
 
 Besides the guard: the main handler (`_sync`) runs on the function's own lifecycle events rather than on every event Open-WebUI sends; routes mounted with `plugin_mount` do not go missing, so nothing needs re-registering on, say, `chat.created`. And the AI Consultant's limit holds across workers, as above.
 
+### What changed for Open-WebUI v0.13.5
+
+Your 1.23.0 already follows v0.13.5's colours: the palette sets its base scale (`--app-base-*`), and steps aside for someone who picked their own colours under Settings > General > Colors. One thing still breaks there, and is fixed in the page-side scripts (`templates/bootloader.js` and three of `templates/designer/scripts/`), and nowhere else:
+
+- **OLED Dark lasted one page load.** v0.13.5 has no OLED theme of its own: as each page loads, it turns a stored `theme` of `oled-dark` into `dark`, and saves a black background as that person's own Dark colours. Picking OLED in the designer stored exactly that, so the next page was in Dark, the designer opened on Dark, and, since a person's own colours win, that person's Dark palette stepped aside for plain black from then on. Now OLED stores Open-WebUI's `theme` as `dark` and says OLED under a key of its own, `owui_tdp_oled`, which the designer and the bootloader read with it: OLED stays OLED, Open-WebUI's Settings show Dark, and nothing is saved under its Colors. Switching Open-WebUI to any other theme ends OLED.
+
+Someone who used OLED before upgrading to v0.13.5 is moved by Open-WebUI itself, before any plugin's script runs: they pick OLED in the designer once more, and clear the black left under Settings > General > Colors, or their Dark palette stays aside.
+
+The change is [`adapt/open-webui-0.13.5.patch`](adapt/open-webui-0.13.5.patch). On v0.13.4 a theme looks as it did, since the designer applies OLED itself either way; one thing differs there: with the function off, someone who picked OLED in the designer sees Open-WebUI's Dark, not its OLED Dark. [The screenshots](../../../docs/screenshots.md) show it on v0.13.5. It is worth sending upstream.
+
 ### Small fixes on the way
 
 - The Launcher's header had a `description:` over several lines. Open-WebUI reads a header line by line, so it stored only the first one; it is one line in `plugin.yaml` now. The sentence about which function version it needs is gone, since the two ship together.
@@ -218,9 +226,9 @@ Besides the guard: the main handler (`_sync`) runs on the function's own lifecyc
 
 ### How we checked it is the same
 
-[`adapt/compare_pages.py`](adapt/compare_pages.py) loads your file and this plugin, each into owpp's mock Open-WebUI, sends both the same 73 requests (the designer for an admin and a user, saves, no-op saves, refused saves, resets, `theme.css`, `state.json`, `/static/loader.js` and `/static/custom.css` under seven combinations of valves, personal themes, and disabling) and compares every status, content type and body. **65 are identical byte for byte**; the other 8 are the guard's answers in the table above. [`adapt/compare_launcher.py`](adapt/compare_launcher.py) does the same for the Launcher: the frames, the cards, the refusals and what the model is told are identical, and each card's Apply link opens the designer with the theme for its own user and no one else's.
+[`adapt/compare_pages.py`](adapt/compare_pages.py) loads your file and this plugin, each into owpp's mock Open-WebUI, sends both the same 63 requests (the designer for an admin and a user, saves, no-op saves, refused saves, resets, `theme.css`, `state.json`, `/static/loader.js` and `/static/custom.css` under five combinations of valves, personal themes, and disabling) and compares every status, content type and body. **55 are identical byte for byte**; the other 8 are the guard's answers in the table above. That is with the v0.13.5 change reversed (`git apply -R examples/plugins/theme_designer_pro/adapt/open-webui-0.13.5.patch`): with it, the 17 responses that carry the designer page or `/static/loader.js` differ by it too, and 38 are identical. [`adapt/compare_launcher.py`](adapt/compare_launcher.py) does the same for the Launcher: the frames, the cards, the refusals and what the model is told are identical, and each card's Apply link opens the designer with the theme for its own user and no one else's.
 
-Then the plugin has its own tests, in `tests/` (114, at least one per valve and per route), and a real Open-WebUI checks what the mock cannot: that the routes are reached ahead of Open-WebUI's own under `/api/v1`, that a save reaches a signed-out page, and that a user is given the Launcher and the skill ([the live suite](../../../tools/live/test_live.py)).
+Then the plugin has its own tests, in `tests/` (109, at least one per valve and per route), and a real Open-WebUI checks what the mock cannot: that the routes are reached ahead of Open-WebUI's own under `/api/v1`, that a save reaches a signed-out page, and that a user is given the Launcher and the skill ([the live suite](../../../tools/live/test_live.py)).
 
 ### What owpp learned from it
 
@@ -233,10 +241,10 @@ Adapting it changed owpp, and found two things to fix there:
 
 ### Moving to a newer upstream release
 
-1. Clone [silentoplayz/theme-designer-pro-presets](https://github.com/silentoplayz/theme-designer-pro-presets) at the new commit, and read its diff since `9a7e68c`: this code runs with admin rights.
-2. `python -I examples/plugins/theme_designer_pro/adapt/split_upstream.py <checkout> examples/plugins/theme_designer_pro` cuts `templates/` again. A new section in the script or a new tab may need a new cut in the script; it stops and says which boundary it could not find.
+1. Clone [silentoplayz/theme-designer-pro-presets](https://github.com/silentoplayz/theme-designer-pro-presets) at the new commit, and read its diff since `34345ea`: this code runs with admin rights.
+2. `python -I examples/plugins/theme_designer_pro/adapt/split_upstream.py <checkout> examples/plugins/theme_designer_pro` cuts `templates/` again. A new section in the script or a new tab may need a new cut in the script; it stops and says which boundary it could not find. Then `git apply examples/plugins/theme_designer_pro/adapt/open-webui-0.13.5.patch`, unless the new release handles v0.13.5 itself ([what changed for v0.13.5](#what-changed-for-open-webui-v0135)); fix by hand what no longer applies, and write the patch again with `git diff -- examples/plugins/theme_designer_pro/templates`.
 3. Port the Python changes in the diff into `function.py` and `tool.py` by hand, by the map above, and the header changes into `plugin.yaml`. Move `VERSION` and the commit in the attribution comments.
-4. `uv run python examples/plugins/theme_designer_pro/adapt/compare_pages.py <checkout> examples/plugins/theme_designer_pro` and `compare_launcher.py`: the 65 must still be identical.
+4. `uv run python examples/plugins/theme_designer_pro/adapt/compare_pages.py <checkout> examples/plugins/theme_designer_pro` and `compare_launcher.py`, with the v0.13.5 patch reversed: the 55 must still be identical.
 5. `owpp test theme_designer_pro`, `owpp check --strict theme_designer_pro`, and the screenshots.
 
 ## Test
@@ -249,10 +257,11 @@ Adapting it changed owpp, and found two things to fix there:
   - As an admin, open `/api/v1/theme-designer`; as a user it answers 403; signed out it sends you to sign in.
   - Pick a theme in Live mode: a chat open in another browser changes without a reload, and a private window's sign-in page wears it if its Show on Auth Pages is on. DevTools > Network: `theme.css` answers 304 on a reload.
   - Settings: an admin has Admin > Themes. Turn Show In Admin Panel on: the Admin Panel has a Themes page.
-  - Turn Allow Personal Themes on: a user's Settings has a Themes tab, and the theme they save is theirs alone.
-  - Set Sidebar Transparency to translucent with an animated theme: the sidebar is frosted glass. Turn Enable Canvas FX off: the animation stops everywhere.
+  - With Allow Personal Themes on (the default): a user's Settings has a Themes tab, and the theme they save is theirs alone.
+  - On the Surfaces tab, turn the sidebar's opacity down with an animated theme: the sidebar is frosted glass. Turn Enable Canvas FX off: the animation stops everywhere.
   - In a chat with the Launcher on, ask "make my chat a deep teal lagoon": a card shows the theme; Apply puts it on (needs iframe Sandbox Allow Same Origin).
   - Disable the function: chats go back to Open-WebUI's own look; enable it: they are themed again within a minute.
+  - On v0.13.5: pick OLED in the designer and reload a chat: it is still OLED, and Settings > General > Colors has nothing set. Set a colour there: that person's chats show it instead of the palette.
 
 ## Deploy
 

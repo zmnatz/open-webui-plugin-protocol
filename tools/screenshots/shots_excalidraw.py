@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 import pytest
-from conftest import URL
+from conftest import URL, send
 
 MODEL = "diagram-assistant"
 ASK = "Draw our API and the database it reads from."
@@ -39,9 +39,7 @@ def same_origin(api, allowed: bool) -> None:
 
 def ask_for_a_drawing(page) -> None:
     page.goto(f"{URL}/?models={MODEL}")
-    page.locator("#chat-input").click()
-    page.keyboard.type(ASK)
-    page.keyboard.press("Enter")
+    send(page, ASK)
     page.get_by_text("Here is the diagram").wait_for(timeout=60_000)
 
 

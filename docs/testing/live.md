@@ -12,13 +12,13 @@ Every test's docstring ends with **By hand**: the steps to see the same behaviou
 
 ## The live suite
 
-This repository also runs its examples on a real Open-WebUI, automatically. It starts the same stack as the [screenshots](../screenshots.md) (Open-WebUI v0.13.4 as the `-slim` image, [aimock](#the-model-aimock) as its models, and [fixed files](#everything-else-fixed-files) for the services the examples call, in Docker), deploys `examples/plugins` with `owpp deploy`, then runs the tests in `tools/live/`: the screenshots show what happens, the live suite asserts it.
+This repository also runs its examples on a real Open-WebUI, automatically. It starts the same stack as the [screenshots](../screenshots.md) (Open-WebUI v0.13.5 as the `-slim` image, [aimock](#the-model-aimock) as its models, and [fixed files](#everything-else-fixed-files) for the services the examples call, in Docker), deploys `examples/plugins` with `owpp deploy`, then runs the tests in `tools/live/`: the screenshots show what happens, the live suite asserts it.
 
 ```sh
 uv run --group screenshots python tools/screenshots/run.py --live
 ```
 
-It needs Docker, reachable by your user ([taking screenshots](../screenshots.md#taking-them) says how without the `docker` group), and no browser. On GitHub, `.github/workflows/live.yml` runs it on every pull request and every push to `main` and `develop`, as `ci` runs the unit tests, with the stack's images cached between runs. `uv run pytest` never collects it: it needs Docker. It runs against v0.13.4 only.
+It needs Docker, reachable by your user ([taking screenshots](../screenshots.md#taking-them) says how without the `docker` group), and no browser. On GitHub, `.github/workflows/live.yml` runs it on every pull request and every push to `main` and `develop`, as `ci` runs the unit tests, with the stack's images cached between runs. `uv run pytest` never collects it: it needs Docker. It runs against v0.13.5 only.
 
 | Test | What it shows on a real Open-WebUI |
 | --- | --- |

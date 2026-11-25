@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Open-WebUI v0.13.5: the live suite and the screenshots run on it (`ghcr.io/open-webui/open-webui:v0.13.5-slim`), every example passes there, and the screenshots are retaken. The screenshot scripts type a message with `send()`, which checks the chat input holds all of it: v0.13.5's input takes typing while it loads and can lose what was typed.
+- [`theme_designer_pro`](examples/plugins/theme_designer_pro) follows upstream Theme Designer Pro 1.23.0 (commit `34345ea`): its palette sets Open-WebUI v0.13.5's base colours and steps aside for a user's own; the Surfaces tab replaces the Sidebar Transparency and Overlay Transparency valves; Allow Personal Themes and Auto Sync start on. On top of it, one change for v0.13.5, which dropped Open-WebUI's own OLED Dark theme: the designer's OLED mode is kept under a key of its own, so it lasts past the next page load. The change is `adapt/open-webui-0.13.5.patch`, for the next copy taken from upstream ([what changed for v0.13.5](examples/plugins/theme_designer_pro/README.md#what-changed-for-open-webui-v0135)).
+
 ## 0.6.1 (2026-11-22)
 
 - Fixed: the `assets` library fills `asset_vars()` placeholders in one pass, so a value that holds another placeholder's text (a valve someone typed) is served as written instead of being filled again ([#69](https://github.com/zmnatz/open-webui-plugin-protocol/issues/69), [libraries](docs/libraries.md#assets)).

@@ -4,7 +4,7 @@
 # Adapted from Theme Designer Pro Launcher 2.1.2 by G30 (https://openwebui.com/u/g30), from
 # silentoplayz/theme-designer-pro-presets, Copyright (c) 2026 silentoplayz, MIT licence (the
 # notice is in NOTICE.md at the repository root):
-# https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/launcher/theme_designer_pro_launcher.py
+# https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/launcher/theme_designer_pro_launcher.py
 #
 # It does what the original does. What changed: the header is plugin.yaml's `tool:`; the theme
 # card and the designer frame are templates/launcher/ (the tool embeds only that folder,

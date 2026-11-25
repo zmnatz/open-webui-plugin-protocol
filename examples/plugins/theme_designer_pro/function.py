@@ -2,10 +2,10 @@
 # Canvas FX backgrounds, frosted glass and custom CSS) from a designer page of its own, and lets
 # each user design a personal theme when the admin allows it.
 #
-# Adapted from Theme Designer Pro 1.22.0 by G30 (https://openwebui.com/u/g30), from
+# Adapted from Theme Designer Pro 1.23.0 by G30 (https://openwebui.com/u/g30), from
 # silentoplayz/theme-designer-pro-presets, Copyright (c) 2026 silentoplayz, MIT licence (the
 # notice is in NOTICE.md at the repository root):
-# https://github.com/silentoplayz/theme-designer-pro-presets/blob/9a7e68c9afe51539effae22767e843f26205d895/event-function/theme_designer_pro_event.py
+# https://github.com/silentoplayz/theme-designer-pro-presets/blob/34345eaffb8678ddfd38b45d7bc173f5b0d27132/event-function/theme_designer_pro_event.py
 #
 # It does what the original does. What changed (the README has the whole list):
 # - The header is plugin.yaml's `function:`.
@@ -24,6 +24,8 @@
 # - The Launcher's signed-link format is shared.py, used here and by tool.py.
 # - The AI Consultant's rate limit is plugin_claim (the jobs library), so it holds across workers.
 # - The per-worker limits on live-update streams can be set in config.yaml.
+# - For Open-WebUI v0.13.5 (adapt/open-webui-0.13.5.patch, in the page-side scripts): OLED is
+#   kept under a key of its own, since v0.13.5 turns a stored 'oled-dark' theme into 'dark'.
 
 import asyncio
 import hashlib
@@ -34,7 +36,7 @@ import re as _re
 import uuid
 from contextlib import contextmanager, suppress
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import JSONResponse
@@ -66,7 +68,7 @@ from owpp.lib import (
 
 from shared import APPLY_TOKEN_PREFIX, THEME_TOKEN_PREFIX, _fill, _open_token, _token_key
 
-VERSION = "1.22.0"
+VERSION = "1.23.0"
 ROUTE_PATH = "/api/v1/theme-designer"
 CSS_FILE_NAME = "open_theme_designer.css"
 
@@ -154,34 +156,12 @@ class Event(PluginEvents):
             description="Add a Themes page to the Admin Panel's top bar, between Functions and Settings, that opens the instance designer there. The designer stays available at its own URL, and in Settings, either way.",
         )
         allow_personal_themes: bool = Field(
-            default=False,
+            default=True,
             description="Let every user design a personal theme from a Themes tab in their own Settings. A personal theme replaces the instance theme for that user only and follows them to every browser, within the limits the other valves set. Off: everyone sees the instance theme.",
         )
         auto_sync: bool = Field(
-            default=False,
-            description="Skip the Selective Sync modal when loading presets or syncing. When enabled, a 'Sync All' toggle appears in the designer footer — turn it on to propagate changes to all modes, or leave it off to apply only to the active mode.\n\n---\n\n#### 🎨 Visual Style",
-        )
-        # ── Visual Style ──
-        sidebar_transparency: Literal["opaque", "translucent", "transparent"] = Field(
-            default="opaque",
-            description=(
-                "Controls sidebar background style. "
-                "'opaque' (default) — solid background for best readability. "
-                "'translucent' — frosted glass effect (backdrop-blur) that lets backgrounds show through. "
-                "'transparent' — fully see-through sidebar with no blur "
-                "(automatically uses translucent on mobile for readability). "
-                "Open WebUI's fades at the top and bottom of the sidebar show only while it's 'opaque'."
-            ),
-        )
-        overlay_transparency: Literal["opaque", "translucent"] = Field(
-            default="opaque",
-            description=(
-                "Controls overlay UI (settings modal, dropdowns, integration menus) background style. "
-                "'opaque' (default) — solid background for best readability. "
-                "'translucent' — frosted glass effect (backdrop-blur) that lets backgrounds show through. "
-                "The fade at the top of chats shows only while it's 'opaque'."
-                "\n\n---\n\n#### 🔒 Security"
-            ),
+            default=True,
+            description="Skip the Selective Sync modal when loading presets or syncing. When enabled, a 'Sync All' toggle appears in the designer footer — turn it on to propagate changes to all modes, or leave it off to apply only to the active mode.\n\n---\n\n#### 🔒 Security",
         )
         # ── Security ──
         enable_canvas_api_access: bool = Field(
@@ -518,10 +498,6 @@ class Event(PluginEvents):
             sections_mtime = Event._file_sig(self._get_sections_path())
         except OSError:
             sections_mtime = None
-        # sidebar_transparency cannot reach this subset today (it rewrites
-        # /*[FX]*/ rules inside structural + gradient, both dropped here) but is
-        # keyed on anyway — a stale safe subset is a far worse failure than an
-        # occasional extra recompute on a valve nobody changes at runtime.
         cache_key = (css_mtime, sections_mtime, *self._css_valve_key())
         cached = Event._safe_css_cache
         if cached and cached[0] == cache_key:
@@ -536,12 +512,6 @@ class Event(PluginEvents):
 
         sections = self._load_sections()
         if sections:
-            # Raw sections, not _postprocess_sections(): the sidebar valve only
-            # rewrites structural + gradient, and the synthetic 'extra' section
-            # bundles the mobile sidebar upgrade in with the overlay glass. That
-            # sidebar rule is itself a transparency rule and belongs with the
-            # deferred structural block, so only the overlay part is applied
-            # below — matching what the pre-1.7.0 embedded subset shipped.
             safe_css = (
                 sections["vars"]
                 + "/* structural rules deferred to bootloader */\n"
@@ -591,13 +561,6 @@ class Event(PluginEvents):
         # CSS. The condition is always true; it marks the block so the
         # bootloader can switch it off in that page's copy of the stylesheet.
         safe_css = f"@supports ({self.INSTANCE_CSS_MARK}) {{\n{safe_css}\n}}\n"
-
-        # The overlay valve APPENDS glass rules for portaled overlays, so unlike
-        # the sidebar valve it has to be baked in here or overlays pop from
-        # opaque to glass the moment the bootloader's /theme.css fetch lands.
-        # They're the admin's for every page, so they stay outside the block.
-        if self.valves.overlay_transparency != "opaque":
-            safe_css += self._overlay_css()
 
         Event._safe_css_cache = (cache_key, safe_css)
         return safe_css
@@ -2420,8 +2383,6 @@ class Event(PluginEvents):
             "enableThemeUpdateChecks": self.valves.enable_theme_update_checks,
             "draftModeDefault": self.valves.draft_mode_default,
             "autoSync": self.valves.auto_sync,
-            "sidebarTransparency": self.valves.sidebar_transparency,
-            "overlayTransparency": self.valves.overlay_transparency,
             # "me": the signed-in user's personal theme; "instance": everyone's.
             "scope": "me" if user_id else "instance",
             # Who an instance save reaches: with personal themes on, only
@@ -2522,7 +2483,6 @@ class Event(PluginEvents):
             html_content.replace("{VERSION}", VERSION)
             .replace("{BOOTLOADER_SRC}", bootloader_js)
             .replace("{ROUTE_BASE}", route_base)
-            .replace("{OVERLAY_TRANSPARENCY}", self.valves.overlay_transparency)
             .replace("</head>", config_tag + "</head>")
             .strip()
         )
@@ -2543,8 +2503,6 @@ class Event(PluginEvents):
     _routes_registered_url = None  # Route base the routes were registered under
     _last_designer_url = None  # Track URL changes to re-register routes
     _last_enable_canvas_fx = None  # Track Canvas FX valve to broadcast changes
-    _last_sidebar_transparency = None  # Track sidebar transparency valve to broadcast changes
-    _last_overlay_transparency = None  # Track overlay transparency valve to broadcast changes
     # Cross-worker valve convergence (multi-container / Redis only).
     instance = None  # Live instance the producers and peer valve sync read
     _last_valves_snapshot = None  # All valve values at the last event(), to detect ANY change
@@ -2583,218 +2541,6 @@ class Event(PluginEvents):
             # which would then run the script the admin switched off.
             return "{}"
 
-    @staticmethod
-    def _rewrite_sidebar_fx(css: str, mode: str) -> str:
-        """Rewrite the opaque /*[FX]*/ sidebar rules (Canvas FX and gradient
-        blocks) for the Sidebar Transparency valve: tinted glass for
-        'translucent', see-through with no blur for 'transparent'.
-
-        Unmarked sidebar rules are left alone. Works rule by rule, so it runs
-        on the flat CSS or on the structural and gradient sections alike.
-        """
-        rule_open = r"#sidebar(?::not\(\.h-full\))?\s*\{\s*/\*\[FX\]\*/"
-        # The designer tints a gradient's hex base colour as rgba() and any
-        # other colour as color-mix(in srgb, <colour> NN%, transparent), with
-        # a lone blur(). Only that lone blur matches, never the -webkit-
-        # property, so CSS this already rewrote (a copy kept aside and saved
-        # back as a personal theme) passes unchanged.
-        lone_blur = r"blur\([^)]*\)(?=\s*!important)"
-
-        def rewrite(rule: str) -> str:
-            if mode == "translucent":
-                blur = "blur(20px) saturate(1.3)"
-                rule = _re.sub(
-                    r"("
-                    + rule_open
-                    + r"\s*background-color:\s*)(var\(--[^)]+\))(\s*!important\s*;)\s*\}",
-                    rf"\1color-mix(in srgb, \2 20%, transparent)\3 backdrop-filter: {blur} !important; -webkit-backdrop-filter: {blur} !important; }}",
-                    rule,
-                )
-                rule = _re.sub(
-                    r"("
-                    + rule_open
-                    + r"[^}]*background-color:\s*)rgba\(([^,]+,[^,]+,[^,]+),\s*[\d.]+\)(\s*!important\s*;[^}]*(?<![\w-])backdrop-filter:\s*)"
-                    + lone_blur,
-                    rf"\1rgba(\2, 0.25)\3{blur}",
-                    rule,
-                )
-                rule = _re.sub(
-                    r"("
-                    + rule_open
-                    + r"[^}]*background-color:\s*color-mix\(in srgb,\s*[^;{}]+\s)\d+%(,\s*transparent\)\s*!important\s*;[^}]*(?<![\w-])backdrop-filter:\s*)"
-                    + lone_blur,
-                    rf"\g<1>25%\2{blur}",
-                    rule,
-                )
-            else:
-                blur = "none"
-                rule = _re.sub(
-                    r"("
-                    + rule_open
-                    + r"\s*background-color:\s*)var\(--[^)]+\)(\s*!important\s*;)\s*\}",
-                    rf"\1transparent\2 backdrop-filter: {blur} !important; -webkit-backdrop-filter: {blur} !important; }}",
-                    rule,
-                )
-                rule = _re.sub(
-                    r"("
-                    + rule_open
-                    + r"[^}]*background-color:\s*)(?:rgba\([^)]+\)|color-mix\([^;{}]+\))(\s*!important\s*;[^}]*(?<![\w-])backdrop-filter:\s*)"
-                    + lone_blur,
-                    rf"\1transparent\2{blur}",
-                    rule,
-                )
-            return _re.sub(
-                r"[^\n]*#sidebar[^{]*\{\s*/\*\[FX\]\*/\s*background-color:\s*revert-layer\s*;?\s*\}",
-                "",
-                rule,
-            )
-
-        # Each marked rule on its own. Run over the whole CSS, these patterns
-        # backtracked in quadratic to cubic time on a long line (custom CSS
-        # with an inline font is one), freezing the worker for seconds to
-        # minutes. A rule starts on the marker's line and ends at its '}'.
-        marker, window = "/*[FX]*/", 2000
-        out, pos = [], 0
-        while True:
-            at = css.find(marker, pos)
-            if at < 0:
-                break
-            line_break = css.rfind("\n", max(pos, at - window), at)
-            start = line_break + 1 if line_break >= 0 else (pos if at - pos <= window else at)
-            end = css.find("}", at, at + window)
-            if end < 0:
-                out.append(css[pos : at + len(marker)])
-                pos = at + len(marker)
-                continue
-            out.append(css[pos:start])
-            rewritten = rewrite(css[start : end + 1])
-            out.append(rewritten)
-            pos = end + 1
-            if not rewritten.strip():
-                # A removed rule takes its line with it
-                line_break = css.find("\n", pos)
-                if line_break >= 0 and not css[pos:line_break].strip():
-                    pos = line_break + 1
-        out.append(css[pos:])
-        return "".join(out)
-
-    @staticmethod
-    def _sidebar_fade_css() -> str:
-        """Hide Open WebUI's fades at the top and bottom of the sidebar.
-
-        They are solid gradients in the sidebar's own color, so over a
-        translucent or transparent sidebar they read as opaque bands.
-        """
-        return (
-            "\n/* Sidebar Transparency: no solid fades over a see-through sidebar */\n"
-            "#sidebar .sidebar-bg-gradient-to-t,\n"
-            "#sidebar .sidebar-bg-gradient-to-b { display: none !important; }\n"
-        )
-
-    @staticmethod
-    def _sidebar_mobile_css() -> str:
-        """Turn a transparent sidebar translucent on phones.
-
-        #sidebar#sidebar outranks the transparent rules.
-        """
-        return (
-            "\n/* Mobile: auto-upgrade transparent sidebar to translucent */\n"
-            "@media (max-width: 768px) {\n"
-            "  .dark #sidebar#sidebar,\n"
-            '  [data-theme="dark"] #sidebar#sidebar,\n'
-            '  [data-theme="oled-dark"] #sidebar#sidebar {\n'
-            "    background-color: color-mix(in srgb, var(--color-gray-950) 20%, transparent) !important;\n"
-            "    backdrop-filter: blur(20px) saturate(1.3) !important;\n"
-            "    -webkit-backdrop-filter: blur(20px) saturate(1.3) !important;\n"
-            "  }\n"
-            '  :root:not(.dark):not([data-theme="dark"]):not([data-theme="oled-dark"]) #sidebar#sidebar {\n'
-            "    background-color: color-mix(in srgb, var(--color-gray-50) 20%, transparent) !important;\n"
-            "    backdrop-filter: blur(20px) saturate(1.3) !important;\n"
-            "    -webkit-backdrop-filter: blur(20px) saturate(1.3) !important;\n"
-            "  }\n"
-            "}\n"
-        )
-
-    @staticmethod
-    def _overlay_css() -> str:
-        """Translucent glass for the overlays Open WebUI portals onto <body>,
-        outside .app: the settings modal and the dropdown, user and
-        integration menus. Descendant selectors, because the portals nest
-        their surfaces at varying depths.
-        """
-        blur = "blur(20px) saturate(1.3)"
-        # A portal: a direct child of body that isn't the app or the theme
-        # system's own. SvelteKit's page wrapper is a body > div too; pages
-        # outside .app, such as a shared chat, sit in it.
-        portal = ':not(.app):not(#theme-designer-container):not([id^="owui-"]):not([style*="display: contents"]):not(script):not(style)'
-        # A surface inside it: not an interactive widget or the app's own
-        surface = ":not(button):not(a):not(input):not(select):not(label):not(span):not(svg):not(img):not(.app *):not(#theme-designer-container *)"
-
-        def surfaces_with(*utilities):
-            """Divs carrying one of these background utilities, plain or dark:."""
-            selectors = [
-                s
-                for utility in utilities
-                for s in (
-                    f'div[class^="{utility}"]',
-                    f'div[class*=" {utility}"]',
-                    f'div[class^="dark:{utility}"]',
-                    f'div[class*=" dark:{utility}"]',
-                )
-            ]
-            return ":where(" + ", ".join(s + surface for s in selectors) + ")"
-
-        # Open WebUI's UI greys are bg-base-* after 0.13.4 (bg-gray-* through 0.13.4)
-        grey = surfaces_with("bg-gray-", "bg-base-")
-        white = surfaces_with("bg-white")
-
-        def glass(color_var):
-            return (
-                f"  background-color: color-mix(in srgb, var({color_var}) 25%, transparent) !important;\n"
-                f"  backdrop-filter: {blur} !important;\n"
-                f"  -webkit-backdrop-filter: {blur} !important;\n"
-            )
-
-        light = ':root:not(.dark):not([data-theme="dark"]):not([data-theme="oled-dark"]):not([data-theme="her"])'
-        # (theme selectors, surfaces, tint)
-        rules = [
-            (
-                (".dark", '[data-theme="dark"]', '[data-theme="oled-dark"]'),
-                (grey,),
-                "--color-gray-950",
-            ),
-            ((light,), (white, grey), "--color-gray-50"),
-            ((".her", '[data-theme="her"]'), (white, grey), "--color-gray-50"),
-        ]
-        css = "\n/* --- Overlay Translucency (valve-injected) --- */\n"
-        for themes, surfaces, color_var in rules:
-            selectors = [f"{theme} body > div{portal} {s}" for s in surfaces for theme in themes]
-            css += ",\n".join(selectors) + " {\n" + glass(color_var) + "}\n"
-        for scheme, surfaces, color_var in (
-            ("dark", (grey,), "--color-gray-950"),
-            ("light", (white, grey), "--color-gray-50"),
-        ):
-            selectors = [f'  [data-theme="system"] body > div{portal} {s}' for s in surfaces]
-            css += f"@media (prefers-color-scheme: {scheme}) {{\n"
-            css += ",\n".join(selectors) + " {\n" + glass(color_var) + "  }\n}\n"
-        # The fade at the top of a chat goes with the solid overlays
-        css += "\n/* Overlay Transparency: no fade at the top of chats */\n#navbar-bg-gradient-to-b { display: none !important; }\n"
-        return css
-
-    def _valve_appended_css(self) -> str:
-        """The rules the transparency valves add once, at the end of the
-        delivered CSS: the 'extra' section when it is assembled from
-        sections."""
-        css = ""
-        sidebar_mode = self.valves.sidebar_transparency
-        if sidebar_mode != "opaque":
-            css += self._sidebar_fade_css()
-            if sidebar_mode == "transparent":
-                css += self._sidebar_mobile_css()
-        if self.valves.overlay_transparency != "opaque":
-            css += self._overlay_css()
-        return css
-
     _CANVAS_CLEARING = _re.compile(
         r"/\*\[OWUI_CLEAR_CANVAS_START\]\*/.*?/\*\[OWUI_CLEAR_CANVAS_END\]\*/", _re.DOTALL
     )
@@ -2810,31 +2556,17 @@ class Event(PluginEvents):
 
     def _postprocess_css(self, css):
         """The flat CSS as the valves deliver it: Enable Canvas FX off drops
-        the clearing of modes whose only background is the canvas, and the
-        transparency valves rewrite and add their rules."""
+        the clearing of modes whose only background is the canvas."""
         if not self.valves.enable_canvas_fx:
             css = self._drop_canvas_clearing(css)
-        if self.valves.sidebar_transparency != "opaque":
-            css = self._rewrite_sidebar_fx(css, self.valves.sidebar_transparency)
-        return css + self._valve_appended_css()
+        return css
 
     def _postprocess_sections(self, sections: dict) -> dict:
-        """Per-section mirror of _postprocess_css.
-
-        The /*[FX]*/ rules the sidebar valve rewrites live only in the
-        structural and gradient sections. The appended rules go into a
-        synthetic 'extra' section, so consumers assembling from sections
-        deliver the same CSS as /theme.css. The bootloader never auth-gates
-        'extra'.
-        """
+        """Per-section mirror of _postprocess_css: the clearing lives only in
+        the structural section."""
         out = dict(sections)
         if not self.valves.enable_canvas_fx:
             out["structural"] = self._drop_canvas_clearing(out["structural"])
-        sidebar_mode = self.valves.sidebar_transparency
-        if sidebar_mode != "opaque":
-            out["structural"] = self._rewrite_sidebar_fx(out["structural"], sidebar_mode)
-            out["gradient"] = self._rewrite_sidebar_fx(out["gradient"], sidebar_mode)
-        out["extra"] = self._valve_appended_css()
         return out
 
     def _state_with_sections(self, state: str, user_id: str | None = None) -> str:
@@ -2860,11 +2592,7 @@ class Event(PluginEvents):
 
     def _css_valve_key(self) -> tuple:
         """The valves _postprocess_css reads, for the delivery cache keys."""
-        return (
-            self.valves.enable_canvas_fx,
-            self.valves.sidebar_transparency,
-            self.valves.overlay_transparency,
-        )
+        return (self.valves.enable_canvas_fx,)
 
     def _state_valve_key(self) -> tuple:
         """The valves _postprocess_state and _state_with_sections read, for
@@ -3843,8 +3571,6 @@ class Event(PluginEvents):
             f"{label} → {now}"
             for label, before, now in (
                 ("Canvas FX", Event._last_enable_canvas_fx, self.valves.enable_canvas_fx),
-                ("sidebar", Event._last_sidebar_transparency, self.valves.sidebar_transparency),
-                ("overlay", Event._last_overlay_transparency, self.valves.overlay_transparency),
             )
             if before is not None and before != now
         ]
@@ -3894,8 +3620,6 @@ class Event(PluginEvents):
 
         Event._last_designer_url = self.valves.designer_url
         Event._last_enable_canvas_fx = self.valves.enable_canvas_fx
-        Event._last_sidebar_transparency = self.valves.sidebar_transparency
-        Event._last_overlay_transparency = self.valves.overlay_transparency
         Event._last_valves_snapshot = valves_now
 
 

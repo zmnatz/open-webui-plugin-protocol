@@ -45,6 +45,7 @@ def test_with_personal_themes_off_the_personal_routes_have_nothing(td):
     By hand: turn Allow Personal Themes off: users' Settings have no Themes tab, and their
     chats show the instance theme.
     """
+    td.valves(allow_personal_themes=False)
     assert td.save(td.user, "/me").status_code == 403
     assert td.user.get(BASE + "/me/theme.css").text == ""
     assert td.user.get(BASE + "/me/state.json").text == "{}"
@@ -156,6 +157,7 @@ def test_a_personal_page_picture_is_its_owners(owui, td):
     By hand: as a user, upload a page picture in your Settings > Themes; another user does not
     see it.
     """
+    td.valves(allow_personal_themes=False)
     assert td.user.post(BASE + "/me/page-background", content=td.PNG).status_code == 403
     td.valves(allow_personal_themes=True)
     url = td.user.post(BASE + "/me/page-background", content=td.PNG).json()["url"]

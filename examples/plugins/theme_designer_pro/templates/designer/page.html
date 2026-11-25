@@ -12,8 +12,8 @@
             if (!embed) return;
             var root = document.documentElement;
             root.classList.add('owui-skin');
-            // Overlay Transparency: a clear page lets the dialog's glass show through.
-            if (embed !== 'settings' || '{OVERLAY_TRANSPARENCY}' === 'opaque') return;
+            // A clear page shows the dialog behind it, as Surfaces' Dialogs row draws it
+            if (embed !== 'settings') return;
             root.classList.add('owui-skin-glass');
             // A frame whose color scheme differs from the page around it gets an
             // opaque backdrop, so take the dialog's, and whether it is dark.

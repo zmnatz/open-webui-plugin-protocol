@@ -20,7 +20,7 @@ It needs Docker, which your user must be able to reach (in the `docker` group; w
 
 `tools/screenshots/run.py`:
 
-1. Starts `tools/screenshots/compose.yaml`. It holds Open-WebUI at the version the protocol targets (v0.13.4, the `-slim` image), aimock as its models, and [fixed files](testing/live.md#everything-else-fixed-files) standing in for a LiteLLM gateway and mcpo. **iframe Sandbox Allow Same Origin** is on by default there (`DEFAULT_INTERFACE_SETTINGS`), as the examples with pages in the Artifacts panel require. Nothing is kept between runs.
+1. Starts `tools/screenshots/compose.yaml`. It holds Open-WebUI at the version the protocol targets (v0.13.5, the `-slim` image), aimock as its models, and [fixed files](testing/live.md#everything-else-fixed-files) standing in for a LiteLLM gateway and mcpo. **iframe Sandbox Allow Same Origin** is on by default there (`DEFAULT_INTERFACE_SETTINGS`), as the examples with pages in the Artifacts panel require. Nothing is kept between runs.
 2. Signs up the admin (the first account always is) and adds a user, both throwaway.
 3. Deploys `examples/plugins` with `owpp deploy`, exactly as a plugin repository would.
 4. Runs the scripts in `tools/screenshots/shots_*.py` with pytest and Playwright. Each signs in on Open-WebUI's own login page, does what a person would, and saves a screenshot at each step worth seeing.
@@ -51,6 +51,7 @@ def test_the_dashboard_lists_what_is_old(admin, shot):
 | `admin`, `user`, `signed_out` | A browser page signed in as the admin, as the user, or not at all. |
 | `api`, `user_api` | Open-WebUI's HTTP API as that account, for setting things up: data to show, a valve to change. What is photographed goes through the browser. |
 | `shot(page, plugin, name, caption, illustrates=[...])` | Saves `docs/screenshots/<plugin>/<name>.png` and records it. `illustrates` names plugin tests, which then show the picture in the catalogue. |
+| `send(page, text)` (imported from `conftest`) | Types a message into the chat and sends it, once the input holds all of it. Since v0.13.5 the input takes typing while the page is still loading and can lose some of it, so type a message with this rather than `page.keyboard.type`. |
 
 Put back whatever a script changes (valves, a function switched off), so the order the scripts run in does not matter.
 
@@ -60,3 +61,5 @@ The first run, on 2026-11-19, found two things wrong with Excalidraw that no uni
 
 - **The editor never loaded from esm.sh.** A comment in `templates/viewer.html` mentioned the `esm.sh` and `hosted` block markers by name. The code that keeps one block and drops the other matched the marker in the comment, and cut out the editor's imports with it. The page then failed with `convertToExcalidrawElements is not defined`. The unit tests only checked the page's head, and that no marker was left, which was true because too much had been removed. Fixed, with a test that the script imports everything it uses.
 - **On a default Open-WebUI, the editor answers 401.** The Artifacts panel sends no session cookie unless **iframe Sandbox Allow Same Origin** is on, and Open-WebUI has it off by default. Turning it on lets any artifact's script reach Open-WebUI's origin, so the requirement is kept and documented rather than worked around ([why, and what it costs](libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin); [issue #6](https://github.com/zmnatz/open-webui-plugin-protocol/issues/6)).
+
+The move to Open-WebUI v0.13.5 (2026-11-25) found that Theme Designer Pro's OLED mode lasted only until the next page load, which v0.13.5 then turned into a black colour of that person's own. It is fixed ([what changed for v0.13.5](../examples/plugins/theme_designer_pro/README.md#what-changed-for-open-webui-v0135)), with a screenshot.

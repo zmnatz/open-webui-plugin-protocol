@@ -1,7 +1,6 @@
     // === SURFACES TAB ===
     // One row per layer, built from SURFACE_LAYERS. The values are the mode's
-    // own; with the switch off the theme leaves the layers to the instance's
-    // Sidebar and Overlay Transparency settings.
+    // own; with the switch off the layers keep Open WebUI's own look.
     (function buildSurfacesTab() {
         const list = $('surfaces-list');
         if (!list) return;
@@ -38,23 +37,16 @@
         slider.dispatchEvent(new Event('change'));
     };
 
-    // Turning Surfaces on for the first time starts from what the instance
-    // settings draw today, so nothing jumps
-    function seedSurfacesFromValves(d) {
-        if (!SURFACE_FIELDS.slice(1).every(k => d[k] === DEFAULT_MODE_DATA[k])) return;
-        const cfg = window.__THEME_PRO_CONFIG__ || {};
-        if (cfg.sidebarTransparency === 'translucent') { d.surfaceSidebarOpacity = 20; d.surfaceSidebarBlur = 20; }
-        else if (cfg.sidebarTransparency === 'transparent') { d.surfaceSidebarOpacity = 0; d.surfaceSidebarBlur = 0; }
-        if (cfg.overlayTransparency === 'translucent') {
-            d.surfaceMenuOpacity = 25; d.surfaceMenuBlur = 20;
-            d.surfaceDialogOpacity = 25; d.surfaceDialogBlur = 20;
-            d.surfaceFadeOpacity = 0;
-        }
-    }
+    // Every slider in this mode back to its default, in one Undo step
+    $('surfaces-reset-btn')?.addEventListener('click', () => {
+        const d = themeData[getActiveDataMode()];
+        if (!d || !d.surfacesEnabled) return;
+        SURFACE_FIELDS.slice(1).forEach(k => { d[k] = DEFAULT_MODE_DATA[k]; });
+        commitChange();
+    });
 
     $('toggle-surfaces')?.addEventListener('change', (e) => {
         const d = themeData[getActiveDataMode()];
-        if (e.target.checked) seedSurfacesFromValves(d);
         d.surfacesEnabled = e.target.checked;
         commitChange();
     });
@@ -65,6 +57,8 @@
         const on = !!d.surfacesEnabled;
         const toggle = $('toggle-surfaces');
         if (toggle) toggle.checked = on;
+        const reset = $('surfaces-reset-btn');
+        if (reset) reset.disabled = !on || SURFACE_FIELDS.slice(1).every(k => (d[k] ?? DEFAULT_MODE_DATA[k]) === DEFAULT_MODE_DATA[k]);
         $('surfaces-list')?.classList.toggle('off', !on);
         document.querySelectorAll('#surfaces-list input[type="range"]').forEach(slider => {
             const k = slider.dataset.field;
@@ -75,10 +69,9 @@
         });
         const note = $('surfaces-note');
         if (note) {
-            const cfg = window.__THEME_PRO_CONFIG__ || {};
             note.innerText = on
-                ? "Opacity is how much of Open WebUI's own color covers each layer: 100% is solid, 0% is clear. Blur softens whatever shows through it. These win over the instance's Sidebar and Overlay Transparency settings in this mode."
-                : `Off: this mode follows the instance's Sidebar Transparency (${cfg.sidebarTransparency || 'opaque'}) and Overlay Transparency (${cfg.overlayTransparency || 'opaque'}) settings. Turn it on to set each layer yourself.`;
+                ? "Opacity is how much of Open WebUI's own color covers each layer: 100% is solid, 0% is clear. Blur softens whatever shows through it."
+                : "Off: this mode keeps Open WebUI's own look for each layer. Turn it on to set each layer yourself.";
         }
     }
 

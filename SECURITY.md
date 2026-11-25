@@ -6,8 +6,8 @@ Please report it privately, not in a public issue: use GitHub's **Security** tab
 **Report a vulnerability**. If that is not available, open an issue that says only that you have a
 security report and ask for a private channel; leave the details out.
 
-Supported: the latest release. This is pre-1.0 software, written against Open-WebUI v0.13.4 and
-checked on a live Open-WebUI only by hand, not in CI (see
+Supported: the latest release. This is pre-1.0 software, written against Open-WebUI v0.13.5 and
+checked on a live Open-WebUI only through its examples (see
 [status and limits](docs/README.md#status-and-limits)), so treat it accordingly.
 
 ## The trust model, in one paragraph
@@ -82,11 +82,14 @@ about keeping that explicit and narrow, not about making untrusted plugins safe.
 - **Third-party hosting is yours to secure.** Excalidraw loads its editor from esm.sh unless you
   self-host it (see its README); either way the code runs in your users' browsers with no integrity
   check.
-- **Not tested against a live Open-WebUI.** The tests use stand-ins for its session check, chat access
-  and function table. The argument names Open-WebUI passes to an Event function's `event()` remain an
-  assumption. The sign-in and redirect fallbacks were checked against Open-WebUI v0.13.4's source
-  instead: its login page posts the same `{"email": "", "password": ""}` for trusted-header and
-  no-auth setups, and the trusted-header branch of `/api/v1/auths/signin` ignores those fields, so no
+- **Checked on a live Open-WebUI through the examples only.** The unit tests use stand-ins for its
+  session check, chat access and function table. The live suite (`docs/testing/live.md`) deploys the
+  examples to a real Open-WebUI v0.13.5 on every pull request, which reaches the sign-in guard there
+  (an admin's route refuses a user), and the screenshot run sends a signed-out visitor to sign in;
+  what no example does is not checked live. The trusted-header sign-in fallback is not part of either
+  run; it was checked against Open-WebUI v0.13.4's and v0.13.5's source instead: its login page
+  posts the same `{"email": "", "password": ""}` for trusted-header and no-auth setups, and the
+  trusted-header branch of `/api/v1/auths/signin` ignores those fields, so no
   user name or password is needed there. Caveats: that route is gated by `ENABLE_PASSWORD_AUTH` (on by
   default), and the trusted header must be present on the request.
 

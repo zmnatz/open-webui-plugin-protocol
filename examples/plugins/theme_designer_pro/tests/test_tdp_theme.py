@@ -35,10 +35,7 @@ def test_an_admin_saves_the_theme_and_every_page_gets_it(td):
     assert css.text == td.CSS and css.headers["etag"] == saved.json()["cssTag"]
     state = td.anon.get(BASE + "/state.json").json()
     assert state["dark"] == td.STATE["dark"]
-    assert (
-        state["_cssSections"]["vars"] == td.SECTIONS["vars"]
-        and state["_cssSections"]["extra"] == ""
-    )
+    assert state["_cssSections"]["vars"] == td.SECTIONS["vars"]
 
 
 def test_an_unchanged_theme_is_not_sent_again(td):
@@ -244,41 +241,6 @@ def test_sign_in_page_theming_off_keeps_the_sign_in_page_plain(td):
     assert td.anon.get(BASE + "/state.json").json()["dark"]["themeShowAuth"] is False
 
 
-@pytest.mark.parametrize(
-    ("mode", "expected"),
-    [
-        ("translucent", "color-mix(in srgb, var(--color-gray-950) 20%, transparent)"),
-        ("transparent", "background-color: transparent !important; backdrop-filter: none"),
-    ],
-)
-def test_sidebar_transparency_lets_the_background_through_the_sidebar(td, mode, expected):
-    """`sidebar_transparency` rewrites the theme's sidebar rules as it is served: frosted for
-    translucent, see-through for transparent (translucent on phones), and hides Open-WebUI's
-    fades at the sidebar's ends.
-
-    By hand: with an animated theme, set Sidebar Transparency to translucent: the animation shows
-    through a frosted sidebar. Set it to transparent: it shows through clearly.
-    """
-    td.save()
-    td.valves(sidebar_transparency=mode)
-    css = td.anon.get(BASE + "/theme.css").text
-    assert expected in css and ".sidebar-bg-gradient-to-t" in css
-    assert ("auto-upgrade transparent sidebar" in css) is (mode == "transparent")
-
-
-def test_translucent_overlays_are_frosted_from_the_first_paint(td):
-    """`overlay_transparency` translucent frosts the settings dialog and the menus, in the
-    served theme and in /static/custom.css, so they never flash opaque first.
-
-    By hand: set Overlay Transparency to translucent and open Settings: the dialog is frosted
-    glass.
-    """
-    td.save()
-    td.valves(overlay_transparency="translucent")
-    assert "Overlay Translucency (valve-injected)" in td.anon.get(BASE + "/theme.css").text
-    assert "Overlay Translucency (valve-injected)" in td.anon.get("/static/custom.css").text
-
-
 def test_the_first_paint_stylesheet_carries_the_theme_colours(td):
     """/static/custom.css, which blocks the first paint, carries the theme's colours and custom
     CSS inside a switch the bootloader turns off where the theme does not belong, and leaves
@@ -337,15 +299,15 @@ def test_a_saved_theme_holding_placeholder_text_is_served_as_it_is(td):
     ("valves", "tab", "page"),
     [
         ({}, True, False),
-        ({"show_in_admin_settings": False}, False, False),
+        ({"show_in_admin_settings": False, "allow_personal_themes": False}, False, False),
         ({"show_in_admin_settings": False, "allow_personal_themes": True}, True, False),
         ({"show_in_admin_panel": True}, True, True),
     ],
 )
 def test_the_themes_tab_and_page_follow_their_valves(td, valves, tab, page):
     """`show_in_admin_settings` (on by default) adds a Themes tab to the Admin part of
-    Settings, `allow_personal_themes` one to every user's Settings, and `show_in_admin_panel` a
-    Themes page to the Admin Panel's top bar.
+    Settings, `allow_personal_themes` (on by default too) one to every user's Settings, and
+    `show_in_admin_panel` a Themes page to the Admin Panel's top bar.
 
     By hand: open Settings: an admin sees Admin > Themes. Turn Show In Admin Panel on: the
     Admin Panel has a Themes page between Functions and Settings.
@@ -355,7 +317,7 @@ def test_the_themes_tab_and_page_follow_their_valves(td, valves, tab, page):
     assert ("window.__owuiTdpSettingsTab" in js) is tab
     assert ("window.__owuiTdpAdminPage" in js) is page
     if tab:
-        personal = valves.get("allow_personal_themes", False)
+        personal = valves.get("allow_personal_themes", True)
         admin = valves.get("show_in_admin_settings", True)
         assert f"if ({str(personal).lower()}) SPECS.push({{ key: 'personal'" in js
         assert f"if ({str(admin).lower()}) SPECS.push({{ key: 'admin'" in js

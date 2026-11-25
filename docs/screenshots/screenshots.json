@@ -1,7 +1,7 @@
 {
-  "open_webui": "0.13.4",
-  "taken": "2026-11-22",
-  "commit": "4c7b2e3",
+  "open_webui": "0.13.5",
+  "taken": "2026-11-25",
+  "commit": "6af5b43",
   "shots": [
     {
       "file": "clear_thinking_tags/with.png",
@@ -213,6 +213,15 @@
       "script": "shots_theme_designer_pro.py::test_the_launcher_builds_a_theme_in_a_chat"
     },
     {
+      "file": "theme_designer_pro/oled.png",
+      "plugin": "theme_designer_pro",
+      "caption": "OLED picked in the designer, after a reload: still OLED's palette. Open-WebUI 0.13.5 has no OLED theme of its own; the designer keeps OLED under a key of its own.",
+      "illustrates": [
+        "test_oled_is_kept_under_its_own_key_so_open_webui_leaves_it_alone"
+      ],
+      "script": "shots_theme_designer_pro.py::test_oled_holds_on_open_webui_0_13_5"
+    },
+    {
       "file": "theme_designer_pro/personal-designer.png",
       "plugin": "theme_designer_pro",
       "caption": "With Allow Personal Themes on, a user's own designer, starting from the instance theme: the instance-only controls are gone, and saves change only their theme.",
@@ -225,7 +234,7 @@
     {
       "file": "theme_designer_pro/personal-off.png",
       "plugin": "theme_designer_pro",
-      "caption": "Personal themes off (the default): a user's designer link answers with a sentence.",
+      "caption": "Personal themes off: a user's designer link answers with a sentence.",
       "illustrates": [
         "test_with_personal_themes_off_a_user_gets_a_sentence_not_the_designer"
       ],

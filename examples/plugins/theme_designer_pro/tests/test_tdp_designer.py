@@ -14,12 +14,12 @@ def test_an_admin_opens_the_designer_on_the_instance_theme(td):
     cached.
 
     By hand: as an admin, open /api/v1/theme-designer. The designer opens on the Themes tab,
-    with "Theme Designer Pro | v1.22.0" in its footer.
+    with "Theme Designer Pro | v1.23.0" in its footer.
     """
     page = td.page(td.admin)
     assert page.status_code == 200
     assert page.headers["cache-control"] == "no-store"
-    assert "<title>Theme Designer Pro</title>" in page.text and "v1.22.0" in page.text
+    assert "<title>Theme Designer Pro</title>" in page.text and "v1.23.0" in page.text
     assert td.config(td.admin)["scope"] == "instance"
 
 
@@ -46,12 +46,13 @@ def test_someone_signed_out_is_sent_to_sign_in_first(owui, td):
 
 
 def test_with_personal_themes_off_a_user_gets_a_sentence_not_the_designer(td):
-    """`allow_personal_themes` is off by default: the personal designer (?scope=me) answers a
-    short page saying so in a frame, and JSON to a fetch.
+    """With `allow_personal_themes` off (it is on by default), the personal designer
+    (?scope=me) answers a short page saying so in a frame, and JSON to a fetch.
 
-    By hand: as a user, open /api/v1/theme-designer?scope=me. The page says "Personal themes are
-    turned off on this instance."
+    By hand: turn Allow Personal Themes off; as a user, open /api/v1/theme-designer?scope=me.
+    The page says "Personal themes are turned off on this instance."
     """
+    td.valves(allow_personal_themes=False)
     page = td.page(td.user, "?scope=me")
     assert page.status_code == 403
     assert "<p>Personal themes are turned off on this instance.</p>" in page.text
@@ -120,10 +121,8 @@ def test_a_personal_designer_starts_from_the_instance_theme_without_its_gallery_
         ("enable_community_themes", False, "enableCommunityThemes", False),
         ("enable_theme_update_checks", False, "enableThemeUpdateChecks", False),
         ("draft_mode_default", True, "draftModeDefault", True),
-        ("auto_sync", True, "autoSync", True),
-        ("sidebar_transparency", "translucent", "sidebarTransparency", "translucent"),
-        ("overlay_transparency", "translucent", "overlayTransparency", "translucent"),
-        ("allow_personal_themes", True, "allowPersonalThemes", True),
+        ("auto_sync", False, "autoSync", False),
+        ("allow_personal_themes", False, "allowPersonalThemes", False),
         ("enable_ai_consultant", False, "enableAiConsultant", False),
     ],
 )
@@ -143,18 +142,6 @@ def test_each_valve_reaches_the_designer(td, valve, value, key, expected):
     assert td.config(td.admin)[key] == expected
 
 
-def test_translucent_overlays_make_the_settings_tab_glass(td):
-    """With `overlay_transparency` translucent, the designer inside Settings drops its own
-    background, so the dialog's glass shows through.
-
-    By hand: set Overlay Transparency to translucent and open Settings > Themes: the dialog's
-    frosted glass shows behind the designer.
-    """
-    assert "'opaque' === 'opaque'" in td.page(td.admin).text
-    td.valves(overlay_transparency="translucent")
-    assert "'translucent' === 'opaque'" in td.page(td.admin).text
-
-
 def test_the_designer_carries_the_bootloader_set_for_its_previews(td):
     """The designer embeds the bootloader its previews run, on and with the designer's own URL,
     and with no theme of its own (the designer applies the one it edits).
@@ -171,6 +158,24 @@ def test_the_designer_carries_the_bootloader_set_for_its_previews(td):
     assert "var embeddedState = null;" in src and "var _cachedCanvasOk = false;" in src
     assert "const _script = true ?" in src and "authToken: true &&" in src
     assert f"readAsset('{BASE}/theme.css')" in src
+
+
+def test_oled_is_kept_under_its_own_key_so_open_webui_leaves_it_alone(td):
+    """Open-WebUI 0.13.5 turns a stored 'oled-dark' theme into 'dark' and a black colour of its
+    own on the next page load. So the designer stores OLED as Open-WebUI's 'dark' plus a key of
+    its own, and the bootloader on every page reads the two as OLED again.
+
+    By hand: on Open-WebUI 0.13.5, pick OLED in the designer and give it a hue, then open a chat
+    and reload it: it still wears the OLED palette, Settings > General > Colors has no colour
+    of Open-WebUI's own set, and the designer opens on OLED again.
+    """
+    td.save()
+    page = td.page(td.admin).text
+    loader = td.anon.get("/static/loader.js").text
+    for script in (page, loader):
+        assert "OLED_KEY = 'owui_tdp_oled'" in script
+    assert "localStorage.setItem('theme', mode === 'oled' ? 'dark'" in page
+    assert "if (theme === 'dark') return 'oled-dark';" in loader
 
 
 def test_the_page_is_its_files_put_together(td, plugin_dir):
