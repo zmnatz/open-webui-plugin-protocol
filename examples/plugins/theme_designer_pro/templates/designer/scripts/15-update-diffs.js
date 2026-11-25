@@ -418,8 +418,8 @@
 
             // Follow Open WebUI's own theme switch in another tab
             window.addEventListener('storage', (e) => {
-                if (e.key === 'theme' && e.newValue) {
-                    let targetMode = e.newValue;
+                if ((e.key === 'theme' && e.newValue) || e.key === OLED_KEY) {
+                    let targetMode = owuiTheme() || 'dark';
                     if (targetMode === 'oled-dark') targetMode = 'oled';
 
                     if (targetMode === 'her') {
@@ -541,7 +541,7 @@
                     // every user on a plain refresh.
                     restoreDraftMode();
 
-                    const pTheme = localStorage.getItem('theme');
+                    const pTheme = owuiTheme();
                     const pDoc = document.documentElement;
                     if (pTheme === 'system' || pDoc.getAttribute('data-theme') === 'system') {
                         const systemBtn = document.querySelector('.mode-btn[data-mode="system"]');

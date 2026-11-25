@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 
-from conftest import URL
+from conftest import URL, send
 
 ASK = "[reasoning only] What is six times seven?"
 THOUGHT = "Thinking it through, the answer is forty-two."
@@ -12,9 +12,7 @@ THOUGHT = "Thinking it through, the answer is forty-two."
 
 def ask(page) -> None:
     page.goto(f"{URL}/?models=screenshot-model")
-    page.locator("#chat-input").click()
-    page.keyboard.type(ASK)
-    page.keyboard.press("Enter")
+    send(page, ASK)
 
 
 def toggle(api, active: bool) -> None:

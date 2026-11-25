@@ -1081,13 +1081,13 @@ class MockOpenWebUI:
         from pydantic import model_validator as _model_validator
 
         class ModelParams(_BaseModel):
-            """v0.13.4: any inference parameter, plus model_controls (left out when empty)."""
+            """v0.13.4 and v0.13.5: any inference parameter, plus model_controls (left out when empty)."""
 
             model_config = _ConfigDict(extra="allow")
             model_controls: dict = _Field(default_factory=dict, exclude_if=lambda value: not value)
 
         class ModelMeta(_BaseModel):
-            """v0.13.4's fields, any others kept, and tags normalised to [{"name": ...}]."""
+            """v0.13.4's fields (v0.13.5's are the same), any others kept, and tags normalised to [{"name": ...}]."""
 
             model_config = _ConfigDict(extra="allow")
             profile_image_url: str | None = None

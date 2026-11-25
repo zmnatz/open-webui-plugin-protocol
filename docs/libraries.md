@@ -99,9 +99,9 @@ Which to use: mark each route that needs more than a signed-in user. If **every*
 
 ### Pages in the Artifacts panel need "iframe Sandbox Allow Same Origin"
 
-A filter can show a plugin's page in the Artifacts panel by putting an `<iframe>` in a reply, as Excalidraw does. The panel is a **sandboxed iframe**, and what it can do depends on a per-user Open-WebUI setting, **iframe Sandbox Allow Same Origin**, which is **off by default** (v0.13.4):
+A filter can show a plugin's page in the Artifacts panel by putting an `<iframe>` in a reply, as Excalidraw does. The panel is a **sandboxed iframe**, and what it can do depends on a per-user Open-WebUI setting, **iframe Sandbox Allow Same Origin**, which is **off by default** (v0.13.4 and v0.13.5):
 
-| Setting | The frame's origin | The page behind the guard | Measured on v0.13.4 |
+| Setting | The frame's origin | The page behind the guard | Measured on v0.13.4 and v0.13.5 |
 | --- | --- | --- | --- |
 | off (default) | opaque | gets no session: the `token` cookie is `SameSite=Lax` and is not sent, so the guard answers **401** | `{"detail":"Sign in to Open-WebUI first."}` |
 | on | Open-WebUI's own | gets the session like any page, and can mint a `plugin_token` for its API | 200 |

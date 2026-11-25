@@ -92,7 +92,7 @@ An event function reacts to Open-WebUI. Send the event, then assert on what it c
 
 ```python
 def test_saving_the_valves_syncs_every_mcpo_server_as_a_tool_server(owui, plugin, mcpo):
-    """By hand: set MCPO_BASE_URL and MCPO_API_KEY and save: Admin Settings > External Tools
+    """By hand: set MCPO_BASE_URL and MCPO_API_KEY and save: Admin Settings > Integrations
     lists one connection per mcpo server."""
     owui.set_valves("mcpo_sync", MCPO_BASE_URL=mcpo["url"], MCPO_API_KEY="mcpo-key")
     assert sorted(synced(owui)) == ["mcpo-filesystem", "mcpo-other", "mcpo-time"]

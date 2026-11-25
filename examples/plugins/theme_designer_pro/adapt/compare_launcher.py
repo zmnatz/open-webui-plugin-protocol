@@ -30,7 +30,7 @@ def run(kind):
                 d.mkdir()
                 (d / "plugin.yaml").write_text(
                     'protocol: "0.5"\nsource:\n  git: https://github.com/silentoplayz/theme-designer-pro-presets.git\n'
-                    '  ref: 9a7e68c9afe51539effae22767e843f26205d895\n  path: ""\n'
+                    '  ref: 34345eaffb8678ddfd38b45d7bc173f5b0d27132\n  path: ""\n'
                     "function:\n  file: event-function/theme_designer_pro_event.py\n"
                     f"tool:\n  id: {TOOL}\n  file: launcher/theme_designer_pro_launcher.py\n  access: public\n"
                 )

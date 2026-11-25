@@ -6,7 +6,7 @@ import struct
 import zlib
 
 import pytest
-from conftest import URL
+from conftest import URL, send
 
 
 def png(path, size: int = 96) -> None:
@@ -51,9 +51,7 @@ def test_a_picture_goes_to_the_vision_model(user, shot, routed, tmp_path):
     png(picture)
     user.goto(f"{URL}/?models=screenshot-model")
     user.locator("input[type=file]").first.set_input_files(str(picture))
-    user.locator("#chat-input").click()
-    user.keyboard.type("What is in this picture?")
-    user.keyboard.press("Enter")
+    send(user, "What is in this picture?")
     user.get_by_text("I am the vision model").last.wait_for(timeout=60_000)
     user.wait_for_timeout(1000)
     shot(

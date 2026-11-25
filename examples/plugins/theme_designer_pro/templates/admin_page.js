@@ -22,7 +22,7 @@
         '.tdp-admin-page{display:none;position:relative;height:100%;min-height:0;flex-direction:column;padding:0 .625rem .5rem}',
         '[data-tdp-admin-open]>.tdp-admin-page{display:flex}',
         '.tdp-admin-page iframe{flex:1 1 auto;width:100%;min-height:0;border:0;border-radius:.75rem;background:transparent}',
-        '.tdp-admin-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--color-gray-500,#9b9b9b);pointer-events:none}'
+        '.tdp-admin-loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:.75rem;color:var(--color-base-500,#9b9b9b);pointer-events:none}'
     ].join('');
     var openPath = null;
     var scheduled = false;

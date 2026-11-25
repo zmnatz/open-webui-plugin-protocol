@@ -324,6 +324,20 @@
             }
             var _rootModeSet = '';
 
+            // Open WebUI 0.13.5 dropped its OLED Dark theme: a stored
+            // 'oled-dark' becomes 'dark' plus a black custom colour on the
+            // next page load. So the designer leaves 'theme' at 'dark' for
+            // OLED and says OLED under this key; this is the mode the two
+            // say together. Open WebUI switched away from dark ends OLED.
+            var OLED_KEY = 'owui_tdp_oled';
+            function owuiTheme() {
+                var theme = localStorage.getItem('theme');
+                if (localStorage.getItem(OLED_KEY) !== '1') return theme;
+                if (theme === 'dark') return 'oled-dark';
+                if (theme) localStorage.removeItem(OLED_KEY);
+                return theme;
+            }
+
             function themeToMode(theme) {
                 if (theme === 'system') return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
                 return { 'oled-dark': 'oled', her: 'her', light: 'light', dark: 'dark' }[theme] || 'dark';
@@ -372,7 +386,7 @@
             function instanceSharedCssWanted() {
                 if (_personal) return false;
                 var st = getParsedState();
-                var c = st && st[themeToMode(localStorage.getItem('theme') || 'dark')];
+                var c = st && st[themeToMode(owuiTheme() || 'dark')];
                 if (!c) return true;
                 if (window.location.pathname.startsWith('/auth')) {
                     return !(c.themeShowAuth === false || c.customCssShowAuth === false);
@@ -453,7 +467,7 @@
                     var parsedState = getParsedState();
 
                     if (parsedState) {
-                        const mode = themeToMode(localStorage.getItem('theme') || 'dark');
+                        const mode = themeToMode(owuiTheme() || 'dark');
                         const config = parsedState[mode];
                         // Sign-in pages show what Show on Auth Pages allows; app
                         // pages leave out what's Only on Auth Pages. A personal
@@ -489,7 +503,6 @@
                                         if (vis.canvas || vis.gradient) parts.push(dropHiddenClearing(sec.structural || ''));
                                         if (vis.gradient) parts.push(sec.gradient || '');
                                         if (vis.custom) parts.push(sec.custom || '');
-                                        parts.push(sec.extra || ''); // valve-appended rules — never auth-gated
                                         // Re-apply the body::before sanitizer (assembly replaced finalCss)
                                         finalCss = parts.join('').replace(/[^{}]*body\s*::before\s*\{[^}]*\}/g, '');
                                     } else {
@@ -517,7 +530,7 @@
                     if (style.textContent !== finalCss) style.textContent = finalCss;
                 }
                 
-                const storedTheme = localStorage.getItem('theme');
+                const storedTheme = owuiTheme();
                 if (storedTheme) {
                     if (document.documentElement.getAttribute('data-theme') !== storedTheme) {
                         document.documentElement.setAttribute('data-theme', storedTheme);
@@ -743,13 +756,15 @@
                 var d = g.getImageData(0, 0, 1, 1).data;
                 return [d[0], d[1], d[2]];
             }
-            // The same function builds the payload on the website's previews
+            // The same function builds the payload on the website's previews.
+            // The ramp is Open WebUI's base scale as the page resolves it: the
+            // palette, or a user's own Theme Colors, or Open WebUI's greys.
             function buildCanvasTheme(readVar, toRgb, mode, hue, chroma, set) {
                 var dark = mode === 'dark' || mode === 'oled';
                 var hex = function(c) { return '#' + c.map(function(v) { return (v < 16 ? '0' : '') + v.toString(16); }).join(''); };
                 var ramp = {}, rampRgb = {};
-                [50, 100, 200, 300, 400, 500, 600, 700, 800, 850, 900, 950].forEach(function(s) {
-                    rampRgb[s] = toRgb(readVar('--color-gray-' + s) || '#808080');
+                [0, 50, 100, 200, 300, 400, 500, 600, 700, 800, 850, 900, 950, 1000].forEach(function(s) {
+                    rampRgb[s] = toRgb(readVar('--color-base-' + s) || '#808080');
                     ramp[s] = hex(rampRgb[s]);
                 });
                 // Accents in the theme's hue, as colorful as the theme itself
@@ -763,7 +778,7 @@
                     return typeof v === 'string' && /^#[0-9a-fA-F]{6}$/.test(v) ? toRgb(v.toLowerCase()) : accent(dh);
                 };
                 var src = {
-                    background: rampRgb[dark ? 900 : 50], surface: rampRgb[dark ? 850 : 100],
+                    background: rampRgb[dark ? 900 : 0], surface: rampRgb[dark ? 850 : 100],
                     text: rampRgb[dark ? 100 : 900], muted: rampRgb[dark ? 400 : 500],
                     accent: pick('accent', 0), accent2: pick('accent2', 40), accent3: pick('accent3', -40)
                 };
@@ -1627,8 +1642,10 @@
                         });
                     }
                 }
-                // An image under a wash like the chat's dimming layer, so the
-                // shared Dimming means the same on every page, in dark and light
+                // An image under the wash Open WebUI lays over a chat's
+                // background image (Chat.svelte: from-base-0/90 to-base-0/55,
+                // dark:from-base-900/90 dark:to-base-900/65), so the shared
+                // Dimming means the same on every page, in dark and light
                 function washedImage(target, lead, url, share) {
                     var d = dimming / 100;
                     var layer = function(from, to) {
@@ -1636,17 +1653,18 @@
                             'background-size: cover !important; background-position: center !important; opacity: ' + share / 100 + ' !important;';
                     };
                     return [
-                        'html.dark ' + target + ' { ' + layer('color-mix(in oklab, var(--color-gray-900) ' + Math.round(100 * d) + '%, transparent)', 'color-mix(in oklab, var(--color-gray-900) ' + Math.round(90 * d) + '%, transparent)') + ' }',
-                        'html:not(.dark) ' + target + ' { ' + layer('rgb(255 255 255 / ' + d + ')', 'rgb(255 255 255 / ' + Math.round(85 * d) / 100 + ')') + ' }'
+                        'html.dark ' + target + ' { ' + layer('color-mix(in oklab, var(--color-base-900) ' + Math.round(90 * d) + '%, transparent)', 'color-mix(in oklab, var(--color-base-900) ' + Math.round(65 * d) + '%, transparent)') + ' }',
+                        'html:not(.dark) ' + target + ' { ' + layer('color-mix(in oklab, var(--color-base-0) ' + Math.round(90 * d) + '%, transparent)', 'color-mix(in oklab, var(--color-base-0) ' + Math.round(55 * d) + '%, transparent)') + ' }'
                     ];
                 }
                 // The sign-in page's own picture (instance theme only), drawn on
-                // Open WebUI's backdrop there
+                // Open WebUI's backdrop there: its full-height layer, picked by
+                // shape since its color classes changed after 0.13.4
                 var authRules = [];
                 var auth = hidden && typeof hidden === 'object' && hidden.auth && typeof hidden.auth === 'object' ? hidden.auth : null;
                 var authShare = auth ? bgShare(auth.share) : 0;
                 if (auth && authShare > 0 && typeof auth.url === 'string' && /^(https:\/\/|\/)[^\s"'()\\<>]{1,2048}$/.test(auth.url)) {
-                    var back = '#auth-page#auth-page > div.absolute.bg-white';
+                    var back = '#auth-page#auth-page > div.absolute.h-full';
                     authRules = washedImage(back, 'background-color: transparent !important; ', auth.url, authShare);
                     if (behind) authRules.push('html:has(#owui-theme-canvas-bg) ' + back + ' { z-index: -1 !important; }');
                 }
@@ -1675,6 +1693,9 @@
                         if (!behind) pageRules.push('body:has(#owui-theme-canvas-bg) .app { z-index: 1 !important; }');
                     }
                 }
+                // The other pages open as tabs inside the chat, whose own
+                // background image stays drawn behind them; it belongs to chats
+                if (!off && onOtherPage()) pageRules.push(CHAT_BG + '[style*="background-image"], ' + CHAT_BG + '[style*="background-image"] + div.pointer-events-none { display: none !important; }');
                 var style = document.getElementById('owui-tdp-hidden-bg');
                 var selectors = Object.keys(shares);
                 if (!selectors.length && !behind && dimming >= 100 && !authRules.length && !pageRules.length) { if (style) style.remove(); return; }
@@ -1806,11 +1827,19 @@
             // state atomically, which is the only place a coherent pair exists.
             var _storageSyncTimer = null;
             window.addEventListener('storage', (e) => {
+                if (e.key === OLED_KEY) {
+                    // OLED on or off: the mode switch below, with 'theme'
+                    // left at 'dark'
+                    var mode = owuiTheme();
+                    if (mode) document.documentElement.setAttribute('data-theme', mode);
+                    refresh();
+                    return;
+                }
                 const triggerKeys =['theme', 'owui_dev_theme_v1_css', 'owui_dev_theme_v1', 'owui_tdp_personal_css', 'owui_tdp_personal_state'];
                 if (!triggerKeys.includes(e.key) || !e.newValue) return;
                 if (e.key === 'theme') {
                     // Mode switch — cheap, unambiguous, apply immediately.
-                    document.documentElement.setAttribute('data-theme', e.newValue);
+                    document.documentElement.setAttribute('data-theme', owuiTheme() || e.newValue);
                     refresh();
                 }
                 // The designer owns its own editing state; another tab's

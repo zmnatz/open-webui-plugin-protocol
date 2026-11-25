@@ -4,7 +4,7 @@ function:
   author: "@G30"
   author_url: https://openwebui.com/u/g30
   funding_url: https://buymeacoffee.com/iamg30
-  version: 1.22.0
+  version: 1.23.0
   license: MIT
   required_open_webui_version: 0.13.4
   description: Instance-wide theme designer for Open WebUI. Replaces the built-in dark, light, OLED, and her modes with fully custom themes for all users, and optionally lets each user design a personal theme of their own. Registers an interactive UI at /api/v1/theme-designer, also opened from a Themes tab in Open WebUI's Admin Settings, and persists themes server-side, publishing them through the Shared Assets Protocol so every user sees the admin's theme from the first paint. Adapted from Theme Designer Pro by G30.

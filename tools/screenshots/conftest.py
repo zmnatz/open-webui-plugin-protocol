@@ -116,6 +116,24 @@ def sign_in(browser: Browser, account: dict) -> Page:
     return page
 
 
+def send(page: Page, text: str) -> None:
+    """Type a message into the chat input and send it. Since v0.13.5 the input takes typing
+    while the models and tools are still loading, and can be redrawn once they arrive, losing
+    what was typed so far: so check the input holds the whole message before pressing Enter,
+    and type it again when it does not."""
+    chat_input = page.locator("#chat-input")
+    for _ in range(5):
+        chat_input.click()
+        page.keyboard.press("ControlOrMeta+A")
+        page.keyboard.press("Backspace")
+        page.keyboard.type(text)
+        page.wait_for_timeout(300)
+        if chat_input.inner_text().strip() == text:
+            page.keyboard.press("Enter")
+            return
+    raise AssertionError(f"the chat input never held {text!r}: {chat_input.inner_text()!r}")
+
+
 @pytest.fixture
 def admin(browser, admin_account):
     page = sign_in(browser, admin_account)

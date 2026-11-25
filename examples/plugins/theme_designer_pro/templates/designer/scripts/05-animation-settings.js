@@ -453,8 +453,8 @@
                 <button type="button" class="plain-button var-name" data-control="copy" style="font-size: 0.6rem; cursor: pointer;" 
                       onmouseover="this.style.color='var(--accent)'" 
                       onmouseout="this.style.color='var(--text-muted)'" 
-                      onclick="navigator.clipboard.writeText('${name}: ${hex};').then(()=>showToast('Copied ${name}: ${hex};'))" 
-                      data-tooltip="Copy ${name}: ${hex};" aria-label="Copy ${name}: ${hex};">
+                      onclick="navigator.clipboard.writeText('${baseStepName(name)}: ${hex};').then(()=>showToast('Copied ${baseStepName(name)}: ${hex};'))" 
+                      data-tooltip="Copy ${baseStepName(name)}: ${hex};" aria-label="Copy ${baseStepName(name)}: ${hex};">
                     ${name.split('-').pop()}
                 </button>
                 <div class="var-controls">
@@ -570,10 +570,8 @@
     function buildCustomCss(modeData, selector) {
         if (!modeData.customCSS || modeData.customCssEnabled === false) return '';
         // Sanitize: neutralize any marker comment sequences to prevent
-        // spoofing the /*[OWUI_*]*/ markers used for auth-page CSS stripping,
-        // and /*[FX]*/, which the sidebar valve would rewrite in /theme.css
-        // but not in the sections sign-in pages are built from
-        const cssText = modeData.customCSS.replace(/\/\*\[(OWUI_|FX\])/g, '/* [$1');
+        // spoofing the /*[OWUI_*]*/ markers used for auth-page CSS stripping
+        const cssText = modeData.customCSS.replace(/\/\*\[OWUI_/g, '/* [OWUI_');
         if (modeData.autoScope) {
             const { keyframes, cleanedCss } = extractKeyframes(cssText);
             // :root and html both mean the page root, which the scope

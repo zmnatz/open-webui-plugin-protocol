@@ -277,6 +277,39 @@
         return vars;
     }
 
+    // Open WebUI's base scale from the palette. Its UI colours are base-*
+    // utilities, each reading --app-base-0 to --app-base-1000 (src/tailwind.css
+    // on dev after 0.13.4). The ramp gives 50 to 950; the ends follow it the
+    // way Open WebUI mixes them from its two seeds, --app-bg and --app-fg: 0
+    // is the light end, 1000 the dark one, and in Dark the dark end is the
+    // background 60% toward black. The palette keeps its --color-gray-* names
+    // in saved themes; those names are set here too, to the base scale, so
+    // theme CSS that reads var(--color-gray-*) keeps the theme's colours.
+    function baseScaleVars(vars, config, mode) {
+        const h = _cssNum(config.h, 0), c = _cssNum(config.c, 0) / 1000, l = _cssNum(config.l, 0) / 100;
+        const dark = mode === 'dark' || mode === 'oled';
+        const end = (lightness) => `oklch(${Math.max(0, Math.min(1, lightness + (l - 0.20))).toFixed(3)} ${c.toFixed(3)} ${c === 0 ? 0 : h})`;
+        const out = { '--app-base-0': end(1) };
+        steps.forEach(step => { out[`--app-base-${step}`] = vars[`--color-gray-${step}`]; });
+        out['--app-base-1000'] = dark ? `color-mix(in oklab, ${vars['--color-gray-900']}, black 60%)` : end(0);
+        out['--app-bg'] = dark ? vars['--color-gray-900'] : out['--app-base-0'];
+        out['--app-fg'] = dark ? out['--app-base-0'] : out['--app-base-1000'];
+        steps.forEach(step => { out[`--color-gray-${step}`] = `var(--app-base-${step})`; });
+        return out;
+    }
+
+    // A manual override can name a step the old way (--color-gray-900) or
+    // the base scale's way (--app-base-900); both set the base scale.
+    function baseStepName(name) { return name.replace(/^--color-gray-(\d+)$/, '--app-base-$1'); }
+    function paletteStepKey(name) { return name.replace(/^--app-base-(\d+)$/, '--color-gray-$1'); }
+
+    // A user's own Theme Colors (Settings > General) win over the palette:
+    // Open WebUI sets them as --app-bg / --app-fg in <html>'s style
+    // attribute, and the base scale is then mixed from them.
+    function ownColorsYield(sel) {
+        return sel.split(',').map(s => `${s.trim()}:not([style*="--app-bg"])`).join(', ');
+    }
+
     function getDefaultColorForStep(mode, step) {
         return rampStepColor(step, DEFAULT_MODE_DATA.h, DEFAULT_MODE_DATA.c, defaultLightness(mode) / 100);
     }
@@ -452,7 +485,8 @@
     //   - paletteEnabled === false emits the mode's DEFAULT ramp, not the admin's
     //     h/c/l, so scoring the sliders would describe a palette nobody receives.
     //   - manual overrides are injected after the palette with !important, so
-    //     they win outright: a --color-gray-900 set there is the colour rated.
+    //     they win outright: an --app-base-900 (or the old --color-gray-900)
+    //     set there is the colour rated.
     function _shippedVars(config, dataMode) {
         let vars;
         if (config.paletteEnabled === false) {
@@ -468,8 +502,9 @@
                 _overrideDecls(line).forEach(p => {
                     // hasOwnProperty, not `in`: only real palette steps, never an
                     // inherited key like __proto__ smuggled in through an override.
-                    if (Object.prototype.hasOwnProperty.call(vars, p.name)) {
-                        vars[p.name] = p.value;
+                    const key = paletteStepKey(p.name);
+                    if (Object.prototype.hasOwnProperty.call(vars, key)) {
+                        vars[key] = p.value;
                         overridden++;
                     }
                 });

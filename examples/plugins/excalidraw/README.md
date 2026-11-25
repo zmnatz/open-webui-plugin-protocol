@@ -21,7 +21,7 @@ Valve (Admin Panel > Functions > Excalidraw): `SESSION_TOKEN_HOURS`.
 
 ## Requirement: iframe Sandbox Allow Same Origin
 
-**On a default Open-WebUI the editor answers 401 ("Sign in to Open-WebUI first.") inside the panel.** The Artifacts panel is a sandboxed iframe. Unless the user's **iframe Sandbox Allow Same Origin** setting is on, the panel sends no cookies at all, so the editor page (not only its API) cannot tell who is signed in. Open-WebUI v0.13.4 ships with the setting off. Found on a real Open-WebUI by the [screenshot run](../../../docs/screenshots.md#what-it-found).
+**On a default Open-WebUI the editor answers 401 ("Sign in to Open-WebUI first.") inside the panel.** The Artifacts panel is a sandboxed iframe. Unless the user's **iframe Sandbox Allow Same Origin** setting is on, the panel sends no cookies at all, so the editor page (not only its API) cannot tell who is signed in. Open-WebUI ships with the setting off (v0.13.4 and v0.13.5). Found on a real Open-WebUI by the [screenshot run](../../../docs/screenshots.md#what-it-found).
 
 To make it work, turn the setting on:
 

@@ -1,0 +1,158 @@
+diff --git a/examples/plugins/theme_designer_pro/templates/bootloader.js b/examples/plugins/theme_designer_pro/templates/bootloader.js
+index db14cfe..7ae41c8 100644
+--- a/examples/plugins/theme_designer_pro/templates/bootloader.js
++++ b/examples/plugins/theme_designer_pro/templates/bootloader.js
+@@ -324,6 +324,20 @@
+             }
+             var _rootModeSet = '';
+ 
++            // Open WebUI 0.13.5 dropped its OLED Dark theme: a stored
++            // 'oled-dark' becomes 'dark' plus a black custom colour on the
++            // next page load. So the designer leaves 'theme' at 'dark' for
++            // OLED and says OLED under this key; this is the mode the two
++            // say together. Open WebUI switched away from dark ends OLED.
++            var OLED_KEY = 'owui_tdp_oled';
++            function owuiTheme() {
++                var theme = localStorage.getItem('theme');
++                if (localStorage.getItem(OLED_KEY) !== '1') return theme;
++                if (theme === 'dark') return 'oled-dark';
++                if (theme) localStorage.removeItem(OLED_KEY);
++                return theme;
++            }
++
+             function themeToMode(theme) {
+                 if (theme === 'system') return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                 return { 'oled-dark': 'oled', her: 'her', light: 'light', dark: 'dark' }[theme] || 'dark';
+@@ -372,7 +386,7 @@
+             function instanceSharedCssWanted() {
+                 if (_personal) return false;
+                 var st = getParsedState();
+-                var c = st && st[themeToMode(localStorage.getItem('theme') || 'dark')];
++                var c = st && st[themeToMode(owuiTheme() || 'dark')];
+                 if (!c) return true;
+                 if (window.location.pathname.startsWith('/auth')) {
+                     return !(c.themeShowAuth === false || c.customCssShowAuth === false);
+@@ -453,7 +467,7 @@
+                     var parsedState = getParsedState();
+ 
+                     if (parsedState) {
+-                        const mode = themeToMode(localStorage.getItem('theme') || 'dark');
++                        const mode = themeToMode(owuiTheme() || 'dark');
+                         const config = parsedState[mode];
+                         // Sign-in pages show what Show on Auth Pages allows; app
+                         // pages leave out what's Only on Auth Pages. A personal
+@@ -516,7 +530,7 @@
+                     if (style.textContent !== finalCss) style.textContent = finalCss;
+                 }
+                 
+-                const storedTheme = localStorage.getItem('theme');
++                const storedTheme = owuiTheme();
+                 if (storedTheme) {
+                     if (document.documentElement.getAttribute('data-theme') !== storedTheme) {
+                         document.documentElement.setAttribute('data-theme', storedTheme);
+@@ -1813,11 +1827,19 @@
+             // state atomically, which is the only place a coherent pair exists.
+             var _storageSyncTimer = null;
+             window.addEventListener('storage', (e) => {
++                if (e.key === OLED_KEY) {
++                    // OLED on or off: the mode switch below, with 'theme'
++                    // left at 'dark'
++                    var mode = owuiTheme();
++                    if (mode) document.documentElement.setAttribute('data-theme', mode);
++                    refresh();
++                    return;
++                }
+                 const triggerKeys =['theme', 'owui_dev_theme_v1_css', 'owui_dev_theme_v1', 'owui_tdp_personal_css', 'owui_tdp_personal_state'];
+                 if (!triggerKeys.includes(e.key) || !e.newValue) return;
+                 if (e.key === 'theme') {
+                     // Mode switch — cheap, unambiguous, apply immediately.
+-                    document.documentElement.setAttribute('data-theme', e.newValue);
++                    document.documentElement.setAttribute('data-theme', owuiTheme() || e.newValue);
+                     refresh();
+                 }
+                 // The designer owns its own editing state; another tab's
+diff --git a/examples/plugins/theme_designer_pro/templates/designer/scripts/03-modes.js b/examples/plugins/theme_designer_pro/templates/designer/scripts/03-modes.js
+index b5b6ece..3c6c609 100644
+--- a/examples/plugins/theme_designer_pro/templates/designer/scripts/03-modes.js
++++ b/examples/plugins/theme_designer_pro/templates/designer/scripts/03-modes.js
+@@ -980,16 +980,26 @@ self.onmessage = (e) => {
+         return Storage.get('theme', {});
+     })();
+ 
++    // Open WebUI 0.13.5 dropped its OLED Dark theme: a stored 'oled-dark'
++    // becomes 'dark' plus a black custom colour on the next page load. So
++    // OLED leaves 'theme' at 'dark' and says OLED under a key of its own,
++    // read with it here and by the bootloader on every page.
++    const OLED_KEY = 'owui_tdp_oled';
++    function owuiTheme() {
++        const theme = localStorage.getItem('theme');
++        return theme === 'dark' && localStorage.getItem(OLED_KEY) === '1' ? 'oled-dark' : theme;
++    }
++
+     let activeMode = 'dark'; // 'dark', 'oled', 'light', 'her' or 'system'
+ 
+     // Auto-detect OWUI theme to match designer appearance
+     (function() {
+         try {
+-            const owuiTheme = localStorage.getItem('theme') || 'dark';
+-            if (owuiTheme === 'light') { activeMode = 'light'; document.body.classList.add('light-mode'); }
+-            else if (owuiTheme === 'her') { activeMode = 'her'; document.body.classList.add('light-mode'); }
+-            else if (owuiTheme === 'oled-dark') { activeMode = 'oled'; }
+-            else if (owuiTheme === 'system') {
++            const current = owuiTheme() || 'dark';
++            if (current === 'light') { activeMode = 'light'; document.body.classList.add('light-mode'); }
++            else if (current === 'her') { activeMode = 'her'; document.body.classList.add('light-mode'); }
++            else if (current === 'oled-dark') { activeMode = 'oled'; }
++            else if (current === 'system') {
+                 const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                 if (!prefersDark) { activeMode = 'light'; document.body.classList.add('light-mode'); }
+             }
+diff --git a/examples/plugins/theme_designer_pro/templates/designer/scripts/06-gradient-css.js b/examples/plugins/theme_designer_pro/templates/designer/scripts/06-gradient-css.js
+index 62eff40..7bb2b6a 100644
+--- a/examples/plugins/theme_designer_pro/templates/designer/scripts/06-gradient-css.js
++++ b/examples/plugins/theme_designer_pro/templates/designer/scripts/06-gradient-css.js
+@@ -497,7 +497,10 @@ ${selector} #sidebar:not(.h-full) { background-color: var(${bgSidebar}) !importa
+             // A draft previews the mode in this tab only, never in other tabs
+             // or the admin's live session
+             if (!_draftMode) {
+-                localStorage.setItem('theme', MODE_CONFIG[mode]?.dataTheme || mode);
++                // OLED first, so another tab reading 'theme' sees both
++                if (mode === 'oled') localStorage.setItem(OLED_KEY, '1');
++                else localStorage.removeItem(OLED_KEY);
++                localStorage.setItem('theme', mode === 'oled' ? 'dark' : (MODE_CONFIG[mode]?.dataTheme || mode));
+             }
+         } catch(e) { console.warn('Theme Pro:', e); }
+     }
+@@ -551,7 +554,7 @@ ${selector} #sidebar:not(.h-full) { background-color: var(${bgSidebar}) !importa
+                 // replaced it with the server's previous state
+                 syncToServer(css, s, stateStr);
+ 
+-                const pTheme = localStorage.getItem('theme');
++                const pTheme = owuiTheme();
+                 if (pTheme && document.documentElement.getAttribute('data-theme') !== pTheme) {
+                     document.documentElement.setAttribute('data-theme', pTheme);
+                 }
+diff --git a/examples/plugins/theme_designer_pro/templates/designer/scripts/15-update-diffs.js b/examples/plugins/theme_designer_pro/templates/designer/scripts/15-update-diffs.js
+index 368e342..3e083be 100644
+--- a/examples/plugins/theme_designer_pro/templates/designer/scripts/15-update-diffs.js
++++ b/examples/plugins/theme_designer_pro/templates/designer/scripts/15-update-diffs.js
+@@ -418,8 +418,8 @@
+ 
+             // Follow Open WebUI's own theme switch in another tab
+             window.addEventListener('storage', (e) => {
+-                if (e.key === 'theme' && e.newValue) {
+-                    let targetMode = e.newValue;
++                if ((e.key === 'theme' && e.newValue) || e.key === OLED_KEY) {
++                    let targetMode = owuiTheme() || 'dark';
+                     if (targetMode === 'oled-dark') targetMode = 'oled';
+ 
+                     if (targetMode === 'her') {
+@@ -541,7 +541,7 @@
+                     // every user on a plain refresh.
+                     restoreDraftMode();
+ 
+-                    const pTheme = localStorage.getItem('theme');
++                    const pTheme = owuiTheme();
+                     const pDoc = document.documentElement;
+                     if (pTheme === 'system' || pDoc.getAttribute('data-theme') === 'system') {
+                         const systemBtn = document.querySelector('.mode-btn[data-mode="system"]');
