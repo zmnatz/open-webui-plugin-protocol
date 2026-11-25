@@ -83,7 +83,7 @@ jobs:
     concurrency: deploy-plugins
     steps:
       - uses: actions/checkout@v5
-      - uses: zmnatz/open-webui-plugin-protocol@v0.6.1
+      - uses: zmnatz/open-webui-plugin-protocol@v0.6.2
         with:
           url: https://chat.example.com
           api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
