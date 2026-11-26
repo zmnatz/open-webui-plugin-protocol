@@ -41,6 +41,8 @@ The two sets test different things. Page Banners' tests are mostly about the ada
 
 Page Banners' By hand steps say the pill "stays folded after a reload". Until this experiment, only the skill's live tests checked that.
 
+Read it as one plugin, not a benchmark. Page Banners' tests were written before `owpp live` existed, when screenshot scripts were the only way into the browser, so the gap on a real Open-WebUI is mostly what `owpp live` makes possible rather than the skill against a person. The agent had read Page Banners' README, and it knew owpp well. And a test that goes red when its expected value changes can fail, which is not the same as catching a bug in the plugin.
+
 The finding was in `owpp live`: each browser page signed in again on the login page, and Open-WebUI answers a sign-in with 429 after a few a minute, so a suite with several browser tests failed in its fixtures. The `admin` and `user` pages now share one sign-in per account for the run ([the fixtures](testing/live.md#the-fixtures)).
 
 ## A plugin spec instead of the wizard
