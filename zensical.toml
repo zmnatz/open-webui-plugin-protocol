@@ -14,6 +14,8 @@ site_url = "https://zmnatz.github.io/open-webui-plugin-protocol/"
 repo_url = "https://github.com/zmnatz/open-webui-plugin-protocol"
 repo_name = "zmnatz/open-webui-plugin-protocol"
 docs_dir = "build/docs"
+extra_css = ["assets/built-function.css"]
+extra_javascript = ["assets/built-function.js"]
 site_dir = "site"
 
 nav = [
