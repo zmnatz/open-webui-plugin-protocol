@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Docs: the published docs site counts visits with Google Analytics (through Google Tag Manager).
+
 ## 0.6.2 (2026-11-25)
 
 - Open-WebUI v0.13.5: the live suite and the screenshots run on it (`ghcr.io/open-webui/open-webui:v0.13.5-slim`), every example passes there, and the screenshots are retaken. The screenshot scripts type a message with `send()`, which checks the chat input holds all of it: v0.13.5's input takes typing while it loads and can lose what was typed.
