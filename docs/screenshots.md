@@ -48,7 +48,7 @@ def test_the_dashboard_lists_what_is_old(admin, shot):
 
 | Fixture | What it is |
 | --- | --- |
-| `admin`, `user`, `signed_out` | A browser page signed in as the admin, as the user, or not at all (owpp-live's [fixtures](testing/live.md#the-fixtures), shared with the live tests). |
+| `admin`, `user`, `signed_out` | A browser page signed in as the admin, as the user, or not at all (owpp live's [fixtures](testing/live.md#the-fixtures), shared with the live tests). |
 | `api`, `user_api` | Open-WebUI's HTTP API as that account, for setting things up: data to show, a valve to change. What is photographed goes through the browser. |
 | `shot(page, plugin, name, caption, illustrates=[...])` | Saves `docs/screenshots/<plugin>/<name>.png` and records it. `illustrates` names plugin tests, which then show the picture in the catalogue. |
 | `send(page, text)` (imported from `conftest`) | Types a message into the chat and sends it, once the input holds all of it. Since v0.13.5 the input takes typing while the page is still loading and can lose some of it, so type a message with this rather than `page.keyboard.type`. The input also turns `'` into `’`, so leave apostrophes out. |

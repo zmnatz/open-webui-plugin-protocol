@@ -1,5 +1,5 @@
-"""Every environment variable owpp (and owpp-live) reads has an entry on
-docs/environment-variables.md, and every entry there is one they read."""
+"""Every environment variable owpp reads has an entry on docs/environment-variables.md, and every
+entry there is one owpp reads."""
 
 from __future__ import annotations
 
@@ -11,12 +11,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGE = ROOT / "docs" / "environment-variables.md"
-SOURCES = sorted(
-    [
-        *(ROOT / "src" / "owpp").rglob("*.py"),
-        *(ROOT / "packages" / "owpp-live" / "src").rglob("*.py"),
-    ]
-)
+SOURCES = sorted((ROOT / "src" / "owpp").rglob("*.py"))
 
 
 def _is_environment(node: ast.expr) -> bool:

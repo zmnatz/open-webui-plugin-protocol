@@ -1,8 +1,9 @@
 """`owpp live`: the plugins deployed to a throwaway Open-WebUI (with aimock as its models), and
 the repository's live tests run against it (docs/commands/live.md).
 
-owpp-live registers it through owpp's `owpp.commands` entry points: `register(add)` gets owpp's
-own function for adding a command, so `--dir` and `-- pytest args` work as for every other.
+`register(add)` is given owpp's own function for adding a command, so `--dir` and
+`-- pytest args` work as for every other. Nothing here needs more than the standard library:
+Docker is run, and Playwright is imported only by a browser fixture (`owpp[live]`).
 """
 
 from __future__ import annotations
@@ -13,11 +14,18 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
-from owpp.cli import LIVE_HELP as HELP
-from owpp.cli import main as owpp_main
-from owpp.errors import OwppError
-
+from ..errors import OwppError
 from .stack import Stack
+
+
+def owpp_main(argv: list[str], env: Mapping[str, str]) -> int:
+    """owpp's own CLI, for the deploy (imported here: owpp.cli imports this module)."""
+    from ..cli import main
+
+    return main(argv, env)
+
+
+HELP = "deploy the plugins to a throwaway Open-WebUI (aimock as its models) and run the live tests"
 
 
 def register(add) -> None:
@@ -93,6 +101,8 @@ def run_command(
         if code:
             raise OwppError("owpp deploy to the live Open-WebUI failed (above)")
         test_env = stack.test_env(admin, user, stack.tests / "failures")
+        if env.get("PYTEST_PLUGINS"):  # the caller's own plugins too
+            test_env["PYTEST_PLUGINS"] = f"{env['PYTEST_PLUGINS']},{test_env['PYTEST_PLUGINS']}"
         if args.up:
             print(
                 f"\nOpen-WebUI: {stack.url}\n"
@@ -102,7 +112,7 @@ def run_command(
                 "To deploy a change:\n"
                 f"  OPEN_WEBUI_URL={stack.url} OPEN_WEBUI_API_KEY={admin['token']} "
                 f"owpp deploy --dir {shlex.quote(str(directory))}\n"
-                "To run the live tests against it again and again (pytest, with owpp-live):\n"
+                "To run the live tests against it again and again (pytest):\n"
                 + "\n".join(f"  export {k}={shlex.quote(v)}" for k, v in test_env.items())
                 + f"\n  pytest {shlex.quote(str(stack.tests))}\n"
                 "To stop it: owpp live --down"

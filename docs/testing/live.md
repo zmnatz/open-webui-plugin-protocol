@@ -17,23 +17,23 @@ A By hand step that depends on what only Open-WebUI does can be a test instead, 
 ```
 plugins/
 live/
-  test_live.py      # the tests: pytest, with owpp-live's fixtures
+  test_live.py      # the tests: pytest, with owpp live's fixtures
   compose.yaml      # optional: services and settings, layered on owpp's
   aimock/           # optional: what the model answers, in place of owpp's fixtures
     models.json
 ```
 
 ```sh
-uvx --from owpp-live playwright install chromium   # once, for tests in the browser
-uvx --from owpp-live owpp live
+uvx --from 'owpp[live]' playwright install chromium   # once, for tests in the browser
+uvx --from 'owpp[live]' owpp live
 ```
 
-[`owpp live`](../commands/live.md) (the **owpp-live** package, released with owpp) starts Open-WebUI v0.13.5 (the `-slim` image) and [aimock](#the-model-aimock) as its models in Docker, signs up an admin and a user, deploys `plugins/` with `owpp deploy`, runs `live/` with pytest and removes it all again. It needs Docker, reachable by your user. A first test, over the API and in the browser:
+[`owpp live`](../commands/live.md) starts Open-WebUI v0.13.5 (the `-slim` image) and [aimock](#the-model-aimock) as its models in Docker, signs up an admin and a user, deploys `plugins/` with `owpp deploy`, runs `live/` with pytest and removes it all again. It needs Docker, reachable by your user. A first test, over the API and in the browser:
 
 ```python
 """Shout on a real Open-WebUI."""
 
-from owpp_live import send, url
+from owpp.live import send, url
 
 
 def test_it_is_deployed_and_active(api):
@@ -69,7 +69,7 @@ Each test keeps the docstring every owpp test has, with its **By hand** steps. A
 
 ### The fixtures
 
-owpp-live's pytest plugin gives every test in a run it is installed in:
+`owpp live` loads these into its pytest run (with `PYTEST_PLUGINS=owpp.live.fixtures`; they are not in every pytest run where owpp is installed):
 
 | Fixture | Is |
 | --- | --- |
@@ -78,7 +78,7 @@ owpp-live's pytest plugin gives every test in a run it is installed in:
 | `admin`, `user`, `signed_out` | A [Playwright](https://playwright.dev/python/) page signed in on Open-WebUI's own login page as the admin or the user, or with no session. |
 | `admin_account`, `user_account` | The accounts: `name`, `email`, `password`, `token`. |
 
-From `owpp_live`: `url()` is Open-WebUI's address, for a page to `goto`, and `send(page, text)` types a message into the chat and sends it, once the input holds all of it. The fixtures read [the variables `owpp live` sets](../environment-variables.md#set-by-owpp-live-for-the-live-tests); without them, a test that uses one stops the run and says to start `owpp live`.
+From `owpp.live`: `url()` is Open-WebUI's address, for a page to `goto`, and `send(page, text)` types a message into the chat and sends it, once the input holds all of it. The fixtures read [the variables `owpp live` sets](../environment-variables.md#set-by-owpp-live-for-the-live-tests); without them, a test that uses one stops the run and says to start `owpp live`.
 
 ### Tests in the browser
 
@@ -95,7 +95,7 @@ A plugin that calls another service gets a stand-in from the repository's own `l
 `owpp live --up` starts the same stack and leaves it running: a throwaway Open-WebUI to try a plugin on by hand, with nothing leaving the machine (no real model, no API key, `OFFLINE_MODE` on, nothing kept once it stops). It prints the address and both accounts. Then:
 
 - **Sign in** at http://127.0.0.1:3000 as either account, and follow a plugin's By hand steps.
-- **Run the tests against it**, again and again: export the variables it printed, then `uvx --from owpp-live pytest live/`.
+- **Run the tests against it**, again and again: export the variables it printed, then `uvx --from 'owpp[live]' pytest live/`.
 - **Deploy a change**: with the two variables it printed for that, `owpp deploy --only <id>`.
 - **Make the model say something new**: add a fixture to `live/aimock/models.json`, above the catch-all, and restart aimock: `docker restart owpp-live-aimock-1`.
 - **See what Open-WebUI sent the model**: `curl 'http://127.0.0.1:4010/__aimock/journal?path=/v1/chat/completions'`. This is the quickest way to check an inlet.
@@ -105,7 +105,7 @@ In CI: [a live check](ci.md#a-live-check).
 
 ## The model: aimock
 
-The stack has no real model and needs no API key. Its models are [aimock](https://github.com/CopilotKit/aimock) (CopilotKit, MIT, pinned in owpp-live's `compose.yaml`): an OpenAI-compatible server that answers from **fixtures**, the same way every run. Each fixture says what to match (the model asked for, the last user message, a tool offered, a tool's result) and what to answer (text, tool calls, reasoning). The first fixture that matches wins.
+The stack has no real model and needs no API key. Its models are [aimock](https://github.com/CopilotKit/aimock) (CopilotKit, MIT, pinned in owpp's `src/owpp/live/compose.yaml`): an OpenAI-compatible server that answers from **fixtures**, the same way every run. Each fixture says what to match (the model asked for, the last user message, a tool offered, a tool's result) and what to answer (text, tool calls, reasoning). The first fixture that matches wins.
 
 owpp's own fixtures give one model, `owpp-live-model`, which answers every message with "Hello! I am owpp's live model: I answer the same way every time." (and fixed JSON for Open-WebUI's title and tag tasks). A repository's `live/aimock/` replaces them: its fixtures are the stack's models. aimock lists as its models (`/v1/models`) the models its fixtures name, so every fixture names one, and the more specific ones go first:
 

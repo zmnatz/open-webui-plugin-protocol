@@ -6,7 +6,7 @@ A plugin is tested in three layers, each catching what the one before cannot:
 | --- | --- | --- | --- |
 | **Check** | [`owpp check --strict`](commands/check.md) | The bundle does not build or compile; a name is used but never defined; a manifest is wrong; with `--since`, a change with no new version. | Nothing |
 | **Unit tests** | [`owpp test`](commands/test.md) | The plugin's own logic is wrong: what a filter does to a chat, what a tool answers, who may open a page, what is installed and removed. Run against a [mock Open-WebUI](testing/mock.md). | The `test` extra |
-| **On a real Open-WebUI** | [`owpp live`](commands/live.md) for the live tests; each test's **By hand** steps, the README's `## Test` list | Open-WebUI does something the mock does not: the chat pipeline, grants, sign-in, the browser. | Docker (owpp-live), or an instance |
+| **On a real Open-WebUI** | [`owpp live`](commands/live.md) for the live tests; each test's **By hand** steps, the README's `## Test` list | Open-WebUI does something the mock does not: the chat pipeline, grants, sign-in, the browser. | Docker (`owpp live`), or an instance |
 
 Every change runs the first two, in CI, and the live tests too where a [live check](testing/ci.md#a-live-check) is set up. The By hand steps run before a release, and when a change touches how the plugin meets Open-WebUI.
 

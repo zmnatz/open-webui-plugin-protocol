@@ -1,4 +1,4 @@
-# What this repository's examples need on top of the Open-WebUI `owpp live` starts (owpp-live's
+# What this repository's examples need on top of the Open-WebUI `owpp live` starts (src/owpp/live/
 # compose.yaml: Open-WebUI v0.13.5-slim and aimock). `tools/screenshots/run.py` layers this file on
 # it for the screenshots and the live suite. See docs/screenshots.md and docs/testing/live.md.
 

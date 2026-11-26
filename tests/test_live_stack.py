@@ -1,4 +1,4 @@
-"""The Docker stack `owpp live` runs (owpp-live's compose.yaml), and the one this repository's
+"""The Docker stack `owpp live` runs (src/owpp/live/compose.yaml), and the one this repository's
 screenshots and live suite layer on it (tools/screenshots/compose.yaml)."""
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
-OWPP_LIVE = ROOT / "packages" / "owpp-live" / "src" / "owpp_live" / "compose.yaml"
+OWPP_LIVE = ROOT / "src" / "owpp" / "live" / "compose.yaml"
 
 
 def test_every_open_webui_it_starts_is_the_slim_image_at_a_pinned_version():

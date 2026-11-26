@@ -7,14 +7,14 @@ owpp live [--tests FOLDER] [--compose FILE] [--fixtures FOLDER] [--port PORT] [-
 
 Tests the plugins on a real Open-WebUI. It starts a throwaway one in Docker, with [aimock](../testing/live.md#the-model-aimock) answering as its models, signs up an admin and a user, deploys the plugins folder with [`owpp deploy`](deploy.md), runs the repository's live tests with pytest, and removes it all again. Its exit code is pytest's. How to write the tests, and the fixtures they get: [on a real Open-WebUI](../testing/live.md#live-tests-in-your-repository).
 
-It comes with the **owpp-live** package, which owpp adds the command from, released with owpp at the same version. It needs Docker with its compose plugin, reachable by your user, and Chromium for the tests that use a browser:
+It needs Docker with its compose plugin, reachable by your user. Tests in the browser also need Playwright, which owpp's `live` extra adds, and Chromium:
 
 ```sh
-uvx --from owpp-live playwright install chromium   # once
-uvx --from owpp-live owpp live
+uvx --from 'owpp[live]' playwright install chromium   # once
+uvx --from 'owpp[live]' owpp live
 ```
 
-Without owpp-live, `owpp live` says how to get it.
+Tests over the API alone need neither: `uvx owpp live` runs them.
 
 ## What it starts
 
@@ -56,7 +56,7 @@ An `aimock/` folder beside the tests (or the folder `--fixtures` names) **replac
 | `owpp live --up` | yes | yes | no: prints the address, the accounts and how to run the tests | no |
 | `owpp live --down` | | | | yes |
 
-With a stack left running, `owpp live` again uses it (signing in to the accounts already there) and deploys again. `--up` prints the [variables](../environment-variables.md#set-by-owpp-live-for-the-live-tests) to export, after which `pytest live/` runs the tests against it as often as you like, and the two variables for `owpp deploy` to put a change on it.
+With a stack left running, `owpp live` again uses it (signing in to the accounts already there) and deploys again. `--up` prints the [variables](../environment-variables.md#set-by-owpp-live-for-the-live-tests) to export (the accounts, and `PYTEST_PLUGINS=owpp.live.fixtures`, which loads the fixtures), after which `pytest live/` runs the tests against it as often as you like, and the two variables for `owpp deploy` to put a change on it.
 
 The deploy uses only the throwaway instance's address and admin token: the `OPEN_WEBUI_*` variables in your environment, for a real instance, are not passed on.
 
@@ -78,10 +78,10 @@ The deploy uses only the throwaway instance's address and admin token: the `OPEN
 ## Examples
 
 ```sh
-uvx --from owpp-live owpp live                    # the tests in ./live
-uvx --from owpp-live owpp live -- -k chat -x      # after --: arguments for pytest
-uvx --from owpp-live owpp live --up               # leave it running, to try things or rerun tests
-uvx --from owpp-live owpp live --down
+uvx --from 'owpp[live]' owpp live                    # the tests in ./live
+uvx --from 'owpp[live]' owpp live -- -k chat -x      # after --: arguments for pytest
+uvx --from 'owpp[live]' owpp live --up               # leave it running, to try things or rerun tests
+uvx --from 'owpp[live]' owpp live --down
 ```
 
 ## Related

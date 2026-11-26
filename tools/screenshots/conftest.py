@@ -15,11 +15,12 @@ import urllib.request
 from pathlib import Path
 
 import pytest
-from owpp_live import send, sign_in, url  # noqa: F401  (for the scripts: from conftest import ...)
-from owpp_live.client import account
+
+from owpp.live import send, sign_in, url  # noqa: F401  (for the scripts: from conftest import ...)
+from owpp.live.client import account
 
 # The browser pages (admin, user, signed_out), the accounts and the failure capture are
-# owpp-live's fixtures; `api` and `user_api` here return the body alone, for setting things up.
+# owpp live's fixtures; `api` and `user_api` here return the body alone, for setting things up.
 URL = url()
 
 ROOT = Path(__file__).resolve().parent.parent.parent

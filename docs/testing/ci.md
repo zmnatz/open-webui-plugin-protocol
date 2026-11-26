@@ -44,8 +44,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uvx --from owpp-live==0.6.3 playwright install --with-deps chromium # for tests in the browser
-      - run: uvx --from owpp-live==0.6.3 owpp live
+      - run: uvx --from 'owpp[live]==0.6.3' playwright install --with-deps chromium # for tests in the browser
+      - run: uvx --from 'owpp[live]==0.6.3' owpp live
 ```
 
-Pin owpp-live at the same version as owpp elsewhere: they are released together. The images come to about 290 MB. This repository's [live suite](live.md#this-repositorys-live-suite) runs the same way in about the time of the unit tests, with the images cached between runs with `actions/cache`, keyed on the compose files (`.github/workflows/live.yml`).
+Pin owpp at the same version as elsewhere. The images come to about 290 MB. This repository's [live suite](live.md#this-repositorys-live-suite) runs the same way in about the time of the unit tests, with the images cached between runs with `actions/cache`, keyed on the compose files (`.github/workflows/live.yml`).

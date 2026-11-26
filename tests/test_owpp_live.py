@@ -1,4 +1,4 @@
-"""owpp-live (packages/owpp-live): `owpp live` and its fixtures, without Docker. Docker and HTTP are
+"""`owpp live` (owpp.live) and its fixtures, without Docker. Docker and HTTP are
 stand-ins here; the live suite (`tools/screenshots/run.py --live`, and CI's `live` job) runs the
 real stack through the same command."""
 
@@ -6,23 +6,17 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
 import sys
 import urllib.error
 from pathlib import Path
 
-import owpp_live
 import pytest
-from owpp_live import command as live_command
-from owpp_live.stack import COMPOSE, DEFAULT_FIXTURES, Stack
 
-import owpp
 from owpp.cli import build_parser, main
 from owpp.errors import OwppError
-
-ROOT = Path(__file__).resolve().parent.parent
-PACKAGE = ROOT / "packages" / "owpp-live"
+from owpp.live import command as live_command
+from owpp.live.stack import COMPOSE, DEFAULT_FIXTURES, Stack
 
 
 class Docker:
@@ -191,6 +185,14 @@ def test_it_starts_the_stack_deploys_runs_the_tests_and_stops_it(repo, deploys):
     assert json.loads(tests_env["OWPP_LIVE_USER"])["token"] == "bob-token"
     assert tests_env["OWPP_LIVE_URL"] == "http://127.0.0.1:3000"
     assert tests_env["OWPP_LIVE_FAILURES"] == str(repo / "live" / "failures")
+    assert tests_env["PYTEST_PLUGINS"] == "owpp.live.fixtures"
+
+
+def test_the_callers_own_pytest_plugins_still_load(repo, deploys):
+    docker = Docker()
+    live([], env={"PYTEST_PLUGINS": "mine"}, docker=docker)
+    tests_env = docker.envs[docker.commands.index(docker.pytest())]
+    assert tests_env["PYTEST_PLUGINS"] == "mine,owpp.live.fixtures"
 
 
 def test_its_exit_code_is_the_tests_and_the_stack_stops_either_way(repo, deploys):
@@ -247,6 +249,7 @@ def test_up_deploys_runs_no_tests_and_prints_how_to_reach_it(repo, deploys, caps
     out = capsys.readouterr().out
     assert "admin@example.com" in out
     assert "export OWPP_LIVE_ADMIN=" in out
+    assert "export PYTEST_PLUGINS=owpp.live.fixtures" in out
     assert "OPEN_WEBUI_API_KEY=admin-token" in out
 
 
@@ -281,36 +284,26 @@ def test_up_down_and_keep_are_one_or_another():
         build_parser().parse_args(["live", "--up", "--down"])
 
 
-# ---- owpp's hook for commands from other packages ---------------------------------------------
+# ---- one of owpp's commands -------------------------------------------------------------------
 
 
-def test_owpp_live_adds_the_live_command_to_owpp():
+def test_live_is_one_of_owpps_commands():
     live_parser = build_parser()._subparsers._group_actions[0].choices["live"]
     assert "--up" in live_parser._option_string_actions
 
 
-def test_without_owpp_live_the_command_says_how_to_get_it(monkeypatch, capsys):
-    import importlib.metadata
-
-    monkeypatch.setattr(importlib.metadata, "entry_points", lambda group: [])
-    assert main(["live", "--up", "--", "-k", "x"], {}) == 1
-    assert "uvx --from owpp-live owpp live" in capsys.readouterr().err
-
-
-def test_a_command_that_does_not_load_is_reported_and_the_rest_still_work(
-    monkeypatch, capsys, tmp_path
-):
-    import importlib.metadata
-
-    class Broken:
-        name, value = "broken", "nowhere:register"
-
-        def load(self):
-            raise ImportError("no module named nowhere")
-
-    monkeypatch.setattr(importlib.metadata, "entry_points", lambda group: [Broken()])
-    assert main(["list", "--dir", str(tmp_path)], {}) == 0
-    assert "owpp broken (nowhere:register) did not load" in capsys.readouterr().err
+def test_owpp_and_owpp_live_need_no_playwright_to_load():
+    """Playwright comes with `owpp[live]`, for the browser fixtures alone: owpp, its CLI and
+    `owpp live` itself load without it."""
+    code = (
+        "import sys; sys.modules['playwright'] = None\n"
+        "import owpp.live, owpp.live.fixtures\n"
+        "from owpp.cli import main\n"
+        "main(['live', '--help'])"
+    )
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert "--up" in result.stdout
 
 
 def test_only_test_and_live_take_arguments_after_two_dashes(capsys):
@@ -322,26 +315,29 @@ def test_only_test_and_live_take_arguments_after_two_dashes(capsys):
 # ---- the fixtures --------------------------------------------------------------------------------
 
 
-def test_a_live_fixture_outside_owpp_live_says_to_start_it(tmp_path):
-    (tmp_path / "test_x.py").write_text("def test_x(api):\n    pass\n")
-    env = {k: v for k, v in os.environ.items() if not k.startswith("OWPP_LIVE_")}
-    result = subprocess.run(
-        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(tmp_path)],
+def run_pytest(folder: Path, **env) -> subprocess.CompletedProcess:
+    (folder / "test_x.py").write_text("def test_x(api):\n    pass\n")
+    base = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.startswith("OWPP_LIVE_") and k != "PYTEST_PLUGINS"
+    }
+    return subprocess.run(
+        [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", str(folder)],
         capture_output=True,
         text=True,
-        env=env,
-        cwd=tmp_path,
+        env=base | env,
+        cwd=folder,
     )
+
+
+def test_the_live_fixtures_are_not_in_every_pytest_run(tmp_path):
+    """Installing owpp does not give every pytest run an `api` or a `user` fixture."""
+    result = run_pytest(tmp_path)
+    assert "fixture 'api' not found" in result.stdout, result.stdout + result.stderr
+
+
+def test_a_live_fixture_outside_owpp_live_says_to_start_it(tmp_path):
+    result = run_pytest(tmp_path, PYTEST_PLUGINS="owpp.live.fixtures")
     assert result.returncode == 2, result.stdout + result.stderr
     assert "run `owpp live`" in result.stdout + result.stderr
-
-
-# ---- released together ---------------------------------------------------------------------------
-
-
-def test_owpp_live_has_owpps_version_and_pins_it():
-    """Released together (docs/adr/0003-owpp-live-package.md): one version, and owpp-live
-    requires exactly that owpp."""
-    assert owpp_live.__version__ == owpp.__version__
-    pyproject = (PACKAGE / "pyproject.toml").read_text()
-    assert re.search(rf'"owpp=={re.escape(owpp.__version__)}"', pyproject)

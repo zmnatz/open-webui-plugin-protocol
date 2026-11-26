@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 COMPOSE = HERE / "compose.yaml"
 DEFAULT_FIXTURES = HERE / "aimock"
 PROJECT = "owpp-live"
+FIXTURES = "owpp.live.fixtures"
 
 # Throwaway accounts on a throwaway instance; never reused anywhere.
 ADMIN = {"name": "Ada Admin", "email": "admin@example.com", "password": "owpp-live-admin"}
@@ -166,8 +167,9 @@ class Stack:
         return {**ADMIN, "token": admin}, {**USER, "token": user}
 
     def test_env(self, admin: dict, user: dict, failures: Path) -> dict[str, str]:
-        """What the live tests read, through owpp-live's pytest plugin."""
+        """What the live tests read: the fixtures (loaded by PYTEST_PLUGINS) and their variables."""
         return {
+            "PYTEST_PLUGINS": FIXTURES,
             "OWPP_LIVE_URL": self.url,
             "OWPP_LIVE_AIMOCK_URL": self.aimock_url,
             "OWPP_LIVE_ADMIN": json.dumps(admin),

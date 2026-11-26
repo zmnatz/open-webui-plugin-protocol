@@ -6,7 +6,7 @@ from __future__ import annotations
 import urllib.error
 import urllib.request
 
-from owpp_live import Aimock, url
+from owpp.live import Aimock, url
 
 MODEL = "screenshot-model"
 PLAIN = "Hello! I am the screenshot model"

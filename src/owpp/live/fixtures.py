@@ -1,17 +1,19 @@
-"""pytest fixtures for live tests, registered in every pytest run where owpp-live is installed.
-`owpp live` starts the stack and sets the variables they read (OWPP_LIVE_*).
+"""pytest fixtures for live tests. They are not registered in every pytest run where owpp is
+installed: `owpp live` starts the stack, sets the variables they read (OWPP_LIVE_*) and loads
+this module with PYTEST_PLUGINS=owpp.live.fixtures, which `owpp live --up` prints for a run
+of your own.
 
 - `api`, `user_api`: Open-WebUI's HTTP API as the admin, or as a user who is not one.
 - `aimock`: what Open-WebUI sent the model (`aimock.requests()`, from aimock's journal).
 - `admin`, `user`, `signed_out`: a Playwright page signed in on Open-WebUI's own login page as
-  that account, or with no session. `send(page, text)` (from owpp_live) chats on one.
+  that account, or with no session. `send(page, text)` (from owpp.live) chats on one.
 - `admin_account`, `user_account`: the accounts, with their tokens (name, email, password).
 
 When a test with a page fails, what it saw (each page as a PNG and its text, and what aimock was
 last asked) is kept in the tests folder's `failures/`.
 
-Nothing is imported or started until a test asks for it: a run that uses none of these (owpp's
-own unit tests, say) costs nothing, and a fixture used outside `owpp live` says to start it.
+Nothing is imported or started until a test asks for it: Playwright only for a page (it comes
+with `owpp[live]`), and a fixture used outside `owpp live` says to start it.
 """
 
 from __future__ import annotations

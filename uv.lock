@@ -7,12 +7,6 @@ resolution-markers = [
     "python_full_version < '3.11'",
 ]
 
-[manifest]
-members = [
-    "owpp",
-    "owpp-live",
-]
-
 [[package]]
 name = "aiohappyeyeballs"
 version = "2.7.1"
@@ -1155,6 +1149,10 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+live = [
+    { name = "playwright" },
+    { name = "pytest" },
+]
 test = [
     { name = "aiohttp" },
     { name = "fastapi", version = "0.162.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1171,7 +1169,7 @@ dev = [
     { name = "fastapi", version = "0.162.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
     { name = "fastapi", version = "0.165.0", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.11'" },
     { name = "httpx" },
-    { name = "owpp-live" },
+    { name = "playwright" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "sqlalchemy", version = "2.0.58", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.11'" },
@@ -1191,18 +1189,20 @@ requires-dist = [
     { name = "aiohttp", marker = "extra == 'test'", specifier = ">=3.9" },
     { name = "fastapi", marker = "extra == 'test'", specifier = ">=0.115" },
     { name = "httpx", marker = "extra == 'test'", specifier = ">=0.27" },
+    { name = "playwright", marker = "extra == 'live'", specifier = ">=1.50" },
+    { name = "pytest", marker = "extra == 'live'", specifier = ">=8" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=8" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "sqlalchemy", extras = ["asyncio"], marker = "extra == 'test'", specifier = ">=2.0" },
 ]
-provides-extras = ["test"]
+provides-extras = ["live", "test"]
 
 [package.metadata.requires-dev]
 dev = [
     { name = "aiohttp", specifier = ">=3.9" },
     { name = "fastapi", specifier = ">=0.162.5" },
     { name = "httpx", specifier = ">=0.28.1" },
-    { name = "owpp-live", editable = "packages/owpp-live" },
+    { name = "playwright", specifier = ">=1.50" },
     { name = "pytest", specifier = ">=8" },
     { name = "ruff", specifier = ">=0.8" },
     { name = "sqlalchemy", specifier = ">=2.0" },
@@ -1210,22 +1210,6 @@ dev = [
 ]
 docs = [{ name = "zensical", marker = "python_full_version >= '3.11'", specifier = ">=0.1.2" }]
 screenshots = [{ name = "playwright", specifier = ">=1.50" }]
-
-[[package]]
-name = "owpp-live"
-source = { editable = "packages/owpp-live" }
-dependencies = [
-    { name = "owpp" },
-    { name = "playwright" },
-    { name = "pytest" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "owpp", editable = "." },
-    { name = "playwright", specifier = ">=1.50" },
-    { name = "pytest", specifier = ">=8" },
-]
 
 [[package]]
 name = "packaging"

@@ -4,7 +4,8 @@ stack as test_live.py: the pages are signed in on the real login page, and aimoc
 from __future__ import annotations
 
 import pytest
-from owpp_live import send, url
+
+from owpp.live import send, url
 
 MODEL = "live-diagram-assistant"
 

@@ -3,11 +3,9 @@
     python tools/release.py prepare minor            # or patch, major, or 0.5.0
     python tools/release.py prepare patch --hotfix   # on a hotfix branch cut from main
 
-Sets `__version__` in `src/owpp/__init__.py` and in owpp-live's (`packages/owpp-live`, released
-together with owpp at the same version, docs/adr/0003-owpp-live-package.md), turns `## Unreleased` in CHANGELOG.md into
+Sets `__version__` in `src/owpp/__init__.py`, turns `## Unreleased` in CHANGELOG.md into
 `## <version> (<date>)`, and moves every pin of the old version in the docs (`owpp@`, `owpp==`,
-the action's `@v`, the README's status line, and owpp-live's `owpp==` requirement) to the new
-one. Prints the new version.
+the action's `@v`, the README's status line) to the new one. Prints the new version.
 
 A release needs an `## Unreleased` section with entries. A hotfix starts from main, which has
 none, so `--hotfix` adds an empty dated section for the fix's entries instead; until they are
@@ -27,40 +25,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 INIT = Path("src/owpp/__init__.py")
-# Packages released with owpp, at its version: each one's __init__.py has the same __version__.
-TOGETHER = [Path("packages/owpp-live/src/owpp_live/__init__.py")]
 CHANGELOG = Path("CHANGELOG.md")
 # Where the docs pin a version for readers to copy. docs/adr/ is history, so it keeps its versions.
-PINNED = [
-    "README.md",
-    "docs/**/*.md",
-    "skills/**/*.md",
-    "packages/*/pyproject.toml",
-    "packages/*/README.md",
-]
+PINNED = ["README.md", "docs/**/*.md", "skills/**/*.md"]
 UNPINNED = ["docs/adr/"]
 
 
-def version_in(path: Path) -> str:
-    return re.search(r'^__version__ = "([^"]+)"', path.read_text(), re.M).group(1)
-
-
 def package_version(root: Path) -> str:
-    return version_in(root / INIT)
-
-
-def released_together(root: Path) -> list[Path]:
-    """The __init__.py of each package released with owpp that is in this checkout. Fails when
-    one is not at owpp's version: they are only ever released together."""
-    found = [root / p for p in TOGETHER if (root / p).is_file()]
-    owpp = package_version(root)
-    for init in found:
-        if version_in(init) != owpp:
-            raise SystemExit(
-                f"{init.relative_to(root)} is at {version_in(init)}, owpp at {owpp}: "
-                "they are released together, at one version"
-            )
-    return found
+    return re.search(r'^__version__ = "([^"]+)"', (root / INIT).read_text(), re.M).group(1)
 
 
 def next_version(current: str, how: str) -> str:
@@ -99,7 +71,7 @@ def date_changelog(text: str, version: str, date: str, hotfix: bool) -> str:
 def move_pins(text: str, old: str, new: str) -> str:
     v = re.escape(old)
     end = r"(?![0-9])"
-    text = re.sub(rf"(owpp(?:-live)?(?:\[[a-z,]+\])?(?:@|==)){v}{end}", rf"\g<1>{new}", text)
+    text = re.sub(rf"(owpp(?:\[[a-z,]+\])?(?:@|==)){v}{end}", rf"\g<1>{new}", text)
     text = re.sub(rf"(open-webui-plugin-protocol@v){v}{end}", rf"\g<1>{new}", text)
     return re.sub(rf"^{v}(, written against)", rf"{new}\g<1>", text, flags=re.M)
 
@@ -113,14 +85,11 @@ def pinned_files(root: Path) -> list[Path]:
 
 def prepare(root: Path, how: str, date: str, hotfix: bool = False) -> str:
     old = package_version(root)
-    together = released_together(root)
     new = next_version(old, how)
     changelog = root / CHANGELOG
     changelog.write_text(date_changelog(changelog.read_text(), new, date, hotfix))
-    for init in [root / INIT, *together]:
-        init.write_text(
-            init.read_text().replace(f'__version__ = "{old}"', f'__version__ = "{new}"')
-        )
+    init = root / INIT
+    init.write_text(init.read_text().replace(f'__version__ = "{old}"', f'__version__ = "{new}"'))
     for path in pinned_files(root):
         text = path.read_text()
         moved = move_pins(text, old, new)

@@ -29,13 +29,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/images.tar
-          key: live-images-${{ hashFiles('packages/owpp-live/src/owpp_live/compose.yaml', 'tools/screenshots/compose.yaml') }}
+          key: live-images-${{ hashFiles('src/owpp/live/compose.yaml', 'tools/screenshots/compose.yaml') }}
       - if: steps.images.outputs.cache-hit == 'true'
         run: docker load --input ~/images.tar
       - if: steps.images.outputs.cache-hit != 'true'
         run: |
           export OWPP_LIVE_FIXTURES=$PWD/tools/screenshots/aimock
-          files="-f packages/owpp-live/src/owpp_live/compose.yaml -f tools/screenshots/compose.yaml"
+          files="-f src/owpp/live/compose.yaml -f tools/screenshots/compose.yaml"
           docker compose $files pull
           docker save --output ~/images.tar $(docker compose $files config --images)
       - run: uv run python tools/screenshots/run.py --live

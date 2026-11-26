@@ -36,7 +36,7 @@ uvx owpp check                       # bundle, compile, report undefined names
 uvx owpp version                     # every plugin's versions (and its tool's and skills')
 uvx owpp version excalidraw minor    # a new version, with a CHANGELOG.md entry
 uvx --from 'owpp[test]' owpp test    # each plugin's tests/, against a mock Open-WebUI
-uvx --from owpp-live owpp live       # live/ tests, on a throwaway Open-WebUI in Docker
+uvx --from 'owpp[live]' owpp live    # live/ tests, on a throwaway Open-WebUI in Docker
 uvx owpp deploy --only excalidraw --dry-run
 uvx owpp pull                        # move plugins taken from git to their latest commit, for review
 uvx owpp deploy --dry-run --latest     # what that would change on the live instance, by version

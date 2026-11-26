@@ -6,7 +6,7 @@
     uv run python tools/screenshots/run.py --live     # the live suite (tools/live): assert, no screenshots
     uv run python tools/screenshots/run.py --up       # only start it, to try
 
-It is `owpp live` (owpp-live, packages/owpp-live) with this repository's pieces:
+It is `owpp live` (src/owpp/live) with this repository's pieces:
 
 1. owpp's stack (Open-WebUI at the version the protocol targets, aimock as its models), with
    compose.yaml here layered on it: nginx serving fixed files for a LiteLLM gateway and mcpo,

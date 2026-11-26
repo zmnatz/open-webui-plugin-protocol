@@ -25,11 +25,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uv build --all-packages
+      - run: uv build
       - name: The built wheel runs and carries the runtime
-        run: uvx --from dist/owpp-*.whl owpp check --dir examples/plugins mcpo_sync
-      - name: owpp-live's wheel adds `owpp live` to the owpp it is released with
-        run: uvx --from dist/owpp_live-*.whl --with dist/owpp-*.whl owpp live --help
+        run: uvx --from dist/*.whl owpp check --dir examples/plugins mcpo_sync
+      - name: The built wheel carries owpp live's stack
+        run: uvx --from dist/*.whl python -c "from owpp.live.stack import COMPOSE, DEFAULT_FIXTURES; assert COMPOSE.is_file() and (DEFAULT_FIXTURES / 'models.json').is_file()"
   release:
     # A release or hotfix pull request into main (docs/contributing.md#releasing): checks now what
     # releasing needs after the merge, that v<__version__> is new and CHANGELOG.md has a dated

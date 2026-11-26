@@ -117,11 +117,11 @@ The private key of [`OPEN_WEBUI_CLIENT_CERT`](#open_webui_client_cert), when it 
 
 ## Set by owpp live, for the live tests
 
-[`owpp live`](commands/live.md) sets these for the pytest run it starts, and prints them with `--up` (to run the tests yourself against the stack it leaves running). owpp-live's [fixtures](testing/live.md#the-fixtures) read them. A test run without them stops, saying to start `owpp live`.
+[`owpp live`](commands/live.md) sets these for the pytest run it starts, and prints them with `--up` (to run the tests yourself against the stack it leaves running). owpp live's [fixtures](testing/live.md#the-fixtures) read them. A test run without them stops, saying to start `owpp live`.
 
 ### `OWPP_LIVE_URL`
 
-The throwaway Open-WebUI's address, `http://127.0.0.1:3000` unless `--port` is given. `owpp_live.url()` returns it, for a page to `goto`.
+The throwaway Open-WebUI's address, `http://127.0.0.1:3000` unless `--port` is given. `owpp.live.url()` returns it, for a page to `goto`.
 
 ### `OWPP_LIVE_AIMOCK_URL`
 
@@ -138,6 +138,10 @@ The same for the account that is not an admin, used by `user_api` and the `user`
 ### `OWPP_LIVE_FAILURES`
 
 The folder where a failed test with a page keeps what it saw: `failures/` in the tests folder.
+
+### `PYTEST_PLUGINS`
+
+pytest's own: the plugins it loads. `owpp live` adds `owpp.live.fixtures` to it, after any already set, so the run has [the fixtures](testing/live.md#the-fixtures). They are in no other pytest run.
 
 ## Set by other tools
 
