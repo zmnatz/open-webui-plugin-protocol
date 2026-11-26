@@ -4,7 +4,8 @@
 
 Prints the entries of the `## <version> (<date>)` section, with links made absolute so they work
 on the release page (relative to the repository at that tag). Fails, so the release is not made,
-when the tag is not `v<version>` for the package's `__version__`, or the changelog has no dated
+when the tag is not `v<version>` for the package's `__version__` (owpp's, and owpp-live's,
+released with it at the same version), or the changelog has no dated
 section for it.
 """
 
@@ -21,6 +22,14 @@ REPO = "https://github.com/zmnatz/open-webui-plugin-protocol"
 def package_version(root: Path = ROOT) -> str:
     text = (root / "src" / "owpp" / "__init__.py").read_text()
     return re.search(r'^__version__ = "([^"]+)"', text, re.M).group(1)
+
+
+def live_version(root: Path = ROOT) -> str | None:
+    """owpp-live's version, released together with owpp (packages/owpp-live)."""
+    init = root / "packages" / "owpp-live" / "src" / "owpp_live" / "__init__.py"
+    if not init.is_file():
+        return None
+    return re.search(r'^__version__ = "([^"]+)"', init.read_text(), re.M).group(1)
 
 
 def notes(tag: str, changelog: str, version: str) -> str:
@@ -43,10 +52,13 @@ def notes(tag: str, changelog: str, version: str) -> str:
     return re.sub(r"(\]\()([^)\s]+)(\))", absolute, m.group(1).strip()) + "\n"
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str], root: Path = ROOT) -> int:
     if len(argv) != 1:
         raise SystemExit("usage: release_notes.py <tag>")
-    sys.stdout.write(notes(argv[0], (ROOT / "CHANGELOG.md").read_text(), package_version()))
+    version, live = package_version(root), live_version(root)
+    if live is not None and live != version:
+        raise SystemExit(f"owpp-live is at {live}, owpp at {version}: they release together")
+    sys.stdout.write(notes(argv[0], (root / "CHANGELOG.md").read_text(), version))
     return 0
 
 

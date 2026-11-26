@@ -27,6 +27,8 @@ uvx owpp@0.6.3 list        # a pinned release (recommended: see below)
 uvx --from 'owpp[test]' owpp test
 ```
 
+`owpp live`, the live tests on a throwaway Open-WebUI in Docker, comes with the **owpp-live** package, released with owpp at the same version: `uvx --from owpp-live owpp live` ([owpp live](commands/live.md)). `uv tool install owpp-live==0.6.3` installs owpp with it.
+
 ## Installing it for good
 
 To have `owpp` on your `PATH`:

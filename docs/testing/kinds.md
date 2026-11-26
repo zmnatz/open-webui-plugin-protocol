@@ -82,7 +82,7 @@ def test_show_creates_the_drawing_and_hands_the_filter_an_artifact(owui, plugin)
 
 - `.call(method, ..., user=, chat_id=)` calls a method as the model would.
 - `.specs` is what the model is told: each method's name, description and parameters. Test it when the docstrings are the instructions the model follows.
-- That the model actually calls the tool is Open-WebUI's and the model's part. This repository's [live suite](live.md#the-live-suite) checks it, with aimock as the model.
+- That the model actually calls the tool is Open-WebUI's and the model's part. This repository's [live suite](live.md#this-repositorys-live-suite) checks it, with aimock as the model.
 
 Example: [`excalidraw`](../examples/excalidraw.md) (`tests/test_excalidraw_tool.py`).
 

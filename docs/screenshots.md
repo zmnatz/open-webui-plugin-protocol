@@ -14,17 +14,17 @@ uv run --group screenshots python tools/screenshots/run.py -- -k banner  # some 
 uv run --group screenshots python tools/screenshots/run.py --keep      # leave it running
 ```
 
-It needs Docker, which your user must be able to reach (in the `docker` group; without it, `sudo -u "$USER" -g docker env "PATH=$PATH" uv run ...` runs it as you), and internet access (the Excalidraw editor loads from esm.sh). A full run takes about two minutes once the images are pulled. Commit the changed PNGs and `screenshots.json` with the change they show. To check rather than photograph, run [the live suite](testing/live.md#the-live-suite). `.github/workflows/screenshots.yml` does the same on GitHub when run by hand (**Actions > screenshots > Run workflow**) and uploads the result as an artifact.
+It needs Docker, which your user must be able to reach (in the `docker` group; without it, `sudo -u "$USER" -g docker env "PATH=$PATH" uv run ...` runs it as you), and internet access (the Excalidraw editor loads from esm.sh). A full run takes about two minutes once the images are pulled. Commit the changed PNGs and `screenshots.json` with the change they show. To check rather than photograph, run [the live suite](testing/live.md#this-repositorys-live-suite). `.github/workflows/screenshots.yml` does the same on GitHub when run by hand (**Actions > screenshots > Run workflow**) and uploads the result as an artifact.
 
 ## What happens
 
-`tools/screenshots/run.py`:
+`tools/screenshots/run.py` is [`owpp live`](commands/live.md) with this repository's pieces:
 
-1. Starts `tools/screenshots/compose.yaml`. It holds Open-WebUI at the version the protocol targets (v0.13.5, the `-slim` image), aimock as its models, and [fixed files](testing/live.md#everything-else-fixed-files) standing in for a LiteLLM gateway and mcpo. **iframe Sandbox Allow Same Origin** is on by default there (`DEFAULT_INTERFACE_SETTINGS`), as the examples with pages in the Artifacts panel require. Nothing is kept between runs.
+1. Starts owpp's stack, Open-WebUI at the version the protocol targets (v0.13.5, the `-slim` image) and aimock as its models, with `tools/screenshots/compose.yaml` layered on it: [fixed files](testing/live.md#everything-else-fixed-files) standing in for a LiteLLM gateway and mcpo. **iframe Sandbox Allow Same Origin** is on by default there (`DEFAULT_INTERFACE_SETTINGS`), as the examples with pages in the Artifacts panel require. Nothing is kept between runs.
 2. Signs up the admin (the first account always is) and adds a user, both throwaway.
 3. Deploys `examples/plugins` with `owpp deploy`, exactly as a plugin repository would.
 4. Runs the scripts in `tools/screenshots/shots_*.py` with pytest and Playwright. Each signs in on Open-WebUI's own login page, does what a person would, and saves a screenshot at each step worth seeing.
-5. Removes the containers.
+5. Removes the containers (not with `--keep`).
 
 **The model** is [aimock](https://github.com/CopilotKit/aimock), answering from fixtures in `tools/screenshots/aimock/`, the same way every run, with no API key and no real model: [how it answers](testing/live.md#the-model-aimock).
 
@@ -48,7 +48,7 @@ def test_the_dashboard_lists_what_is_old(admin, shot):
 
 | Fixture | What it is |
 | --- | --- |
-| `admin`, `user`, `signed_out` | A browser page signed in as the admin, as the user, or not at all (shared with [the live suite's browser tests](testing/live.md#tests-in-the-browser), from `browser_fixtures.py`). |
+| `admin`, `user`, `signed_out` | A browser page signed in as the admin, as the user, or not at all (owpp-live's [fixtures](testing/live.md#the-fixtures), shared with the live tests). |
 | `api`, `user_api` | Open-WebUI's HTTP API as that account, for setting things up: data to show, a valve to change. What is photographed goes through the browser. |
 | `shot(page, plugin, name, caption, illustrates=[...])` | Saves `docs/screenshots/<plugin>/<name>.png` and records it. `illustrates` names plugin tests, which then show the picture in the catalogue. |
 | `send(page, text)` (imported from `conftest`) | Types a message into the chat and sends it, once the input holds all of it. Since v0.13.5 the input takes typing while the page is still loading and can lose some of it, so type a message with this rather than `page.keyboard.type`. The input also turns `'` into `’`, so leave apostrophes out. |

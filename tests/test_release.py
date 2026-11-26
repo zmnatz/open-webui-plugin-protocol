@@ -101,7 +101,7 @@ def test_a_hotfix_adds_a_dated_section_for_the_fix(tmp_path):
 
 
 def test_this_repository_prepares_cleanly(tmp_path):
-    for path in ["src/owpp/__init__.py", "CHANGELOG.md", "README.md", "docs", "skills"]:
+    for path in ["src/owpp/__init__.py", "CHANGELOG.md", "README.md", "docs", "skills", "packages"]:
         (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
         copy = shutil.copytree if (ROOT / path).is_dir() else shutil.copy
         copy(ROOT / path, tmp_path / path)
@@ -112,3 +112,40 @@ def test_this_repository_prepares_cleanly(tmp_path):
         for pin in [f"owpp@{old}", f"owpp=={old}", f"open-webui-plugin-protocol@v{old}"]:
             assert pin not in text, f"{path.relative_to(tmp_path)} still pins {old}"
     assert f"owpp@{new}" in (tmp_path / "docs" / "install.md").read_text()
+    live = tmp_path / "packages" / "owpp-live"
+    assert release.version_in(live / "src" / "owpp_live" / "__init__.py") == new
+    assert f'"owpp=={new}"' in (live / "pyproject.toml").read_text()
+
+
+def with_owpp_live(repo: Path, version: str = "0.4.0") -> Path:
+    live = repo / "packages" / "owpp-live"
+    (live / "src" / "owpp_live").mkdir(parents=True)
+    (live / "src" / "owpp_live" / "__init__.py").write_text(f'__version__ = "{version}"\n')
+    (live / "pyproject.toml").write_text('dependencies = ["owpp==0.4.0", "pytest>=8"]\n')
+    (repo / "docs" / "live.md").write_text("uvx owpp-live@0.4.0 owpp live\n")
+    return live
+
+
+def test_owpp_live_is_released_with_owpp_at_its_version(tmp_path):
+    """Its __version__, its owpp== requirement and the docs' owpp-live pins all move."""
+    repo = a_repo(tmp_path)
+    live = with_owpp_live(repo)
+    assert release.prepare(repo, "minor", "2026-12-01") == "0.5.0"
+    assert release.version_in(live / "src" / "owpp_live" / "__init__.py") == "0.5.0"
+    assert '"owpp==0.5.0"' in (live / "pyproject.toml").read_text()
+    assert "owpp-live@0.5.0" in (repo / "docs" / "live.md").read_text()
+
+
+def test_owpp_live_at_another_version_is_refused(tmp_path):
+    repo = a_repo(tmp_path)
+    with_owpp_live(repo, "0.3.9")
+    with pytest.raises(SystemExit, match="released together"):
+        release.prepare(repo, "patch", "2026-12-01")
+    assert release.package_version(repo) == "0.4.0"
+
+
+def test_the_release_notes_refuse_owpp_live_at_another_version(tmp_path):
+    repo = a_repo(tmp_path)
+    with_owpp_live(repo, "0.3.9")
+    with pytest.raises(SystemExit, match="release together"):
+        release_notes.main(["v0.4.0"], repo)

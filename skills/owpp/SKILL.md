@@ -19,6 +19,7 @@ Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](h
 | Change a plugin that exists | [Change](#change) |
 | A plugin that takes its code from another git repository, or moving it to a newer commit | [From git](#from-git) |
 | Write or fix a plugin's tests | [references/testing.md](references/testing.md) |
+| Tests on a real Open-WebUI (Docker, with aimock as its models): over its API or in the browser | `uvx --from owpp-live owpp live` runs `live/` (https://zmnatz.github.io/open-webui-plugin-protocol/testing/live/#live-tests-in-your-repository) |
 | Put plugins on an Open-WebUI instance | [Deploy](#deploy) |
 | A function or plugin that already exists (pasted into Open-WebUI, a `.py` file, someone else's repository) | `uvx owpp import --instance <id>`, `uvx owpp import <file>` or `uvx owpp import <git URL>` writes its folder (https://zmnatz.github.io/open-webui-plugin-protocol/commands/import/); its tests: the `test-existing-plugin` skill (`npx skills add zmnatz/open-webui-plugin-protocol@test-existing-plugin`) |
 

@@ -11,6 +11,7 @@
   owpp migrate [id ...] [--dry-run]  bring plugin.yaml to the current protocol version
   owpp create [id]                   a wizard: asks what the plugin is, then writes it
   owpp init <id> [--type event|filter|action|pipe]   scaffold a plugin folder
+  owpp live [--up | --keep | --down] [-- pytest args]  (owpp-live) the live tests, on a throwaway Open-WebUI
 
 Every command takes --dir <plugins folder> (default: $OWPP_PLUGINS_DIR, else ./plugins).
 """
@@ -575,7 +576,46 @@ def build_parser() -> argparse.ArgumentParser:
     init = add("init", _cmd_init, "scaffold a plugin folder")
     init.add_argument("id")
     init.add_argument("--type", choices=list(CLASS), default="event")
+    test.set_defaults(passthrough=True)
+    added = _added_commands(add)
+    if "live" not in added:
+        # Listed, so `owpp --help` shows it; main() answers it before its options are parsed.
+        add("live", _cmd_live_missing, f"{LIVE_HELP} (needs the owpp-live package)")
+        parser.set_defaults(missing_commands={"live"})
     return parser
+
+
+# ---- commands from other packages --------------------------------------------
+
+COMMANDS_GROUP = "owpp.commands"
+LIVE_HELP = (
+    "deploy the plugins to a throwaway Open-WebUI (aimock as its models) and run the live tests"
+)
+
+
+def _added_commands(add) -> set[str]:
+    """Commands other packages add (owpp-live adds `live`): each `owpp.commands` entry point is
+    a function that takes `add(name, handler, help)` and adds its command with it."""
+    from importlib.metadata import entry_points
+
+    added = set()
+    for entry in entry_points(group=COMMANDS_GROUP):
+        try:
+            entry.load()(add)
+        except Exception as error:  # a broken package must not take the other commands down
+            print(f"warn  owpp {entry.name} ({entry.value}) did not load: {error}", file=sys.stderr)
+            continue
+        added.add(entry.name)
+    return added
+
+
+def _cmd_live_missing(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    print(
+        "error: owpp live comes with the owpp-live package (it needs Docker): run it as "
+        "`uvx --from owpp-live owpp live`, or `pip install owpp-live`",
+        file=sys.stderr,
+    )
+    return 1
 
 
 def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None) -> int:
@@ -585,9 +625,11 @@ def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None
     # Everything after `--` goes to pytest (owpp test -- -k name -x).
     passthrough = argv[argv.index("--") + 1 :] if "--" in argv else []
     argv = argv[: argv.index("--")] if "--" in argv else argv
+    if argv[:1] and argv[0] in (parser.get_default("missing_commands") or set()):
+        return _cmd_live_missing(argparse.Namespace(), Path(), env)
     args = parser.parse_args(argv)
-    if passthrough and args.command != "test":
-        parser.error("only `owpp test` takes arguments after --")
+    if passthrough and not getattr(args, "passthrough", False):
+        parser.error("only `owpp test` and `owpp live` take arguments after --")
     args.pytest_args = passthrough
     if not getattr(args, "handler", None):
         parser.print_help()

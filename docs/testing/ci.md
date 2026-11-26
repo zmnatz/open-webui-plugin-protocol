@@ -30,4 +30,22 @@ Pin the same owpp version here as in the deploy (`uses: zmnatz/open-webui-plugin
 
 ## A live check
 
-The mock is not Open-WebUI. A job that starts Open-WebUI in Docker (the `-slim` image, `ghcr.io/open-webui/open-webui:v0.13.5-slim`: it leaves out the bundled ML models, which a test has no use for), with [aimock](live.md#the-model-aimock) as its models, deploys with `owpp deploy` and runs a few assertions over its API catches what the mock cannot; this repository's [live suite](live.md#the-live-suite) is one. It runs on every pull request in about the time of the unit tests: the images come to about 290 MB, cached between runs with `actions/cache` keyed on the compose file (`.github/workflows/live.yml`).
+The mock is not Open-WebUI. [`owpp live`](../commands/live.md) starts a throwaway Open-WebUI in Docker (the `-slim` image, `ghcr.io/open-webui/open-webui:v0.13.5-slim`: it leaves out the bundled ML models, which a test has no use for), with [aimock](live.md#the-model-aimock) as its models, deploys the plugins and runs the repository's [live tests](live.md#live-tests-in-your-repository), which catch what the mock cannot. GitHub's runners have Docker:
+
+```yaml
+# .github/workflows/live.yml in your repository
+on:
+  pull_request:
+    paths: ["plugins/**", "live/**"]
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - run: uvx --from owpp-live==0.6.3 playwright install --with-deps chromium # for tests in the browser
+      - run: uvx --from owpp-live==0.6.3 owpp live
+```
+
+Pin owpp-live at the same version as owpp elsewhere: they are released together. The images come to about 290 MB. This repository's [live suite](live.md#this-repositorys-live-suite) runs the same way in about the time of the unit tests, with the images cached between runs with `actions/cache`, keyed on the compose files (`.github/workflows/live.yml`).

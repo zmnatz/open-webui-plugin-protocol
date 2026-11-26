@@ -1,6 +1,6 @@
 ---
 name: test-existing-plugin
-description: Tests for an Open-WebUI function or owpp plugin that already works, against owpp's mock Open-WebUI (and, in the owpp repository, Playwright and API tests on a real Open-WebUI with aimock). Use when asked for tests, coverage, live or browser tests, or screenshots of a function pasted into Open-WebUI, a .py file, someone else's repository, or a plugin folder without tests.
+description: Tests for an Open-WebUI function or owpp plugin that already works, against owpp's mock Open-WebUI (and live tests, over the API and in the browser with Playwright, on a real Open-WebUI with aimock, run by owpp live). Use when asked for tests, coverage, live or browser tests, or screenshots of a function pasted into Open-WebUI, a .py file, someone else's repository, or a plugin folder without tests.
 ---
 
 # Tests for a plugin that already works
@@ -66,20 +66,21 @@ In `plugins/<id>/README.md` (make one if there is none): the `owpp check <id> --
 
 Done when each By hand step is in the list.
 
-## 5. In the owpp repository: the live suite and screenshots
+## 5. Live tests, on a real Open-WebUI
 
-When the plugin is one of the owpp repository's examples (`examples/plugins/<id>`, with `tools/screenshots/` and `tools/live/` beside it), it also runs on a real Open-WebUI: v0.13.5 in Docker, with aimock answering as its models from fixtures (`tools/screenshots/aimock/models.json`). Follow `docs/agents/examples.md`, steps 3 to 5.
+For each By hand step that depends on what only Open-WebUI does, write a live test that asserts it on a throwaway Open-WebUI v0.13.5 in Docker, with aimock answering as its models. `owpp live` (the owpp-live package) starts it, deploys the plugins and runs the tests: https://zmnatz.github.io/open-webui-plugin-protocol/testing/live/#live-tests-in-your-repository
 
-**Live tests**: for each By hand step that depends on what only Open-WebUI does, write a test that asserts it there (https://zmnatza.github.io/open-webui-plugin-protocol/testing/live/#the-live-suite):
+- **Where**: in a plugins repository, `live/test_<id>.py` beside `plugins/`. In the owpp repository, for one of its examples, `tools/live/` (and follow `docs/agents/examples.md`, steps 3 to 5).
+- **Over the API** (which model a request goes to, what reaches the model, a grant): the `api` and `user_api` fixtures (each call returns `(status, body)`), and `aimock.requests()` for what Open-WebUI sent the model.
+- **In the browser** (the chat page running a tool the model calls, a button under a reply, the Artifacts panel, a page the plugin serves): the `admin`, `user` or `signed_out` Playwright page, with `send(page, text)` and `url()` from `owpp_live`. Wait for what the page shows (`page.get_by_text(...).wait_for(timeout=60_000)`), then assert on it and on `aimock.requests()`. Leave apostrophes out of what `send` types: the input makes them curly.
+- **The model's answers**: `live/aimock/models.json` (in the owpp repository, `tools/screenshots/aimock/models.json`), more specific fixtures first. Without one, the model is `owpp-live-model`, which answers every message the same way.
+- **A service the plugin calls**: a stand-in in `live/compose.yaml`, layered on owpp's stack: https://zmnatz.github.io/open-webui-plugin-protocol/commands/live/#your-own-services-and-settings
 
-- **Over the API** (which model a request goes to, what reaches the model, a grant): in `tools/live/test_live.py`, with the `api` and `user_api` fixtures, and aimock's journal for what Open-WebUI sent the model.
-- **In the browser** (the chat page running a tool the model calls, a button under a reply, the Artifacts panel, a page the plugin serves): a Playwright test in `tools/live/test_in_the_browser.py`, with the `admin`, `user` or `signed_out` page and `send(page, text)`. Wait for what the page shows (`page.get_by_text(...).wait_for(timeout=60_000)`), then assert on it and on the journal. Leave apostrophes out of what `send` types: the input makes them curly. (https://zmnatza.github.io/open-webui-plugin-protocol/testing/live/#tests-in-the-browser)
+Run them with `uvx --from owpp-live owpp live` (in the owpp repository, `uv run python tools/screenshots/run.py --live`), with `-- -k <name>` for some. It needs Docker, reachable by the user running you: when `docker ps` says "permission denied", give the user the command to run, and work from the output they paste back. Install Chromium once, for the browser: `uvx --from owpp-live playwright install chromium`. See each test bite, as in step 3. A failure that the mock's tests did not show is a finding.
 
-When the model must answer something new, add an aimock fixture above the catch-all. Run them with `uv run --group screenshots python tools/screenshots/run.py --live` (`-- -k <name>` for some). See each one bite, as in step 3. A failure that the mock's tests did not show is a finding.
+**Screenshots**, in the owpp repository only (`docs/screenshots.md#adding-one`): each script follows one test's By hand steps in the browser, and its `shot(..., illustrates=[...])` names the tests from step 3 that it shows.
 
-**Screenshots** (`docs/screenshots.md#adding-one`): each script follows one test's By hand steps in the browser, and its `shot(..., illustrates=[...])` names the tests from step 3 that it shows.
-
-Done when the live suite passes with a test for each By hand step that needs the real Open-WebUI, and the screenshots run passes with its new PNGs and `docs/screenshots/screenshots.json` in the change.
+Done when `owpp live` passes with a test for each By hand step that needs the real Open-WebUI, or the user has the command to run where you cannot, and in the owpp repository the screenshots run passes with its new PNGs and `docs/screenshots/screenshots.json` in the change.
 
 ## Report
 

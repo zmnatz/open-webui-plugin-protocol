@@ -28,7 +28,7 @@ What a change to this repository includes, so that the person who [reviews it](r
 4. If you changed a plugin, deploy it to a test instance and do its **By hand** steps yourself.
 5. Update the guide and the changelog.
 6. Check this site: `uv run --group docs python tools/build_docs.py`. A broken link fails the build.
-7. Open a pull request into `develop`: say what changed, why, and which live checks you did. The [live suite](testing/live.md#the-live-suite) runs on it; to run it before you push, `run.py --live`.
+7. Open a pull request into `develop`: say what changed, why, and which live checks you did. The [live suite](testing/live.md#this-repositorys-live-suite) runs on it; to run it before you push, `run.py --live`.
 
 ## Commit messages
 
@@ -65,13 +65,15 @@ Never squash or rebase into `main`, or back from it into `develop`: `develop` wo
 
 Releases are started from the Actions tab, and everything after the merge is automatic. The branching, tagging and merge-back are the shared workflows in [zmnatz/github-workflows](https://github.com/zmnatz/github-workflows), which this repository's `release.yml`, `tag.yml` and `merge-back.yml` call with its own commands; publishing is this repository's, on the tag:
 
-1. **Start it.** Run **Actions > release > Run workflow** with the version (`patch`, `minor`, `major`, or one such as `0.5.0`). `.github/workflows/release.yml` cuts `release/<version>` from `develop`, prepares it with `tools/release.py` (it sets `__version__` in `src/owpp/__init__.py`, turns `## Unreleased` in `CHANGELOG.md` into `## <version> (<date>)`, and moves the docs' version pins), and opens its pull request into `main`. Only fixes for the release go on that branch now. To prepare one by hand instead, run `python tools/release.py prepare <version>` on the branch.
+1. **Start it.** Run **Actions > release > Run workflow** with the version (`patch`, `minor`, `major`, or one such as `0.5.0`). `.github/workflows/release.yml` cuts `release/<version>` from `develop`, prepares it with `tools/release.py` (it sets `__version__` in `src/owpp/__init__.py` and in owpp-live's, turns `## Unreleased` in `CHANGELOG.md` into `## <version> (<date>)`, and moves the docs' version pins and owpp-live's `owpp==` requirement), and opens its pull request into `main`. Only fixes for the release go on that branch now. To prepare one by hand instead, run `python tools/release.py prepare <version>` on the branch.
 2. **Merge it** with a merge commit, once CI is green. CI's `release` job checks a `release/` or `hotfix/` pull request into `main` the way publishing will: `v<__version__>` is not a tag yet, and the changelog has a dated section for it with entries.
 3. **Tagging.** The merge into `main` starts `.github/workflows/tag.yml`, which tags it `v<version>`, and does nothing else. A push to `main` whose version is already tagged tags nothing.
-4. **Releasing the tag.** Everything a release does runs on the `v*` tag, whether `tag.yml` pushed it or you did by hand: `.github/workflows/publish.yml` publishes the package to PyPI and creates the GitHub release with the changelog section as its notes and the built package attached, and `.github/workflows/docs.yml` publishes the docs site.
+4. **Releasing the tag.** Everything a release does runs on the `v*` tag, whether `tag.yml` pushed it or you did by hand: `.github/workflows/publish.yml` publishes both packages to PyPI, owpp and owpp-live (`packages/owpp-live`, always released with owpp at the same version: [ADR 0003](adr/0003-owpp-live-package.md)), and creates the GitHub release with the changelog section as its notes and the built packages attached, and `.github/workflows/docs.yml` publishes the docs site.
 5. **Merge-back.** The same merge starts `.github/workflows/merge-back.yml`, which opens a pull request from `main` into `develop` and merges it with a merge commit. When it conflicts (usually `CHANGELOG.md`, when `develop` has new entries), it leaves the pull request open with the steps to resolve it on a branch cut from `main` (GitHub's **Resolve conflicts** works there, as it can't on `main` itself), and the run fails so it is not missed. **Actions > merge-back > Run workflow** tries again.
 
 A hotfix is the same with **kind** set to `hotfix`: `hotfix/<version>` is cut from `main`, with a patch version and an empty dated changelog section, and its pull request opens as a draft. Push the fix and its changelog entry to that branch, then mark it ready and merge it.
+
+Publishing uses PyPI's trusted publishing, with no token: each of the two PyPI projects has `publish.yml` and the `pypi` environment as a trusted publisher (set on pypi.org, under the project's **Publishing** settings).
 
 `release.yml`, `tag.yml` and `merge-back.yml` need a `RELEASE_TOKEN` Actions secret, and fail at once without it: a fine-grained token (or a GitHub App's) for this repository with **Contents** and **Pull requests: read and write** ([the token](https://github.com/zmnatz/github-workflows#the-token)). GitHub starts no workflows for what a workflow's own token does, so with that token the release pull request would get no checks and the tag would release nothing. When the token expires, renew it and update the secret.
 

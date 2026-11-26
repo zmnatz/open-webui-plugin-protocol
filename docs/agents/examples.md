@@ -30,7 +30,7 @@ The model is [aimock](../testing/live.md#the-model-aimock), answering from `tool
 
 ## 4. Check it live
 
-When the plugin depends on something only the real Open-WebUI does (which model a request goes to, what reaches the model, a grant), add a test to `tools/live/test_live.py` ([the live suite](../testing/live.md#the-live-suite)). Its tests can read what Open-WebUI sent the model from aimock's journal. When it is something only the chat page does (running a tool the model calls, a button under a reply, the Artifacts panel), drive the page with Playwright in `tools/live/test_in_the_browser.py` ([tests in the browser](../testing/live.md#tests-in-the-browser)).
+When the plugin depends on something only the real Open-WebUI does (which model a request goes to, what reaches the model, a grant), add a test to `tools/live/test_live.py` ([the live suite](../testing/live.md#this-repositorys-live-suite)). Its tests can read what Open-WebUI sent the model from aimock's journal. When it is something only the chat page does (running a tool the model calls, a button under a reply, the Artifacts panel), drive the page with Playwright in `tools/live/test_in_the_browser.py` ([tests in the browser](../testing/live.md#tests-in-the-browser), with [owpp-live's fixtures](../testing/live.md#the-fixtures)).
 
 ## 5. Run it
 
@@ -39,7 +39,7 @@ uv run --group screenshots python tools/screenshots/run.py -- -k <id>   # its sc
 uv run --group screenshots python tools/screenshots/run.py --live       # the live suite
 ```
 
-Both start Open-WebUI in Docker; `run.py --up` starts it and leaves it running, to try something by hand ([trying things out in isolation](../testing/live.md#trying-things-out-in-isolation)). When `docker ps` says "permission denied", the user running the agent is not in the `docker` group: hand the user the command to run in their own terminal (`sudo -u "$USER" -g docker env "PATH=$PATH" uv run ...`), and work from the output they paste back. Each failure prints Open-WebUI's response body; its `detail` says what went wrong.
+Both start Open-WebUI in Docker; `run.py --up` starts it and leaves it running, to try something by hand ([trying things out](../testing/live.md#trying-things-out)). When `docker ps` says "permission denied", the user running the agent is not in the `docker` group: hand the user the command to run in their own terminal (`sudo -u "$USER" -g docker env "PATH=$PATH" uv run ...`), and work from the output they paste back. Each failure prints Open-WebUI's response body; its `detail` says what went wrong.
 
 Done when the live suite passes and the new PNGs and `docs/screenshots/screenshots.json` are in the commit.
 

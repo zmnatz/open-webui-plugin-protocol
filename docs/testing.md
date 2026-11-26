@@ -6,9 +6,9 @@ A plugin is tested in three layers, each catching what the one before cannot:
 | --- | --- | --- | --- |
 | **Check** | [`owpp check --strict`](commands/check.md) | The bundle does not build or compile; a name is used but never defined; a manifest is wrong; with `--since`, a change with no new version. | Nothing |
 | **Unit tests** | [`owpp test`](commands/test.md) | The plugin's own logic is wrong: what a filter does to a chat, what a tool answers, who may open a page, what is installed and removed. Run against a [mock Open-WebUI](testing/mock.md). | The `test` extra |
-| **On a real Open-WebUI** | each test's **By hand** steps, the README's `## Test` list | Open-WebUI does something the mock does not: the chat pipeline, grants, sign-in, the browser. | An instance |
+| **On a real Open-WebUI** | [`owpp live`](commands/live.md) for the live tests; each test's **By hand** steps, the README's `## Test` list | Open-WebUI does something the mock does not: the chat pipeline, grants, sign-in, the browser. | Docker (owpp-live), or an instance |
 
-Every change runs the first two, in CI. The third runs before a release, and when a change touches how the plugin meets Open-WebUI.
+Every change runs the first two, in CI, and the live tests too where a [live check](testing/ci.md#a-live-check) is set up. The By hand steps run before a release, and when a change touches how the plugin meets Open-WebUI.
 
 ## In this section
 
@@ -17,7 +17,7 @@ Every change runs the first two, in CI. The third runs before a release, and whe
 | [Writing a test](testing/writing.md) | A first test, the fixtures, the docstring every test carries, the order to work in. |
 | [Testing each kind of plugin](testing/kinds.md) | Recipes: filters, actions, pipes, tools, events and scheduled jobs, pages, installers and skills, a function written elsewhere, code from git, plugins that call other services. |
 | [The mock](testing/mock.md) | Every call and table of the mock Open-WebUI, and what it is not. |
-| [On a real Open-WebUI](testing/live.md) | By hand checks; this repository's live suite, the examples deployed to a real Open-WebUI with aimock as its models; and the same stack as an isolated Open-WebUI to try things on. |
+| [On a real Open-WebUI](testing/live.md) | By hand checks; live tests in your repository, which [`owpp live`](commands/live.md) runs on a throwaway Open-WebUI with aimock as its models, over its API and in the browser; trying things out on it; and this repository's live suite. |
 | [In CI](testing/ci.md) | A workflow that checks and tests every pull request. |
 
 ## Running the tests

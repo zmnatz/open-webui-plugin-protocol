@@ -1,0 +1,16 @@
+{
+  "fixtures": [
+    {
+      "match": { "model": "owpp-live-model", "userMessage": "Generate a concise" },
+      "response": { "content": "{\"title\": \"Live test\"}" }
+    },
+    {
+      "match": { "model": "owpp-live-model", "userMessage": "Generate 1-3 broad tags" },
+      "response": { "content": "{\"tags\": [\"Test\"]}" }
+    },
+    {
+      "match": { "model": "owpp-live-model" },
+      "response": { "content": "Hello! I am owpp's live model: I answer the same way every time." }
+    }
+  ]
+}

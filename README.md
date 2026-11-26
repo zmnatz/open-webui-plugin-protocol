@@ -36,6 +36,7 @@ uvx owpp check                       # bundle, compile, report undefined names
 uvx owpp version                     # every plugin's versions (and its tool's and skills')
 uvx owpp version excalidraw minor    # a new version, with a CHANGELOG.md entry
 uvx --from 'owpp[test]' owpp test    # each plugin's tests/, against a mock Open-WebUI
+uvx --from owpp-live owpp live       # live/ tests, on a throwaway Open-WebUI in Docker
 uvx owpp deploy --only excalidraw --dry-run
 uvx owpp pull                        # move plugins taken from git to their latest commit, for review
 uvx owpp deploy --dry-run --latest     # what that would change on the live instance, by version
@@ -104,7 +105,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ## Status
 
-0.6.3, written against Open-WebUI v0.13.5 (and v0.13.4). The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.5 ([screenshots](docs/screenshots.md)), and checked there on every change by an end-to-end run with aimock as its models ([the live suite](docs/testing/live.md#the-live-suite)). See [status and limits](docs/README.md#status-and-limits).
+0.6.3, written against Open-WebUI v0.13.5 (and v0.13.4). The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.5 ([screenshots](docs/screenshots.md)), and checked there on every change by an end-to-end run with aimock as its models ([the live suite](docs/testing/live.md#this-repositorys-live-suite)). See [status and limits](docs/README.md#status-and-limits).
 
 ## Development
 

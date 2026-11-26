@@ -48,6 +48,7 @@ dev = [
     "ruff>=0.8",
     "sqlalchemy>=2.0",
     "starlette>=1.7.0",
+    "owpp-live",
 ]
 docs = [
     "zensical>=0.1.2 ; python_full_version >= '3.11'",
@@ -55,6 +56,14 @@ docs = [
 screenshots = [
     "playwright>=1.50",
 ]
+
+# owpp-live (packages/owpp-live), developed here and released with owpp: in the dev environment, so
+# `owpp live` and its fixtures are there for this repository's own live suite and tests.
+[tool.uv.workspace]
+members = ["packages/owpp-live"]
+
+[tool.uv.sources]
+owpp-live = { workspace = true }
 
 [tool.hatch.version]
 path = "src/owpp/__init__.py"

@@ -1,6 +1,7 @@
 name: publish
 # Releases a v* tag (docs/contributing.md#releasing): tag.yml pushes it when a release merges into
-# main, or push one by hand. Publishes the package to PyPI and creates the GitHub release.
+# main, or push one by hand. Publishes owpp and owpp-live (packages/owpp-live, always released with
+# it at the same version) to PyPI and creates the GitHub release.
 on:
   push:
     tags: ["v*"]
@@ -23,7 +24,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uv build
+      - run: uv build --all-packages
+      # Both: each needs a trusted publisher on pypi.org for this workflow and the pypi environment.
       - run: uv publish --trusted-publishing always
       - uses: actions/upload-artifact@v4
         with: { name: dist, path: dist/ }

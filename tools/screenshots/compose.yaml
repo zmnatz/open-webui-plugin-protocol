@@ -1,43 +1,25 @@
-# A throwaway Open-WebUI for the screenshot run: `uv run --group screenshots python
-# tools/screenshots/run.py` starts it, deploys examples/plugins into it, takes the screenshots
-# and removes it again (no volumes, so nothing is kept). See docs/screenshots.md.
-name: owpp-screenshots
+# What this repository's examples need on top of the Open-WebUI `owpp live` starts (owpp-live's
+# compose.yaml: Open-WebUI v0.13.5-slim and aimock). `tools/screenshots/run.py` layers this file on
+# it for the screenshots and the live suite. See docs/screenshots.md and docs/testing/live.md.
 
 services:
   open-webui:
-    # The version the protocol is written against (docs/README.md, "Status and limits"), as the
-    # slim image: it leaves out the bundled ML models (about 4.5 GB in the full one), which neither
-    # the screenshots nor the live run use.
-    image: ghcr.io/open-webui/open-webui:v0.13.5-slim
-    ports: ["127.0.0.1:3000:8080"]
     environment:
-      WEBUI_SECRET_KEY: screenshots-only
-      # The only models are aimock's, below: no Ollama, no real provider, no API key. The first
-      # connection answers the chats; the second only says what a LiteLLM gateway would say
-      # about the same models (for examples/plugins/litellm_model_sync). Open-WebUI keeps the
-      # first connection's entry for a model both list.
-      ENABLE_OLLAMA_API: "false"
+      # The first connection (aimock) answers the chats; the second only says what a LiteLLM
+      # gateway would say about the same models (for examples/plugins/litellm_model_sync).
+      # Open-WebUI keeps the first connection's entry for a model both list.
       OPENAI_API_BASE_URLS: http://aimock:4010/v1;http://gateway/v1
       OPENAI_API_KEYS: unused;unused
-      # Nothing downloaded at startup, no update checks: the run is the same offline or not.
-      OFFLINE_MODE: "true"
-      ENABLE_VERSION_UPDATE_CHECK: "false"
+      # owpp live lets every user use every model; here a user who is not an admin needs the read
+      # grant litellm_model_sync gives each model, as on a real instance (docs/testing/live.md).
+      BYPASS_MODEL_ACCESS_CONTROL: "false"
       # excalidraw and inline_visualizer show pages in the Artifacts panel, which need this on
       # (`requires: iframe_sandbox_allow_same_origin` in their plugin.yaml; owpp deploy warns
       # without it). shots_excalidraw.py turns it off and on again for its "without" shot.
       DEFAULT_INTERFACE_SETTINGS: '{"iframeSandboxAllowSameOrigin": true}'
       # Read by examples/plugins/mcpo_sync, whose MCPO_BASE_URL default is http://mcpo:8000.
       MCPO_API_KEY: mcpo-key
-    depends_on: [aimock, static]
-
-  aimock:
-    # CopilotKit's aimock (https://github.com/CopilotKit/aimock, MIT): an OpenAI-compatible
-    # server that answers from the fixtures in aimock/, the same way every run. Its request
-    # journal, GET /__aimock/journal, is what the live suite reads to see what Open-WebUI sent.
-    image: ghcr.io/copilotkit/aimock:1.48.1
-    command: ["--fixtures", "/fixtures", "--host", "0.0.0.0", "--port", "4010"]
-    ports: ["127.0.0.1:4010:4010"]
-    volumes: ["./aimock:/fixtures:ro"]
+    depends_on: [static]
 
   static:
     # Fixed files for what the examples talk to besides a model (nginx.conf): a LiteLLM

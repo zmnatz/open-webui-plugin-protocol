@@ -7,3 +7,4 @@ dist/
 site/
 build/
 tools/screenshots/failures/
+tools/live/failures/

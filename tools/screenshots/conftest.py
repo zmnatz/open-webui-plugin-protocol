@@ -1,5 +1,5 @@
-"""Fixtures for the screenshot scripts (shots_*.py). run.py starts Open-WebUI, deploys the
-examples and runs these with pytest; the repository's own test run never collects them.
+"""Fixtures for the screenshot scripts (shots_*.py). run.py starts Open-WebUI (`owpp live`), deploys
+the examples and runs these with pytest; the repository's own test run never collects them.
 
 Each script signs in through the real login page, follows a plugin's By hand steps in a
 browser, and calls `shot(...)` at each step worth seeing. A shot names the plugin tests it
@@ -15,19 +15,12 @@ import urllib.request
 from pathlib import Path
 
 import pytest
-from browser_fixtures import (  # noqa: F401  (fixtures and the failure hook, for pytest)
-    URL,
-    account,
-    admin,
-    admin_account,
-    browser,
-    pytest_runtest_makereport,
-    send,
-    sign_in,
-    signed_out,
-    user,
-    user_account,
-)
+from owpp_live import send, sign_in, url  # noqa: F401  (for the scripts: from conftest import ...)
+from owpp_live.client import account
+
+# The browser pages (admin, user, signed_out), the accounts and the failure capture are
+# owpp-live's fixtures; `api` and `user_api` here return the body alone, for setting things up.
+URL = url()
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 OUT = ROOT / "docs" / "screenshots"
