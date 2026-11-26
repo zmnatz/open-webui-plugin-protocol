@@ -26,7 +26,7 @@ from pathlib import Path
 import pytest
 
 from .client import Aimock, Api, account
-from .pages import PAGES, new_page, sign_in
+from .pages import PAGES, new_page, sign_in, signed_in_state
 
 
 @pytest.fixture(scope="session")
@@ -70,18 +70,30 @@ def browser():
         chromium.close()
 
 
+@pytest.fixture(scope="session")
+def admin_session(browser, admin_account) -> dict:
+    """The admin's browser session, signed in once (Open-WebUI limits sign-ins)."""
+    return signed_in_state(browser, admin_account)
+
+
+@pytest.fixture(scope="session")
+def user_session(browser, user_account) -> dict:
+    """The user's browser session, signed in once."""
+    return signed_in_state(browser, user_account)
+
+
 @pytest.fixture
-def admin(browser, admin_account):
-    """A page signed in as the admin."""
-    page = sign_in(browser, admin_account)
+def admin(browser, admin_account, admin_session):
+    """A page signed in as the admin, in a fresh context (its own localStorage)."""
+    page = sign_in(browser, admin_account, admin_session)
     yield page
     page.context.close()
 
 
 @pytest.fixture
-def user(browser, user_account):
-    """A page signed in as a user who is not an admin."""
-    page = sign_in(browser, user_account)
+def user(browser, user_account, user_session):
+    """A page signed in as a user who is not an admin, in a fresh context."""
+    page = sign_in(browser, user_account, user_session)
     yield page
     page.context.close()
 

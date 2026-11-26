@@ -75,7 +75,7 @@ Each test keeps the docstring every owpp test has, with its **By hand** steps. A
 | --- | --- |
 | `api`, `user_api` | Open-WebUI's HTTP API as the admin, or as a user who is not one. `api("GET", path)` and `api("POST", path, body)` return `(status, body)`, with the body on an error too, so put it in the assertion message: Open-WebUI says what went wrong in `detail`. |
 | `aimock` | `aimock.requests()`: every chat request Open-WebUI sent the model, from aimock's journal, newest last. The messages there are the ones after every filter ran. |
-| `admin`, `user`, `signed_out` | A [Playwright](https://playwright.dev/python/) page signed in on Open-WebUI's own login page as the admin or the user, or with no session. |
+| `admin`, `user`, `signed_out` | A [Playwright](https://playwright.dev/python/) page signed in as the admin or the user, or with no session. Each account signs in once per run, on Open-WebUI's own login page (it refuses more than a few sign-ins a minute), and every test gets a fresh browser context from that session, so what one test leaves in `localStorage` is not seen by the next. |
 | `admin_account`, `user_account` | The accounts: `name`, `email`, `password`, `token`. |
 
 From `owpp.live`: `url()` is Open-WebUI's address, for a page to `goto`, and `send(page, text)` types a message into the chat and sends it, once the input holds all of it. The fixtures read [the variables `owpp live` sets](../environment-variables.md#set-by-owpp-live-for-the-live-tests); without them, a test that uses one stops the run and says to start `owpp live`.

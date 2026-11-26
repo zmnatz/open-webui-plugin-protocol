@@ -23,6 +23,26 @@ or copy the folder into your agent's skills folder (for Claude Code, `.claude/sk
 npx skills add zmnatz/open-webui-plugin-protocol@test-existing-plugin
 ```
 
+### Tried on Better Banners
+
+To see what the skill gives, an agent ran it on Classic298's original [Better Banners](https://github.com/Classic298/open-webui-plugins/tree/main/better-banners) (1.0.4, commit `917c88f`), and the result was set beside the tests of [Page Banners](examples/page_banners.md), this repository's variant of it, which were written by hand while adapting it. The agent did not read Page Banners' tests until its own were done. In a new plugins repository, `owpp import <the folder's URL>`, then the skill's steps, on Open-WebUI v0.13.5:
+
+| | Page Banners (adapted, tests written with it) | Better Banners (original, the skill) |
+| --- | --- | --- |
+| Against the mock | 11 tests | 17 (12 tests, one with 5 cases), all passing at the first run |
+| On a real Open-WebUI | that it is deployed and active; 4 screenshot scripts that open the page but assert little | 10 live tests in the browser, passing at the first run (about 70 s) |
+| Each one goes red when its expected value is changed | not checked | all 27 |
+| Findings | | none in Better Banners; one in `owpp live`, fixed (below) |
+
+The two sets test different things. Page Banners' tests are mostly about the adaptation: the script as an `assets/` file wrapped once in a `try`, a stylesheet in `/static/custom.css`, and names that cannot collide with the original's. The skill's go further into what the plugin itself does:
+
+- **Against the mock**, beyond what Page Banners' tests cover: the 1.0.2 fragment dropped on upgrade, another deleted plugin's fragment withdrawn, the weak `W/` ETag a proxy sends back, the `Cache-Control` header, both ends of every valve's range, a stale block in the `loader.js` on disk not served twice, and events other than a banner edit sending nothing.
+- **On a real Open-WebUI**, nothing of which was asserted before: the banners at the top of an open chat (in `#chat-pane`), or right above the message input with `position: bottom`. Not on the new-chat screen, where Open-WebUI shows its own (so each banner shows once). Seen by a user who is not an admin. A new banner reaching an open tab without a reload. The pill keeping the banners folded after a reload, with their count and the highest level's colour. A dismissal remembered in Open-WebUI's own `dismissedBannerIds`, and no close button on a banner that is not dismissible. Markdown rendered, and `<script>`, `onerror` and `javascript:` links that cannot run. The banner changing with the page's language. No banners, and no block in `/static/loader.js`, once the function is disabled.
+
+Page Banners' By hand steps say the pill "stays folded after a reload". Until this experiment, only the skill's live tests checked that.
+
+The finding was in `owpp live`: each browser page signed in again on the login page, and Open-WebUI answers a sign-in with 429 after a few a minute, so a suite with several browser tests failed in its fixtures. The `admin` and `user` pages now share one sign-in per account for the run ([the fixtures](testing/live.md#the-fixtures)).
+
 ## A plugin spec instead of the wizard
 
 `owpp create` asks questions at a terminal, which an agent cannot answer. `owpp create --spec <file>` takes the same answers as a YAML or JSON file (`-` reads stdin), writes the plugin and checks it:

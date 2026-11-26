@@ -19,23 +19,40 @@ document.addEventListener("DOMContentLoaded", () => {
 """
 
 
-def new_page(browser):
-    """A page in a context of its own, with no session."""
-    context = browser.new_context(viewport=VIEWPORT, color_scheme="light")
+def new_page(browser, storage_state: dict | None = None):
+    """A page in a context of its own: with no session, or with a saved one."""
+    context = browser.new_context(
+        viewport=VIEWPORT, color_scheme="light", storage_state=storage_state
+    )
     context.add_init_script(HIDE_TOASTS)
     return context.new_page()
 
 
-def sign_in(browser, account: dict):
-    """A page signed in on Open-WebUI's own login page, with the What's New dialog closed."""
+def signed_in_state(browser, account: dict) -> dict:
+    """Sign in once on Open-WebUI's own login page, and keep the session (its cookie and
+    the token in localStorage). Open-WebUI limits sign-ins (429 after a few a minute), so
+    each page starts from this instead of signing in again."""
+    page = sign_in(browser, account)
+    try:
+        return page.context.storage_state()
+    finally:
+        page.context.close()
+
+
+def sign_in(browser, account: dict, storage_state: dict | None = None):
+    """A page signed in as `account`, at Open-WebUI's home, with the What's New dialog
+    closed: through the login page, or from a session `signed_in_state` saved."""
     from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
-    page = new_page(browser)
-    page.goto(url() + "/auth")
-    page.fill("input[name=email]", account["email"])
-    page.fill("input[name=password]", account["password"])
-    page.keyboard.press("Enter")
-    page.wait_for_url(url() + "/")
+    page = new_page(browser, storage_state)
+    if storage_state is None:
+        page.goto(url() + "/auth")
+        page.fill("input[name=email]", account["email"])
+        page.fill("input[name=password]", account["password"])
+        page.keyboard.press("Enter")
+        page.wait_for_url(url() + "/")
+    else:
+        page.goto(url() + "/")
     with contextlib.suppress(PlaywrightTimeout):
         page.get_by_text("Okay, Let's Go!").click(timeout=5000)
     return page
