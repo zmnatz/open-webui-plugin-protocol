@@ -47,7 +47,7 @@ Tests go in `plugins/<id>/tests/test_<id>.py`, using the `owui` and `plugin` fix
 | a page | `owui.client(user).get(path)` |
 | a tool it installs | `owui.tool("<tool id>").call("<method>", ...)` |
 
-Set valves with `owui.set_valves(id, NAME=value)`, add people with `owui.add_user("Bob")`, and assert on what comes back, `owui.chat_events` (what it sent through `__event_emitter__`), and the tables (`owui.users`, `owui.functions`, `owui.tools`, `owui.models`). Recipes for each kind: https://zmnatz.github.io/open-webui-plugin-protocol/testing/kinds/
+Set valves with `owui.set_valves(id, NAME=value)`, to a value that is neither the default nor any number in the code (2, not 1: a test with the value the code hard-codes cannot tell the valve from the constant), add people with `owui.add_user("Bob")`, and assert on what comes back, `owui.chat_events` (what it sent through `__event_emitter__`), and the tables (`owui.users`, `owui.functions`, `owui.tools`, `owui.models`). Recipes for each kind: https://zmnatz.github.io/open-webui-plugin-protocol/testing/kinds/
 
 For each line:
 

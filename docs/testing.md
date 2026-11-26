@@ -18,6 +18,7 @@ Every change runs the first two, in CI, and the live tests too where a [live che
 | [Testing each kind of plugin](testing/kinds.md) | Recipes: filters, actions, pipes, tools, events and scheduled jobs, pages, installers and skills, a function written elsewhere, code from git, plugins that call other services. |
 | [The mock](testing/mock.md) | Every call and table of the mock Open-WebUI, and what it is not. |
 | [On a real Open-WebUI](testing/live.md) | By hand checks; live tests in your repository, which [`owpp live`](commands/live.md) runs on a throwaway Open-WebUI with aimock as its models, over its API and in the browser; trying things out on it; and this repository's live suite. |
+| [A plugin that already works](testing/existing-plugins.md) | Tests for code that exists, written by an agent with the `test-existing-plugin` skill: two worked examples, and how many planted bugs their tests caught. |
 | [In CI](testing/ci.md) | A workflow that checks and tests every pull request. |
 
 ## Running the tests

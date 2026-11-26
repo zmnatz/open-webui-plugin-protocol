@@ -1,0 +1,6 @@
+# Layered on owpp's stack. Excalidraw's editor is a page in the Artifacts panel, which needs
+# iframe Sandbox Allow Same Origin (plugin.yaml: requires), off in Open-WebUI by default.
+services:
+  open-webui:
+    environment:
+      DEFAULT_INTERFACE_SETTINGS: '{"iframeSandboxAllowSameOrigin": true}'

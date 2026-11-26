@@ -153,6 +153,8 @@ A function pasted into Open-WebUI, or written for it outside owpp, is brought in
 - **A name the mock does not have** still imports, and raises `NotImplementedError` naming it when called: [what the mock is not](mock.md#what-it-is-not).
 - **A service it calls** is a stand-in on `127.0.0.1`, as for [any plugin that calls other services](#plugins-that-call-other-services).
 
+Two worked examples, someone else's plugin and one of this repository's, with their tests and how many planted bugs those caught: [a plugin that already works](existing-plugins.md).
+
 ## Code from git
 
 A plugin whose tool, function or skills come from a `source:` is loaded with the files fetched from the pinned commit, which needs the network. To test offline, and to test only this folder's part, load it with stand-ins:

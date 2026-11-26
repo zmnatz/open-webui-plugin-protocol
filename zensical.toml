@@ -45,6 +45,7 @@ nav = [
     { "Each kind of plugin" = "testing/kinds.md" },
     { "The mock" = "testing/mock.md" },
     { "On a real Open-WebUI" = "testing/live.md" },
+    { "A plugin that already works" = "testing/existing-plugins.md" },
     { "In CI" = "testing/ci.md" },
   ] },
   { "Commands" = [
