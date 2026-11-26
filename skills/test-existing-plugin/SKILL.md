@@ -30,6 +30,7 @@ Read the whole of the code, and write down, one line each:
 - **each valve**, and what changes when it is set;
 - **each branch**: every early `return`, `except`, and check on the user's role, the model or the body's shape, both what it does and when it leaves things alone;
 - **each thing outside it** that it calls: an `open_webui` model, an HTTP service, a model.
+- **each field it shows to a person** (a banner's title and text, a valve, a model's reply, a file name): what happens when it holds markup, a script or an event-handler attribute.
 
 Done when every method, valve and branch in the code has a line.
 

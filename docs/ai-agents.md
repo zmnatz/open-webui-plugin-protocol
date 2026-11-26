@@ -41,6 +41,17 @@ The two sets test different things. Page Banners' tests are mostly about the ada
 
 Page Banners' By hand steps say the pill "stays folded after a reload". Until this experiment, only the skill's live tests checked that.
 
+Then, to see whether the tests catch bugs and not only changed expectations, 16 bugs a developer could plausibly write were put into Better Banners one at a time (its dismissals under another key, `position: bottom` ignored, a typo in the event name, `javascript:` links let through, collapsing not saved, the script still served once disabled, a cache that ignores a valve, and so on), each deployed to the live Open-WebUI and run against every test:
+
+| | Caught |
+| --- | --- |
+| By the mock's tests | 4 of 16: the server side only (the event name, the script withdrawn when disabled, the weak ETag, the 1.0.2 fragment) |
+| By the live tests | 12 of 16: everything the page's script does, and the cache bug, which only shows in the page |
+| By either | 14 of 16 |
+| After one more live test | 16 of 16 |
+
+The two it missed were both ways to run code from a banner: the sanitizer keeping `onclick`, and the title set as HTML. The skill tested the behaviours it listed, and "a field shows hostile markup safely" was not one of them: its HTML test used an `<img onerror>`, which the sanitizer drops anyway, and every banner had an empty title. A test of markup in every field caught both, and the skill now asks for one, for each field a plugin shows to a person.
+
 Read it as one plugin, not a benchmark. Page Banners' tests were written before `owpp live` existed, when screenshot scripts were the only way into the browser, so the gap on a real Open-WebUI is mostly what `owpp live` makes possible rather than the skill against a person. The agent had read Page Banners' README, and it knew owpp well. And a test that goes red when its expected value changes can fail, which is not the same as catching a bug in the plugin.
 
 The finding was in `owpp live`: each browser page signed in again on the login page, and Open-WebUI answers a sign-in with 429 after a few a minute, so a suite with several browser tests failed in its fixtures. The `admin` and `user` pages now share one sign-in per account for the run ([the fixtures](testing/live.md#the-fixtures)).
