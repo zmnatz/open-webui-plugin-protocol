@@ -54,7 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uvx owpp@0.6.2 check --strict && uvx owpp@0.6.2 build --out dist
+      - run: uvx owpp@0.6.3 check --strict && uvx owpp@0.6.3 build --out dist
       - uses: actions/upload-artifact@v4
         with: { name: plugins, path: dist }
   deploy:
@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: { name: plugins, path: dist }
-      - uses: zmnatz/open-webui-plugin-protocol@v0.6.2
+      - uses: zmnatz/open-webui-plugin-protocol@v0.6.3
         with:
           url: https://chat.example.com
           api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
