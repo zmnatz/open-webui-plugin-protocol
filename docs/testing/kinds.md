@@ -145,6 +145,14 @@ def test_the_tool_goes_with_the_function_and_comes_back_with_it(owui, plugin):
 
 `owui.skills` holds the skills, and the grants are on each row (`access: public` puts a read grant for every user there).
 
+## A function written elsewhere
+
+A function pasted into Open-WebUI, or written for it outside owpp, is brought in with [`owpp import`](../commands/import.md) (`--instance <id>`, a file, or its repository's URL), which writes its folder and a first test. The recipes on this page then apply as they are, for the kind of function it is. Two things come up with such code:
+
+- **`open_webui` imported at the top of the file** loads in the mock, which stands in for those modules as they are in Open-WebUI v0.13. Code written for an older Open-WebUI can fail where v0.13 would too (a model method that is a coroutine now, say): that is a finding about the function, not the test.
+- **A name the mock does not have** still imports, and raises `NotImplementedError` naming it when called: [what the mock is not](mock.md#what-it-is-not).
+- **A service it calls** is a stand-in on `127.0.0.1`, as for [any plugin that calls other services](#plugins-that-call-other-services).
+
 ## Code from git
 
 A plugin whose tool, function or skills come from a `source:` is loaded with the files fetched from the pinned commit, which needs the network. To test offline, and to test only this folder's part, load it with stand-ins:

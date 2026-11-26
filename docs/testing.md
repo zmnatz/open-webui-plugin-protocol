@@ -15,7 +15,7 @@ Every change runs the first two, in CI. The third runs before a release, and whe
 | Page | For |
 | --- | --- |
 | [Writing a test](testing/writing.md) | A first test, the fixtures, the docstring every test carries, the order to work in. |
-| [Testing each kind of plugin](testing/kinds.md) | Recipes: filters, actions, pipes, tools, events and scheduled jobs, pages, installers and skills, code from git, plugins that call other services. |
+| [Testing each kind of plugin](testing/kinds.md) | Recipes: filters, actions, pipes, tools, events and scheduled jobs, pages, installers and skills, a function written elsewhere, code from git, plugins that call other services. |
 | [The mock](testing/mock.md) | Every call and table of the mock Open-WebUI, and what it is not. |
 | [On a real Open-WebUI](testing/live.md) | By hand checks; this repository's live suite, the examples deployed to a real Open-WebUI with aimock as its models; and the same stack as an isolated Open-WebUI to try things on. |
 | [In CI](testing/ci.md) | A workflow that checks and tests every pull request. |

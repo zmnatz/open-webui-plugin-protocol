@@ -18,7 +18,7 @@ Done when all five places name the author and the licence.
 
 ## 2. Test it
 
-Follow [the owpp skill's testing steps](../../skills/owpp/references/testing.md): every valve and every branch has a test, each with a docstring that says what it checks and then **By hand**. The test names matter twice over: the screenshots link to them, and the [test catalogue](../testing/writing.md#describe-every-test) is built from the docstrings.
+Follow [the `test-existing-plugin` skill](../../skills/test-existing-plugin/SKILL.md), steps 2 to 4 (the adapted code works, so its tests pin what it does): every valve and every branch has a test, each with a docstring that says what it checks and then **By hand**. The test names matter twice over: the screenshots link to them, and the [test catalogue](../testing/writing.md#describe-every-test) is built from the docstrings.
 
 Done when `uv run owpp test --dir examples/plugins <id>` and `uv run owpp check --strict --dir examples/plugins <id>` pass, and `uv run ruff check .` and `uv run ruff format --check .` (what CI runs) pass over the adapted code too. Every `open_webui` name the plugin imports must exist in the mock, which `tests/test_stubs.py` checks: add any that is missing to `src/owpp/testing/mock.py` (with a test in `tests/test_mock.py`), then regenerate the editor stubs with `uv run python -m owpp.testing.stubs` and commit `src/open_webui-stubs/`.
 
@@ -30,7 +30,7 @@ The model is [aimock](../testing/live.md#the-model-aimock), answering from `tool
 
 ## 4. Check it live
 
-When the plugin depends on something only the real Open-WebUI does (which model a request goes to, what reaches the model, a grant), add a test to `tools/live/test_live.py` ([the live suite](../testing/live.md#the-live-suite)). Its tests can read what Open-WebUI sent the model from aimock's journal.
+When the plugin depends on something only the real Open-WebUI does (which model a request goes to, what reaches the model, a grant), add a test to `tools/live/test_live.py` ([the live suite](../testing/live.md#the-live-suite)). Its tests can read what Open-WebUI sent the model from aimock's journal. When it is something only the chat page does (running a tool the model calls, a button under a reply, the Artifacts panel), drive the page with Playwright in `tools/live/test_in_the_browser.py` ([tests in the browser](../testing/live.md#tests-in-the-browser)).
 
 ## 5. Run it
 

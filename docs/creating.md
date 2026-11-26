@@ -102,6 +102,8 @@ The tool stage defaults to yes for an installer. If it has no tool, the skills s
 
 ## From a git repository
 
+For code that is already in a repository, [`owpp import <URL>`](commands/import.md) asks nothing: it finds the function, the tool and the skills in the folder and pins them. The wizard is for choosing the parts yourself.
+
 ```text
 ▸ Stage 3/6 · The repository  (~3 min left)
 
