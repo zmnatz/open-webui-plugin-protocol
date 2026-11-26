@@ -1,6 +1,7 @@
 name: docs
 # Builds the documentation site (zensical.toml, tools/build_docs.py) on every pull request, and publishes it to GitHub
 # Pages from each v* tag, so the site is the latest release. To publish again, run it by hand on the tag.
+# Published pages get Google Analytics, with the measurement ID in the GA_ID Actions secret (docs/contributing.md#this-site).
 # Once per repository: Settings > Pages > Source: GitHub Actions, and the github-pages environment allows v* tags.
 on:
   push:
@@ -20,6 +21,12 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       - run: uv sync --group docs --python 3.13 # Zensical needs 3.11+
       - run: uv run python tools/build_docs.py # fails on a broken link, or an example missing from the menu
+      # Only what is published: pull requests from forks get no secrets.
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: zmnatz/github-workflows/google-analytics@v1.2.1
+        with:
+          site-dir: site
+          tag-id: ${{ secrets.GA_ID }}
       - if: startsWith(github.ref, 'refs/tags/v')
         uses: actions/upload-pages-artifact@v5
         with:

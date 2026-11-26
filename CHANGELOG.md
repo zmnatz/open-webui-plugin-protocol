@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Docs: the published docs site counts visits with Google Analytics.
 - Docs: each example's page has a **Get the built function** button: a popup with the one file `owpp deploy` stores, a copy button, and a link to the file, an address Open-WebUI's **Import from URL** takes (`.../examples/downloads/<id>.py` on the docs site, as of the latest release).
 
 ## 0.6.2 (2026-11-25)
