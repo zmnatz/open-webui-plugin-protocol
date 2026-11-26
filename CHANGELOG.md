@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Docs: the published docs site counts visits with Google Analytics (through Google Tag Manager).
+- Docs: the published docs site counts visits with Google Analytics.
 
 ## 0.6.2 (2026-11-25)
 
