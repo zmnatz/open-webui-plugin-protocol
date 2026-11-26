@@ -50,7 +50,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uvx owpp@0.6.2 pull | tee pull.txt
+      - run: uvx owpp@0.6.3 pull | tee pull.txt
       - name: Open a pull request
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
