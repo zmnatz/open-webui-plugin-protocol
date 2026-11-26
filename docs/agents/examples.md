@@ -48,6 +48,6 @@ Done when the live suite passes and the new PNGs and `docs/screenshots/screensho
 - The example's README: what it does, its valves, `## Test` from the By hand steps, `## Deploy`.
 - `CHANGELOG.md` under Unreleased.
 - Add the example to the Examples menu in `zensical.toml` (`{ "Title" = "examples/<id>.md" }`): its page is built either way, but only the menu leads to it.
-- `uv run --group docs python tools/build_docs.py` builds the docs site with the new page and its screenshots; a broken link, or an example the menu leaves out, fails it.
+- `uv run --group docs python tools/build_docs.py` builds the docs site with the new page and its screenshots; a broken link, or an example the menu leaves out, fails it. The button to the example's built function is added by the same build; nothing to write.
 
 Done when the docs build passes, and `uv run pytest` passes.
