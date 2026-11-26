@@ -57,6 +57,7 @@ Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (
 
 ```sh
 uvx owpp create                      # a wizard: asks what the plugin is, writes plugins/<id>/
+uvx owpp import <git URL|file>       # or a plugin from code that exists (--instance <id>: from Open-WebUI)
 uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
 # or OPEN_WEBUI_USERNAME + OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing: docs/commands/deploy.md#signing-in

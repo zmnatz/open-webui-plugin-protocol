@@ -57,6 +57,7 @@ nav = [
     { "owpp pull" = "commands/pull.md" },
     { "owpp version" = "commands/version.md" },
     { "owpp migrate" = "commands/migrate.md" },
+    { "owpp import" = "commands/import.md" },
     { "owpp create" = "commands/create.md" },
     { "owpp init" = "commands/init.md" },
   ] },

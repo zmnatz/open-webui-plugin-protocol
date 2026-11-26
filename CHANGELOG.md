@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- `owpp import` makes a plugin folder from code that already exists ([owpp import](docs/commands/import.md), [#82](https://github.com/zmnatz/open-webui-plugin-protocol/issues/82)). From a git repository (a GitHub or GitLab page of a folder or file, or a clone URL), it finds the function, the tool and the skills in the folder, or takes a whole owpp plugin, and pins them at the branch's current commit, never copying them. From a `.py` file, or a function on Open-WebUI (`--instance <id>`, signed in as the deploy is), it moves the docstring header into `plugin.yaml`, so the bundle is the same code again. It then runs `owpp check`. This is how a function written for Open-WebUI is now tested as it is ([#52](https://github.com/zmnatz/open-webui-plugin-protocol/issues/52)).
+- `owui.load()` refuses a loose `<id>.py` with the `owpp import` that makes a plugin of it, instead of `NotADirectoryError`.
+- A second agent skill, [`test-existing-plugin`](skills/test-existing-plugin/SKILL.md): tests for a function or plugin that already works, against the mock, with what looks wrong reported rather than fixed, and in this repository its screenshots ([with an AI agent](docs/ai-agents.md#the-test-existing-plugin-skill)).
+
 ## 0.6.3 (2026-11-26)
 
 - Docs: the published docs site counts visits with Google Analytics.

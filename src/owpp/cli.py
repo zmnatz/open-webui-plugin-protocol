@@ -363,6 +363,49 @@ def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str
     return run_wizard(directory, args.id or "", check=check)
 
 
+def _cmd_import(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    from .importer import import_file, import_git, import_instance
+
+    if bool(args.what) == bool(args.instance):
+        print(
+            "say what to import: a git URL, a file, or --instance <id> (one of them)",
+            file=sys.stderr,
+        )
+        return 1
+    if args.instance:
+        instance = instance_from_env(env)
+        if not instance.base_url:
+            raise OwppError("OPEN_WEBUI_URL is not set: --instance reads the function from it")
+        imported = import_instance(directory, instance, args.instance, args.id or "")
+    elif Path(args.what).is_dir():
+        raise OwppError(
+            f"{args.what} is a folder on disk: give the URL of its git repository, so the "
+            "code is pinned at a commit, or the file of one function"
+        )
+    elif Path(args.what).is_file():
+        imported = import_file(directory, args.what, args.id or "")
+    else:
+        imported = import_git(
+            directory,
+            args.what,
+            plugin_id=args.id or "",
+            path=args.path or "",
+            name=args.ref or "",
+            public=args.public,
+        )
+    plugin_id = imported.folder.name
+    print(f"created {imported.folder}")
+    for note in imported.notes:
+        print(f"note  {note}")
+    print()
+    code = main(["check", plugin_id, "--dir", str(directory)], env)
+    print(
+        f"\nnext: write its tests in {plugin_id}/tests/ and run `owpp test {plugin_id}` "
+        "(docs/testing/writing.md)"
+    )
+    return code
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="owpp",
@@ -410,6 +453,33 @@ def build_parser() -> argparse.ArgumentParser:
         "--latest",
         action="store_true",
         help="at the latest commit each git-sourced plugin follows (deploys only as a dry run)",
+    )
+    imp = add(
+        "import",
+        _cmd_import,
+        "make a plugin folder from code that exists: a folder or file in a git repository "
+        "(pinned, not copied), a .py file, or a function on Open-WebUI",
+    )
+    imp.add_argument(
+        "what",
+        nargs="?",
+        metavar="url|file",
+        help="a git URL (a GitHub or GitLab page of a folder or file works), or a .py file",
+    )
+    imp.add_argument(
+        "--instance",
+        metavar="ID",
+        help="import the function with this id from OPEN_WEBUI_URL (signs in as deploy does)",
+    )
+    imp.add_argument("--id", help="the plugin's id (default: from the file, folder or instance)")
+    imp.add_argument("--path", help="with a clone URL: the folder in the repository")
+    imp.add_argument(
+        "--ref", metavar="BRANCH|TAG", help="with a clone URL: the branch or tag to follow"
+    )
+    imp.add_argument(
+        "--public",
+        action="store_true",
+        help="give every user the tool and skills it installs (default: admins only)",
     )
     deploy = add("deploy", _cmd_deploy, "deploy the plugins to an Open-WebUI instance")
     deploy.add_argument(
