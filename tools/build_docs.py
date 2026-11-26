@@ -10,10 +10,13 @@ is checked in, so none of it can drift from the repository:
 
 - the root CHANGELOG, SECURITY, LICENSE and NOTICE files, and each example plugin's README;
 - an examples overview, built from each plugin.yaml;
+- for each example, its built function: the one file `owpp deploy` stores, behind a button atop the
+  example's page that shows it in a popup, and at an address Open-WebUI can import it from (see
+  `_with_built`);
 - the test catalogue, built from the test docstrings (docs/testing/writing.md, "Describe every test");
 - the libraries table in docs/libraries.md, built from the library catalogue;
 - llms.txt and llms-full.txt, for language models: the site's pages with their addresses, and
-  the text of the guide in one file (https://llmstxt.org/);
+  the text of the guide in one file (https://llmstxt.org/).
 
 Links are written for GitHub, relative to the file they are in. They are rewritten to the page
 that carries the target on the site, or else to the file on GitHub. A link to a file or heading
@@ -36,6 +39,9 @@ import sys
 from pathlib import Path
 
 import yaml
+
+from owpp.bundle import FunctionFile, load_function_files
+from owpp.sources import Sources
 
 ROOT = Path(__file__).resolve().parent.parent
 DOCS = ROOT / "docs"
@@ -94,12 +100,17 @@ def assemble(out: Path = OUT) -> list[str]:
     for path, uri in COPIED.items():
         text = (ROOT / path).read_text()
         pages[uri] = (path, text if path.endswith(".md") else f"# License\n\n{text}")
+    functions = _functions()
     for plugin in _plugins():
         rel = plugin.relative_to(ROOT).as_posix()
         copied[f"{rel}/README.md"] = copied[rel] = f"examples/{plugin.name}.md"
+        readme = (plugin / "README.md").read_text()
+        function = functions.get(plugin.name.lower())
+        if function:  # a plugin with only a tool or skills has no function to install
+            readme = _with_built(readme, function, out)
         pages[f"examples/{plugin.name}.md"] = (
             f"{rel}/README.md",
-            (plugin / "README.md").read_text() + _gallery(plugin.name, f"{rel}/README.md"),
+            readme + _gallery(plugin.name, f"{rel}/README.md"),
         )
     # Generated pages write their links relative to the repository root.
     pages["examples/index.md"] = ("generated.md", _examples_index())
@@ -133,6 +144,34 @@ def assemble(out: Path = OUT) -> list[str]:
             )
     _write_llms(out, pages)
     return problems
+
+
+# ---- each example, built --------------------------------------------------------------------
+
+DOWNLOADS = "examples/downloads"  # beside the example pages: <id>.py
+BUTTON = '<a class="md-button md-button--primary owpp-built"'
+
+
+def _functions(folder: Path = EXAMPLES) -> dict[str, FunctionFile]:
+    """Every function in the plugins folder by id, bundled as `owpp deploy` would store it. A
+    plugin that takes files from git has them fetched."""
+    with Sources() as sources:
+        return {f.id: f for f in load_function_files(folder, sources)}
+
+
+def _with_built(readme: str, function: FunctionFile, out: Path) -> str:
+    """Writes the function as `<id>.py`, and puts the button to it under the README's title.
+
+    The button is a link to the file; docs/assets/built-function.js shows the file in a popup
+    instead of leaving the page. Open-WebUI's Import from URL takes a function's id from the
+    file's name, so the file is named for the id a deploy would give it.
+    """
+    name = f"{function.id}.py"
+    (out / DOWNLOADS).mkdir(parents=True, exist_ok=True)
+    (out / DOWNLOADS / name).write_text(function.content)
+    # Zensical rewrites an href in HTML: written relative to the page's source file.
+    button = f'{BUTTON} href="downloads/{name}">Get the built function</a>'
+    return re.sub(r"^# .*$", lambda m: f"{m[0]}\n\n{button}", readme, count=1, flags=re.M)
 
 
 # ---- the library catalogue ----------------------------------------------------------------
@@ -183,8 +222,8 @@ def _summary(text: str) -> str:
     """A page's first sentence of prose, as one line ("" when it opens with none)."""
     for para in re.sub(r"\A#[^\n]*\n+", "", text.lstrip()).split("\n\n"):
         para = para.strip()
-        if not para or para.startswith("#"):
-            continue  # a heading: the prose under it may follow
+        if not para or para.startswith(("#", BUTTON)):
+            continue  # a heading or a button: the prose under it may follow
         if para.startswith(("```", "|", "!!!", "-", "<")):
             return ""
         line = " ".join(re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", para).split())

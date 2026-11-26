@@ -81,6 +81,7 @@ The site is built with [Zensical](https://zensical.org/), configured in `zensica
 
 - the root `CHANGELOG.md`, `SECURITY.md`, `LICENSE` and `NOTICE.md`, and each example plugin's `README.md`;
 - the examples overview, from each `plugin.yaml`;
+- each example's built function, as a `.py` file to import by URL. A button atop the example's page shows it in a popup (`docs/assets/built-function.js`);
 - the test catalogue, from the test docstrings.
 
 Links written for GitHub (`../SECURITY.md`, a plugin's `config.yaml`) are rewritten to the page that carries the file, or to the file on GitHub. A link to a file or heading that does not exist fails the build. `serve` assembles the pages once, so after editing `docs/`, run it again.

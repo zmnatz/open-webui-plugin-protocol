@@ -1,0 +1,18 @@
+/* The popup of an example's built function (built-function.js). */
+.owpp-popup {
+  width: min(60rem, calc(100vw - 1rem)); height: calc(100vh - 4rem); max-width: none; max-height: none;
+  box-sizing: border-box; padding: 0; overflow: hidden; border: 0; border-radius: .4rem;
+  background: var(--md-default-bg-color); color: var(--md-default-fg-color);
+}
+.owpp-popup[open] { display: flex; }
+.owpp-popup::backdrop { background: rgba(0, 0, 0, .5); }
+.owpp-popup > div { display: flex; flex: 1; flex-direction: column; min-width: 0; padding: .8rem; }
+.owpp-popup .owpp-bar { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+.owpp-popup .owpp-bar strong { margin-right: auto; }
+.owpp-popup .md-button { cursor: pointer; padding: .3em 1em; }
+.owpp-popup p { margin: .6rem 0; overflow-wrap: anywhere; }
+/* The code scrolls inside its block, so the copy button stays in the corner. */
+.owpp-popup .highlight, .owpp-popup pre { display: flex; flex: 1; flex-direction: column; min-height: 0; margin: 0; }
+.owpp-popup pre > code { flex: 1; min-height: 0; max-height: none; overflow: auto; background: var(--md-code-bg-color); }
+.owpp-popup .owpp-status { margin-right: .4em; font-family: var(--md-text-font-family); }
+.owpp-popup .owpp-status:not(:empty) { padding: 0 .4em; background: var(--md-code-bg-color); }
