@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Docs: each example has a page with its built function (linked from its own page, not in the menu): the one file `owpp deploy` stores, with a copy button, and at an address Open-WebUI's **Import from URL** takes (`.../examples/downloads/<id>.py` on the docs site, as of the latest release).
+
 ## 0.6.2 (2026-11-25)
 
 - Open-WebUI v0.13.5: the live suite and the screenshots run on it (`ghcr.io/open-webui/open-webui:v0.13.5-slim`), every example passes there, and the screenshots are retaken. The screenshot scripts type a message with `send()`, which checks the chat input holds all of it: v0.13.5's input takes typing while it loads and can lose what was typed.
