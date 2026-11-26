@@ -10,9 +10,9 @@ is checked in, so none of it can drift from the repository:
 
 - the root CHANGELOG, SECURITY, LICENSE and NOTICE files, and each example plugin's README;
 - an examples overview, built from each plugin.yaml;
-- for each example, a page with its built function (linked from the example's own page): the one
-  file `owpp deploy` stores, to copy, and at an address Open-WebUI can import it from (see
-  `_built_page`);
+- for each example, its built function: the one file `owpp deploy` stores, behind a button atop the
+  example's page that shows it in a popup, and at an address Open-WebUI can import it from (see
+  `_with_built`);
 - the test catalogue, built from the test docstrings (docs/testing/writing.md, "Describe every test");
 - the libraries table in docs/libraries.md, built from the library catalogue;
 - llms.txt and llms-full.txt, for language models: the site's pages with their addresses, and
@@ -40,7 +40,7 @@ from pathlib import Path
 
 import yaml
 
-from owpp.bundle import FunctionFile, load_function_files, parse_frontmatter, runtime_data
+from owpp.bundle import FunctionFile, load_function_files
 from owpp.sources import Sources
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -101,22 +101,13 @@ def assemble(out: Path = OUT) -> list[str]:
         text = (ROOT / path).read_text()
         pages[uri] = (path, text if path.endswith(".md") else f"# License\n\n{text}")
     functions = _functions()
-    blocks: dict[str, str] = {}  # page -> a code block ending it, added once links are rewritten
     for plugin in _plugins():
         rel = plugin.relative_to(ROOT).as_posix()
         copied[f"{rel}/README.md"] = copied[rel] = f"examples/{plugin.name}.md"
         readme = (plugin / "README.md").read_text()
         function = functions.get(plugin.name.lower())
         if function:  # a plugin with only a tool or skills has no function to install
-            # BUILT.md is no file in the repository: the name the README's link goes by.
-            built = f"examples/{plugin.name}-built.md"
-            copied[f"{rel}/BUILT.md"] = built
-            text, blocks[built] = _built_page(function, out)
-            pages[built] = (f"{rel}/README.md", text)
-            readme += (
-                "\n## Built function\n\n[The built function](BUILT.md), to copy or to import "
-                "by URL.\n"
-            )
+            readme = _with_built(readme, function, out)
         pages[f"examples/{plugin.name}.md"] = (
             f"{rel}/README.md",
             readme + _gallery(plugin.name, f"{rel}/README.md"),
@@ -142,7 +133,7 @@ def assemble(out: Path = OUT) -> list[str]:
         for i in range(0, len(parts), 2):
             parts[i] = re.sub(r"(\]\()([^)\s]+)(\))", relink, parts[i])
         (out / uri).parent.mkdir(parents=True, exist_ok=True)
-        (out / uri).write_text("".join(parts) + blocks.get(uri, ""))
+        (out / uri).write_text("".join(parts))
     # An example's page is built whether or not the menu names it, so one left out of
     # zensical.toml's nav is reachable only by its address: refuse that.
     in_menu = {page for _, section in _nav() for _, page in section}
@@ -158,9 +149,7 @@ def assemble(out: Path = OUT) -> list[str]:
 # ---- each example, built --------------------------------------------------------------------
 
 DOWNLOADS = "examples/downloads"  # beside the example pages: <id>.py
-SANDBOX_LINK = (
-    "../../../docs/libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin"
-)
+BUTTON = '<a class="md-button md-button--primary owpp-built"'
 
 
 def _functions(folder: Path = EXAMPLES) -> dict[str, FunctionFile]:
@@ -170,70 +159,19 @@ def _functions(folder: Path = EXAMPLES) -> dict[str, FunctionFile]:
         return {f.id: f for f in load_function_files(folder, sources)}
 
 
-def _built_page(function: FunctionFile, out: Path) -> tuple[str, str]:
-    """An example's page with its built function (not in the menu), as the text and the code
-    block that ends it; writes the same code as `<id>.py`, for an address to import it from.
+def _with_built(readme: str, function: FunctionFile, out: Path) -> str:
+    """Writes the function as `<id>.py`, and puts the button to it under the README's title.
 
-    Open-WebUI's Import from URL takes a function's id from the file's name, and its name and
-    description from the header. The block is kept apart from the text so that nothing in the
-    code is taken for a link or a heading. Importing leaves a function switched off and not
-    global, so the page says what `owpp deploy` would have done.
+    The button is a link to the file; docs/assets/built-function.js shows the file in a popup
+    instead of leaving the page. Open-WebUI's Import from URL takes a function's id from the
+    file's name, so the file is named for the id a deploy would give it.
     """
-    meta = parse_frontmatter(function.content)
     name = f"{function.id}.py"
     (out / DOWNLOADS).mkdir(parents=True, exist_ok=True)
     (out / DOWNLOADS / name).write_text(function.content)
-
-    runtime = runtime_data(function.content)
-    extras = " and ".join(
-        f"{len(runtime[k])} {k[:-1] if len(runtime[k]) == 1 else k}"
-        for k in ("tools", "skills")
-        if runtime[k]
-    )
-    after = ["switch it on"]
-    # What `owpp deploy` does for a new function (docs/commands/deploy.md).
-    if function.want_global or (function.type == "filter" and not function.not_global):
-        after.append("switch on **Global** in its **...** menu")
-    if function.requires.get("iframe_sandbox_allow_same_origin"):
-        after.append(f"turn on [**iframe Sandbox Allow Same Origin**]({SANDBOX_LINK})")
-    needs = meta.get("required_open_webui_version")
-    text = "\n".join(
-        [
-            # Thousands of lines of code would swamp the site's search.
-            "---",
-            "search:",
-            "  exclude: true",
-            "---",
-            "",
-            f"# {function.name}: the built function",
-            "",
-            f"[{function.name}](README.md) as the one file [`owpp deploy`]"
-            "(../../../docs/commands/deploy.md) stores, with its libraries bundled in."
-            + (f" While it is on, it installs {extras}." if extras else "")
-            + (f" It needs Open WebUI {needs} or newer." if needs else "")
-            + " A function runs on your server with full access to it: read it first.",
-            "",
-            "## Import from URL",
-            "",
-            "In **Admin Panel > Functions**, open the arrow beside **Create**, choose "
-            "**Import from URL**, give it this address, then **Save & Create**:",
-            "",
-            "```text",
-            f"{SITE_URL}{DOWNLOADS}/{name}",
-            "```",
-            "",
-            f"Then {', '.join(after)}, and set its valves ([{function.name}'s page](README.md)).",
-            "",
-            "## Or copy the code",
-            "",
-            f"Paste it into a new function (**Create**), with the **Function ID** `{function.id}`.",
-            "",
-        ]
-    )
-    # A fence longer than any the code has at the start of a line.
-    ticks = re.findall(r"^\s*(`{3,})", function.content, flags=re.M)
-    fence = "`" * (max(map(len, ticks), default=2) + 1)
-    return text, f'\n{fence}python title="{name}"\n{function.content.rstrip()}\n{fence}\n'
+    # Zensical rewrites an href in HTML: written relative to the page's source file.
+    button = f'{BUTTON} href="downloads/{name}">Get the built function</a>'
+    return re.sub(r"^# .*$", lambda m: f"{m[0]}\n\n{button}", readme, count=1, flags=re.M)
 
 
 # ---- the library catalogue ----------------------------------------------------------------
@@ -284,8 +222,8 @@ def _summary(text: str) -> str:
     """A page's first sentence of prose, as one line ("" when it opens with none)."""
     for para in re.sub(r"\A#[^\n]*\n+", "", text.lstrip()).split("\n\n"):
         para = para.strip()
-        if not para or para.startswith("#"):
-            continue  # a heading: the prose under it may follow
+        if not para or para.startswith(("#", BUTTON)):
+            continue  # a heading or a button: the prose under it may follow
         if para.startswith(("```", "|", "!!!", "-", "<")):
             return ""
         line = " ".join(re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", para).split())
