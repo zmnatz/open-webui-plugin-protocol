@@ -1,17 +1,37 @@
 """Fixtures for the live suite (test_*.py here). `tools/screenshots/run.py --live` starts
 Open-WebUI, deploys examples/plugins and runs these with pytest; the repository's own test run
-never collects them."""
+never collects them.
+
+A test that needs the browser (what the chat page does, a button under a reply, the Artifacts
+panel) takes the Playwright pages the screenshot scripts use: `admin`, `user` and `signed_out`,
+with `send(page, text)` to chat (tools/screenshots/browser_fixtures.py)."""
 
 from __future__ import annotations
 
 import json
-import os
+import sys
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 
-URL = os.environ.get("OWPP_SCREENSHOT_URL", "http://127.0.0.1:3000")
+# Appended, not prepended: `conftest` must stay this file for `from conftest import ...`.
+sys.path.append(str(Path(__file__).resolve().parent.parent / "screenshots"))
+
+from browser_fixtures import (  # noqa: E402, F401  (fixtures and the failure hook, for pytest)
+    AIMOCK,
+    URL,
+    account,
+    admin,
+    admin_account,
+    browser,
+    pytest_runtest_makereport,
+    send,
+    signed_out,
+    user,
+    user_account,
+)
 
 
 class Api:
@@ -39,18 +59,11 @@ class Api:
                 return error.code, text
 
 
-def _account(name: str) -> dict:
-    raw = os.environ.get(f"OWPP_SCREENSHOT_{name}")
-    if not raw:
-        pytest.exit("Run the live suite with tools/screenshots/run.py --live", returncode=2)
-    return json.loads(raw)
-
-
 @pytest.fixture(scope="session")
 def api() -> Api:
-    return Api(_account("ADMIN")["token"])
+    return Api(account("ADMIN")["token"])
 
 
 @pytest.fixture(scope="session")
 def user_api() -> Api:
-    return Api(_account("USER")["token"])
+    return Api(account("USER")["token"])

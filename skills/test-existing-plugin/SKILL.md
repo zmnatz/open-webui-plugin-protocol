@@ -1,6 +1,6 @@
 ---
 name: test-existing-plugin
-description: Tests for an Open-WebUI function or owpp plugin that already works, against owpp's mock Open-WebUI. Use when asked for tests, coverage or screenshots of a function pasted into Open-WebUI, a .py file, someone else's repository, or a plugin folder without tests.
+description: Tests for an Open-WebUI function or owpp plugin that already works, against owpp's mock Open-WebUI (and, in the owpp repository, Playwright and API tests on a real Open-WebUI with aimock). Use when asked for tests, coverage, live or browser tests, or screenshots of a function pasted into Open-WebUI, a .py file, someone else's repository, or a plugin folder without tests.
 ---
 
 # Tests for a plugin that already works
@@ -66,12 +66,21 @@ In `plugins/<id>/README.md` (make one if there is none): the `owpp check <id> --
 
 Done when each By hand step is in the list.
 
-## 5. In the owpp repository: screenshots and the live suite
+## 5. In the owpp repository: the live suite and screenshots
 
-When the plugin is one of the owpp repository's examples (`examples/plugins/<id>`, with `tools/screenshots/` beside it), it is also photographed on a real Open-WebUI, and checked there when it depends on what only Open-WebUI does. Follow `docs/agents/examples.md`, steps 3 to 5, and `docs/screenshots.md#adding-one`. Each screenshot script follows one test's By hand steps in the browser, and its `shot(..., illustrates=[...])` names the tests from step 3 that it shows.
+When the plugin is one of the owpp repository's examples (`examples/plugins/<id>`, with `tools/screenshots/` and `tools/live/` beside it), it also runs on a real Open-WebUI: v0.13.5 in Docker, with aimock answering as its models from fixtures (`tools/screenshots/aimock/models.json`). Follow `docs/agents/examples.md`, steps 3 to 5.
 
-Done when the screenshots run passes and its new PNGs and `docs/screenshots/screenshots.json` are in the change.
+**Live tests**: for each By hand step that depends on what only Open-WebUI does, write a test that asserts it there (https://zmnatza.github.io/open-webui-plugin-protocol/testing/live/#the-live-suite):
+
+- **Over the API** (which model a request goes to, what reaches the model, a grant): in `tools/live/test_live.py`, with the `api` and `user_api` fixtures, and aimock's journal for what Open-WebUI sent the model.
+- **In the browser** (the chat page running a tool the model calls, a button under a reply, the Artifacts panel, a page the plugin serves): a Playwright test in `tools/live/test_in_the_browser.py`, with the `admin`, `user` or `signed_out` page and `send(page, text)`. Wait for what the page shows (`page.get_by_text(...).wait_for(timeout=60_000)`), then assert on it and on the journal. Leave apostrophes out of what `send` types: the input makes them curly. (https://zmnatza.github.io/open-webui-plugin-protocol/testing/live/#tests-in-the-browser)
+
+When the model must answer something new, add an aimock fixture above the catch-all. Run them with `uv run --group screenshots python tools/screenshots/run.py --live` (`-- -k <name>` for some). See each one bite, as in step 3. A failure that the mock's tests did not show is a finding.
+
+**Screenshots** (`docs/screenshots.md#adding-one`): each script follows one test's By hand steps in the browser, and its `shot(..., illustrates=[...])` names the tests from step 3 that it shows.
+
+Done when the live suite passes with a test for each By hand step that needs the real Open-WebUI, and the screenshots run passes with its new PNGs and `docs/screenshots/screenshots.json` in the change.
 
 ## Report
 
-Tell the user the tests written (one line per behaviour), each finding with the test that shows it, and what is left to check by hand.
+Tell the user the tests written (one line per behaviour, the live ones marked), each finding with the test that shows it, and what is left to check by hand.

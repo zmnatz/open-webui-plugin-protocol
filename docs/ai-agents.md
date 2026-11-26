@@ -17,7 +17,7 @@ or copy the folder into your agent's skills folder (for Claude Code, `.claude/sk
 
 ## The test-existing-plugin skill
 
-[`skills/test-existing-plugin/`](../skills/test-existing-plugin/SKILL.md) writes the tests for a function or plugin that already works: one pasted into Open-WebUI, a `.py` file, someone else's repository, or a plugin with no tests yet. It brings the code in with [`owpp import`](commands/import.md), lists every method, valve and branch, and writes a test for each against [the mock](testing/mock.md) that pins what the code does now. Where the code does something its author would not want, it reports a finding rather than changing the code. In this repository it also takes the example's [screenshots](screenshots.md).
+[`skills/test-existing-plugin/`](../skills/test-existing-plugin/SKILL.md) writes the tests for a function or plugin that already works: one pasted into Open-WebUI, a `.py` file, someone else's repository, or a plugin with no tests yet. It brings the code in with [`owpp import`](commands/import.md), lists every method, valve and branch, and writes a test for each against [the mock](testing/mock.md) that pins what the code does now. Where the code does something its author would not want, it reports a finding rather than changing the code. In this repository it also writes [live tests](testing/live.md#the-live-suite) for what only a real Open-WebUI does, over its API or in the browser with Playwright, against Open-WebUI with aimock as its models, and takes the example's [screenshots](screenshots.md).
 
 ```sh
 npx skills add zmnatz/open-webui-plugin-protocol@test-existing-plugin

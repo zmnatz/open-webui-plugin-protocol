@@ -30,7 +30,7 @@ The model is [aimock](../testing/live.md#the-model-aimock), answering from `tool
 
 ## 4. Check it live
 
-When the plugin depends on something only the real Open-WebUI does (which model a request goes to, what reaches the model, a grant), add a test to `tools/live/test_live.py` ([the live suite](../testing/live.md#the-live-suite)). Its tests can read what Open-WebUI sent the model from aimock's journal.
+When the plugin depends on something only the real Open-WebUI does (which model a request goes to, what reaches the model, a grant), add a test to `tools/live/test_live.py` ([the live suite](../testing/live.md#the-live-suite)). Its tests can read what Open-WebUI sent the model from aimock's journal. When it is something only the chat page does (running a tool the model calls, a button under a reply, the Artifacts panel), drive the page with Playwright in `tools/live/test_in_the_browser.py` ([tests in the browser](../testing/live.md#tests-in-the-browser)).
 
 ## 5. Run it
 

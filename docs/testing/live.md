@@ -12,13 +12,13 @@ Every test's docstring ends with **By hand**: the steps to see the same behaviou
 
 ## The live suite
 
-This repository also runs its examples on a real Open-WebUI, automatically. It starts the same stack as the [screenshots](../screenshots.md) (Open-WebUI v0.13.5 as the `-slim` image, [aimock](#the-model-aimock) as its models, and [fixed files](#everything-else-fixed-files) for the services the examples call, in Docker), deploys `examples/plugins` with `owpp deploy`, then runs the tests in `tools/live/`: the screenshots show what happens, the live suite asserts it.
+This repository also runs its examples on a real Open-WebUI, automatically. It starts the same stack as the [screenshots](../screenshots.md) (Open-WebUI v0.13.5 as the `-slim` image, [aimock](#the-model-aimock) as its models, and [fixed files](#everything-else-fixed-files) for the services the examples call, in Docker), deploys `examples/plugins` with `owpp deploy`, then runs the tests in `tools/live/`: the screenshots show what happens, the live suite asserts it. Most of its tests call Open-WebUI's API; [those in the browser](#tests-in-the-browser) drive its chat page with Playwright, as a person would.
 
 ```sh
 uv run --group screenshots python tools/screenshots/run.py --live
 ```
 
-It needs Docker, reachable by your user ([taking screenshots](../screenshots.md#taking-them) says how without the `docker` group), and no browser. On GitHub, `.github/workflows/live.yml` runs it on every pull request and every push to `main` and `develop`, as `ci` runs the unit tests, with the stack's images cached between runs. `uv run pytest` never collects it: it needs Docker. It runs against v0.13.5 only.
+It needs Docker, reachable by your user ([taking screenshots](../screenshots.md#taking-them) says how without the `docker` group), and Chromium for Playwright (`uv run --group screenshots playwright install chromium`). On GitHub, `.github/workflows/live.yml` runs it on every pull request and every push to `main` and `develop`, as `ci` runs the unit tests, with the stack's images cached between runs. `uv run pytest` never collects it: it needs Docker. It runs against v0.13.5 only.
 
 | Test | What it shows on a real Open-WebUI |
 | --- | --- |
@@ -32,8 +32,17 @@ It needs Docker, reachable by your user ([taking screenshots](../screenshots.md#
 | `test_theme_designer_pros_designer_is_for_admins` | A route marked `PluginAdmin` refuses a user who is not an admin on the real server. |
 | `test_theme_designer_pros_save_reaches_a_signed_out_page` | `theme_designer_pro`'s save is served at once to a page with no session. |
 | `test_theme_designer_pros_launcher_and_skill_reach_a_user` | A tool and a skill an event function installs are given to a user who is not an admin. |
+| `test_the_chat_page_runs_the_tool_the_model_calls_and_answers_with_its_result` | In the browser, the chat page runs the tool the model calls (the API hands the call back instead), and the model answers with its result. |
 
 To add one, write a `test_*.py` in `tools/live/` with the `api` (admin) and `user_api` fixtures. Each call returns `(status, body)`, with the body on an error too, so put it in the assertion message: Open-WebUI says what went wrong in `detail`. To see what Open-WebUI sent the model, read aimock's journal (`_requests()` in `test_live.py`).
+
+### Tests in the browser
+
+What only the chat page does (running the tool a model calls, a button under a reply, the Artifacts panel, a page a plugin serves) is tested with Playwright, in `tools/live/test_in_the_browser.py` or a file beside it. It takes the screenshot scripts' fixtures (`tools/screenshots/browser_fixtures.py`): `admin`, `user` and `signed_out` pages, and `send(page, text)` to chat ([the fixtures](../screenshots.md#adding-one)).
+
+Wait for what the page shows (`page.get_by_text(...).wait_for(timeout=60_000)`), then assert on it and on aimock's journal. The model's replies come from [aimock's fixtures](#the-model-aimock): a test that needs a new one adds it there. When a browser test fails, what each page showed (a PNG and its text) and what aimock was last asked are kept in `tools/screenshots/failures/`.
+
+A test and a screenshot script often follow the same By hand steps: the test asserts them on every pull request, the script photographs them when the screenshots are taken.
 
 A plugins repository can run its own the same way: see [an isolated Open-WebUI of your own](#an-isolated-open-webui-of-your-own).
 
@@ -95,4 +104,4 @@ It starts the stack, signs up an admin and a user, deploys `examples/plugins` wi
 
 ### An isolated Open-WebUI of your own
 
-A plugins repository can do the same with four files: a `compose.yaml` with Open-WebUI (the `-slim` image), aimock and its fixtures, and a script that signs up an admin and runs `owpp deploy`. This repository's `tools/screenshots/compose.yaml`, `aimock/models.json` and `run.py` are a starting point; drop the `static` service unless a plugin calls one of the services it stands in for.
+A plugins repository can do the same with four files: a `compose.yaml` with Open-WebUI (the `-slim` image), aimock and its fixtures, and a script that signs up an admin and runs `owpp deploy`. This repository's `tools/screenshots/compose.yaml`, `aimock/models.json` and `run.py` are a starting point; drop the `static` service unless a plugin calls one of the services it stands in for. For tests in the browser, copy `browser_fixtures.py` too. owpp shipping all of this is [#84](https://github.com/zmnatz/open-webui-plugin-protocol/issues/84).
