@@ -23,7 +23,7 @@ jobs:
       - run: uv run python tools/build_docs.py # fails on a broken link, or an example missing from the menu
       # Only what is published: pull requests from forks get no secrets.
       - if: startsWith(github.ref, 'refs/tags/v')
-        uses: zmnatz/github-workflows/google-analytics@v1
+        uses: zmnatz/github-workflows/google-analytics@v1.2.1
         with:
           site-dir: site
           tag-id: ${{ secrets.GA_ID }}
