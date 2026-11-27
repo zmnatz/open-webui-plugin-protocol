@@ -39,6 +39,7 @@ from typing import Any
 
 from ..bundle import bundle_function, function_type, parse_frontmatter
 from ..manifest import read_manifest
+from ..sources import Sources
 
 # Modules a test run leaves behind and the mock removes on close: Open-WebUI's, the loaded
 # plugins', and the state the libraries keep in sys.modules so it survives a reload.
@@ -206,32 +207,12 @@ class _MissingFinder:
 
 _MISSING_FINDER = _MissingFinder()
 
-# What `load()` without `sources=` reads git sources through, once per test session: each pinned
-# file is fetched once. The pytest plugin closes it when the session ends.
-_SESSION = None
 
-
-def session_sources():
-    """The test session's Sources (made on first use)."""
-    global _SESSION
-    from ..sources import Sources
-
-    if _SESSION is None or _SESSION.closed:
-        _SESSION = Sources()
-    return _SESSION
-
-
-def close_session_sources() -> None:
-    if _SESSION is not None:
-        _SESSION.close()
-
-
-def _stand_ins(folder: Path, files: dict[str, Any]):
+def _stand_ins(folder: Path, files: dict[str, Any], behind: Sources) -> Sources:
     """Sources whose git holds `files` ({path inside the source's `path`: text}) at the pinned
     commit of `folder`'s `source:`. Anything else, such as what a whole plugin's upstream takes
-    from git itself, is fetched from git as the session does."""
+    from git itself, is fetched as `behind` does."""
     from ..manifest import get, text_of
-    from ..sources import Sources
 
     src = read_manifest(folder).get("source")
     git, ref = text_of(get(src, "git")), text_of(get(src, "ref"))
@@ -240,7 +221,7 @@ def _stand_ins(folder: Path, files: dict[str, Any]):
 
     def fetcher(g: str, r: str, paths: list[str]) -> dict[str, Any]:
         if (g, r) != (git, ref):
-            return session_sources()._fetcher(g, r, paths)
+            return behind.fetcher(g, r, paths)
         out = {}
         for path in paths:
             if path.endswith("/"):
@@ -371,9 +352,17 @@ class MockOpenWebUI:
       emitted: [(event, data)] sent on the socket (`sio.emit`)
       chat_events: [(chat_id, event)] sent through `__event_emitter__`
       app: the FastAPI app; event_sinks: Open-WebUI's EVENT_SINKS
+
+    `sources` is what `load()` reads a `source:` plugin's files from git through; it is the
+    caller's to close. A mock given none makes its own, and closes it when the mock closes.
     """
 
-    def __init__(self, static_dir: Path | str | None = None, secret_key: str = "mock-secret"):
+    def __init__(
+        self,
+        static_dir: Path | str | None = None,
+        secret_key: str = "mock-secret",
+        sources: Sources | None = None,
+    ):
         from fastapi import FastAPI
         from sqlalchemy import create_engine
         from sqlalchemy.pool import StaticPool
@@ -381,6 +370,8 @@ class MockOpenWebUI:
         from starlette.routing import Mount
         from starlette.staticfiles import StaticFiles
 
+        self._own_sources = sources is None
+        self.sources = Sources() if sources is None else sources
         self._own_static = static_dir is None
         self.static_dir = Path(static_dir or tempfile.mkdtemp(prefix="owpp-static-"))
         # DATA_DIR and what Open-WebUI keeps under it (uploads, cache), and a stand-in for
@@ -479,6 +470,8 @@ class MockOpenWebUI:
             if _MISSING_FINDER in sys.meta_path:
                 sys.meta_path.remove(_MISSING_FINDER)
         self.engine.dispose()
+        if self._own_sources:
+            self.sources.close()
         if self._own_static:
             shutil.rmtree(self.static_dir, ignore_errors=True)
         shutil.rmtree(self.data_dir, ignore_errors=True)
@@ -677,7 +670,8 @@ class MockOpenWebUI:
         """Bundle a plugin folder as `owpp deploy` would, store it as a function, and load
         it as Open-WebUI does. `valves` are the stored valves (default: the manifest's).
         A `source:` plugin's files are fetched from git at the pinned commit, as the deploy
-        does (once per run). `sources` stands in for them instead, so a test needs no network:
+        does, through the mock's Sources (each file once). `sources` stands in for them
+        instead, so a test needs no network:
         {path inside the source's `path`: text}, e.g. {"tool.py": "class Tools: ..."}.
         For a plugin taken whole from git (`source: {plugin: true}`), they are the upstream
         folder's files, plugin.yaml included, and the upstream folder is what is bundled.
@@ -689,8 +683,7 @@ class MockOpenWebUI:
                 f"`owpp import {folder.as_posix()}` makes one of this file, header and all"
             )
         id = id or folder.name
-        # From git at the pinned commit (once per session), or from the stand-ins.
-        reader = session_sources() if sources is None else _stand_ins(folder, sources)
+        reader = self.sources if sources is None else _stand_ins(folder, sources, self.sources)
         plugin = reader.resolve(folder)
         manifest = plugin.manifest
         fn = manifest.get("function") or {}

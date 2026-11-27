@@ -4,33 +4,34 @@
 - `plugin_dir`: the plugin folder the test file is in (the nearest plugin.yaml above it).
 - `plugin`: that plugin, loaded into `owui` (enabled, with the manifest's valves).
 
-What `owui.load()` fetched from git for the session is deleted when the session ends.
+Every `owui` reads git through one Sources, so what `owui.load()` fetched is kept for the session
+and deleted when it ends.
 
 Imports are deferred so that loading this plugin costs nothing in a run that never uses them.
 """
 
 from __future__ import annotations
 
-import sys
-
 import pytest
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def _owpp_session_sources():
-    """Close the Sources `owui.load()` fetches through, once the session is done."""
-    yield
-    mock = sys.modules.get("owpp.testing.mock")  # never imported: nothing was fetched
-    if mock is not None:
-        mock.close_session_sources()
+    """The session's Sources, which every `owui` reads git through: each pinned file is
+    fetched once. Closed once the session is done."""
+    from owpp.sources import Sources
+
+    with Sources() as sources:
+        yield sources
 
 
 @pytest.fixture
-def owui(tmp_path):
+def owui(tmp_path, _owpp_session_sources):
     """A mock Open-WebUI (owpp.testing.MockOpenWebUI) for this test."""
     from owpp.testing import MockOpenWebUI
 
-    with MockOpenWebUI(static_dir=tmp_path / "owui-static") as mock:
+    static = tmp_path / "owui-static"
+    with MockOpenWebUI(static_dir=static, sources=_owpp_session_sources) as mock:
         yield mock
 
 

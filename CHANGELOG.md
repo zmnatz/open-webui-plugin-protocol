@@ -3,6 +3,7 @@
 ## Unreleased
 
 - `owpp check` finds undefined names scope by scope, as Python does: a name defined only inside another function or class is now reported, and names bound by `match` patterns no longer are.
+- `MockOpenWebUI(sources=...)` takes the `Sources` it reads a `source:` plugin's files through. The `owui` fixture still fetches each file once per test run; a mock you make yourself without one now fetches for itself rather than sharing with the run ([the mock](docs/testing/mock.md)).
 
 ## 0.7.0 (2026-11-27)
 

@@ -9,7 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from owpp.sources import Sources
 from owpp.testing import MockOpenWebUI
+
+pytest_plugins = ["pytester"]
 
 
 def plugin_folder(root: Path, code: str, manifest: str = "function:\n  title: Demo\n") -> Path:
@@ -95,31 +98,91 @@ def test_model_configs_behave_like_open_webuis():
         assert owui.run(Models.delete_model_by_id("m")) and owui.models == {}
 
 
-def test_a_source_plugin_is_loaded_from_its_pinned_commit(tmp_path, monkeypatch):
-    """Without `sources=`, load() fetches what a `source:` plugin takes from git, as the deploy
-    does, once per run."""
-    from owpp.sources import Sources
-    from owpp.testing import mock
+PINNED = "a" * 40
+EVENT = "class Event:\n    async def event(self, *a, **k):\n        pass\n"
 
-    calls = []
 
-    def fetcher(git, ref, paths, protocols="https:ssh"):
+def recording_sources(calls: list) -> Sources:
+    """Sources whose git holds an event function at every path, noting what was fetched."""
+
+    def fetcher(git, ref, paths):
         calls.append((git, ref, tuple(paths)))
-        return {
-            p: "class Event:\n    async def event(self, *a, **k):\n        pass\n" for p in paths
-        }
+        return {p: EVENT for p in paths}
 
-    monkeypatch.setattr(mock, "_SESSION", Sources(fetcher))
-    folder = tmp_path / "upstream"
+    return Sources(fetcher)
+
+
+def source_folder(root: Path) -> Path:
+    """A plugin whose function is taken from git."""
+    folder = root / "upstream"
     folder.mkdir()
     (folder / "plugin.yaml").write_text(
-        "source:\n  git: https://example.com/repo.git\n  ref: " + "a" * 40 + "\n  path: p\n"
+        f"source:\n  git: https://example.com/repo.git\n  ref: {PINNED}\n  path: p\n"
         "function:\n  file: event.py\n"
     )
+    return folder
+
+
+def test_a_source_plugin_is_loaded_through_the_sources_the_mock_was_given(tmp_path):
+    """Without `sources=`, load() fetches what a `source:` plugin takes from git, as the deploy
+    does, through the mock's Sources: once for every mock that shares it. Closing a mock leaves
+    that Sources open, for whoever made it."""
+    calls = []
+    folder = source_folder(tmp_path)
+    with recording_sources(calls) as sources:
+        for _ in range(2):
+            with MockOpenWebUI(sources=sources) as owui:
+                assert owui.load(folder).type == "event"
+                owui.load(folder)
+        assert not sources.closed
+    assert calls == [("https://example.com/repo.git", PINNED, ("p/event.py",))]
+
+
+def test_a_mock_given_no_sources_makes_its_own_and_closes_it():
+    """A mock made without a Sources, as outside pytest, has one for as long as it is open."""
     with MockOpenWebUI() as owui:
-        assert owui.load(folder).type == "event"
-        owui.load(folder)
-    assert calls == [("https://example.com/repo.git", "a" * 40, ("p/event.py",))]
+        assert not owui.sources.closed
+    assert owui.sources.closed
+
+
+def test_what_stand_ins_do_not_hold_is_fetched_through_the_mocks_sources(tmp_path):
+    """A whole plugin from git whose upstream takes its function from another repository:
+    `sources=` stands in for the upstream folder, and the other repository is read through the
+    mock's Sources."""
+    folder = tmp_path / "whole"
+    folder.mkdir()
+    (folder / "plugin.yaml").write_text(
+        f"source:\n  git: https://example.com/repo.git\n  ref: {PINNED}\n  path: p\n"
+        "  plugin: true\n"
+    )
+    stand_ins = {
+        "plugin.yaml": f"source:\n  git: https://example.com/other.git\n  ref: {PINNED}\n"
+        "function:\n  file: event.py\n"
+    }
+    calls = []
+    with recording_sources(calls) as sources, MockOpenWebUI(sources=sources) as owui:
+        assert owui.load(folder, sources=stand_ins).type == "event"
+    assert calls == [("https://example.com/other.git", PINNED, ("event.py",))]
+
+
+def test_the_owui_fixture_gives_every_mock_the_sessions_sources(pytester):
+    """The pytest plugin owns one Sources for the session: each test's `owui` is built with it,
+    and it is closed when the session ends."""
+    pytester.makepyfile(
+        """
+        seen = []
+
+        def test_one(owui):
+            seen.append(owui.sources)
+
+        def test_two(owui):
+            assert owui.sources is seen[0] and not owui.sources.closed
+        """
+    )
+    run = pytester.inline_run()
+    run.assertoutcome(passed=2)
+    module = run.getcalls("pytest_collection_modifyitems")[0].items[0].module
+    assert module.seen[0].closed
 
 
 FILTER_WITH_MODEL = """
