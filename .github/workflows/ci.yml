@@ -11,6 +11,8 @@ jobs:
       - uses: astral-sh/setup-uv@v6
       # The Python the pinned Open-WebUI runs on (.python-version, ADR 0004).
       - run: uv sync
+      - name: The Open-WebUI pin matches upstream's slim lock
+        run: python3 tools/sync_open_webui.py --check
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest
