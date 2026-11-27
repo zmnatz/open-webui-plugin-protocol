@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import pytest
-from conftest import write_tree
+from conftest import FakeRepo, write_tree
 
 from owpp.cli import main
 from owpp.errors import OwppError
 from owpp.manifest import read_manifest
 from owpp.pull import compare_url, pull
-from owpp.sources import Sources
-from owpp.sources._git import pick_sha
 
 GIT = "https://github.com/owner/repo.git"
 OLD = "a1" * 20
@@ -48,15 +46,16 @@ REPO = {
 }
 
 
-def fetcher(git, ref, paths):
-    files = REPO[ref]
-    out = {}
-    for path in paths:
-        if path.endswith("/"):
-            out |= {k: v for k, v in files.items() if k.startswith(path)}
-        elif path in files:
-            out[path] = files[path]
-    return out
+def upstream(latest: str | None = NEW) -> FakeRepo:
+    """REPO, with `latest` as the commit of its default branch, branch release/v2 and tag
+    v2.1 (None: it has none of them)."""
+    return FakeRepo(
+        GIT,
+        commits=REPO,
+        branches={"release/v2": latest} if latest else {},
+        tags={"v2.1": latest} if latest else {},
+        head=latest,
+    )
 
 
 @pytest.fixture
@@ -72,22 +71,17 @@ def plugins(tmp_path):
 
 def run(directory, ids=None, dry_run=False, latest=NEW, bump_by="patch"):
     lines: list[str] = []
-    looked_up: list[tuple[str, str]] = []
-
-    def resolve(git, ref):
-        looked_up.append((git, ref))
-        return latest
-
+    repo = upstream(latest)
     code = pull(
         directory,
         ids,
         dry_run=dry_run,
-        sources=Sources(fetcher, lookup=resolve),
+        sources=repo.sources(),
         out=lines.append,
         bump_by=bump_by,
         today="2026-11-20",
     )
-    return code, "\n".join(lines), looked_up
+    return code, "\n".join(lines), repo.looked_up
 
 
 class TestSync:
@@ -194,39 +188,12 @@ class TestSync:
 
     def test_the_command(self, plugins, monkeypatch, capsys):
         d = plugins()
-        monkeypatch.setattr("owpp.cli.Sources", lambda: Sources(fetcher, lookup=lambda g, r: OLD))
+        monkeypatch.setattr("owpp.cli.Sources", upstream(OLD).sources)
         assert main(["pull", "--dir", str(d)], env={}) == 0
         assert "up to date" in capsys.readouterr().out
 
 
 class TestPieces:
-    def test_a_branch_or_a_tag_is_looked_up_exactly_and_told_apart(self):
-        from owpp.sources._git import kind_in
-
-        out = f"{'a' * 40}\trefs/heads/v1\n{'b' * 40}\trefs/tags/v1\n{'c' * 40}\trefs/tags/v1^{{}}"
-        assert pick_sha(out, "refs/heads/v1") == "a" * 40
-        assert pick_sha(out, "refs/tags/v1") == "c" * 40  # the commit an annotated tag points at
-        assert pick_sha(out, "refs/heads/nope") is None
-        assert kind_in(out, "v1") == "tag"  # both: the tag, as git reads the name
-        assert kind_in(f"{'a' * 40}\trefs/heads/main\n", "main") == "branch"
-        assert kind_in("", "main") is None
-
-    def test_ls_remote_output_is_read_as_git_does(self):
-        out = "\n".join(
-            [
-                f"{'a' * 40}\tHEAD",
-                f"{'b' * 40}\trefs/heads/main",
-                f"{'c' * 40}\trefs/tags/v1",
-                f"{'d' * 40}\trefs/tags/v1^{{}}",  # the commit an annotated tag points at
-                f"{'e' * 40}\trefs/heads/v1",
-                f"{'f' * 40}\trefs/remotes/x/main",
-            ]
-        )
-        assert pick_sha(out, "HEAD") == "a" * 40
-        assert pick_sha(out, "main") == "b" * 40
-        assert pick_sha(out, "v1") == "d" * 40  # the peeled tag, over the branch
-        assert pick_sha(out, "other") is None
-
     def test_compare_links_for_github(self):
         assert compare_url("git@github.com:o/r.git", OLD, NEW).startswith(
             "https://github.com/o/r/compare/"
