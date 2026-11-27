@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import yaml
@@ -30,7 +30,7 @@ from . import __version__
 from .bundle import FunctionFile, load_function_files
 from .check import UnknownPlugin, check_plugins, failed, warning_count
 from .create import CLASS, PluginSpec, spec_from_data, write_plugin
-from .deploy import choices_from_env, instance_from_env, run_deploy
+from .deploy import Instance, choices_from_env, instance_from_env, run_deploy
 from .errors import OwppError
 from .manifest import (
     parse_yaml,
@@ -149,10 +149,15 @@ def _cmd_build(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
     return 0
 
 
-def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
-    instance = instance_from_env(
+def _instance(args: argparse.Namespace, env: Mapping[str, str]) -> Instance:
+    """The instance in the environment, with the command's certificate flags (_tls_flags)."""
+    return instance_from_env(
         env, ca_cert=args.ca_cert, client_cert=args.client_cert, client_key=args.client_key
     )
+
+
+def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    instance = _instance(args, env)
     choices = choices_from_env(
         env,
         dir=directory,
@@ -285,7 +290,7 @@ def _cmd_import(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         )
         return 1
     if args.instance:
-        instance = instance_from_env(env)
+        instance = _instance(args, env)
         if not instance.base_url:
             raise OwppError("OPEN_WEBUI_URL is not set: --instance reads the function from it")
         imported = import_instance(directory, instance, args.instance, args.id or "")
@@ -317,6 +322,26 @@ def _cmd_import(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         "(docs/testing/writing.md)"
     )
     return code
+
+
+def _tls_flags(parser: argparse.ArgumentParser) -> None:
+    """The certificate flags of a command that talks to an instance."""
+    parser.add_argument(
+        "--ca-cert",
+        metavar="PEM",
+        help="a PEM file of CA certificates to trust besides the system's (default "
+        "$OPEN_WEBUI_CA_CERT)",
+    )
+    parser.add_argument(
+        "--client-cert",
+        metavar="PEM",
+        help="a client certificate to present, for mutual TLS (default $OPEN_WEBUI_CLIENT_CERT)",
+    )
+    parser.add_argument(
+        "--client-key",
+        metavar="PEM",
+        help="its private key, when not in the same file (default $OPEN_WEBUI_CLIENT_KEY)",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -394,6 +419,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="give every user the tool and skills it installs (default: admins only)",
     )
+    _tls_flags(imp)
     deploy = add("deploy", _cmd_deploy, "deploy the plugins to an Open-WebUI instance")
     deploy.add_argument(
         "--from",
@@ -407,22 +433,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="delete nothing: list the functions a full deploy would delete",
     )
     deploy.add_argument("--only", metavar="id,id", help="deploy just these (no pruning)")
-    deploy.add_argument(
-        "--ca-cert",
-        metavar="PEM",
-        help="a PEM file of CA certificates to trust besides the system's (default "
-        "$OPEN_WEBUI_CA_CERT)",
-    )
-    deploy.add_argument(
-        "--client-cert",
-        metavar="PEM",
-        help="a client certificate to present, for mutual TLS (default $OPEN_WEBUI_CLIENT_CERT)",
-    )
-    deploy.add_argument(
-        "--client-key",
-        metavar="PEM",
-        help="its private key, when not in the same file (default $OPEN_WEBUI_CLIENT_KEY)",
-    )
+    _tls_flags(deploy)
     deploy.add_argument(
         "--dry-run", action="store_true", help="list what would change, with versions"
     )
@@ -495,8 +506,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None) -> int:
-    env = os.environ if env is None else env
+def parse_command(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """The command line (default: this process's), parsed. Everything after `--` is in
+    `pytest_args`, for the commands that pass it to pytest."""
     parser = build_parser()
     argv = list(sys.argv[1:] if argv is None else argv)
     # Everything after `--` goes to pytest (owpp test -- -k name -x).
@@ -506,14 +518,29 @@ def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None
     if passthrough and not getattr(args, "passthrough", False):
         parser.error("only `owpp test` and `owpp live` take arguments after --")
     args.pytest_args = passthrough
+    return args
+
+
+def plugins_dir(args: argparse.Namespace, env: Mapping[str, str]) -> Path:
+    """The plugins folder a command works on: --dir, else $OWPP_PLUGINS_DIR, else ./plugins."""
+    return Path(args.dir or env.get("OWPP_PLUGINS_DIR") or "plugins").resolve()
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    env: Mapping[str, str] | None = None,
+    sources: Callable[[], Sources] = Sources,
+) -> int:
+    """Run one command. `sources` makes what it reads plugin files from git through."""
+    env = os.environ if env is None else env
+    args = parse_command(argv)
     if not getattr(args, "handler", None):
-        parser.print_help()
+        build_parser().print_help()
         return 0
-    directory = Path(args.dir or env.get("OWPP_PLUGINS_DIR") or "plugins").resolve()
+    directory = plugins_dir(args, env)
     # One Sources for the command: each file from git is fetched once, and the upstream copies of
     # plugins taken whole from git last until the command (pytest, for `owpp test`) is done.
-    with Sources() as sources:
-        args.sources = sources
+    with sources() as args.sources:
         return args.handler(args, directory, env)
 
 

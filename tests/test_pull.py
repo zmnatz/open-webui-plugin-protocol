@@ -186,10 +186,9 @@ class TestSync:
         with pytest.raises(OwppError, match="no plugin nope"):
             run(d, ids=["nope"])
 
-    def test_the_command(self, plugins, monkeypatch, capsys):
+    def test_the_command(self, plugins, capsys):
         d = plugins()
-        monkeypatch.setattr("owpp.cli.Sources", upstream(OLD).sources)
-        assert main(["pull", "--dir", str(d)], env={}) == 0
+        assert main(["pull", "--dir", str(d)], env={}, sources=upstream(OLD).sources) == 0
         assert "up to date" in capsys.readouterr().out
 
 

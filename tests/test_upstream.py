@@ -283,8 +283,7 @@ files = json.load(open(sys.argv[1]))
 def fetcher(git, ref, paths):
     return {k: v for k, v in files.items() if any(k.startswith(p) for p in paths)}
 
-cli.Sources = lambda: Sources(fetcher)
-sys.exit(cli.main(sys.argv[2:]))
+sys.exit(cli.main(sys.argv[2:], sources=lambda: Sources(fetcher)))
 """
 
 

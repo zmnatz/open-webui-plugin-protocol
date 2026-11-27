@@ -123,10 +123,10 @@ class TestTrackToBranchOrTag:
         assert text == tracked("v2", '"0.7"', flow).replace("track:", f"{kind}:")
         assert read_manifest(d / "old")["source"][kind] == "v2"
 
-    def test_the_command_asks_its_sources(self, plugins, monkeypatch):
+    def test_the_command_asks_its_sources(self, plugins):
         d = plugins(old=tracked("v2"))
-        monkeypatch.setattr("owpp.cli.Sources", FakeRepo(GIT, tags={"v2": SHA}).sources)
-        assert main(["migrate", "--dir", str(d)], env={}) == 0
+        repo = FakeRepo(GIT, tags={"v2": SHA})
+        assert main(["migrate", "--dir", str(d)], env={}, sources=repo.sources) == 0
         assert read_manifest(d / "old")["source"]["tag"] == "v2"
 
     def test_a_name_it_cannot_decide_is_left_for_the_user(self, plugins):

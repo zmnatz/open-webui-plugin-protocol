@@ -3,12 +3,15 @@ repository) becomes a plugin folder with a plugin.yaml, ready to test."""
 
 from __future__ import annotations
 
+import ssl
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 from conftest import FakeRepo, write_tree
+from fake_open_webui import FakeOpenWebUI, serve
+from pki import make_pki
 
 from owpp.bundle import bundle_function, load_function_files
 from owpp.cli import main
@@ -493,12 +496,42 @@ class TestTheCommand:
         assert main(["import", "--instance", "shout", "--dir", str(plugins)], env=env) == 0
         assert (plugins / "shout" / "function.py").read_text() == SHOUT_CODE
 
-    def test_imports_from_git_through_the_commands_sources(self, tmp_path, monkeypatch):
+    def test_imports_from_git_through_the_commands_sources(self, tmp_path):
         repo = their_repo()
-        monkeypatch.setattr("owpp.cli.Sources", repo.sources)
         plugins = tmp_path / "plugins"
-        assert main(["import", GIT, "--path", "viz", "--dir", str(plugins)], env={}) == 0
+        assert (
+            main(
+                ["import", GIT, "--path", "viz", "--dir", str(plugins)],
+                env={},
+                sources=repo.sources,
+            )
+            == 0
+        )
         assert read_manifest(plugins / "viz")["source"]["ref"] == SHA
+
+    def test_imports_from_an_instance_with_the_certificate_flags(self, tmp_path):
+        """An instance with a private CA that requires mutual TLS: --ca-cert, --client-cert and
+        --client-key are what get in, and they win over their variables, as for deploy."""
+        pki = make_pki(tmp_path / "pki")
+        tls = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=pki / "ca.pem")
+        tls.load_cert_chain(pki / "server.pem", pki / "server.key")
+        tls.verify_mode = ssl.CERT_REQUIRED
+        fake = FakeOpenWebUI(live=[{"id": "shout", "name": "Shout", "content": SHOUT}])
+        plugins = tmp_path / "plugins"
+        with serve(fake, tls) as url:
+            env = {
+                "OPEN_WEBUI_URL": url,
+                "OPEN_WEBUI_API_KEY": "sk-good",
+                "OPEN_WEBUI_CA_CERT": str(tmp_path / "not-this-one.pem"),
+                "OPEN_WEBUI_CLIENT_CERT": str(tmp_path / "nor-this-one.pem"),
+                "OPEN_WEBUI_CLIENT_KEY": str(tmp_path / "nor-this-one.key"),
+            }
+            flags = ["--ca-cert", str(pki / "ca.pem")]
+            flags += ["--client-cert", str(pki / "client.pem")]
+            flags += ["--client-key", str(pki / "client.key")]
+            argv = ["import", "--instance", "shout", "--dir", str(plugins), *flags]
+            assert main(argv, env=env) == 0
+        assert (plugins / "shout" / "function.py").read_text() == SHOUT_CODE
 
     def test_takes_one_thing_to_import(self, tmp_path, capsys):
         assert main(["import", "--dir", str(tmp_path)], env={}) == 1
