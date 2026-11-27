@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from conftest import EXAMPLES, write_tree
 
-from owpp.cli import main
+from owpp.check import Finding, check_plugins, failed, warning_count
 from owpp.lint import lint_plugin, lint_source
 
 
@@ -237,7 +237,7 @@ class TestPlugins:
         assert lint_plugin(EXAMPLES / name, name) == []
 
 
-class TestTheCommand:
+class TestInCheck:
     def make(self, tmp_path):
         write_tree(
             tmp_path / "p",
@@ -247,18 +247,15 @@ class TestTheCommand:
             },
         )
 
-    def test_warnings_are_printed_and_do_not_fail_by_default(self, tmp_path, capsys):
+    def test_they_are_warnings_which_fail_only_a_strict_check(self, tmp_path):
         self.make(tmp_path)
-        assert main(["check", "--dir", str(tmp_path)], env={}) == 0
-        out = capsys.readouterr().out
-        assert "warn  p/function.py:5: valve N has no description" in out and "1 warning(s)" in out
+        found = list(check_plugins(tmp_path))
+        (warning,) = [f for f in found if f.kind == "warn"]
+        assert warning.message.startswith("p/function.py:5: valve N has no description")
+        assert warning_count(found) == 1
+        assert not failed(found) and failed(found, strict=True)
 
-    def test_strict_makes_them_fail(self, tmp_path, capsys):
-        self.make(tmp_path)
-        assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 1
-        assert "failing because of --strict" in capsys.readouterr().out
-
-    def test_strict_passes_a_clean_plugin(self, tmp_path, capsys):
+    def test_a_clean_plugin_has_none(self, tmp_path):
         write_tree(
             tmp_path / "p",
             {
@@ -266,8 +263,7 @@ class TestTheCommand:
                 "function.py": "class Event:\n    pass\n",
             },
         )
-        assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 0
-        assert "warn" not in capsys.readouterr().out
+        assert "warn" not in [f.kind for f in check_plugins(tmp_path)]
 
 
 class TestPublicNotes:
@@ -336,7 +332,7 @@ class TestPublicNotes:
             notes = lint_notes(folder, folder.name)
             assert len(notes) == self.PUBLIC.get(folder.name, 0), (folder.name, notes)
 
-    def test_owpp_check_prints_them_without_failing_even_when_strict(self, tmp_path, capsys):
+    def test_check_notes_them_without_failing_even_when_strict(self, tmp_path):
         write_tree(
             tmp_path / "p",
             {
@@ -344,10 +340,12 @@ class TestPublicNotes:
                 "function.py": "from owpp.lib import plugin_mount\n\nclass Event:\n    def go(self, app, router):\n        plugin_mount(app, router, '/hook', access='public')\n",
             },
         )
-        assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 0
-        out = capsys.readouterr().out
+        found = list(check_plugins(tmp_path))
         assert (
-            'note  p/function.py:5: mounts routes that serve people who are not signed in (access="public")'
-            in out
+            Finding(
+                "note",
+                'p/function.py:5: mounts routes that serve people who are not signed in (access="public")',
+            )
+            in found
         )
-        assert "warning(s)" not in out
+        assert not failed(found, strict=True)

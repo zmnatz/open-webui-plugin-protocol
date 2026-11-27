@@ -25,7 +25,7 @@ from owpp.bundle import (
     parse_frontmatter,
     parse_skill,
 )
-from owpp.cli import check_bundle
+from owpp.check import check_bundle
 from owpp.deploy import MANAGED_BY, Result, plan_deploy, render_report
 from owpp.errors import OwppError
 
