@@ -35,3 +35,9 @@ _Avoid_: decompiling, extracting
 **Library catalogue**:
 The list of every library with what it pulls in, what turns it on and what data it carries.
 _Avoid_: LIBS, library table
+
+### Testing
+
+**Test harness**:
+What a plugin's unit tests run against: the real Open-WebUI's code in the test process, with a fresh database, a fake model and a record of what was sent.
+_Avoid_: mock Open-WebUI, mock
