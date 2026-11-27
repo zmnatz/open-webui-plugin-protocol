@@ -6,13 +6,11 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --python ${{ matrix.python }}
+      # The Python the pinned Open-WebUI runs on (.python-version, ADR 0004).
+      - run: uv sync
       - run: uv run ruff check .
       - run: uv run ruff format --check .
       - run: uv run pytest

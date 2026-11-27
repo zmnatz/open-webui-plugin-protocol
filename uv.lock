@@ -1200,7 +1200,7 @@ provides-extras = ["live", "test"]
 [package.metadata.requires-dev]
 dev = [
     { name = "aiohttp", specifier = ">=3.9" },
-    { name = "fastapi", specifier = ">=0.162.5" },
+    { name = "fastapi", specifier = ">=0.136.3" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "playwright", specifier = ">=1.50" },
     { name = "pytest", specifier = ">=8" },
