@@ -268,6 +268,16 @@ def folder_files(directory: Path) -> list[dict]:
     return sorted(files, key=lambda f: f["path"])
 
 
+def files_of(entries: dict[str, dict] | list[dict]) -> dict[str, str | bytes]:
+    """{path: text or bytes} from the runtime's file entries ({path: {content, encoding?}} or
+    [{path, content, encoding?}])."""
+    items = entries.items() if isinstance(entries, dict) else ((e["path"], e) for e in entries)
+    return {
+        path: base64.b64decode(e["content"]) if e.get("encoding") == "base64" else e["content"]
+        for path, e in items
+    }
+
+
 def plugin_folders(directory: Path | str) -> list[Path]:
     """Sub-folders of `directory` that hold a plugin.yaml, by name."""
     with os.scandir(directory) as it:

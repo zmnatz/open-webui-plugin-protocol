@@ -6,9 +6,12 @@ import ast
 import importlib
 
 import pytest
+from conftest import write_tree
 
 import owpp.lib
+from owpp.bundle import bundle_function
 from owpp.errors import OwppError
+from owpp.importer import import_code
 from owpp.libraries import (
     BY_NAME,
     FROM_RUNTIME,
@@ -23,7 +26,9 @@ from owpp.libraries import (
     table,
     wanted,
 )
+from owpp.manifest import read_manifest
 from owpp.testing.mock import MockOpenWebUI
+from owpp.unbundle import unbundle
 
 CODE = '"""\ntitle: T\n"""\nx = 1\n'
 
@@ -156,3 +161,72 @@ def test_every_library_a_tool_may_ask_for_has_a_reader_for_its_data():
     from owpp.bundle import TOOL_DATA_READERS
 
     assert sorted(TOOL_DATA_READERS) == sorted(lib.name for lib in LIBRARIES if lib.for_tools)
+
+
+# Each entry that carries data reads it from a plugin folder and writes it back: a plugin with
+# settings that are not the defaults, bundled and unbundled, is the same folder again.
+ROUND_TRIPS = {
+    "static": {
+        "plugin.yaml": 'protocol: "0.5"\nfunction: {title: Demo}\n'
+        "static: {prefix: /demo-files, access: admin}\n",
+        "function.py": "class Filter:\n    pass\n",
+        "static/app.js": "console.log(1)\n",
+        "static/img/logo.bin": bytes([0xFF, 0x00, 0x10]),
+    },
+    "assets": {
+        "plugin.yaml": 'protocol: "0.5"\nfunction: {title: Demo}\nassets: {order: 5, wrap: false}\n',
+        "assets/loader.js": "console.log('demo')\n",
+        "assets/custom.css": "body { color: red }\n",
+    },
+}
+
+
+@pytest.mark.parametrize("name", ROUND_TRIPS)
+def test_an_entry_reads_its_data_and_writes_it_back(tmp_path, name):
+    """The entry's data, bundled into the function and unbundled out of it, writes back the
+    files and the plugin.yaml key it was read from, settings that are not the defaults included."""
+    folder = write_tree(tmp_path / "demo", ROUND_TRIPS[name])
+    manifest = read_manifest(folder)
+    lib = BY_NAME[name]
+    data = lib.read(folder, manifest)
+    own = unbundle(bundle_function(folder))
+    assert own.data[name] == data
+    files, keys = lib.write("demo", own.data[name])
+    want = {p: v for p, v in ROUND_TRIPS[name].items() if p.startswith(f"{name}/")}
+    assert {p: v.encode() if isinstance(v, str) else v for p, v in files.items()} == {
+        p: v.encode() if isinstance(v, str) else v for p, v in want.items()
+    }
+    assert keys == {name: manifest[name]}
+
+
+@pytest.mark.parametrize("name", ROUND_TRIPS)
+def test_an_entry_with_its_defaults_writes_no_key(tmp_path, name):
+    """Settings left at the entry's defaults are not written to plugin.yaml."""
+
+    tree = dict(ROUND_TRIPS[name])
+    tree["plugin.yaml"] = 'protocol: "0.5"\nfunction: {title: Demo}\n'
+    folder = write_tree(tmp_path / "demo", tree)
+    lib = BY_NAME[name]
+    _, keys = lib.write("demo", lib.read(folder, read_manifest(folder)))
+    assert keys == {}
+
+
+def test_an_imported_plugin_with_static_and_assets_is_the_same_folder(tmp_path):
+    """owpp import of a bundle with static/ and assets/, both with settings that are not the
+    defaults, writes back the same files and plugin.yaml keys."""
+
+    tree = {
+        **ROUND_TRIPS["static"],
+        **ROUND_TRIPS["assets"],
+        "plugin.yaml": 'protocol: "0.5"\nfunction: {title: Demo}\n'
+        "static: {prefix: /demo-files, access: public}\nassets: {order: -2, wrap: false}\n",
+        "function.py": "from owpp.lib import PluginAssets\n\n\nclass Event(PluginAssets):\n    pass\n",
+    }
+    src = write_tree(tmp_path / "src" / "demo", tree)
+    folder = import_code(tmp_path / "plugins", bundle_function(src), "demo", "x").folder
+    got = read_manifest(folder)
+    assert got["static"] == {"prefix": "/demo-files", "access": "public"}
+    assert got["assets"] == {"order": -2, "wrap": False}
+    for path in ("static/app.js", "static/img/logo.bin", "assets/loader.js", "assets/custom.css"):
+        assert (folder / path).read_bytes() == (src / path).read_bytes()
+    assert bundle_function(folder) == bundle_function(src)

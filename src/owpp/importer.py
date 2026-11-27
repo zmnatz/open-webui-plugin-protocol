@@ -34,10 +34,10 @@ from .create import PluginSpec, SkillSpec, SourceSpec, ToolSpec, _yaml, write_pl
 from .errors import OwppError
 from .imports import add_lib_imports
 from .libraries import BY_NAME, LIBRARIES, VENDORED, exports
-from .manifest import Value, read_text
+from .manifest import Value, files_of, read_text
 from .protocol import VERSION as PROTOCOL_VERSION
 from .sources._git import GIT_URL, Fetcher, git_fetcher, ref_kind, refname, resolve_ref
-from .unbundle import Unbundled, files_of, unbundle
+from .unbundle import Unbundled, unbundle
 from .versioning import changelog_text
 
 # Header keys that mean something else in plugin.yaml's `function:` section.
@@ -109,24 +109,11 @@ def _taken_out(
     templates = own.data.get("templates")
     if templates is not None:
         files |= {f"templates/{p}": v for p, v in files_of(templates).items()}
-    if (static := own.data.get("static")) is not None:
-        files |= {f"static/{p}": v for p, v in files_of(static.get("files") or {}).items()}
-        keys = {
-            k: static[k]
-            for k, default in (("prefix", f"/{plugin_id}"), ("access", "user"))
-            if static.get(k) not in (None, default)
-        }
-        if keys:
-            lines.append(f"static: {_flow(keys)}")
-    if (assets := own.data.get("assets")) is not None:
-        files |= {f"assets/{p}": v for p, v in (assets.get("files") or {}).items()}
-        keys = {
-            k: assets[k]
-            for k, default in (("order", 0), ("wrap", True))
-            if assets.get(k) not in (None, default)
-        }
-        if keys:
-            lines.append(f"assets: {_flow(keys)}")
+    for name in ("static", "assets"):
+        if (value := own.data.get(name)) is not None:
+            got, keys = BY_NAME[name].write(plugin_id, value)
+            files |= got
+            lines += [f"{key}: {_flow(v)}" for key, v in keys.items()]
     jobs = own.data.get("jobs")
     if jobs is not None and jobs != BY_NAME["jobs"].default:
         lines.append(f"jobs: {_flow(jobs)}")
