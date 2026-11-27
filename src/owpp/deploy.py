@@ -45,6 +45,7 @@ from .manifest import plugin_folders, read_manifest
 from .sources import Sources
 from .versioning import (
     is_older,
+    norm,
     own_code,
     same,
     skill_version,
@@ -390,10 +391,6 @@ class PlanItem:
     existing: dict | None = None
 
 
-def _norm(s: Any) -> str:
-    return str(s or "").replace("\r\n", "\n").rstrip()
-
-
 def replace_imports(content: Any) -> str:
     """Open-WebUI rewrites these import prefixes in the code before it stores it
     (utils/plugin.py replace_imports), so the stored copy of a file that uses them never
@@ -424,7 +421,7 @@ def plan_deploy(
         else:
             meta = existing.get("meta") or {}
             same = (
-                _norm(existing.get("content")) == _norm(replace_imports(f.content))
+                norm(existing.get("content")) == norm(replace_imports(f.content))
                 and meta.get("managed_by") == managed_by
                 and (meta.get("description") or "") == f.description
                 and (meta.get("sources") or {}) == f.sources

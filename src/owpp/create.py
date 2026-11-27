@@ -34,7 +34,6 @@ from .bundle import VALID_ID, VALID_SKILL_ID
 from .errors import OwppError
 from .events import problem_with
 from .imports import add_lib_imports
-from .libraries import exports
 from .protocol import VERSION as PROTOCOL_VERSION
 from .sources import GIT_URL, SHA40, TRACK
 from .versioning import changelog_text
@@ -630,7 +629,7 @@ def render_function(spec: PluginSpec) -> str:
         text = text.replace(
             "from pydantic import BaseModel, Field\n", "from pydantic import BaseModel\n"
         )
-    return add_lib_imports(text, exports())
+    return add_lib_imports(text)
 
 
 def render_tool(spec: PluginSpec) -> str:
@@ -688,7 +687,7 @@ def render_tool(spec: PluginSpec) -> str:
         ]
     while lines[-1] == "":
         lines.pop()
-    return add_lib_imports("\n".join(lines) + "\n", exports())
+    return add_lib_imports("\n".join(lines) + "\n")
 
 
 def _yaml(value: str) -> str:

@@ -61,9 +61,8 @@ def with_imports(code: str) -> str:
     """`code` with the `from owpp.lib import ...` a plugin writes for the library names it uses,
     for fixtures written to exercise the libraries rather than the imports."""
     from owpp.imports import add_lib_imports
-    from owpp.libraries import exports
 
-    return add_lib_imports(code, exports())
+    return add_lib_imports(code)
 
 
 def write_plugin(root: Path, files: dict[str, str | bytes]) -> Path:

@@ -714,3 +714,16 @@ class TestIframeRequirementWarning:
         warning = warning_for(opts)
         assert warning and "could not be read" in warning
         assert any(r.action.startswith("created") for r in deploy(*opts))
+
+
+def test_deploy_and_versioning_share_one_text_normaliser():
+    # Both compare stored code with a local file, so both must treat CRLF and trailing space alike.
+    import owpp.deploy as deploy
+    import owpp.versioning as versioning
+
+    assert deploy.norm is versioning.norm
+    files = [FunctionFile(id="a", content="x = 1\r\n", description="d")]
+    live = [
+        {"id": "a", "content": "x = 1   \n", "meta": {"managed_by": "mine", "description": "d"}}
+    ]
+    assert plan_deploy(files, live, "mine")[0].action == "unchanged"
