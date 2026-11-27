@@ -62,31 +62,31 @@ class TestMigrate:
         d = plugins()
         assert run(d) == (
             0,
-            "new   old: migrated 0.1 -> 0.2 -> 0.3 -> 0.5\n        wrote plugin.yaml",
+            "new   old: migrated 0.1 -> 0.2 -> 0.3 -> 0.5 -> 0.7\n        wrote plugin.yaml",
         )
         text = (d / "old" / "plugin.yaml").read_text()
         assert text.startswith(
-            '# Written before plugin.yaml had a protocol key.\nprotocol: "0.5"\n'
+            '# Written before plugin.yaml had a protocol key.\nprotocol: "0.7"\n'
         )
         assert "  version: 0.1.0\ninclude: [events]\n" in text
-        assert read_manifest(d / "old")["protocol"] == "0.5"
+        assert read_manifest(d / "old")["protocol"] == "0.7"
 
     def test_a_dry_run_writes_nothing(self, plugins):
         d = plugins()
         code, out = run(d, dry_run=True)
-        assert code == 0 and "would migrate 0.1 -> 0.2 -> 0.3 -> 0.5" in out
+        assert code == 0 and "would migrate 0.1 -> 0.2 -> 0.3 -> 0.5 -> 0.7" in out
         assert (d / "old" / "plugin.yaml").read_text() == OLD
 
     def test_an_explicit_old_version_is_replaced_keeping_its_comment(self, plugins):
         old = OLD.replace("function:", 'protocol: "0.1" # when we started\nfunction:')
         d = plugins(old=old)
         assert run(d)[0] == 0
-        assert 'protocol: "0.5" # when we started\n' in (d / "old" / "plugin.yaml").read_text()
+        assert 'protocol: "0.7" # when we started\n' in (d / "old" / "plugin.yaml").read_text()
 
     def test_a_plugin_already_at_the_current_version_is_left_alone(self, plugins):
-        old = OLD.replace("function:", 'protocol: "0.5"\nfunction:')
+        old = OLD.replace("function:", 'protocol: "0.7"\nfunction:')
         d = plugins(old=old)
-        assert run(d) == (0, "ok    old: protocol 0.5")
+        assert run(d) == (0, "ok    old: protocol 0.7")
         assert (d / "old" / "plugin.yaml").read_text() == old
 
     def test_only_the_named_plugins_are_migrated(self, plugins):
@@ -99,7 +99,7 @@ class TestMigrate:
             },
         )
         assert run(d, ["old"])[0] == 0
-        assert read_manifest(d / "old")["protocol"] == "0.5"
+        assert read_manifest(d / "old")["protocol"] == "0.7"
         assert 'protocol: "0.2"' in (d / "new" / "plugin.yaml").read_text()
 
     def test_an_unknown_id_is_an_error(self, plugins):
@@ -109,8 +109,8 @@ class TestMigrate:
     def test_the_command_migrates(self, plugins, capsys):
         d = plugins()
         assert main(["migrate", "--dir", str(d)], env={}) == 0
-        assert "migrated 0.1 -> 0.2 -> 0.3 -> 0.5" in capsys.readouterr().out
-        assert read_manifest(d / "old")["protocol"] == "0.5"
+        assert "migrated 0.1 -> 0.2 -> 0.3 -> 0.5 -> 0.7" in capsys.readouterr().out
+        assert read_manifest(d / "old")["protocol"] == "0.7"
 
 
 class TestTrackToBranchOrTag:
@@ -121,10 +121,10 @@ class TestTrackToBranchOrTag:
     def test_track_becomes_what_the_repository_says_it_is(self, plugins, kind, flow):
         d = plugins(old=tracked("v2", flow=flow))
         code, out = run(d, kinds={"v2": kind})
-        assert code == 0 and "migrated 0.2 -> 0.3 -> 0.5" in out
+        assert code == 0 and "migrated 0.2 -> 0.3 -> 0.5 -> 0.7" in out
         assert run.asked == [(GIT, "v2")]
         text = (d / "old" / "plugin.yaml").read_text()
-        assert text == tracked("v2", '"0.5"', flow).replace("track:", f"{kind}:")
+        assert text == tracked("v2", '"0.7"', flow).replace("track:", f"{kind}:")
         assert read_manifest(d / "old")["source"][kind] == "v2"
 
     def test_a_name_it_cannot_decide_is_left_for_the_user(self, plugins):
@@ -133,7 +133,7 @@ class TestTrackToBranchOrTag:
         code, out = run(d)
         assert code == 1
         assert "FAIL  old: could not tell whether `track: main` is a branch or a tag" in out
-        assert "migrated 0.2 -> 0.3 -> 0.5" in out  # the others are migrated
+        assert "migrated 0.2 -> 0.3 -> 0.5 -> 0.7" in out  # the others are migrated
         assert (d / "old" / "plugin.yaml").read_text() == tracked("main")
 
     def test_a_0_3_manifest_with_track_is_refused(self, plugins):
@@ -161,8 +161,8 @@ class TestSteps:
         text, old, steps = migrate_text(
             'protocol: "0.0"\nfunction: {title: T}\n', "0.0", "p/plugin.yaml"
         )
-        assert old == "0.0" and steps == ["0.0", "0.1", "0.2", "0.3"]
-        assert 'protocol: "0.5"' in text
+        assert old == "0.0" and steps == ["0.0", "0.1", "0.2", "0.3", "0.5"]
+        assert 'protocol: "0.7"' in text
 
     def test_a_version_with_no_step_is_refused(self):
         with pytest.raises(OwppError, match="cannot migrate protocol 0.0"):
@@ -200,7 +200,7 @@ TOOL = """class Tools:
 
 
 class TestTheImportsArriveIn0_5:
-    """0.3 -> 0.5: a plugin's files import what they used to find in scope (owpp.imports)."""
+    """0.3 -> 0.5 -> 0.7: a plugin's files import what they used to find in scope (owpp.imports)."""
 
     def migrated(self, tmp_path, **files):
         write_tree(

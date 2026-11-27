@@ -17,6 +17,13 @@ The runtime and libraries are copied into every bundle, so a new owpp changes th
 4. **Dry run.** `owpp deploy --dry-run` against your instance shows which functions, tools and skills the new bundles would update.
 5. **Commit** the pin and the manifest changes together, and deploy.
 
+## 0.6 -> 0.7
+
+- **Protocol 0.7.** `owpp migrate` sets `protocol: "0.7"` and changes nothing else: 0.7 changes no key, so a manifest left at 0.5 means the same, and `owpp check --strict` only notes it. owpp 0.6 refuses a 0.7 manifest, so move every pin (CI, the action, your own machine) before you migrate.
+- **Live tests, if you want them:** [`owpp live`](commands/live.md) runs a repository's `live/` tests on a throwaway Open-WebUI in Docker. Nothing changes for a repository without a `live/` folder. Tests in the browser need the `live` extra: `uvx --from 'owpp[live]' owpp live`, after `playwright install chromium` ([live tests in your repository](testing/live.md#live-tests-in-your-repository)).
+- **The deploy records `requires:`** in each function's `meta.requires`, for [`owpp import --instance`](commands/import.md#what-owpp-put-into-it-taken-back-out). A function already deployed is not updated just for it: it gets the key on its next update.
+- **The Excalidraw example** (3.1.1) no longer sends a CORS header from its scene API. A copy taken from this repository changes only if you `owpp pull` it.
+
 ## 0.5 -> 0.6
 
 - **Nothing to migrate.** Manifests stay `protocol: "0.5"`: 0.6 adds a key and takes none away, and the bundles a deploy writes are the same as 0.5.0's unless a plugin uses the new key.

@@ -1,5 +1,5 @@
 # Manifest (docs/plugin-format.md). The function: keys become the docstring header.
-protocol: "0.5"
+protocol: "0.7"
 source:
   git: "https://github.com/Classic298/open-webui-plugins.git"
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea

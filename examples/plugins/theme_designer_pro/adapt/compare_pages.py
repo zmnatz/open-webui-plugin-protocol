@@ -50,7 +50,7 @@ def upstream_folder(tmp: Path) -> Path:
     d = tmp / "theme_designer_pro"
     d.mkdir()
     (d / "plugin.yaml").write_text(
-        'protocol: "0.5"\nsource:\n  git: https://github.com/silentoplayz/theme-designer-pro-presets.git\n'
+        'protocol: "0.7"\nsource:\n  git: https://github.com/silentoplayz/theme-designer-pro-presets.git\n'
         '  ref: 34345eaffb8678ddfd38b45d7bc173f5b0d27132\n  path: ""\n'
         "function:\n  file: event-function/theme_designer_pro_event.py\n"
     )
