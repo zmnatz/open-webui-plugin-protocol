@@ -30,9 +30,9 @@ ok    notes: protocol 0.5
 ## Examples
 
 ```sh
-uvx owpp@0.7.0 migrate --dry-run
-uvx owpp@0.7.0 migrate
-uvx owpp@0.7.0 migrate hello
+uvx owpp@0.7.1 migrate --dry-run
+uvx owpp@0.7.1 migrate
+uvx owpp@0.7.1 migrate hello
 ```
 
 ## Related
