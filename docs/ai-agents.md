@@ -1,23 +1,29 @@
 # With an AI agent
 
-`owpp` is a command-line tool with plain-text output, so a coding agent (Claude Code, Codex, Cursor and the like) drives it the way a person does: it runs the commands, reads the output and edits the files. Three things help it do that well.
+`owpp` is a command-line tool with plain-text output. Thus a coding agent (Claude Code, Codex, Cursor or a similar agent) uses it as a person does. The agent runs the commands, reads the output and edits the files. Three things help it to do this well: two skills and a plugin spec.
 
 ## The owpp skill
 
-[`skills/owpp/`](../skills/owpp/SKILL.md) is an [agent skill](https://agentskills.io): instructions an agent loads when a task touches an Open-WebUI plugin. It walks through each kind of task (create, change, a plugin from git, deploy) with the commands to run and when each is done, and lists the rules the code is held to, such as library names being globals with no import, and the deploy waiting for the user's go-ahead.
+[`skills/owpp/`](../skills/owpp/SKILL.md) is an [agent skill](https://agentskills.io). An agent loads these instructions when a task has an Open-WebUI plugin in it. For each type of task (create, change, a plugin from git, deploy), the skill gives the commands to run and when the task is done. It also lists the rules for the code. Examples are that each file imports what it uses, and that the deploy waits until the user says to start.
 
-Install it with the [skills CLI](https://skills.sh/):
+To install it with the [skills CLI](https://skills.sh/), run one of these commands:
 
 ```sh
 npx skills add zmnatz/open-webui-plugin-protocol@owpp          # this project
 npx skills add zmnatz/open-webui-plugin-protocol@owpp -g       # every project
 ```
 
-or copy the folder into your agent's skills folder (for Claude Code, `.claude/skills/owpp/` in the repository, or `~/.claude/skills/owpp/`).
+You can also copy the folder into the skills folder of your agent. For Claude Code, that is `.claude/skills/owpp/` in the repository, or `~/.claude/skills/owpp/`.
 
 ## The test-existing-plugin skill
 
-[`skills/test-existing-plugin/`](../skills/test-existing-plugin/SKILL.md) writes the tests for a function or plugin that already works: one pasted into Open-WebUI, a `.py` file, someone else's repository, or a plugin with no tests yet. It brings the code in with [`owpp import`](commands/import.md), lists every method, valve and branch, and writes a test for each against [the mock](testing/mock.md) that pins what the code does now. Where the code does something its author would not want, it reports a finding rather than changing the code. It also writes [live tests](testing/live.md#live-tests-in-your-repository) for what only a real Open-WebUI does, over its API or in the browser with Playwright, run by [`owpp live`](commands/live.md) on a throwaway Open-WebUI with aimock as its models. In this repository it also takes the example's [screenshots](screenshots.md).
+[`skills/test-existing-plugin/`](../skills/test-existing-plugin/SKILL.md) writes the tests for a function or plugin that already works. The code can be in Open-WebUI, in a `.py` file, in the repository of someone else, or in a plugin that has no tests.
+
+- It brings the code in with [`owpp import`](commands/import.md).
+- It lists each method, valve and branch. For each one, it writes a test against [the mock](testing/mock.md) that records what the code does now.
+- Where the code does something that its author does not want, it reports a finding. It does not change the code.
+- It writes [live tests](testing/live.md#live-tests-in-your-repository) for what only a real Open-WebUI does, over the API or in the browser with Playwright. [`owpp live`](commands/live.md) runs them on a throwaway Open-WebUI, with aimock as its models.
+- In this repository, it also takes the example's [screenshots](screenshots.md).
 
 ```sh
 npx skills add zmnatz/open-webui-plugin-protocol@test-existing-plugin
@@ -25,30 +31,30 @@ npx skills add zmnatz/open-webui-plugin-protocol@test-existing-plugin
 
 ### How well it works
 
-It was tried on two plugins: Classic298's Better Banners, imported from git, and this repository's Excalidraw. Then bugs were planted in each, one at a time, and run against every test the skill wrote: the tests caught 14 of 16 in Better Banners and 16 of 19 in Excalidraw, the mock's tests the bugs on the server and the live tests the bugs on the page. What they missed, what they found in owpp, and what the tests that already existed caught: [testing a plugin that already works](testing/existing-plugins.md).
+This project tried the skill on two plugins: Classic298's Better Banners, imported from git, and this repository's Excalidraw. Then it put bugs into each plugin, one at a time, and ran all the tests that the skill wrote against each bug. The tests found 14 of 16 bugs in Better Banners, and 16 of 19 in Excalidraw. The tests against the mock found the bugs on the server, and the live tests found the bugs on the page. [Testing a plugin that already works](testing/existing-plugins.md) gives the full results.
 
 ## A plugin spec instead of the wizard
 
-`owpp create` asks questions at a terminal, which an agent cannot answer. `owpp create --spec <file>` takes the same answers as a YAML or JSON file (`-` reads stdin), writes the plugin and checks it:
+`owpp create` asks questions at a terminal, and an agent cannot answer them. `owpp create --spec <file>` takes the same answers as a YAML or JSON file (`-` reads stdin). It writes the plugin and checks it:
 
 ```sh
 uvx owpp create --spec notes.yaml
 ```
 
-The format is in [creating a plugin](creating.md#from-a-spec).
+[Creating a plugin](creating.md#from-a-spec) gives the format.
 
 ## The documentation, for a model
 
-The site publishes two files for language models, following [llms.txt](https://llmstxt.org/):
+The site publishes two files for language models, as [llms.txt](https://llmstxt.org/) specifies:
 
-- **[`llms.txt`](https://zmnatz.github.io/open-webui-plugin-protocol/llms.txt)**: what owpp is, and every page of this site with its address and a one-line summary.
-- **[`llms-full.txt`](https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt)**: the whole of Getting started and the Guide as one text file, to give a model in one go.
+- **[`llms.txt`](https://zmnatz.github.io/open-webui-plugin-protocol/llms.txt)**: what owpp is, and each page of this site with its address and a one-line summary.
+- **[`llms-full.txt`](https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt)**: all of the Getting started, Guide and Commands pages as one text file, to give to a model at one time.
 
-Both are generated when the site is built, from the same pages, so they never drift from it.
+The site build generates both files from the same pages, so they always agree with the site.
 
 ## In a plugins repository's `AGENTS.md`
 
-So that any agent working in the repository finds the skill and the rules, add a few lines to its `AGENTS.md` (or `CLAUDE.md`):
+To let all agents in the repository find the skill and the rules, add these lines to its `AGENTS.md` (or `CLAUDE.md`):
 
 ```markdown
 ## Open-WebUI plugins
@@ -63,4 +69,6 @@ has been read to me.
 
 ## No MCP server
 
-There is no MCP server for owpp. An agent that can run commands already has the whole of owpp through its shell, with the same output a person sees, and an MCP server would only wrap those commands again. It would also be a second place to hold deploy credentials, which today come only from the environment. A server would earn its place for an agent with no shell (a chat app with tools, say), which could check plugins or preview a deploy but could not edit a repository either. If that is how you work, [open an issue](https://github.com/zmnatz/open-webui-plugin-protocol/issues).
+owpp has no MCP server. An agent that can run commands already has all of owpp through its shell, with the same output that a person sees. An MCP server only wraps those commands again. It is also a second place to keep deploy credentials, which now come only from the environment.
+
+A server is useful only for an agent with no shell, for example a chat app with tools. That agent can check plugins or preview a deploy, but it cannot edit a repository. If you work in this way, [open an issue](https://github.com/zmnatz/open-webui-plugin-protocol/issues).

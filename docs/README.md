@@ -1,31 +1,31 @@
 # Open-WebUI plugin protocol
 
-A way to write, test and deploy Open-WebUI **plugins** from a git repository: a function (the parent) plus an optional tool and skills, installed and removed together, with shared libraries for the things every plugin ends up needing (routes, background jobs, per-chat data, static files).
+owpp writes, tests and deploys Open-WebUI **plugins** from a git repository. A plugin is a function (the parent) with an optional tool and skills, which are installed and removed together. Its [libraries](libraries.md) supply what most plugins need: routes, background jobs, per-chat data and static files.
 
-Open-WebUI stores a function or tool as **one code blob** and cannot import siblings. This protocol is the layer that makes a folder of files behave like one plugin:
+Open-WebUI stores a function or a tool as **one block of code**, and that code cannot import other files. This protocol makes a folder of files work as one plugin:
 
 1. A **plugin** is a folder with a `plugin.yaml` manifest ([plugin format](plugin-format.md)).
-2. A **bundler** turns the folder into the single file Open-WebUI stores, in a fixed order, and can pull function, tool and skill code from any git repo at a pinned commit ([bundling](bundling.md)).
-3. A **runtime**, appended to the bundle, makes the function the parent: enabling it installs its tool and skills, disabling or deleting it removes them ([runtime](runtime.md)).
-4. **Libraries** are vendored Python blocks a manifest lists under `include:` ([libraries](libraries.md)).
-5. A **CLI and a deploy script** check, bundle and deploy one plugin or all of them, from a laptop or CI ([tooling](tooling.md)).
+2. The **bundler** makes the folder into the one file that Open-WebUI stores, in a fixed order. It can take function, tool and skill code from a git repository at a pinned commit ([bundling](bundling.md)).
+3. The **runtime** goes at the end of the bundle and makes the function the parent. When you enable the function, it installs its tool and skills. When you disable or delete the function, it removes them ([runtime](runtime.md)).
+4. **Libraries** are built-in code that owpp links into the bundle. A manifest asks for one with `include:`, or a file in the plugin turns it on ([libraries](libraries.md)).
+5. The **CLI** and its **GitHub Action** check, bundle and deploy one plugin or all of them, from a laptop or from CI ([tooling](tooling.md)).
 
 ## Why this
 
-Pasting a function into Open-WebUI's admin UI is the quickest way to run it. owpp is worth the extra step when one of these matters:
+The quickest way to run a function is to paste it into Open-WebUI's admin UI. owpp is worth the extra step when one of these is important to you:
 
-- **Version control.** The plugins live in git: each change is a commit someone can review, and an earlier version can be deployed again ([deploying an older version](commands/deploy.md#deploying-an-older-version)). An edit in the admin UI replaces the code and keeps no history.
-- **Reviewed upgrades of third-party code.** Someone else's function, tool or skill is taken from their repository at a pinned commit instead of copied in. [`owpp pull`](commands/pull.md) moves the pin and lists the files that changed, so the upgrade is a change you review before it runs with admin rights ([`owpp pull`](commands/pull.md)).
-- **Shared libraries.** Routes, scheduled jobs, per-chat data, static files and templates come from [libraries](libraries.md), not from a copy pasted into each function.
-- **Tests.** [`owpp check`](commands/check.md) finds undefined names before anything is deployed, [`owpp test`](commands/test.md) runs each plugin's unit tests against a mock Open-WebUI, and [`owpp live`](commands/live.md) runs a repository's live tests on a throwaway Open-WebUI in Docker, over its API and in the browser ([testing](testing.md)). A function that already works comes in with [`owpp import`](commands/import.md), and an agent can write its tests ([a plugin that already works](testing/existing-plugins.md)).
-- **Repeatable deploys.** [`owpp deploy`](commands/deploy.md), from a laptop or the [GitHub Action](tooling.md#github-action), makes the instance match the repository, `--dry-run` shows what it would change first, and a plugin that has not changed is left alone ([what a deploy does](commands/deploy.md#what-a-deploy-does)).
-- **A function with a tool and skills.** They are installed and removed together ([runtime](runtime.md)), instead of by hand in three places.
+- **Version control.** The plugins are in git. Each change is a commit that someone can review, and you can deploy an earlier version again ([deploying an older version](commands/deploy.md#deploying-an-older-version)). An edit in the admin UI replaces the code and keeps no history.
+- **Reviewed upgrades of third-party code.** owpp takes someone else's function, tool or skill from their repository at a pinned commit, and does not copy it. [`owpp pull`](commands/pull.md) moves the pin and lists the files that changed. You review that change before the code runs with admin rights.
+- **Shared libraries.** Routes, scheduled jobs, per-chat data, static files and templates come from [libraries](libraries.md), not from a copy in each function.
+- **Tests.** [`owpp check`](commands/check.md) finds undefined names before you deploy. [`owpp test`](commands/test.md) runs each plugin's unit tests against a mock Open-WebUI. [`owpp live`](commands/live.md) runs a repository's live tests on a throwaway Open-WebUI in Docker, over its API and in the browser ([testing](testing.md)). [`owpp import`](commands/import.md) brings in a function that already works, and an agent can write its tests ([a plugin that already works](testing/existing-plugins.md)).
+- **Repeatable deploys.** [`owpp deploy`](commands/deploy.md) makes the instance match the repository, from a laptop or from the [GitHub Action](tooling.md#github-action). `--dry-run` shows what it will change first. A plugin that did not change stays as it is ([what a deploy does](commands/deploy.md#what-a-deploy-does)).
+- **A function with a tool and skills.** The runtime installs and removes them together ([runtime](runtime.md)). You do not do it by hand in three places.
 
-It is not worth it when:
+It is not worth the extra step when:
 
-- you have a function or two of your own, change them rarely and nobody else reviews them: the admin UI is enough;
-- you want to keep editing in the admin UI: the repository is the source of truth, and the next deploy replaces a managed function's code with the repository's;
-- you cannot deploy as an admin of the instance: the deploy refuses any other account ([signing in](commands/deploy.md#signing-in)).
+- You have one or two functions of your own, you change them rarely and nobody else reviews them. The admin UI is sufficient.
+- You want to continue to edit in the admin UI. The repository is the source of truth: the next deploy replaces a managed function's code with the repository's code.
+- You cannot deploy as an admin of the instance. The deploy refuses all other accounts ([signing in](commands/deploy.md#signing-in)).
 
 ## Where to start
 
@@ -36,11 +36,11 @@ It is not worth it when:
 | Bring a repository or existing functions over | [adopting](adopting.md), and [`owpp import`](commands/import.md) |
 | Test a plugin, or one that already works | [testing](testing.md), [live tests](testing/live.md), [a plugin that already works](testing/existing-plugins.md) |
 | Deploy, or set up CI | [tooling](tooling.md) and its command pages |
-| Fix an error owpp printed | [troubleshooting](troubleshooting.md) |
+| Fix an error that owpp printed | [troubleshooting](troubleshooting.md) |
 | Move to a new owpp version | [upgrading](upgrading.md) |
 | Review or contribute a change | [reviewing](reviewing.md), [contributing](contributing.md) |
 
-Everything else (the libraries, the runtime, testing, the environment variables, the examples and the project pages) is in the menu, and short answers are in the [FAQ](faq.md).
+The menu has all the other pages: the libraries, the runtime, testing, the environment variables, the examples and the project pages. The [FAQ](faq.md) has short answers.
 
 ## At a glance
 
@@ -78,18 +78,22 @@ owpp deploy --only my_plugin --dry-run
 
 ## Guarantees
 
-- **Reproducible.** A bundle depends only on the folder and the pinned git commits it names. Libraries are vendored byte for byte.
-- **Reviewed upgrades.** Remote code is referenced by full commit SHA, never a branch or tag, because it runs inside Open-WebUI with admin rights. `owpp pull` moves the SHA to the latest commit, as a change to review and commit.
-- **Owned objects only.** The deploy marks what it creates (`meta.managed_by`) and only ever updates or deletes those. Hand-made functions are never touched.
-- **No surprises on disable.** Whatever a function installed (tools, skills, routes, background jobs) goes away or stops when it is disabled.
+- **Reproducible.** A bundle depends only on the plugin folder and the pinned git commits it names. Each library goes into the bundle as owpp ships it. The bundler removes only the library's imports and fills in its data.
+- **Reviewed upgrades.** A manifest names remote code by its full commit SHA, never by a branch or tag, because that code runs inside Open-WebUI with admin rights. `owpp pull` moves the SHA to the latest commit, as a change that you review and commit.
+- **Owned objects only.** The deploy marks each function it makes (`meta.managed_by`). It updates or deletes only the marked functions, and never touches a function made by hand.
+- **No surprises on disable.** When you disable a function, all that it installed is removed or stops: tools, skills, routes and background jobs.
 
 ## Status and limits
 
-Written against Open-WebUI **v0.13.5** (it began on v0.13.4, which it still supports). API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) were read from that source, and the libraries are tested against stubbed Open-WebUI modules. The examples are deployed to a real v0.13.5 on every change by the [live suite](testing/live.md#this-repositorys-live-suite), an end-to-end run, and photographed there ([screenshots](screenshots.md)).
+owpp is written against Open-WebUI **v0.13.5**. It started on v0.13.4, and it continues to support that version. The API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) come from that source. The libraries are tested against stubbed Open-WebUI modules. On each change, the [live suite](testing/live.md#this-repositorys-live-suite) deploys the examples to a real v0.13.5 and runs them end to end. It also takes their [screenshots](screenshots.md) there.
 
 Known limits:
 
-- **The live suite runs on v0.13.5 only**, with aimock and fixed files in place of a real model and the services the examples call ([the live suite](testing/live.md#this-repositorys-live-suite)). A newer Open-WebUI, or a real model's behaviour, is checked by hand.
-- **Sign-in fallbacks checked against source, not a live instance.** For a page opened with no session, the guard relies on Open-WebUI's `/api/v1/auths/signin` accepting empty credentials when trusted-header sign-in is configured, and on its login page honouring `?redirect=` ([routes](libraries.md#routes)). Verified in the v0.13.4 and v0.13.5 source: both hold, with no user name or password needed under a trusted header. The signin route needs `ENABLE_PASSWORD_AUTH` (on by default) and the trusted header to be present.
+- **The live suite runs on v0.13.5 only.** In place of a real model and the services that the examples call, it uses aimock and fixed files ([the live suite](testing/live.md#this-repositorys-live-suite)). You check a newer Open-WebUI, or the behaviour of a real model, by hand.
+- **The sign-in fallbacks are checked against the source, not against a live instance.** For a page opened with no session, the guard of the [routes](libraries.md#routes) library relies on two things in Open-WebUI:
+    - `/api/v1/auths/signin` accepts empty credentials when trusted-header sign-in is configured. This route also needs `ENABLE_PASSWORD_AUTH` (on by default) and the trusted header.
+    - Its login page obeys `?redirect=`.
+
+    Both are true in the v0.13.4 and v0.13.5 source. Under a trusted header, they need no user name or password.
 - **Redis** claims in the `jobs` library are tested with stubs only.
-- **No example serves `static/` files or a public mount** (both example pages are templates the function renders). The `static` library and the `public` access level are tested, and `owpp create` writes both, but no example shows them.
+- **No example serves `static/` files or has a public mount.** The examples' pages are all templates that the function renders. The `static` library and the `public` access level have tests, and `owpp create` writes both, but no example shows them.
