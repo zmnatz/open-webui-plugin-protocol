@@ -39,6 +39,22 @@ owpp import --instance shout      # the function with id shout, read from OPEN_W
 
 The docstring header moves into `plugin.yaml` under `function:`, one key per line, and the rest of the file is `function.py`. Bundled, it is the same code again: the deploy stores what you imported. A header line that is not `key: value` (or has no value) is dropped and listed in the report. It also writes a README, a CHANGELOG (with an entry for the header's version) and a first test that loads it, for the rest of its tests to go beside ([writing a test](../testing/writing.md)).
 
+### What owpp put into it, taken back out
+
+A function owpp deployed is its bundle: owpp's [libraries](../libraries.md), the files they carry, and for a plugin with a tool or skills the [runtime](../runtime.md) that installs them. Imported, each goes back to what it was made from, so `function.py` is the plugin's own code and bundling the import gives the same function again:
+
+| In the bundle | In the folder it writes |
+| --- | --- |
+| a library (`# end plugin ... library`) | a name in `include:` (one that `templates/`, `static/`, `config.yaml` or another library turns on is left out) |
+| its data | `templates/`, `static/`, `assets/`, `config.yaml`, `jobs:`, and `static:` or `assets:` settings that are not the defaults |
+| the runtime's tool | `tool.py` and `tool:` (its header keys, `include:`, `access:`, `valves:`) |
+| the runtime's skills | `skills/<id>/`, with `access: public` in a public skill's `SKILL.md` |
+| `meta.requires` (with `--instance`) | `requires:` |
+
+The code that used those libraries gets the `from owpp.lib import` line it needs. A library is recognised where the bundler puts it, after the docstring header, by its first lines and its `# end` line, so a bundle from another version of owpp imports too; a block it cannot recognise stays, and the report names it, to delete and add to `include:` by hand. `requires:` comes back only from a function deployed by an owpp that records it in `meta.requires`; otherwise the report says to add it back if the plugin had one. Code the function and the tool shared (`shared.py`) is in both files: it can go back into a `shared.py` by hand.
+
+The [Shared Assets Protocol](https://github.com/Classic298/open-webui-plugins/tree/main/shared-assets-protocol)'s two blocks (the shared asset block and live reload), anywhere in a function, become `include: [shared_assets]` and `live_reload` when they are byte-identical to owpp's copy, as the protocol asks of every copy. Left in, they would fail `owpp check`, which refuses a function's own code that changes `app.routes`. A copy that differs is the plugin's own code and stays, and the report says so: `owpp check` refuses it, so import that plugin from git (which takes its code as it is), or replace the block with `include:`.
+
 `--instance` signs in as [`owpp deploy`](deploy.md#signing-in) does, from the same [environment variables](../environment-variables.md#signing-in), and keeps the function's id. The first deploy then updates that function (and marks it as managed) instead of adding a second copy. Its valves are not copied, since they may hold keys or passwords: the deploy keeps the instance's, and defaults go under `function: valves:`.
 
 ## Options

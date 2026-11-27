@@ -22,7 +22,6 @@ from owpp.lib import (
 
 from shared import (
     _ID,
-    CORS,
     EXCALIDRAW_VERSION,
     MARKER,
     NO_STORE,
@@ -193,8 +192,8 @@ class Filter:
             return
 
         async def authorised(chat_id: str, t: str = "") -> str:
-            # The sandboxed panel sends no cookies, so the API takes the chat-bound token the page was
-            # rendered with instead of a session.
+            # The API takes the chat-bound token the page was rendered with: only a user who can
+            # write to the chat is given one, and it expires.
             if not _ID.fullmatch(chat_id) or not plugin_check_token(t, chat_id):
                 raise HTTPException(404, "Not found")
             return chat_id
@@ -218,10 +217,9 @@ class Filter:
             except _NoChat:
                 raise HTTPException(404, "Not found") from None
             if scene["version"] == since:
-                return JSONResponse({"changed": False, "version": since}, headers=CORS)
-            return JSONResponse({"changed": True, **scene}, headers=CORS)
+                return JSONResponse({"changed": False, "version": since}, headers=NO_STORE)
+            return JSONResponse({"changed": True, **scene}, headers=NO_STORE)
 
-        # A text/plain POST is a CORS simple request: no preflight.
         @api.post("/api/scenes/{chat_id}")
         async def put_scene(request: Request, chat_id: str):
             try:
@@ -235,7 +233,7 @@ class Filter:
                 scene = await _mutate(chat_id, lambda _: elements, client)
             except _NoChat:
                 raise HTTPException(404, "Not found") from None
-            return JSONResponse({"version": scene["version"]}, headers=CORS)
+            return JSONResponse({"version": scene["version"]}, headers=NO_STORE)
 
         # The page mount replaces any earlier routes; the API mount uses the token guard.
         plugin_mount(app, page, PREFIX)

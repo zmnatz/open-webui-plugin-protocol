@@ -27,6 +27,9 @@ test = [
   "sqlalchemy[asyncio]>=2.0",  # with greenlet, as Open-WebUI ships it
   "aiohttp>=3.9",
 ]
+# `owpp live`'s browser fixtures (admin, user, signed_out): the command, the stack and the API
+# fixtures need only the standard library and Docker.
+live = ["pytest>=8", "playwright>=1.50"]
 
 [project.urls]
 Repository = "https://github.com/zmnatz/open-webui-plugin-protocol"
@@ -48,6 +51,7 @@ dev = [
     "ruff>=0.8",
     "sqlalchemy>=2.0",
     "starlette>=1.7.0",
+    "playwright>=1.50",  # owpp live's browser fixtures, for this repository's live suite
 ]
 docs = [
     "zensical>=0.1.2 ; python_full_version >= '3.11'",

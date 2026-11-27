@@ -5,16 +5,19 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from conftest import write_tree
 
-from owpp.bundle import load_function_files
+from owpp.bundle import bundle_function, load_function_files
 from owpp.cli import main
 from owpp.errors import OwppError
-from owpp.importer import import_file, import_git, import_instance, parse_git_url
+from owpp.importer import import_code, import_file, import_git, import_instance, parse_git_url
+from owpp.libraries import BY_NAME
 from owpp.manifest import read_manifest
 from owpp.sources import Sources
+from owpp.unbundle import _protocol_body, unbundle
 
 SHOUT = '''"""
 title: Shout
@@ -321,6 +324,175 @@ class TestFromOpenWebUI:
         server = mock_server()
         with pytest.raises(OwppError, match="HTTP 401"):
             import_instance(tmp_path / "plugins", server.instance(), "nope")
+
+
+# ---- what owpp, or the Shared Assets Protocol, put into the code ---------------------------
+
+EXAMPLES = Path(__file__).resolve().parent.parent / "examples" / "plugins"
+# Each example's parts: libraries, templates, static, assets, config, jobs, a tool, skills.
+LOCAL_EXAMPLES = sorted(
+    p.name
+    for p in EXAMPLES.iterdir()
+    if (p / "plugin.yaml").exists() and not read_manifest(p).get("source")
+)
+
+
+def _bundle(folder):
+    with Sources() as sources:
+        return bundle_function(sources.resolve(folder))
+
+
+class TestWhatOwppPutIn:
+    @pytest.mark.parametrize("name", LOCAL_EXAMPLES)
+    def test_a_deployed_example_imports_back_to_a_plugin_whose_bundle_is_the_same(
+        self, tmp_path, name
+    ):
+        """What `owpp import --instance` reads for a function owpp deployed is its bundle: the
+        libraries, their data and the runtime (with the tool and skills) come back out as
+        include:, files and tool.py, and bundling the import gives the same code again."""
+        deployed = _bundle(EXAMPLES / name)
+        imported = import_code(tmp_path, deployed, name, "Open-WebUI")
+        assert _bundle(imported.folder) == deployed
+
+    def test_the_tool_its_templates_and_config_come_back_as_files(self, tmp_path, mock_server):
+        server = mock_server(
+            live=[
+                {
+                    "id": "excalidraw",
+                    "name": "Excalidraw",
+                    "content": _bundle(EXAMPLES / "excalidraw"),
+                }
+            ]
+        )
+        folder = import_instance(tmp_path / "plugins", server.instance(), "excalidraw").folder
+        manifest = read_manifest(folder)
+        assert manifest["include"] == ["routes", "chat_data"]
+        assert manifest["tool"]["include"] == ["chat_data"]
+        assert manifest["tool"]["access"] == "public"
+        assert (folder / "templates" / "viewer.html").read_text() == (
+            EXAMPLES / "excalidraw" / "templates" / "viewer.html"
+        ).read_text()
+        assert "assets_url" in (folder / "config.yaml").read_text()
+        for name in ("function.py", "tool.py"):
+            code = (folder / name).read_text()
+            assert "# end plugin" not in code and "plugin runtime" not in code
+            assert "from owpp.lib import" in code
+        lint = subprocess.run(
+            [sys.executable, "-m", "owpp", "check", "--dir", str(tmp_path / "plugins"), "--strict"],
+            capture_output=True,
+            text=True,
+        )
+        assert lint.returncode == 0, lint.stdout + lint.stderr
+
+    def test_a_public_skill_says_so_in_its_front_matter(self, tmp_path):
+        """A skill declared public in plugin.yaml is, once local, public by its SKILL.md."""
+        write_tree(
+            tmp_path / "src",
+            {
+                "helper/plugin.yaml": 'protocol: "0.5"\nfunction: {title: Helper}\nskills: {draw: {file: draw.md, access: public}}\n',
+                "helper/draw.md": "---\nname: draw\ndescription: Draws.\n---\n\nDraw.\n",
+            },
+        )
+        folder = import_code(
+            tmp_path / "plugins", _bundle(tmp_path / "src" / "helper"), "helper", "x"
+        ).folder
+        skill = (folder / "skills" / "draw" / "SKILL.md").read_text()
+        assert skill == "---\nname: draw\ndescription: Draws.\naccess: public\n---\n\nDraw.\n"
+
+    def test_a_library_from_another_owpp_version_is_still_taken_out(self, tmp_path):
+        """A block is recognised by where link() put it, its first lines and its end line, not
+        by its whole text, so a bundle an older owpp deployed imports too."""
+        deployed = _bundle(EXAMPLES / "excalidraw")
+        older = deployed.replace("def plugin_mount(", "def plugin_mount(  # older\n    ", 1)
+        assert older != deployed
+        own = unbundle(older)
+        assert own.found == ["core", "routes", "chat_data", "templates", "config"]
+        assert "# older" not in own.code
+
+    def test_the_shared_assets_protocols_block_becomes_include(self, tmp_path):
+        """A function that carries the protocol's block, byte-identical as the protocol asks, is
+        given owpp's copy instead: its own code no longer changes app.routes, so it passes."""
+        block = _protocol_body(BY_NAME["shared_assets"])
+        imports = "import hashlib\nimport re\nfrom pathlib import Path\nfrom typing import Any\n"
+        code = SHOUT.replace("from pydantic", imports + "\n" + block + "\nfrom pydantic")
+        file = write_tree(tmp_path, {"shout.py": code}) / "shout.py"
+        folder = import_file(tmp_path / "plugins", file).folder
+        assert read_manifest(folder)["include"] == ["shared_assets"]
+        assert "app.routes" not in (folder / "function.py").read_text()
+        assert "end shared asset block" in _bundle(folder)
+
+    def test_a_copy_of_the_block_that_differs_is_the_plugins_own_code(self, tmp_path):
+        block = _protocol_body(BY_NAME["shared_assets"]).replace(
+            "ASSET_IMPL_VERSION = 5", "ASSET_IMPL_VERSION = 4"
+        )
+        code = SHOUT.replace("from pydantic", block + "\nfrom pydantic")
+        own = unbundle(code)
+        assert own.found == [] and own.code == code
+
+    def test_a_differing_copy_says_how_to_import_it_instead(self, tmp_path):
+        block = _protocol_body(BY_NAME["shared_assets"]).replace(
+            "ASSET_IMPL_VERSION = 5", "ASSET_IMPL_VERSION = 4"
+        )
+        code = SHOUT.replace("from pydantic", block + "\nfrom pydantic")
+        imported = import_code(tmp_path, code, "shout", "x")
+        assert any("not byte-identical" in n and "owpp import <URL>" in n for n in imported.notes)
+
+    def test_a_library_it_does_not_recognise_is_named(self, tmp_path):
+        """A block from another owpp whose first lines changed stays, and the notes say which,
+        rather than leaving only `owpp check`'s refusal of what it does."""
+        deployed = _bundle(EXAMPLES / "excalidraw")
+        first = "import base64 as _base64\n"  # the routes library's first line
+        older = deployed.replace("\n" + first, "\nimport base64 as _b64  # older\n" + first, 1)
+        imported = import_code(tmp_path, older, "excalidraw", "x")
+        assert any("still holds owpp's routes" in n for n in imported.notes)
+
+    def test_static_binary_files_and_a_tool_that_is_the_function_round_trip(
+        self, tmp_path, mock_server
+    ):
+        """Deployed and imported back from the instance: static/ (with its settings), binary
+        files, a skill, a tool that is the function's own bundle, and requires:."""
+        manifest = (
+            'protocol: "0.5"\n'
+            "function: {title: Demo, global: true}\n"
+            "static: {prefix: /demo-files, access: admin}\n"
+            "tool: {id: demo_tool, from: function, access: public}\n"
+            "requires: {iframe_sandbox_allow_same_origin: true}\n"
+        )
+        src = write_tree(
+            tmp_path / "src",
+            {
+                "demo/plugin.yaml": manifest,
+                "demo/function.py": "class Filter:\n    pass\n\n\nclass Tools:\n    pass\n",
+                "demo/static/app.js": "console.log(1)\n",
+                "demo/static/img/logo.bin": bytes([0xFF, 0x00, 0x10]),
+                "demo/skills/draw/SKILL.md": "---\nname: draw\ndescription: Draws.\n---\n\nDraw.\n",
+                "demo/skills/draw/icon.bin": bytes([0x89, 0x50]),
+            },
+        )
+        server = mock_server()
+        env = {"OPEN_WEBUI_URL": server.base_url, "OPEN_WEBUI_API_KEY": "sk-good"}
+        assert main(["deploy", "--dir", str(src)], env=env) == 0
+        plugins = tmp_path / "plugins"
+        assert main(["import", "--instance", "demo", "--dir", str(plugins)], env=env) == 0
+        folder = plugins / "demo"
+        got = read_manifest(folder)
+        assert got["static"] == {"prefix": "/demo-files", "access": "admin"}
+        assert got["tool"] == {"id": "demo_tool", "access": "public", "from": "function"}
+        assert got["requires"] == {"iframe_sandbox_allow_same_origin": True}
+        assert (folder / "static" / "img" / "logo.bin").read_bytes() == bytes([0xFF, 0x00, 0x10])
+        assert (folder / "skills" / "draw" / "icon.bin").read_bytes() == bytes([0x89, 0x50])
+        assert _bundle(folder) == _bundle(src / "demo")
+
+    def test_a_function_an_older_owpp_deployed_says_requires_may_be_missing(
+        self, tmp_path, mock_server
+    ):
+        meta = {"description": "x", "managed_by": "owpp"}  # no `requires`: deployed before it
+        server = mock_server(
+            live=[{"id": "shout", "name": "Shout", "content": SHOUT, "meta": meta}]
+        )
+        imported = import_instance(tmp_path, server.instance(), "shout")
+        assert any("did not record `requires:`" in n for n in imported.notes)
+        assert "requires" not in read_manifest(imported.folder)
 
 
 class TestTheCommand:

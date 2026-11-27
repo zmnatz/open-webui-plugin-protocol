@@ -1,6 +1,6 @@
 name: screenshots
-# Takes the documentation screenshots on a real Open-WebUI (docs/screenshots.md): starts
-# tools/screenshots/compose.yaml, deploys examples/plugins, follows the plugins' By hand steps in
+# Takes the documentation screenshots on a real Open-WebUI (docs/screenshots.md): `owpp live` starts
+# its stack with tools/screenshots/compose.yaml layered on it, deploys examples/plugins, follows the plugins' By hand steps in
 # Chromium. Run by hand (Actions > screenshots > Run workflow); it uploads docs/screenshots/ as an
 # artifact to review and commit. Heavy (Docker images, a browser), so never on every push.
 on:

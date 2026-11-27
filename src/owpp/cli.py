@@ -11,6 +11,7 @@
   owpp migrate [id ...] [--dry-run]  bring plugin.yaml to the current protocol version
   owpp create [id]                   a wizard: asks what the plugin is, then writes it
   owpp init <id> [--type event|filter|action|pipe]   scaffold a plugin folder
+  owpp live [--up | --keep | --down] [-- pytest args]  the live tests, on a throwaway Open-WebUI (Docker)
 
 Every command takes --dir <plugins folder> (default: $OWPP_PLUGINS_DIR, else ./plugins).
 """
@@ -575,6 +576,10 @@ def build_parser() -> argparse.ArgumentParser:
     init = add("init", _cmd_init, "scaffold a plugin folder")
     init.add_argument("id")
     init.add_argument("--type", choices=list(CLASS), default="event")
+    test.set_defaults(passthrough=True)
+    from .live.command import register as add_live  # stdlib only; Docker and Playwright when run
+
+    add_live(add)
     return parser
 
 
@@ -586,8 +591,8 @@ def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None
     passthrough = argv[argv.index("--") + 1 :] if "--" in argv else []
     argv = argv[: argv.index("--")] if "--" in argv else argv
     args = parser.parse_args(argv)
-    if passthrough and args.command != "test":
-        parser.error("only `owpp test` takes arguments after --")
+    if passthrough and not getattr(args, "passthrough", False):
+        parser.error("only `owpp test` and `owpp live` take arguments after --")
     args.pytest_args = passthrough
     if not getattr(args, "handler", None):
         parser.print_help()

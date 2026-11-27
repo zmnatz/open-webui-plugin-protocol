@@ -1,7 +1,8 @@
 name: live
-# The live suite (docs/testing/live.md): deploys examples/plugins to a real Open-WebUI (the
-# version the protocol targets, -slim) with aimock as its models and nginx serving fixed files,
-# then asserts on what it does (tools/live), over the API and in Chromium. Runs on every pull request and push to main, like ci.
+# The live suite (docs/testing/live.md): `owpp live` deploys examples/plugins to a real Open-WebUI
+# (the version the protocol targets, -slim) with aimock as its models and nginx serving fixed files,
+# then asserts on what it does (tools/live), over the API and in Chromium. Runs on every pull
+# request and push to main, like ci.
 on:
   push:
     branches: [main, develop]
@@ -28,11 +29,13 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/images.tar
-          key: live-images-${{ hashFiles('tools/screenshots/compose.yaml') }}
+          key: live-images-${{ hashFiles('src/owpp/live/compose.yaml', 'tools/screenshots/compose.yaml') }}
       - if: steps.images.outputs.cache-hit == 'true'
         run: docker load --input ~/images.tar
       - if: steps.images.outputs.cache-hit != 'true'
         run: |
-          docker compose -f tools/screenshots/compose.yaml pull
-          docker save --output ~/images.tar $(docker compose -f tools/screenshots/compose.yaml config --images)
+          export OWPP_LIVE_FIXTURES=$PWD/tools/screenshots/aimock
+          files="-f src/owpp/live/compose.yaml -f tools/screenshots/compose.yaml"
+          docker compose $files pull
+          docker save --output ~/images.tar $(docker compose $files config --images)
       - run: uv run python tools/screenshots/run.py --live

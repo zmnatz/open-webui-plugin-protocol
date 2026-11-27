@@ -1,8 +1,8 @@
-protocol: "0.5"
+protocol: "0.7"
 function:
   title: Excalidraw
   author: zmnatz
-  version: 3.1.0
+  version: 3.1.1
   global: true
   required_open_webui_version: 0.10.0
   license: MIT

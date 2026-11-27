@@ -14,9 +14,13 @@ unless asked otherwise, and the report says so.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
+
+import yaml
 
 from .bundle import (
     DOCSTRING,
@@ -28,9 +32,12 @@ from .bundle import (
 )
 from .create import PluginSpec, SkillSpec, SourceSpec, ToolSpec, _yaml, write_plugin
 from .errors import OwppError
+from .imports import add_lib_imports
+from .libraries import BY_NAME, LIBRARIES, VENDORED, exports
 from .manifest import Value, read_text
 from .protocol import VERSION as PROTOCOL_VERSION
 from .sources._git import GIT_URL, Fetcher, git_fetcher, ref_kind, refname, resolve_ref
+from .unbundle import Unbundled, files_of, unbundle
 from .versioning import changelog_text
 
 # Header keys that mean something else in plugin.yaml's `function:` section.
@@ -72,20 +79,153 @@ def _header_value(value: object) -> str:
     return _yaml(str(value))
 
 
-def _write(folder: Path, files: dict[str, str]) -> None:
+def _write(folder: Path, files: dict[str, str | bytes]) -> None:
     if folder.exists():
         raise OwppError(f"{folder} already exists")
     for name, text in files.items():
         path = folder / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(text.encode("utf-8"))
+        path.write_bytes(text if isinstance(text, bytes) else text.encode("utf-8"))
+
+
+def _flow(value: Any) -> str:
+    """A value on one line of plugin.yaml: JSON, which YAML reads as it is."""
+    return json.dumps(value, ensure_ascii=False)
+
+
+def _header_keys(header: dict) -> dict:
+    return {k: v for k, v in header.items() if _HEADER_KEY.fullmatch(k) and str(v).strip()}
+
+
+def _taken_out(
+    plugin_id: str, own: Unbundled
+) -> tuple[list[str], dict[str, str | bytes], list[str]]:
+    """What unbundling took out of a function, back as plugin.yaml lines, files and notes."""
+    lines: list[str] = []
+    files: dict[str, str | bytes] = {}
+    notes: list[str] = []
+    if own.include:
+        lines.append(f"include: [{', '.join(own.include)}]")
+    templates = own.data.get("templates")
+    if templates is not None:
+        files |= {f"templates/{p}": v for p, v in files_of(templates).items()}
+    if (static := own.data.get("static")) is not None:
+        files |= {f"static/{p}": v for p, v in files_of(static.get("files") or {}).items()}
+        keys = {
+            k: static[k]
+            for k, default in (("prefix", f"/{plugin_id}"), ("access", "user"))
+            if static.get(k) not in (None, default)
+        }
+        if keys:
+            lines.append(f"static: {_flow(keys)}")
+    if (assets := own.data.get("assets")) is not None:
+        files |= {f"assets/{p}": v for p, v in (assets.get("files") or {}).items()}
+        keys = {
+            k: assets[k]
+            for k, default in (("order", 0), ("wrap", True))
+            if assets.get(k) not in (None, default)
+        }
+        if keys:
+            lines.append(f"assets: {_flow(keys)}")
+    jobs = own.data.get("jobs")
+    if jobs is not None and jobs != BY_NAME["jobs"].default:
+        lines.append(f"jobs: {_flow(jobs)}")
+    if (config := own.data.get("config")) is not None:
+        files["config.yaml"] = yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
+    left = [
+        lib.name
+        for lib in LIBRARIES
+        if lib.name not in own.found and lib.name not in VENDORED and lib.end in own.code
+    ]
+    protocol = [n for n in VENDORED if n not in own.found and BY_NAME[n].end in own.code]
+    if protocol:
+        notes.append(
+            "its Shared Assets Protocol block is not byte-identical to owpp's (another version "
+            "of the protocol), so it stays in function.py, where `owpp check` refuses its change "
+            "to app.routes: import it from git instead (`owpp import <URL>`), which takes the "
+            f"code as it is, or replace the block with include: [{', '.join(protocol)}]"
+        )
+    if left:
+        notes.append(
+            f"function.py still holds owpp's {', '.join(left)} (a `# end ...` line): a copy this "
+            "owpp does not recognise, from another version. Delete each block and add its name "
+            "to include:, or `owpp check` refuses what it does"
+        )
+    if own.found:
+        notes.append(
+            f"owpp's code in it is back to what it was made from: {', '.join(own.found)}"
+            + (f" (include: [{', '.join(own.include)}])" if own.include else "")
+        )
+    if len(own.tools) > 1:
+        raise OwppError(
+            f"the function installs {len(own.tools)} tools ({', '.join(t['id'] for t in own.tools)}); "
+            "owpp takes one tool per plugin"
+        )
+    for tool in own.tools:
+        lines += ["tool:", f"  id: {tool['id']}"]
+        if tool.get("access") == "public":
+            lines.append("  access: public")
+        if tool.get("valves"):
+            lines.append(f"  valves: {_flow(tool['valves'])}")
+        if tool.get("self"):
+            lines.append("  from: function")
+            notes.append(f"the tool {tool['id']} is the function itself (tool: from: function)")
+            continue
+        code = unbundle(tool.get("content") or "")
+        m = DOCSTRING.match(code.code)
+        keys = _header_keys(parse_frontmatter(code.code)) if m else {}
+        lines += [f"  {k}: {_header_value(v)}" for k, v in keys.items()]
+        # A tool's libraries are never turned on by the plugin's files: it names them all.
+        tool_include = [
+            lib.name
+            for lib in LIBRARIES
+            if lib.name in code.include or (lib.for_tools and lib.name in code.data)
+        ]
+        if tool_include:
+            lines.append(f"  include: [{', '.join(tool_include)}]")
+        theirs = code.data.get("templates")
+        if theirs is not None:
+            if templates is None or set(theirs) != set(templates):
+                lines.append(f"  templates: {_flow(sorted(theirs))}")
+            files |= {
+                f"templates/{p}": v
+                for p, v in files_of(theirs).items()
+                if f"templates/{p}" not in files
+            }
+        body = code.code[m.end() :] if m else code.code
+        files["tool.py"] = add_lib_imports(body[1:] if body.startswith("\n") else body, exports())
+        notes.append(
+            f"the tool {tool['id']} came with it: tool.py and `tool:` in plugin.yaml. Code the "
+            "function and the tool shared (a shared.py) is in both files now: it can go back "
+            "into a shared.py"
+        )
+    for skill in own.skills:
+        skill_files = files_of(skill.get("files") or [])
+        root = skill_files.get("SKILL.md")
+        front = parse_skill("SKILL.md", root)[0] if isinstance(root, str) else {}
+        if skill.get("access") == "public" and front.get("access") != "public":
+            # A local skill says it is public in its front matter (docs/plugin-format.md).
+            assert isinstance(root, str)
+            end = root.index("\n---", 3)
+            skill_files["SKILL.md"] = root[:end] + "\naccess: public" + root[end:]
+            notes.append(f"the skill {skill['id']} is public: its SKILL.md now says access: public")
+        files |= {f"skills/{skill['id']}/{p}": v for p, v in skill_files.items()}
+    if own.skills:
+        notes.append(f"skills that came with it: {', '.join(s['id'] for s in own.skills)}")
+    return lines, files, notes
 
 
 def import_code(
-    directory: Path | str, content: str, plugin_id: str, where: str, today: str | None = None
+    directory: Path | str,
+    content: str,
+    plugin_id: str,
+    where: str,
+    today: str | None = None,
+    requires: dict | None = None,
 ) -> Imported:
     """Write `<directory>/<plugin_id>/` from a function's code: plugin.yaml holds its header,
-    function.py the rest. `where` says where the code came from, for the README."""
+    function.py the rest. `where` says where the code came from, for the README; `requires` is
+    plugin.yaml's `requires:`, when the deploy recorded it."""
     plugin_id = _check_id(plugin_id)
     m = DOCSTRING.match(content)
     header = parse_frontmatter(content)
@@ -100,7 +240,10 @@ def import_code(
             f"{where}: a function defines exactly one of class Pipe, Filter, Action or Event "
             f"(found {', '.join(types) if types else 'none'})"
         )
-    notes: list[str] = []
+    own = unbundle(content)
+    content = own.code
+    m = DOCSTRING.match(content)
+    extra, more_files, notes = _taken_out(plugin_id, own)
     for line in m.group(1).split("\n"):
         key, colon, value = line.partition(":")
         key, value = key.strip(), value.strip()
@@ -114,9 +257,13 @@ def import_code(
                 f"{where}: the header's `{key}:` means something else in plugin.yaml; rename or "
                 "remove it first"
             )
-    keys = {k: v for k, v in header.items() if _HEADER_KEY.fullmatch(k) and str(v).strip()}
+    keys = _header_keys(header)
     body = content[m.end() :]
     body = body[1:] if body.startswith("\n") else body
+    if (
+        own.found or own.tools or own.skills
+    ):  # its code finds the libraries' names in scope no more: it imports them
+        body = add_lib_imports(body, exports())
     title = str(keys.get("title") or plugin_id)
     version = str(keys.get("version") or "")
     manifest = [
@@ -124,8 +271,11 @@ def import_code(
         f'protocol: "{PROTOCOL_VERSION}"',
         "function:",
         *(f"  {k}: {_header_value(v)}" for k, v in keys.items()),
+        *extra,
+        *(["requires:", *(f"  {k}: {_flow(v)}" for k, v in requires.items())] if requires else []),
     ]
-    files = {
+    files: dict[str, str | bytes] = {
+        **more_files,
         "plugin.yaml": "\n".join(manifest) + "\n",
         "function.py": body,
         "README.md": _readme(plugin_id, title, types[0], where),
@@ -165,10 +315,23 @@ def import_instance(
     content = _field(stored, "content")
     if not isinstance(content, str) or not content:
         raise OwppError(f"Open-WebUI returned no code for the function {function_id}")
+    meta = _field(stored, "meta")
+    meta = meta if isinstance(meta, dict) else {}
+    requires = meta.get("requires")
     # Where it came from, without the instance's address: plugin.yaml and the README are committed.
     imported = import_code(
-        directory, content, plugin_id or function_id, f"Open-WebUI (function {function_id})", today
+        directory,
+        content,
+        plugin_id or function_id,
+        f"Open-WebUI (function {function_id})",
+        today,
+        requires if isinstance(requires, dict) else None,
     )
+    if meta.get("managed_by") and not isinstance(requires, dict):
+        imported.notes.append(
+            "an owpp that did not record `requires:` deployed it: if its plugin.yaml had one "
+            "(iframe_sandbox_allow_same_origin), add it back"
+        )
     imported.notes.append(
         "valves are not copied (they may hold keys or passwords): the deploy keeps the "
         "instance's, and defaults go under `function: valves:` in plugin.yaml"

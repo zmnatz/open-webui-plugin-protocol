@@ -45,7 +45,7 @@ const { React, createRoot, Excalidraw, MainMenu, convertToExcalidrawElements } =
   await import("__ASSETS_URL__/editor.js");
 <!--/hosted-->
 
-// The sandboxed panel sends no cookies, so API calls carry the token rendered into this page.
+// API calls carry the token rendered into this page.
 const parts = location.pathname.split("/");
 const id = decodeURIComponent(parts.pop());
 parts.pop();
@@ -125,10 +125,9 @@ let api = null, version = -1, lastHash = "", pointerDown = false, timer = null;
 
 async function save(elements) {
   timer = null;
-  // text/plain keeps this a CORS "simple" request: no preflight.
   const r = await fetch(url(), {
     method: "POST",
-    headers: { "content-type": "text/plain;charset=utf-8" },
+    headers: { "content-type": "application/json" },
     body: JSON.stringify({ client: me, elements }),
   });
   if (r.ok) version = (await r.json()).version;

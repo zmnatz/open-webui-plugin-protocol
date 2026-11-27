@@ -25,10 +25,10 @@ All sections are optional except that a tool or skills need a `function:` sectio
 ### `protocol:`
 
 ```yaml
-protocol: "0.5"   # the version of the plugin format this manifest was written for
+protocol: "0.7"   # the version of the plugin format this manifest was written for
 ```
 
-A quoted major.minor string that tracks owpp's major.minor. It changes only when a release changes what a manifest key means, takes one away, or changes how the plugin's code must be written (0.5: every file imports what it uses); there was no 0.4, because owpp 0.4 changed nothing; `owpp init`, `owpp create` and the examples in this repository write `protocol: "0.5"`. It is a manifest key: unlike `function:`'s keys, it is not copied into the deployed header.
+A quoted major.minor string that tracks owpp's major.minor. A release moves it when it changes what a manifest key means, takes one away, or changes how the plugin's code must be written (0.5: every file imports what it uses), and 0.7 moved it to match the release without changing any key, so a 0.5 manifest means the same in 0.7. There was no 0.4 or 0.6: those releases left it alone. `owpp init`, `owpp create` and the examples in this repository write `protocol: "0.7"`. It is a manifest key: unlike `function:`'s keys, it is not copied into the deployed header.
 
 - **Write the quotes.** Unquoted `0.5` is a YAML number and is refused, as is a patch version such as `"0.5.0"`.
 - A **newer** version than the owpp reading the manifest is refused: its keys may mean something else. Upgrade owpp first.
@@ -108,7 +108,7 @@ Makes `tool: {file}`, `function: {file}` and `skills: {<id>: {file|dir}}` read f
 When the folder at `path` is an owpp plugin itself (it has a `plugin.yaml`, like the [examples](../examples/plugins)), take all of it with `plugin: true`:
 
 ```yaml
-protocol: "0.5"
+protocol: "0.7"
 source:
   git: https://github.com/zmnatz/open-webui-plugin-protocol.git
   path: examples/plugins/excalidraw
@@ -193,7 +193,7 @@ Structured settings that ship with the plugin, read by the function with `plugin
 ## Example: a plugin with every part
 
 ```yaml
-protocol: "0.5"
+protocol: "0.7"
 function:
   title: Excalidraw
   author: you

@@ -1,4 +1,5 @@
-"""The Docker stack the screenshots and the live suite run (tools/screenshots/compose.yaml)."""
+"""The Docker stack `owpp live` runs (src/owpp/live/compose.yaml), and the one this repository's
+screenshots and live suite layer on it (tools/screenshots/compose.yaml)."""
 
 from __future__ import annotations
 
@@ -9,6 +10,7 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
+OWPP_LIVE = ROOT / "src" / "owpp" / "live" / "compose.yaml"
 
 
 def test_every_open_webui_it_starts_is_the_slim_image_at_a_pinned_version():
@@ -16,7 +18,7 @@ def test_every_open_webui_it_starts_is_the_slim_image_at_a_pinned_version():
     nothing here uses; a pinned version keeps every run on the one the protocol targets."""
     images = [
         service["image"]
-        for compose in ROOT.glob("tools/**/compose*.y*ml")
+        for compose in [OWPP_LIVE, *ROOT.glob("tools/**/compose*.y*ml")]
         for service in (yaml.safe_load(compose.read_text()).get("services") or {}).values()
         if "open-webui/open-webui" in service.get("image", "")
     ]
@@ -32,11 +34,12 @@ STACK = ROOT / "tools" / "screenshots"
 def test_aimock_is_pinned_and_every_fixture_names_its_model():
     """aimock's list of models is the models its fixtures match on, so each fixture names one;
     and the image is pinned, so a new aimock never changes a run by itself."""
-    services = yaml.safe_load((STACK / "compose.yaml").read_text())["services"]
+    services = yaml.safe_load(OWPP_LIVE.read_text())["services"]
     tag = services["aimock"]["image"].rpartition(":")[2]
     assert tag[:1].isdigit(), services["aimock"]["image"]
-    fixtures = json.loads((STACK / "aimock" / "models.json").read_text())["fixtures"]
-    assert fixtures and all(f["match"].get("model") for f in fixtures)
+    for folder in (OWPP_LIVE.parent / "aimock", STACK / "aimock"):
+        fixtures = json.loads((folder / "models.json").read_text())["fixtures"]
+        assert fixtures and all(f["match"].get("model") for f in fixtures), folder
 
 
 def test_the_gateway_describes_every_model_aimock_answers_as():

@@ -1246,8 +1246,15 @@ class MockOpenWebUI:
             return _tool_specs(module)
 
         class JSONCodec:
-            dumps = staticmethod(json.dumps)
-            loads = staticmethod(json.loads)
+            # Wrappers, not json's own functions: their signature changes between Python
+            # versions (3.15 adds array_hook), and the stubs are written from this one.
+            @staticmethod
+            def dumps(obj: Any, **kwargs: Any) -> str:
+                return json.dumps(obj, **kwargs)
+
+            @staticmethod
+            def loads(s: Any, **kwargs: Any) -> Any:
+                return json.loads(s, **kwargs)
 
         async def emit(event, data=None, room=None, to=None, **kwargs):
             mock.emitted.append((event, data))

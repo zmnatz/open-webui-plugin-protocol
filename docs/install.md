@@ -27,6 +27,8 @@ uvx owpp@0.6.3 list        # a pinned release (recommended: see below)
 uvx --from 'owpp[test]' owpp test
 ```
 
+[`owpp live`](commands/live.md), the live tests on a throwaway Open-WebUI in Docker, is one of owpp's commands. Its tests in the browser need Playwright, which the `live` extra adds: `uvx --from 'owpp[live]' owpp live`.
+
 ## Installing it for good
 
 To have `owpp` on your `PATH`:
