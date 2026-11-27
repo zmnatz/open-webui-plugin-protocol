@@ -62,6 +62,42 @@ def test_each_harness_starts_from_open_webui_just_after_its_startup(tmp_path):
         assert "<title>Open WebUI</title>" in owui.client(owui.admin).get("/left-behind").text
 
 
+def test_a_fresh_harness_is_a_new_open_webui(tmp_path):
+    """`fresh=True` imports and starts Open-WebUI again: new modules and a new data folder, and
+    a change a plugin made to an Open-WebUI module is gone."""
+    with Harness() as owui:
+        import open_webui.utils.misc as misc  # noqa: PLC0415
+
+        misc.PATCHED_BY_A_PLUGIN = True
+        before = owui.data_dir
+    with Harness(fresh=True) as owui:
+        import open_webui.utils.misc as misc  # noqa: PLC0415
+
+        assert not hasattr(misc, "PATCHED_BY_A_PLUGIN") and owui.data_dir != before
+        folder = plugin_folder(tmp_path, "class Filter:\n    pass\n")
+        assert owui.load(folder).type == "filter"
+
+
+def test_the_fresh_open_webui_marker_gives_a_test_a_new_open_webui(pytester):
+    pytester.makepyfile(
+        """
+        import pytest
+
+        dirs = []
+
+        def test_one(owui):
+            dirs.append(owui.data_dir)
+
+        @pytest.mark.fresh_open_webui
+        def test_two(owui):
+            assert owui.data_dir != dirs[0]
+        """
+    )
+    # In a child process: an inline run puts sys.modules back afterwards, which would bring
+    # back the Open-WebUI that the fresh one replaced.
+    pytester.runpytest_subprocess("-p", "no:cacheprovider").assert_outcomes(passed=2)
+
+
 def test_only_one_harness_is_open_at_a_time():
     with Harness(), pytest.raises(RuntimeError, match="another Harness is open"):
         Harness()

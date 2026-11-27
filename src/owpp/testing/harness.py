@@ -99,6 +99,7 @@ class _Runtime:
         self._tasks: set = set()
         self.recorder: Harness | None = None
         self.model = Aimock(free_port())
+        self._environ = dict(os.environ)  # put back by shut_down(): Open-WebUI writes to it too
         os.environ.update(
             OPENAI_API_BASE_URLS=f"{self.model.url}/v1",
             OPENAI_API_KEYS="owpp-test-harness",
@@ -113,7 +114,8 @@ class _Runtime:
             ENABLE_VERSION_UPDATE_CHECK="false",
         )
         os.environ.setdefault("GLOBAL_LOG_LEVEL", "WARNING")  # Open-WebUI's, unless set
-        sys.path.insert(0, str(open_webui_dir()))
+        if str(open_webui_dir()) not in sys.path:
+            sys.path.insert(0, str(open_webui_dir()))
         with contextlib.redirect_stdout(sys.stderr):  # the banner and the migrations' prints
             from open_webui.main import app
 
@@ -189,6 +191,28 @@ class _Runtime:
         self._modules = set(sys.modules)
         self._tasks = {t for t in asyncio.all_tasks(self.loop) if not t.done()}  # its own
         self._files = {p for p in self.data_dir.rglob("*") if not p.name.startswith("webui.db")}
+
+    def shut_down(self) -> None:
+        """Stop this Open-WebUI and take it out of the process: its startup undone, its loop
+        closed, aimock stopped, and every `open_webui` and plugin module removed, so the next
+        import is a new Open-WebUI."""
+        from open_webui.internal.db import async_engine, engine
+
+        self.stop_tasks()
+        with contextlib.suppress(Exception):
+            self.loop.run_until_complete(self._lifespan.__aexit__(None, None, None))
+        self.stop_tasks()
+        self.loop.run_until_complete(async_engine.dispose())
+        engine.dispose()
+        self.loop.close()
+        self.model.stop()
+        for name in list(sys.modules):
+            if name.split(".")[0] == "open_webui" or name.startswith(_PLUGIN_MODULE_PREFIXES):
+                del sys.modules[name]
+        for key in [k for k in os.environ if k not in self._environ]:
+            del os.environ[key]
+        os.environ.update(self._environ)
+        shutil.rmtree(self.data_dir, ignore_errors=True)
 
     def stop_tasks(self) -> None:
         """Cancel the tasks a test left running (a repeating job, a page's stream)."""
@@ -312,9 +336,13 @@ def _noting_missing_packages(load, runtime: _Runtime):
 _RUNTIME: _Runtime | None = None
 
 
-def runtime() -> _Runtime:
-    """The Open-WebUI of this process, started on first use."""
+def runtime(fresh: bool = False) -> _Runtime:
+    """The Open-WebUI of this process, started on first use. `fresh` shuts it down and starts a
+    new one: imported again, with a new data folder, and its startup run again."""
     global _RUNTIME
+    if fresh and _RUNTIME is not None:
+        _RUNTIME.shut_down()
+        _RUNTIME = None
     if _RUNTIME is None:
         _RUNTIME = _Runtime()
     return _RUNTIME
@@ -516,12 +544,19 @@ class Harness:
       admin: the admin that deploys the loaded functions;
       emitted, chat_events, completions, model_reply, requirements: what the fakes saw.
 
+    `fresh=True` starts a new Open-WebUI for this harness (see __init__).
+
     `sources` is what `load()` reads a `source:` plugin's files from git through; it is the
     caller's to close. A harness given none makes its own, and closes it when it closes.
     """
 
-    def __init__(self, sources: Sources | None = None):
-        self._rt = runtime()
+    def __init__(self, sources: Sources | None = None, fresh: bool = False):
+        """`fresh`: a new Open-WebUI, imported and started again, in place of the one this
+        process has, put back to just after its startup. Slower (some seconds); for a test
+        that needs Open-WebUI's modules or its startup new."""
+        if runtime().recorder is not None and fresh:
+            raise RuntimeError("another Harness is open in this process; close it first")
+        self._rt = runtime(fresh=fresh)
         self._own_sources = sources is None
         self.sources = Sources() if sources is None else sources
         self.app = self._rt.app

@@ -5,9 +5,8 @@ from __future__ import annotations
 
 import importlib.util
 import re
-from pathlib import Path
-
 import tomllib
+from pathlib import Path
 
 from owpp.testing import pin
 

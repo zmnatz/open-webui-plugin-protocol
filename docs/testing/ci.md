@@ -20,7 +20,7 @@ jobs:
           path: ~/.cache/owpp
           key: owpp-open-webui-v0.13.5
       - run: uvx owpp@0.7.2 check --strict
-      - run: uvx --python 3.12 --from 'owpp[test]==0.7.2' owpp test
+      - run: uvx --from 'owpp[test]==0.7.2' owpp test
       - run: uvx owpp@0.7.2 check --since origin/${{ github.base_ref }}
 ```
 

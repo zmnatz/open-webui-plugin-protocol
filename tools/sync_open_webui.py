@@ -10,8 +10,9 @@ Python of that image (the Dockerfile's `FROM python:X.Y`), which the lock is com
 writes:
 
 - src/owpp/testing/pin.py: the version, the wheel and its hash, the image's Python;
-- pyproject.toml: the `test` extra, every pin of the slim lock, with the lock's markers and the
-  image's Python as markers;
+- pyproject.toml: `requires-python`, the image's Python (owpp runs on the Python Open-WebUI runs
+  on), and the `test` extra, every pin of the slim lock, with the lock's markers and the image's
+  Python as markers;
 - src/owpp/live/compose.yaml: the `-slim` image tag.
 """
 
@@ -35,7 +36,7 @@ DOCKERFILE_URL = GITHUB + "Dockerfile"
 PYPI_URL = "https://pypi.org/pypi/open-webui/{version}/json"
 
 # What owpp test needs on top of Open-WebUI's own packages.
-OWN = ['"pytest>=8"']
+OWN = ['"pytest>=8"', '"pytest-xdist>=3.6"']  # -n auto: each worker starts its own Open-WebUI
 BEGIN = "test = [  # tools/sync_open_webui.py writes this list: do not edit it by hand"
 END = "]  # end of the test extra"
 
@@ -121,6 +122,14 @@ def rendered(version: str) -> dict[Path, str]:
         sys.exit(f"{PYPROJECT}: no test extra between the markers")
     block = extra(lock_pins(lock), f"python_version == '{python}'")
     pyproject = pyproject[:start] + block + pyproject[end + len(END) :]
+    major, minor = python.split(".")
+    pyproject = re.sub(
+        r'^requires-python = ".*"$',
+        f'requires-python = ">={python},<{major}.{int(minor) + 1}"',
+        pyproject,
+        count=1,
+        flags=re.M,
+    )
 
     compose = re.sub(
         r"(ghcr\.io/open-webui/open-webui:v)[^\s-]+(-slim)",

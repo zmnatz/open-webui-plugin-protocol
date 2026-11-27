@@ -25,7 +25,7 @@ The pull request's checks run `.github/workflows/ci.yml`, `docs.yml` and `live.y
 | `tools/build_docs.py` | This site builds. No link or heading that it points to is missing, and the menu lists every example. |
 | `tools/screenshots/run.py --live` | The [live suite](testing/live.md#this-repositorys-live-suite) passes on a real Open-WebUI. |
 
-`ci.yml` runs the first four checks on Python 3.10 and 3.14.
+`ci.yml` runs the first four checks on Python 3.12, the Python of the pinned Open-WebUI.
 
 ## 3. Run it yourself
 

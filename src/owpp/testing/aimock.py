@@ -28,7 +28,8 @@ PACKAGE = "@copilotkit/aimock"
 # The package's server command, the one its Docker image runs (`node dist/cli.js`): its `aimock`
 # command takes a config file instead.
 BIN = "llmock"
-RUNNERS = ("bun", "node", "docker")
+RUNNERS = ("bun", "node", "docker")  # in this order: the first on PATH runs aimock
+TOOLS = {"bun": "bunx", "node": "npx", "docker": "docker"}
 
 
 def version() -> str:
@@ -48,17 +49,19 @@ def free_port() -> int:
 
 
 def _command(runner: str, port: int, fixtures: Path, name: str) -> list[str]:
+    # The tool as PATH has it (bunx.exe, npx.cmd on Windows), so it starts on every system.
+    tool = shutil.which(TOOLS[runner]) or TOOLS[runner]
     args = ["--fixtures", "{fixtures}", "--port", "{port}", "--log-level", "warn"]
     at = f"{PACKAGE}@{version()}"
     if runner == "bun":
         rest = [a.format(fixtures=fixtures, port=port) for a in args]
-        return ["bunx", "--package", at, BIN, "--host", "127.0.0.1", *rest]
+        return [tool, "--package", at, BIN, "--host", "127.0.0.1", *rest]
     if runner == "node":
         rest = [a.format(fixtures=fixtures, port=port) for a in args]
-        return ["npx", "--yes", "--package", at, BIN, "--host", "127.0.0.1", *rest]
+        return [tool, "--yes", "--package", at, BIN, "--host", "127.0.0.1", *rest]
     rest = [a.format(fixtures="/fixtures", port=4010) for a in args]
     return [
-        "docker", "run", "--rm", "--name", name,
+        tool, "run", "--rm", "--name", name,
         "-p", f"127.0.0.1:{port}:4010",
         "-v", f"{fixtures}:/fixtures:ro",
         f"ghcr.io/copilotkit/aimock:{version()}",
@@ -68,9 +71,8 @@ def _command(runner: str, port: int, fixtures: Path, name: str) -> list[str]:
 
 def pick_runner() -> str:
     """Bun if it is installed, else Node, else Docker."""
-    tools = {"bun": "bunx", "node": "npx", "docker": "docker"}
     for runner in RUNNERS:
-        if shutil.which(tools[runner]):
+        if shutil.which(TOOLS[runner]):
             return runner
     raise RuntimeError(
         "a test asked the harness's model, which is aimock: install Bun, Node (20 or newer) or "
@@ -124,7 +126,8 @@ class Aimock:
         if self._process is None:
             return
         if getattr(self, "_runner", None) == "docker":
-            subprocess.run(["docker", "rm", "-f", self._name], capture_output=True, check=False)
+            docker = shutil.which("docker") or "docker"
+            subprocess.run([docker, "rm", "-f", self._name], capture_output=True, check=False)
         if self._process.poll() is None:
             self._process.terminate()
             try:

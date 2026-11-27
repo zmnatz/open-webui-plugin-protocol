@@ -4,12 +4,32 @@
 
 The `owui` fixture is the harness for one test. This page lists what the harness does. [Testing each kind of plugin](kinds.md) shows how to use the calls.
 
+## owpp mirrors Open-WebUI
+
+owpp follows the Open-WebUI version that it pins, and does not keep a copy of it:
+
+- **The same Python.** owpp runs on the Python of Open-WebUI's image: Python 3.12 for v0.13.5. uv picks it for you.
+- **The same packages.** The `test` extra installs the packages of Open-WebUI's slim image, at Open-WebUI's versions.
+- **The same code.** The harness runs Open-WebUI's own code, and its model is aimock, as on the stack of `owpp live`.
+
+When owpp moves to a new Open-WebUI, all three move with it. A test can then fail because Open-WebUI changed. That is the purpose: the test shows what the new Open-WebUI does. Change the plugin or the test to agree with it.
+
 ## How it runs
 
 - **One Open-WebUI in each test process.** The first test imports Open-WebUI and runs its startup. The import takes some seconds.
 - **The same start for each test.** Before each test, the harness puts the database, the app's routes and state, and the data folder back as they were after the startup.
 - **Open-WebUI's own code.** The first run downloads the pinned Open-WebUI wheel to a cache and checks its hash. The cache is [`OWPP_CACHE_DIR`](../environment-variables.md#owpp_cache_dir). The wheel is not installed. The `test` extra installs the packages of Open-WebUI's slim image.
-- **Open-WebUI's Python.** Open-WebUI v0.13.5 runs on Python 3.12. Run the tests with `uvx --python 3.12 --from 'owpp[test]' owpp test`.
+- **In parallel, if you want.** `owpp test -- -n auto` runs the tests in parallel (pytest-xdist, in the `test` extra). Each worker starts its own Open-WebUI, which takes some seconds. So use it when a repository has many tests.
+
+## A new Open-WebUI for a test
+
+The harness puts Open-WebUI back as it was after its startup. It does not undo a change that a plugin makes to Open-WebUI's own modules (for example, a function that it replaces). If a test needs a new Open-WebUI, ask for one. A new Open-WebUI takes some seconds, so this is off by default.
+
+- **For one test:** mark the test with `@pytest.mark.fresh_open_webui`.
+- **For every test:** set [`OWPP_FRESH_OPEN_WEBUI`](../environment-variables.md#owpp_fresh_open_webui) to `1`.
+- **Outside pytest:** use `Harness(fresh=True)`.
+
+The harness then stops Open-WebUI, removes its modules, and imports and starts it again, with a new data folder.
 
 ## Loading and lifecycle
 

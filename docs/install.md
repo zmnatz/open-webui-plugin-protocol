@@ -4,7 +4,7 @@
 
 ## Requirements
 
-- **[uv](https://docs.astral.sh/uv/getting-started/installation/)**. It brings its own Python, so you do not need a Python of your own. Without uv, use Python 3.10 or newer with `pip` or `pipx` ([below](#install-it-on-your-path)).
+- **[uv](https://docs.astral.sh/uv/getting-started/installation/)**. It brings its own Python, so you do not need a Python of your own. Without uv, use Python 3.12 with `pip` or `pipx` ([below](#install-it-on-your-path)). owpp runs on the Python of the Open-WebUI that it pins ([owpp mirrors Open-WebUI](testing/harness.md#owpp-mirrors-open-webui)).
 - **`git`**, for plugins that take code from another repository (`source:`), and for `owpp pull` and `owpp check --since`.
 - For a deploy, an **Open-WebUI** instance and a way to sign in as an admin. That is an API key, a user name and password, an OIDC token, or nothing where the instance allows it ([signing in](commands/deploy.md#signing-in)).
 
@@ -21,10 +21,10 @@ uvx owpp@0.7.2 list        # a pinned release (recommended: see below)
 
 ## The test extra
 
-`owpp test` runs each plugin's tests against the real Open-WebUI, in the test process ([the test harness](testing/harness.md)). It needs pytest and the packages of Open-WebUI's slim image, at Open-WebUI's versions. The `test` extra adds them. They need Open-WebUI's Python, which is 3.12 for Open-WebUI v0.13.5:
+`owpp test` runs each plugin's tests against the real Open-WebUI, in the test process ([the test harness](testing/harness.md)). It needs pytest and the packages of Open-WebUI's slim image, at Open-WebUI's versions. The `test` extra adds them:
 
 ```sh
-uvx --python 3.12 --from 'owpp[test]' owpp test
+uvx --from 'owpp[test]' owpp test
 ```
 
 The first run downloads Open-WebUI's own code (about 110 MB) to a cache: [`OWPP_CACHE_DIR`](environment-variables.md#owpp_cache_dir).

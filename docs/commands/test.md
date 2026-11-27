@@ -9,10 +9,10 @@ owpp test --editor
 
 The test fixtures bundle a plugin exactly as [`owpp deploy`](deploy.md) does. Then they deploy it through Open-WebUI's API. For the tests and the fixtures, see [testing plugins](../testing.md).
 
-The command needs the `test` extra: pytest, and the packages of Open-WebUI's slim image. It also needs Open-WebUI's Python (3.12 for Open-WebUI v0.13.5). Run it as `uvx --python 3.12 --from 'owpp[test]' owpp test`.
+The command needs the `test` extra: pytest, pytest-xdist, and the packages of Open-WebUI's slim image ([owpp mirrors Open-WebUI](../testing/harness.md#owpp-mirrors-open-webui)). Run it as `uvx --from 'owpp[test]' owpp test`. To run the tests in parallel, add `-- -n auto`.
 
-- On a different Python, the command stops and gives that command.
-- If a package is missing, the command stops and names it, for example ``error: owpp test needs pytest: run it as `uvx --python 3.12 --from 'owpp[test]' owpp test`, or `pip install 'owpp[test]'` ``.
+- On a Python other than Open-WebUI's (3.12), the command stops and says so.
+- If a package is missing, the command stops and names it, for example ``error: owpp test needs pytest: run it as `uvx --from 'owpp[test]' owpp test`, or `pip install 'owpp[test]'` ``.
 - The first run downloads Open-WebUI's code to [`OWPP_CACHE_DIR`](../environment-variables.md#owpp_cache_dir).
 
 ## Upstream tests
@@ -34,9 +34,10 @@ A plugin [taken whole from git](../plugin-format.md#a-whole-plugin-from-git) has
 ## Examples
 
 ```sh
-uvx --python 3.12 --from 'owpp[test]' owpp test               # every plugin with a tests/ folder
-uvx --python 3.12 --from 'owpp[test]' owpp test excalidraw    # just these
+uvx --from 'owpp[test]' owpp test               # every plugin with a tests/ folder
+uvx --from 'owpp[test]' owpp test excalidraw    # just these
 owpp test excalidraw -- -k token -x                           # after --: arguments for pytest
+owpp test -- -n auto                                          # in parallel
 owpp test --upstream                                          # the upstream's tests too
 owpp test --editor                                            # where an editor finds open_webui
 ```

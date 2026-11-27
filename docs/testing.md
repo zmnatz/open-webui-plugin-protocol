@@ -35,8 +35,8 @@ plugins/excalidraw/
 ```
 
 ```sh
-uvx --python 3.12 --from 'owpp[test]' owpp test               # every plugin with a tests/ folder
-uvx --python 3.12 --from 'owpp[test]' owpp test excalidraw    # just these
+uvx --from 'owpp[test]' owpp test               # every plugin with a tests/ folder
+uvx --from 'owpp[test]' owpp test excalidraw    # just these
 owpp test excalidraw -- -k token -x                           # after --: arguments for pytest
 ```
 

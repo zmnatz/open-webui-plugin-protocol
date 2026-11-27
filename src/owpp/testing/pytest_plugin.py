@@ -24,6 +24,10 @@ def pytest_configure(config):
     config.addinivalue_line("filterwarnings", "ignore::UserWarning:open_webui")
     config.addinivalue_line("filterwarnings", "ignore:.*unsupported reflection")
     config.addinivalue_line("filterwarnings", "ignore:Table '_alembic_tmp")
+    config.addinivalue_line(
+        "markers",
+        "fresh_open_webui: give this test a new Open-WebUI, imported and started again",
+    )
 
 
 @pytest.fixture(scope="session")
@@ -37,11 +41,18 @@ def _owpp_session_sources():
 
 
 @pytest.fixture
-def owui(_owpp_session_sources):
-    """The test harness (owpp.testing.Harness) for this test."""
+def owui(request, _owpp_session_sources):
+    """The test harness (owpp.testing.Harness) for this test. A test marked
+    `@pytest.mark.fresh_open_webui`, or every test when OWPP_FRESH_OPEN_WEBUI is set, gets a new
+    Open-WebUI, imported and started again (slower)."""
+    import os
+
     from owpp.testing import Harness
 
-    with Harness(sources=_owpp_session_sources) as harness:
+    fresh = bool(os.environ.get("OWPP_FRESH_OPEN_WEBUI")) or (
+        request.node.get_closest_marker("fresh_open_webui") is not None
+    )
+    with Harness(sources=_owpp_session_sources, fresh=fresh) as harness:
         yield harness
 
 

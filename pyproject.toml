@@ -9,11 +9,12 @@ description = "Write, test and deploy Open-WebUI plugins (a function plus its to
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE", "NOTICE.md"]
-requires-python = ">=3.10"
+requires-python = ">=3.12,<3.13"
 dependencies = ["PyYAML>=6.0"]
 keywords = ["open-webui", "plugins", "functions", "tools", "skills", "deploy"]
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
   "Operating System :: OS Independent",
 ]
 
@@ -23,6 +24,7 @@ classifiers = [
 # (owpp.testing.pin, ADR 0004).
 test = [  # tools/sync_open_webui.py writes this list: do not edit it by hand
   "pytest>=8",
+  "pytest-xdist>=3.6",
   "aiocache==0.12.3 ; python_version == '3.12'",
   "aiodns==3.6.1 ; python_version == '3.12'",
   "aiofiles==25.1.0 ; python_version == '3.12'",
@@ -224,7 +226,6 @@ owpp = "owpp.testing.pytest_plugin"
 [dependency-groups]
 dev = [
     "owpp[test]",  # the pinned Open-WebUI's packages, at its versions (ADR 0004)
-    "pytest-xdist>=3.6",  # -n auto: each worker starts its own Open-WebUI
     "ruff>=0.8",
     "playwright>=1.50",  # owpp live's browser fixtures, for this repository's live suite
 ]
@@ -253,7 +254,7 @@ filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecate
 
 [tool.ruff]
 line-length = 100
-target-version = "py310"
+target-version = "py312"  # the Python Open-WebUI runs on (requires-python)
 # Classic298's Shared Assets Protocol, vendored byte for byte: never lint or reformat it.
 extend-exclude = [
   "src/owpp/runtime/lib/shared_assets.py",
