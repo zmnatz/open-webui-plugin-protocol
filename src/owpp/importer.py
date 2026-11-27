@@ -33,7 +33,7 @@ from .bundle import (
 from .create import PluginSpec, SkillSpec, SourceSpec, ToolSpec, _yaml, write_plugin
 from .errors import OwppError
 from .imports import add_lib_imports
-from .libraries import BY_NAME, LIBRARIES, VENDORED, exports
+from .libraries import BY_NAME, LIBRARIES, VENDORED
 from .manifest import Value, files_of, read_text
 from .protocol import VERSION as PROTOCOL_VERSION
 from .sources._git import GIT_URL, Fetcher, git_fetcher, ref_kind, refname, resolve_ref
@@ -180,7 +180,7 @@ def _taken_out(
                 if f"templates/{p}" not in files
             }
         body = code.code[m.end() :] if m else code.code
-        files["tool.py"] = add_lib_imports(body[1:] if body.startswith("\n") else body, exports())
+        files["tool.py"] = add_lib_imports(body[1:] if body.startswith("\n") else body)
         notes.append(
             f"the tool {tool['id']} came with it: tool.py and `tool:` in plugin.yaml. Code the "
             "function and the tool shared (a shared.py) is in both files now: it can go back "
@@ -250,7 +250,7 @@ def import_code(
     if (
         own.found or own.tools or own.skills
     ):  # its code finds the libraries' names in scope no more: it imports them
-        body = add_lib_imports(body, exports())
+        body = add_lib_imports(body)
     title = str(keys.get("title") or plugin_id)
     version = str(keys.get("version") or "")
     manifest = [
