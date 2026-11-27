@@ -91,10 +91,11 @@ def missing_lib_imports(text: str, lib: dict[str, str]) -> list[str]:
     return sorted((n for n in unbound(text) if n in lib), key=isort_key)
 
 
-def add_lib_imports(text: str, lib: dict[str, str]) -> str:
+def add_lib_imports(text: str, lib: dict[str, str] | None = None) -> str:
     """`text` with a `from owpp.lib import ...` for the library names it uses without importing,
-    after its other top-level imports (ahead of `from shared import`). Unchanged if none."""
-    names = missing_lib_imports(text, lib)
+    after its other top-level imports (ahead of `from shared import`). Unchanged if none.
+    `lib` defaults to every name a plugin can import (`exports()`)."""
+    names = missing_lib_imports(text, exports() if lib is None else lib)
     return _add_imports(text, [import_line(LIB, names)]) if names else text
 
 

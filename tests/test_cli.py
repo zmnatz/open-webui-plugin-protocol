@@ -8,31 +8,11 @@ import sys
 import pytest
 from conftest import EXAMPLES, FILTER, fake_sources, write_tree
 
-from owpp import __version__
+from owpp import __version__, cli
 from owpp.bundle import load_function_files
-from owpp.cli import bundle_parts, check_bundle, main, scaffold
+from owpp.check import check_bundle
+from owpp.cli import main, scaffold
 from owpp.errors import OwppError
-
-
-class TestCheckBundle:
-    def test_accepts_good_code(self):
-        assert check_bundle("import os\nx = os.getcwd()\n") is None
-
-    def test_reports_a_syntax_error(self):
-        assert "does not compile" in check_bundle("def f(:\n")
-
-    def test_reports_undefined_names(self):
-        assert check_bundle("x = typo_name + 1\n") == "undefined names: typo_name"
-
-    def test_names_defined_by_imports_arguments_and_handlers_are_fine(self):
-        code = "import a.b as c\ndef f(arg):\n    try:\n        return arg + c\n    except E as err:\n        return err\nclass E(Exception): pass\n"
-        assert check_bundle(code) is None
-
-    def test_a_name_used_only_when_globals_has_it_is_fine(self):
-        """The assets library calls live_reload's functions only when that library is there."""
-        code = 'def f():\n    if "reload_active" in globals():\n        return reload_active()\n'
-        assert check_bundle(code) is None
-        assert check_bundle("def f():\n    return reload_active()\n") is not None
 
 
 class TestScaffold:
@@ -71,22 +51,30 @@ class TestCommands:
         with pytest.raises(OwppError, match="no plugins folder"):
             main(["list", "--dir", str(tmp_path / "nope")], env={})
 
-    def test_check_reports_ok_and_fail(self, functions_dir, capsys):
+    def test_check_prints_the_findings_and_exits_1_on_a_failure(self, functions_dir, capsys):
         d = functions_dir({"good.py": FILTER, "bad.py": FILTER + "x = typo\n"})
         assert main(["check", "--dir", str(d)], env={}) == 1
-        out = capsys.readouterr().out
-        assert "ok    good" in out and "FAIL  bad: undefined names: typo" in out
+        assert capsys.readouterr().out.splitlines() == [
+            "FAIL  bad: undefined names: typo",
+            f"ok    good ({len(FILTER)} chars)",
+        ]
         assert main(["check", "good", "--dir", str(d)], env={}) == 0
+        capsys.readouterr()
         assert main(["check", "nope", "--dir", str(d)], env={}) == 1
+        assert capsys.readouterr() == ("", f"no plugin nope in {d.resolve()}\n")
 
-    def test_check_covers_the_embedded_tool(self, tmp_path, capsys):
-        scaffold(tmp_path, "viz", "filter")
-        (tmp_path / "viz" / "plugin.yaml").write_text(
-            "function:\n  title: Viz\ntool:\n  title: Viz Tool\n"
+    def test_check_counts_the_warnings_and_strict_fails_on_them(self, tmp_path, capsys):
+        write_tree(
+            tmp_path / "p",
+            {"plugin.yaml": "function: {title: T}\n", "function.py": "class Event:\n    pass\n"},
         )
-        (tmp_path / "viz" / "tool.py").write_text("class Tools:\n    x = missing\n")
-        assert main(["check", "--dir", str(tmp_path)], env={}) == 1
-        assert "FAIL  tool viz: undefined names: missing" in capsys.readouterr().out
+        assert main(["check", "--dir", str(tmp_path)], env={}) == 0
+        lines = capsys.readouterr().out.splitlines()
+        assert [line[:6] for line in lines[:2]] == ["ok    ", "warn  "]
+        assert lines[2:] == ["1 warning(s)"]
+        assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 1
+        out = capsys.readouterr().out
+        assert out.splitlines()[-1] == "1 warning(s); failing because of --strict"
 
     def test_bundle_writes_the_exact_deployed_code(self, tmp_path):
         out = tmp_path / "out.py"
@@ -99,45 +87,23 @@ class TestCommands:
         assert (tmp_path / "hello" / "plugin.yaml").exists()
         assert "created" in capsys.readouterr().out
 
-    def test_bundle_parts_lists_the_function_then_its_tools(self):
-        (fn,) = [f for f in load_function_files(EXAMPLES, fake_sources()) if f.id == "excalidraw"]
-        assert [name for name, _ in bundle_parts(fn)] == ["excalidraw", "tool excalidraw"]
 
-
-class TestCheckProtocol:
-    """A missing protocol is a warning (0.1 plugins predate the key); an older one is a note."""
-
-    def make(self, tmp_path, line=""):
-        write_tree(
-            tmp_path / "p",
-            {
-                "plugin.yaml": f"{line}function: {{title: T}}\n",
-                "function.py": "class Event:\n    pass\n",
-            },
-        )
-
-    def test_a_missing_key_warns(self, tmp_path, capsys):
-        self.make(tmp_path)
-        assert main(["check", "--dir", str(tmp_path)], env={}) == 0
-        out = capsys.readouterr().out
-        assert "warn  p/plugin.yaml: no `protocol:` key" in out
-        assert "owpp migrate" in out and "1 warning(s)" in out
-
-    def test_strict_fails_on_a_missing_key(self, tmp_path):
-        self.make(tmp_path)
-        assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 1
-
-    def test_an_older_protocol_is_a_note_and_still_passes_strict(self, tmp_path, capsys):
-        self.make(tmp_path, 'protocol: "0.1"\n')
-        assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 0
-        out = capsys.readouterr().out
-        assert "note  p/plugin.yaml: protocol 0.1" in out and "owpp migrate" in out
-        assert "warning(s)" not in out
-
-    def test_the_current_protocol_is_quiet(self, tmp_path, capsys):
-        self.make(tmp_path, 'protocol: "0.7"\n')
-        assert main(["check", "--strict", "--dir", str(tmp_path)], env={}) == 0
-        assert "protocol" not in capsys.readouterr().out
+@pytest.mark.parametrize("command", ["create", "import"])
+def test_create_and_import_check_without_running_the_command_line_again(
+    command, tmp_path, monkeypatch, capsys
+):
+    parsed = []
+    parser = cli.build_parser
+    monkeypatch.setattr(cli, "build_parser", lambda: parsed.append(1) or parser())
+    if command == "create":
+        (tmp_path / "spec.yaml").write_text("id: demo\n")
+        argv = ["create", "--spec", str(tmp_path / "spec.yaml")]
+    else:
+        (tmp_path / "demo.py").write_text(FILTER)
+        argv = ["import", str(tmp_path / "demo.py")]
+    assert main([*argv, "--dir", str(tmp_path / "plugins")], env={}) == 0
+    assert "ok    demo (" in capsys.readouterr().out
+    assert len(parsed) == 1
 
 
 class TestTestCommand:

@@ -19,87 +19,28 @@ Every command takes --dir <plugins folder> (default: $OWPP_PLUGINS_DIR, else ./p
 from __future__ import annotations
 
 import argparse
-import ast
-import builtins
 import os
 import sys
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import yaml
 
 from . import __version__
-from .bundle import FunctionFile, env_references, load_function_files, runtime_data
+from .bundle import FunctionFile, load_function_files
+from .check import UnknownPlugin, check_plugins, failed, warning_count
 from .create import CLASS, PluginSpec, spec_from_data, write_plugin
-from .deploy import choices_from_env, instance_from_env, run_deploy
+from .deploy import Instance, choices_from_env, instance_from_env, run_deploy
 from .errors import OwppError
-from .lint import lint_notes, lint_plugin
-from .manifest import parse_yaml, plugin_folders, read_manifest, read_text
-from .protocol import report as protocol_report
+from .manifest import (
+    parse_yaml,
+    plugin_folders,
+    read_manifest,
+    read_text,
+    require_plugins_folder,
+)
 from .sources import Sources, is_plugin_source
-from .versioning import bump, changelog_problem, check_since, version_of, versions_of
-
-# ---- check --------------------------------------------------------------------
-
-
-def _globals_guard(n: ast.AST) -> bool:
-    """`"name" in globals()`: code that uses `name` only when another library defined it."""
-    return (
-        isinstance(n, ast.Compare)
-        and isinstance(n.left, ast.Constant)
-        and isinstance(n.left.value, str)
-        and len(n.ops) == 1
-        and isinstance(n.ops[0], ast.In)
-        and isinstance(n.comparators[0], ast.Call)
-        and isinstance(n.comparators[0].func, ast.Name)
-        and n.comparators[0].func.id == "globals"
-    )
-
-
-def undefined_names(tree: ast.AST) -> list[str]:
-    """Names a bundle uses without defining or importing them (a typo, or a library a
-    plugin forgot to include)."""
-    defined = set(dir(builtins))
-    loaded = set()
-    for n in ast.walk(tree):
-        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            defined.add(n.name)
-        elif isinstance(n, ast.Name):
-            if isinstance(n.ctx, (ast.Store, ast.Del)):
-                defined.add(n.id)
-            else:
-                loaded.add(n.id)
-        elif isinstance(n, (ast.Import, ast.ImportFrom)):
-            for a in n.names:
-                defined.add((a.asname or a.name).split(".")[0])
-        elif isinstance(n, ast.arg):
-            defined.add(n.arg)
-        elif isinstance(n, ast.ExceptHandler) and n.name:
-            defined.add(n.name)
-        elif _globals_guard(n):  # `if "name" in globals(): name()`, an optional library's name
-            defined.add(n.left.value)
-    return sorted(loaded - defined)
-
-
-def check_bundle(code: str, name: str = "bundle.py") -> str | None:
-    """Compile `code` and list undefined names. None when it is fine, else the problem."""
-    try:
-        tree = ast.parse(code, filename=name)
-        compile(tree, name, "exec")
-    except (SyntaxError, ValueError) as e:
-        detail = f"{e.msg} (line {e.lineno})" if isinstance(e, SyntaxError) else str(e)
-        return f"does not compile: {type(e).__name__}: {detail}"
-    names = undefined_names(tree)
-    return f"undefined names: {', '.join(names)}" if names else None
-
-
-def bundle_parts(fn: FunctionFile) -> list[tuple[str, str]]:
-    """The function bundle, then each tool bundle the runtime embeds for it."""
-    tools = runtime_data(fn.content)["tools"]
-    return [(fn.id, fn.content)] + [
-        (f"tool {t['id']}", t["content"]) for t in tools if not t.get("self")
-    ]
-
+from .versioning import bump, versions_of
 
 # ---- init ---------------------------------------------------------------------
 
@@ -116,8 +57,7 @@ def scaffold(directory: Path | str, plugin_id: str, type: str = "event") -> Path
 
 
 def _load(args: argparse.Namespace, directory: Path) -> list[FunctionFile]:
-    if not directory.exists():
-        raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
+    require_plugins_folder(directory)
     return load_function_files(directory, args.sources)
 
 
@@ -127,58 +67,29 @@ def _cmd_list(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
     return 0
 
 
-def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
-    all_functions = _load(args, directory)
-    missing = [i for i in args.ids if not any(f.id == i for f in all_functions)]
-    if missing:
-        print(f"no plugin {', '.join(missing)} in {directory}", file=sys.stderr)
+def _check(
+    directory: Path,
+    sources: Sources,
+    ids: Sequence[str] = (),
+    strict: bool = False,
+    since: str | None = None,
+) -> int:
+    """Print what the check finds, as it is found, and return `owpp check`'s exit code."""
+    findings = []
+    try:
+        for finding in check_plugins(directory, sources, ids, since):
+            print(finding)
+            findings.append(finding)
+    except UnknownPlugin as e:
+        print(e, file=sys.stderr)
         return 1
-    bad = warnings = 0
-    for fn in all_functions:
-        if args.ids and fn.id not in args.ids:
-            continue
-        for name, code in bundle_parts(fn):
-            problem = check_bundle(code, f"{fn.id}.py")
-            print(f"FAIL  {name}: {problem}" if problem else f"ok    {name} ({len(code)} chars)")
-            bad += bool(problem)
-        for finding in lint_plugin(directory / fn.file.rstrip("/"), fn.file.rstrip("/")):
-            print(f"warn  {finding}")
-            warnings += 1
-        for finding in lint_notes(directory / fn.file.rstrip("/"), fn.file.rstrip("/")):
-            print(f"note  {finding}")
-        if fn.file.endswith("/"):  # a plugin folder
-            name = fn.file.rstrip("/")
-            root = fn.root or directory / name
-            problem = changelog_problem(root, version_of(fn.content))
-            if problem:
-                print(f"warn  {fn.id}/{problem}")
-                warnings += 1
-            warn, note = protocol_report(
-                f"{name}/plugin.yaml", read_manifest(directory / name).get("protocol")
-            )
-            if warn:
-                print(f"warn  {warn}")
-                warnings += 1
-            if note:
-                print(f"note  {note}")
-            for var, default in env_references(root):
-                shown = (
-                    "no default"
-                    if default is None
-                    else f"default {default}"
-                    if default
-                    else "default empty"
-                )
-                print(f"env   {var} ({shown})")
-    if args.since:
-        chosen = [f for f in all_functions if not args.ids or f.id in args.ids]
-        found = check_since(directory, args.since, args.ids, args.sources, new_files=chosen)
-        for finding in found:
-            print(f"FAIL  {finding}")
-            bad += 1
-    if warnings:
-        print(f"{warnings} warning(s){'; failing because of --strict' if args.strict else ''}")
-    return 1 if bad or (args.strict and warnings) else 0
+    if warnings := warning_count(findings):
+        print(f"{warnings} warning(s){'; failing because of --strict' if strict else ''}")
+    return int(failed(findings, strict))
+
+
+def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    return _check(directory, args.sources, args.ids, args.strict, args.since)
 
 
 def _cmd_version(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -238,10 +149,15 @@ def _cmd_build(args: argparse.Namespace, directory: Path, env: Mapping[str, str]
     return 0
 
 
-def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
-    instance = instance_from_env(
+def _instance(args: argparse.Namespace, env: Mapping[str, str]) -> Instance:
+    """The instance in the environment, with the command's certificate flags (_tls_flags)."""
+    return instance_from_env(
         env, ca_cert=args.ca_cert, client_cert=args.client_cert, client_key=args.client_key
     )
+
+
+def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    instance = _instance(args, env)
     choices = choices_from_env(
         env,
         dir=directory,
@@ -334,7 +250,7 @@ def _cmd_migrate(args: argparse.Namespace, directory: Path, env: Mapping[str, st
 
     if not directory.exists():
         raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
-    return migrate(directory, args.ids, dry_run=args.dry_run)
+    return migrate(directory, args.ids, dry_run=args.dry_run, sources=args.sources)
 
 
 def _cmd_pull(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -350,7 +266,7 @@ def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str
 
     def check(folder: Path, plugin_id: str) -> int:
         print()
-        return main(["check", plugin_id, "--strict", "--dir", str(folder)], env)
+        return _check(folder, args.sources, [plugin_id], strict=True)
 
     if args.spec:  # no questions: the plugin described in a file (for scripts and agents)
         text = sys.stdin.read() if args.spec == "-" else read_text(args.spec)
@@ -361,7 +277,7 @@ def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         folder = write_plugin(directory, spec_from_data(data, args.id or ""))
         print(f"created {folder}")
         return check(directory, folder.name)
-    return run_wizard(directory, args.id or "", check=check)
+    return run_wizard(directory, args.id or "", check=check, sources=args.sources)
 
 
 def _cmd_import(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -374,7 +290,7 @@ def _cmd_import(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         )
         return 1
     if args.instance:
-        instance = instance_from_env(env)
+        instance = _instance(args, env)
         if not instance.base_url:
             raise OwppError("OPEN_WEBUI_URL is not set: --instance reads the function from it")
         imported = import_instance(directory, instance, args.instance, args.id or "")
@@ -389,6 +305,7 @@ def _cmd_import(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         imported = import_git(
             directory,
             args.what,
+            sources=args.sources,
             plugin_id=args.id or "",
             path=args.path or "",
             name=args.ref or "",
@@ -399,12 +316,32 @@ def _cmd_import(args: argparse.Namespace, directory: Path, env: Mapping[str, str
     for note in imported.notes:
         print(f"note  {note}")
     print()
-    code = main(["check", plugin_id, "--dir", str(directory)], env)
+    code = _check(directory, args.sources, [plugin_id])
     print(
         f"\nnext: write its tests in {plugin_id}/tests/ and run `owpp test {plugin_id}` "
         "(docs/testing/writing.md)"
     )
     return code
+
+
+def _tls_flags(parser: argparse.ArgumentParser) -> None:
+    """The certificate flags of a command that talks to an instance."""
+    parser.add_argument(
+        "--ca-cert",
+        metavar="PEM",
+        help="a PEM file of CA certificates to trust besides the system's (default "
+        "$OPEN_WEBUI_CA_CERT)",
+    )
+    parser.add_argument(
+        "--client-cert",
+        metavar="PEM",
+        help="a client certificate to present, for mutual TLS (default $OPEN_WEBUI_CLIENT_CERT)",
+    )
+    parser.add_argument(
+        "--client-key",
+        metavar="PEM",
+        help="its private key, when not in the same file (default $OPEN_WEBUI_CLIENT_KEY)",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -482,6 +419,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="give every user the tool and skills it installs (default: admins only)",
     )
+    _tls_flags(imp)
     deploy = add("deploy", _cmd_deploy, "deploy the plugins to an Open-WebUI instance")
     deploy.add_argument(
         "--from",
@@ -495,22 +433,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="delete nothing: list the functions a full deploy would delete",
     )
     deploy.add_argument("--only", metavar="id,id", help="deploy just these (no pruning)")
-    deploy.add_argument(
-        "--ca-cert",
-        metavar="PEM",
-        help="a PEM file of CA certificates to trust besides the system's (default "
-        "$OPEN_WEBUI_CA_CERT)",
-    )
-    deploy.add_argument(
-        "--client-cert",
-        metavar="PEM",
-        help="a client certificate to present, for mutual TLS (default $OPEN_WEBUI_CLIENT_CERT)",
-    )
-    deploy.add_argument(
-        "--client-key",
-        metavar="PEM",
-        help="its private key, when not in the same file (default $OPEN_WEBUI_CLIENT_KEY)",
-    )
+    _tls_flags(deploy)
     deploy.add_argument(
         "--dry-run", action="store_true", help="list what would change, with versions"
     )
@@ -583,8 +506,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None) -> int:
-    env = os.environ if env is None else env
+def parse_command(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """The command line (default: this process's), parsed. Everything after `--` is in
+    `pytest_args`, for the commands that pass it to pytest."""
     parser = build_parser()
     argv = list(sys.argv[1:] if argv is None else argv)
     # Everything after `--` goes to pytest (owpp test -- -k name -x).
@@ -594,14 +518,29 @@ def main(argv: Sequence[str] | None = None, env: Mapping[str, str] | None = None
     if passthrough and not getattr(args, "passthrough", False):
         parser.error("only `owpp test` and `owpp live` take arguments after --")
     args.pytest_args = passthrough
+    return args
+
+
+def plugins_dir(args: argparse.Namespace, env: Mapping[str, str]) -> Path:
+    """The plugins folder a command works on: --dir, else $OWPP_PLUGINS_DIR, else ./plugins."""
+    return Path(args.dir or env.get("OWPP_PLUGINS_DIR") or "plugins").resolve()
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    env: Mapping[str, str] | None = None,
+    sources: Callable[[], Sources] = Sources,
+) -> int:
+    """Run one command. `sources` makes what it reads plugin files from git through."""
+    env = os.environ if env is None else env
+    args = parse_command(argv)
     if not getattr(args, "handler", None):
-        parser.print_help()
+        build_parser().print_help()
         return 0
-    directory = Path(args.dir or env.get("OWPP_PLUGINS_DIR") or "plugins").resolve()
+    directory = plugins_dir(args, env)
     # One Sources for the command: each file from git is fetched once, and the upstream copies of
     # plugins taken whole from git last until the command (pytest, for `owpp test`) is done.
-    with Sources() as sources:
-        args.sources = sources
+    with sources() as args.sources:
         return args.handler(args, directory, env)
 
 

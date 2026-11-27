@@ -35,7 +35,7 @@ jobs:
     concurrency: deploy-plugins
     steps:
       - uses: actions/checkout@v5
-      - uses: zmnatz/open-webui-plugin-protocol@v0.7.0
+      - uses: zmnatz/open-webui-plugin-protocol@v0.7.1
         with:
           url: https://chat.example.com
           api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
@@ -68,7 +68,8 @@ More CI: [building in one job and deploying in another](commands/build.md#exampl
 | Bundler, manifest rules, function types, libraries included | `tests/test_bundle.py` |
 | Git sources (pinned commits, fetching, refusing unsafe URLs) | `tests/test_sources.py` |
 | Deploy against a stand-in Open-WebUI API: create, update, global, prune, valves, `--only` | `tests/test_deploy.py` |
-| CLI commands, `check`, `init` scaffolds | `tests/test_cli.py` |
+| CLI commands, `init` scaffolds | `tests/test_cli.py` |
+| `owpp check`: undefined names, the findings, what fails a check | `tests/test_check.py` |
 | Every command has a page in `docs/commands/` that documents each of its flags | `tests/test_command_docs.py` |
 | Every environment variable owpp reads has an entry in `docs/environment-variables.md` | `tests/test_env_docs.py` |
 | `owpp pull`: moving a pinned commit, the files it lists, refusing what it cannot check | `tests/test_pull.py` |

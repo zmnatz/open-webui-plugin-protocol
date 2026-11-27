@@ -15,6 +15,7 @@ since they become one namespace. Anything else is refused here, with the line it
 from __future__ import annotations
 
 import ast
+import builtins
 import re
 import symtable
 from collections.abc import Iterator
@@ -27,6 +28,9 @@ LIB = "owpp.lib"
 SEPARATE = ("function", "tool")
 # `{{file:NAME}}`, replaced by the sibling file's text (deprecated: templates/ does it as Python).
 FILE_TOKEN = re.compile(r"\{\{file:([A-Za-z0-9_.-]+)\}\}")
+# What the compiler looks up for itself, which no source has to define: `__class__` for `super`,
+# the others around annotations (Python 3.14 and later).
+COMPILER_NAMES = {"__class__", "__classdict__", "__conditional_annotations__"}
 
 
 def _top_level(body: list[ast.stmt]) -> Iterator[ast.stmt]:
@@ -315,43 +319,132 @@ def _separate(fail, node: ast.AST, name: str, other: str) -> OwppError:
     )
 
 
+def undefined(text: str) -> list[str]:
+    """Names a whole module (a bundle) looks up that nothing defines: not its top level, a
+    `global` in a function, the builtins, or an `"name" in globals()` guard, which marks a name
+    used only when something else (an optional library) has defined it."""
+    tree = ast.parse(text)
+    known = set(dir(builtins)) | set(_walrus_targets(tree))
+    for table in _scopes(symtable.symtable(text, "<bundle>", "exec")):
+        known.update(
+            s.get_name()
+            for s in table.get_symbols()
+            if s.is_declared_global() and (s.is_assigned() or s.is_imported())
+        )
+    known.update(n.left.value for n in ast.walk(tree) if _globals_guard(n))
+    return [name for name in unbound(text) if name not in known]
+
+
+def _walrus_targets(node: ast.AST) -> Iterator[str]:
+    """The names `:=` binds outside any function: the module's, even from a comprehension."""
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
+        return
+    if isinstance(node, ast.NamedExpr):
+        yield node.target.id
+    for child in ast.iter_child_nodes(node):
+        yield from _walrus_targets(child)
+
+
+def _globals_guard(node: ast.AST) -> bool:
+    """`"name" in globals()`."""
+    return (
+        isinstance(node, ast.Compare)
+        and isinstance(node.left, ast.Constant)
+        and isinstance(node.left.value, str)
+        and len(node.ops) == 1
+        and isinstance(node.ops[0], ast.In)
+        and isinstance(node.comparators[0], ast.Call)
+        and isinstance(node.comparators[0].func, ast.Name)
+        and node.comparators[0].func.id == "globals"
+    )
+
+
+def _scopes(table: symtable.SymbolTable) -> Iterator[symtable.SymbolTable]:
+    """`table` and the scopes inside it, outermost first. Python 3.14's annotation scopes are
+    left out: `unbound` reads annotations from the syntax tree, as every version needs."""
+    yield table
+    for child in table.get_children():
+        if child.get_type() != "annotation":
+            yield from _scopes(child)
+
+
 def unbound(text: str) -> dict[str, int]:
     """Names the module looks up as globals (from any scope) without binding them at its top
     level, with the line of the first such use: what it expects to find already in scope,
-    builtins included. Resolved scope by scope, as the compiler does (symtable)."""
+    builtins included, and annotations that name nothing in their own scope. Resolved scope by
+    scope, as the compiler does (symtable)."""
     top = symtable.symtable(text, "<plugin>", "exec")
     bound = {s.get_name() for s in top.get_symbols() if s.is_assigned() or s.is_imported()}
-    # Per scope (function and class bodies by their first line), the names it reads as globals.
+    # Per scope (function and class bodies by their first line), the names it reads as globals,
+    # and the names it binds itself.
     globals_in: dict[tuple[str, int], set[str]] = {}
-
-    def visit(table: symtable.SymbolTable) -> None:
-        names = {
+    locals_in: dict[tuple[str, int], set[str]] = {}
+    for table in _scopes(top):
+        key = (table.get_name(), table.get_lineno())
+        symbols = table.get_symbols()
+        locals_in[key] = {
             s.get_name()
-            for s in table.get_symbols()
-            if s.is_referenced() and (table.get_type() == "module" or s.is_global())
+            for s in symbols
+            if (s.is_assigned() or s.is_imported() or s.is_parameter())
+            and not s.is_declared_global()
         }
-        globals_in[(table.get_name(), table.get_lineno())] = names
-        for child in table.get_children():
-            visit(child)
+        module = table.get_type() == "module"
+        # symtable takes a function called `top` for the module, and calls its locals global.
+        globals_in[key] = {
+            s.get_name()
+            for s in symbols
+            if s.is_referenced()
+            and (module or (s.is_global() and s.get_name() not in locals_in[key]))
+        }
 
-    visit(top)
+    def of(node, table: dict[tuple[str, int], set[str]], default: set[str]) -> set[str]:
+        """What `table` has for the scope of a def or class."""
+        found = table.get((node.name, node.lineno), default)
+        if node.decorator_list:  # symtable gives a decorated def the line of its def
+            found = table.get((node.name, node.decorator_list[0].lineno), found)
+        return found
+
     tree = ast.parse(text)
     # Annotations name globals too, even postponed ones (`from __future__ import annotations`)
     # that symtable leaves out: FastAPI and pydantic look them up in the module at run time.
     annotated: dict[str, int] = {}
-    for node in ast.walk(tree):
-        notes = []
-        if isinstance(node, ast.arg) and node.annotation is not None:
-            notes.append(node.annotation)
-        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.returns:
-            notes.append(node.returns)
-        elif isinstance(node, ast.AnnAssign):
-            notes.append(node.annotation)
-        for note in notes:
-            for name in ast.walk(note):
-                if isinstance(name, ast.Name):
-                    annotated[name.id] = min(annotated.get(name.id, name.lineno), name.lineno)
-    wanted = (set().union(*globals_in.values()) | set(annotated)) - bound
+
+    def note(annotation: ast.expr | None, visible: set[str]) -> None:
+        if annotation is None:
+            return
+        parts = list(ast.walk(annotation))
+        names = [n for n in parts if isinstance(n, ast.Name)]
+        # A lambda's or a comprehension's own names, inside the annotation.
+        own = {a.arg for a in parts if isinstance(a, ast.arg)}
+        own |= {n.id for n in names if isinstance(n.ctx, ast.Store)}
+        for name in names:
+            if name.id not in visible | own:
+                annotated[name.id] = min(annotated.get(name.id, name.lineno), name.lineno)
+
+    def annotations(node: ast.AST, functions: set[str], in_class: set[str]) -> None:
+        """Note what annotations name, but for what the enclosing functions bind (`functions`),
+        or the class they are directly in (`in_class`)."""
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            functions = functions | {p.name for p in getattr(node, "type_params", ())}
+            own = of(node, locals_in, set())
+            if isinstance(node, ast.ClassDef):
+                inside = (functions, own)
+            else:
+                for arg in ast.walk(node.args):
+                    if isinstance(arg, ast.arg):
+                        note(arg.annotation, functions | in_class)
+                note(node.returns, functions | in_class)
+                inside = (functions | own, set())
+            for child in node.body:
+                annotations(child, *inside)
+            return
+        if isinstance(node, ast.AnnAssign):
+            note(node.annotation, functions | in_class)
+        for child in ast.iter_child_nodes(node):
+            annotations(child, functions, in_class)
+
+    annotations(tree, set(), set())
+    wanted = (set().union(*globals_in.values()) | set(annotated)) - bound - COMPILER_NAMES
     lines: dict[str, int] = {n: line for n, line in annotated.items() if n in wanted}
 
     def walk(node: ast.AST, scope: set[str]) -> None:
@@ -366,9 +459,7 @@ def unbound(text: str) -> dict[str, int]:
                 for default in (*node.args.defaults, *node.args.kw_defaults):
                     if default is not None:
                         walk(default, scope)
-            inner = globals_in.get((node.name, node.lineno), scope)
-            if node.decorator_list:  # symtable gives a decorated def the line of its def
-                inner = globals_in.get((node.name, node.decorator_list[0].lineno), inner)
+            inner = of(node, globals_in, scope)
             for child in node.body:
                 walk(child, inner)
             return

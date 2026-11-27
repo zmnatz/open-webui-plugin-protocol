@@ -19,29 +19,26 @@ from .errors import OwppError
 from .imports import Upgrade, upgrade
 from .manifest import get, parse_yaml, plugin_folders, read_text, rename_key, set_key, text_of
 from .protocol import VERSION, parse
-from .sources import ref_kind
+from .sources import Sources
 
 
 class Undecided(OwppError):
     """A step that needs something it could not find out; the manifest is left as it was."""
 
 
-KindOf = Callable[[str, str], "str | None"]
-
-
-def _to_0_2(text: str, manifest: dict, kind_of: KindOf) -> str:
+def _to_0_2(text: str, manifest: dict, sources: Sources) -> str:
     """0.1 -> 0.2: record the version. Everything 0.2 adds is optional, so nothing else changes."""
     return set_key(text, "protocol", '"0.2"')
 
 
-def _to_0_3(text: str, manifest: dict, kind_of: KindOf) -> str:
+def _to_0_3(text: str, manifest: dict, sources: Sources) -> str:
     """0.2 -> 0.3: `source: track:` becomes `branch:` or `tag:`, whichever the name is in the
     repository (asked with `git ls-remote`)."""
     source = manifest.get("source")
     name = text_of(get(source, "track"))
     if name:
         git = text_of(source.get("git"))
-        kind = kind_of(git, name)
+        kind = sources.kind(git, name)
         if kind not in ("branch", "tag"):
             raise Undecided(
                 f"could not tell whether `track: {name}` is a branch or a tag of {git} "
@@ -52,12 +49,12 @@ def _to_0_3(text: str, manifest: dict, kind_of: KindOf) -> str:
     return set_key(text, "protocol", '"0.3"')
 
 
-def _to_0_5(text: str, manifest: dict, kind_of: KindOf) -> str:
+def _to_0_5(text: str, manifest: dict, sources: Sources) -> str:
     """0.3 -> 0.5: record the version; the code step adds the imports (owpp.imports)."""
     return set_key(text, "protocol", '"0.5"')
 
 
-def _to_0_7(text: str, manifest: dict, kind_of: KindOf) -> str:
+def _to_0_7(text: str, manifest: dict, sources: Sources) -> str:
     """0.5 -> 0.7: record the version. 0.7 matches owpp 0.7 and changes no key."""
     return set_key(text, "protocol", '"0.7"')
 
@@ -81,7 +78,7 @@ class Step:
 
     old: str
     new: str
-    apply: Callable[[str, dict, KindOf], str]
+    apply: Callable[[str, dict, Sources], str]
     code: Callable[[Path, dict], Upgrade] | None = None
 
 
@@ -93,9 +90,7 @@ STEPS = (
 )
 
 
-def migrate_text(
-    text: str, value: Any, path: str, kind_of: KindOf = ref_kind
-) -> tuple[str, str, list[str]]:
+def migrate_text(text: str, value: Any, path: str, sources: Sources) -> tuple[str, str, list[str]]:
     """The manifest text at the current protocol, the version it came from, and the steps it
     took. Raises Undecided when a step cannot be made without the user."""
     version = parse(value, path)
@@ -105,7 +100,7 @@ def migrate_text(
         step = next((s for s in STEPS if s.old == version), None)
         if step is None:
             raise OwppError(f"{path}: cannot migrate protocol {version} to {VERSION}")
-        text = step.apply(text, parse_yaml(text) or {}, kind_of)
+        text = step.apply(text, parse_yaml(text) or {}, sources)
         applied.append(version)
         version = step.new
     return text, old, applied
@@ -116,7 +111,8 @@ def migrate(
     ids: list[str] | None = None,
     dry_run: bool = False,
     out: Callable[[str], None] = print,
-    kind_of: KindOf = ref_kind,
+    *,
+    sources: Sources,
 ) -> int:
     """`owpp migrate`: 0 when every plugin is current or was migrated, 1 when one is left for
     the user (an unknown id is an error)."""
@@ -134,7 +130,7 @@ def migrate(
         declared = parse_yaml(read_text(path)) or {}
         try:
             text, old, steps = migrate_text(
-                read_text(path), get(declared, "protocol"), str(path), kind_of
+                read_text(path), get(declared, "protocol"), str(path), sources
             )
         except Undecided as e:
             out(f"FAIL  {folder.name}: {e}")

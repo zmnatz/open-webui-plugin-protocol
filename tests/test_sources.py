@@ -12,7 +12,7 @@ from owpp.bundle import bundle_function, load_function_files
 from owpp.deploy import deploy
 from owpp.errors import OwppError
 from owpp.sources import Sources
-from owpp.sources._git import git_fetcher
+from owpp.sources._git import git_fetcher, kind_in, pick_sha
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
 REPO = "https://example.com/owner/repo.git"
@@ -238,9 +238,9 @@ class TestBundling:
             load_function_files(plugin(MANIFEST).parent)
 
     def test_deploy_fetches_the_sources_and_creates_the_function_with_them_embedded(
-        self, plugin, mock_server
+        self, plugin, open_webui
     ):
-        m = mock_server()
+        m = open_webui()
         fetched = []
 
         def fetcher(git_url, ref, paths):
@@ -256,6 +256,64 @@ class TestBundling:
         assert fetched == [(REPO, SHA, "sub/dir/tool.py", "sub/dir/SKILL.md")]
         assert "created" in res[0].action
         assert "_plugin_start()" in m.state["remote"]["content"]
+
+
+class TestRefs:
+    """What a branch or tag names, read from `git ls-remote`."""
+
+    def test_a_branch_or_a_tag_is_looked_up_exactly_and_told_apart(self):
+        out = f"{'a' * 40}\trefs/heads/v1\n{'b' * 40}\trefs/tags/v1\n{'c' * 40}\trefs/tags/v1^{{}}"
+        assert pick_sha(out, "refs/heads/v1") == "a" * 40
+        assert pick_sha(out, "refs/tags/v1") == "c" * 40  # the commit an annotated tag points at
+        assert pick_sha(out, "refs/heads/nope") is None
+        assert kind_in(out, "v1") == "tag"  # both: the tag, as git reads the name
+        assert kind_in(f"{'a' * 40}\trefs/heads/main\n", "main") == "branch"
+        assert kind_in("", "main") is None
+
+    def test_ls_remote_output_is_read_as_git_does(self):
+        out = "\n".join(
+            [
+                f"{'a' * 40}\tHEAD",
+                f"{'b' * 40}\trefs/heads/main",
+                f"{'c' * 40}\trefs/tags/v1",
+                f"{'d' * 40}\trefs/tags/v1^{{}}",  # the commit an annotated tag points at
+                f"{'e' * 40}\trefs/heads/v1",
+                f"{'f' * 40}\trefs/remotes/x/main",
+            ]
+        )
+        assert pick_sha(out, "HEAD") == "a" * 40
+        assert pick_sha(out, "main") == "b" * 40
+        assert pick_sha(out, "v1") == "d" * 40  # the peeled tag, over the branch
+        assert pick_sha(out, "other") is None
+
+    @pytest.mark.parametrize(
+        ("listed", "kind"),
+        [
+            (["refs/heads/v1"], "branch"),
+            (["refs/tags/v1"], "tag"),
+            (["refs/heads/v1", "refs/tags/v1"], "tag"),
+            ([], None),
+        ],
+    )
+    def test_sources_says_whether_a_name_is_a_branch_or_a_tag(self, monkeypatch, listed, kind):
+        asked = []
+
+        def ls_remote(args, **kwargs):
+            asked.append(args)
+            out = "".join(f"{SHA}\t{name}\n" for name in listed)
+            return subprocess.CompletedProcess(args, 0, out, "")
+
+        monkeypatch.setattr(subprocess, "run", ls_remote)
+        with Sources() as sources:
+            assert sources.kind(REPO, "v1") == kind
+        assert asked[0][-2:] == ["refs/heads/v1", "refs/tags/v1"]
+
+    def test_sources_reads_a_folder_at_a_commit_by_path_inside_it(self):
+        files = {"viz/tool.py": "t\n", "viz/a/b.md": "b\n", "other.py": "o\n"}
+        calls: list = []
+        sources = Sources(repo(files, calls))
+        assert sources.files(REPO, SHA, "viz") == {"tool.py": "t\n", "a/b.md": "b\n"}
+        assert calls == [(REPO, SHA, ["viz/"])]
 
 
 class TestGitFetcher:

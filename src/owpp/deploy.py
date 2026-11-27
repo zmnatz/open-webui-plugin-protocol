@@ -30,21 +30,28 @@ import shutil
 import ssl
 import sys
 import tempfile
-import time
-import urllib.error
-import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any
 
 from .build import Build, read_build
 from .bundle import VALID_ID, FunctionFile, load_function_files
 from .errors import OwppError
 from .manifest import plugin_folders, read_manifest
+from .openwebui import (
+    MANAGED_BY,
+    Fetch,
+    FunctionMeta,
+    OpenWebUI,
+    SignInRefused,
+    field_of,
+    urllib_fetch,
+)
 from .sources import Sources
 from .versioning import (
     is_older,
+    norm,
     own_code,
     same,
     skill_version,
@@ -53,45 +60,6 @@ from .versioning import (
     tools_of,
     version_of,
 )
-
-API = "/api/v1/functions"
-
-# Stored in each deployed function's meta (meta.managed_by); the only thing pruning acts
-# on, so a deploy never touches a function it did not create. Override it per deployment
-# (--managed-by / OWPP_MANAGED_BY), and never change it for an instance that already has
-# functions deployed: they would look hand-made and stop being pruned.
-MANAGED_BY = "open-webui-plugin-protocol"
-
-
-# ---- http ---------------------------------------------------------------------
-
-
-class HttpResponse(NamedTuple):
-    status: int
-    text: str
-
-    @property
-    def ok(self) -> bool:
-        return 200 <= self.status < 300
-
-
-Fetch = Callable[[str, str, "dict[str, str] | None", "bytes | None"], HttpResponse]
-
-
-def urllib_fetch(
-    method: str,
-    url: str,
-    headers: dict[str, str] | None = None,
-    body: bytes | None = None,
-    context: ssl.SSLContext | None = None,
-) -> HttpResponse:
-    request = urllib.request.Request(url, data=body, headers=headers or {}, method=method)
-    try:
-        with urllib.request.urlopen(request, timeout=60, context=context) as response:  # noqa: S310 (admin-chosen URL)
-            return HttpResponse(response.status, response.read().decode("utf-8", "replace"))
-    except urllib.error.HTTPError as e:
-        return HttpResponse(e.code, e.read().decode("utf-8", "replace"))
-
 
 # ---- TLS: a CA to trust, a client certificate to present ------------------------
 
@@ -173,6 +141,11 @@ class Instance:
         if context is not None and self.fetch is urllib_fetch:
             self.fetch = functools.partial(urllib_fetch, context=context)
 
+    @property
+    def open_webui(self) -> OpenWebUI:
+        """The instance's API, as the account the API key (or the session) belongs to."""
+        return OpenWebUI(self.base_url, self.fetch, self.api_key)
+
 
 @dataclass
 class Choices:
@@ -242,49 +215,11 @@ def choices_from_env(
     )
 
 
-def _call(instance: Instance, method: str, path: str, body: dict | None = None) -> Any:
-    headers = {"Authorization": f"Bearer {instance.api_key}", "Accept": "application/json"}
-    data = None
-    if body is not None:
-        headers["Content-Type"] = "application/json"
-        data = json.dumps(body, ensure_ascii=False).encode("utf-8")
-    res = instance.fetch(method, f"{instance.base_url}{path}", headers, data)
-    if not res.ok:
-        raise OwppError(f"{method} {path} -> HTTP {res.status}: {res.text[:300]}")
-    try:
-        return json.loads(res.text)
-    except ValueError:
-        return res.text
-
-
-def _field(obj: Any, key: str) -> Any:
-    return obj.get(key) if isinstance(obj, dict) else None
-
-
 # ---- signing in ---------------------------------------------------------------
 
-AUTHS = "/api/v1/auths"
 IFRAME_REQUIREMENT = "iframe_sandbox_allow_same_origin"
 IFRAME_SETTING = "iframeSandboxAllowSameOrigin"
 IFRAME_FIX = "DEFAULT_INTERFACE_SETTINGS='{\"iframeSandboxAllowSameOrigin\": true}'"
-
-
-def _post_signin(instance: Instance, path: str, body: dict) -> tuple[dict | None, str]:
-    """POST to one of Open-WebUI's sign-in endpoints: (its result, "") or (None, why not)."""
-    res = instance.fetch(
-        "POST",
-        f"{instance.base_url}{AUTHS}{path}",
-        {"Content-Type": "application/json", "Accept": "application/json"},
-        json.dumps(body).encode("utf-8"),
-    )
-    try:
-        data = json.loads(res.text)
-    except ValueError:
-        data = None
-    if res.ok and isinstance(data, dict) and data.get("token"):
-        return data, ""
-    detail = data.get("detail") if isinstance(data, dict) else None
-    return None, f"HTTP {res.status}{f': {detail}' if detail else ''}"
 
 
 def sign_in(instance: Instance) -> str:
@@ -303,81 +238,49 @@ def sign_in(instance: Instance) -> str:
         return "an API key"
     if bool(instance.username) != bool(instance.password):
         raise OwppError("OPEN_WEBUI_USERNAME and OPEN_WEBUI_PASSWORD go together: set both")
+    api = instance.open_webui
     if instance.username:
         how = f"user {instance.username}"
-        result, why = _post_signin(
-            instance, "/signin", {"email": instance.username, "password": instance.password}
-        )
-        if result is None:
-            result, ldap_why = _post_signin(
-                instance, "/ldap", {"user": instance.username, "password": instance.password}
-            )
-            if result is None:
+        try:
+            result = api.sign_in(instance.username, instance.password)
+        except SignInRefused as why:
+            try:
+                result = api.sign_in_ldap(instance.username, instance.password)
+            except SignInRefused as ldap_why:
                 raise OwppError(
                     f"could not sign in as {instance.username}: with a password ({why}), "
                     f"with LDAP ({ldap_why})"
-                )
+                ) from None
             how = f"LDAP user {instance.username}"
     elif instance.oidc_token:
         provider = instance.oauth_provider.strip().lower()
         if not VALID_ID.fullmatch(provider.replace("-", "_")):
             raise OwppError(f"OPEN_WEBUI_OAUTH_PROVIDER {provider!r} is not a provider name")
         how = f"an OIDC token ({provider})"
-        result, why = _post_signin(
-            instance, f"/oauth/{provider}/token/exchange", {"token": instance.oidc_token}
-        )
-        if result is None:
+        try:
+            result = api.exchange_oidc(provider, instance.oidc_token)
+        except SignInRefused as why:
             raise OwppError(
                 f"could not exchange the OIDC token with provider {provider} ({why}). The "
                 "instance must set ENABLE_OAUTH_TOKEN_EXCHANGE=true and have that provider "
                 "configured; set OPEN_WEBUI_OAUTH_PROVIDER if it is not called oidc"
-            )
+            ) from None
     else:
         how = "an open sign-in"
-        result, why = _post_signin(instance, "/signin", {"email": "", "password": ""})
-        if result is None:
+        try:
+            result = api.sign_in("", "")
+        except SignInRefused as why:
             raise OwppError(
                 f"no credentials, and Open-WebUI did not sign in without them ({why}). Set "
                 "OPEN_WEBUI_API_KEY (an admin's API key), OPEN_WEBUI_USERNAME and "
                 "OPEN_WEBUI_PASSWORD, or OPEN_WEBUI_OIDC_TOKEN"
-            )
+            ) from None
     role = result.get("role")
     if role is not None and role != "admin":
         who = result.get("email") or result.get("name") or "that account"
         raise OwppError(f"signed in with {how} as {who}, who is not an admin (role {role})")
     instance.api_key = str(result["token"])
     return how
-
-
-def _tls_hint(error: ssl.SSLError) -> str:
-    if isinstance(error, ssl.SSLCertVerificationError):
-        return (
-            f"{error.verify_message or error}: give the CA that signed its certificate with "
-            "OPEN_WEBUI_CA_CERT (or --ca-cert)"
-        )
-    text = str(error)
-    if "CERTIFICATE_REQUIRED" in text or "HANDSHAKE_FAILURE" in text:
-        return (
-            f"{text}: it may want a client certificate, OPEN_WEBUI_CLIENT_CERT (or --client-cert)"
-        )
-    return text
-
-
-def wait_for_health(instance: Instance, attempts: int = 6, delay: float = 30.0) -> None:
-    """Open-WebUI may still be starting (the stack redeploys on the same push). Six tries
-    30 s apart (~3 min); rerun the workflow if a redeploy takes longer."""
-    for i in range(attempts):
-        try:
-            if instance.fetch("GET", f"{instance.base_url}/health", None, None).ok:
-                return
-        except OSError as e:
-            reason = getattr(e, "reason", e)
-            if isinstance(reason, ssl.SSLError):  # waiting will not fix a certificate
-                raise OwppError(f"{instance.base_url}: TLS failed ({_tls_hint(reason)})") from e
-            # otherwise: not up yet
-        if i < attempts - 1:
-            time.sleep(delay)
-    raise OwppError(f"{instance.base_url}/health did not answer in time")
 
 
 # ---- planning -----------------------------------------------------------------
@@ -388,10 +291,6 @@ class PlanItem:
     file: FunctionFile
     action: str  # create | update | unchanged | invalid
     existing: dict | None = None
-
-
-def _norm(s: Any) -> str:
-    return str(s or "").replace("\r\n", "\n").rstrip()
 
 
 def replace_imports(content: Any) -> str:
@@ -422,13 +321,13 @@ def plan_deploy(
         elif existing is None:
             plan.append(PlanItem(f, "create"))
         else:
-            meta = existing.get("meta") or {}
+            meta = FunctionMeta.of(existing)
             same = (
-                _norm(existing.get("content")) == _norm(replace_imports(f.content))
-                and meta.get("managed_by") == managed_by
-                and (meta.get("description") or "") == f.description
-                and (meta.get("sources") or {}) == f.sources
-                and (meta.get("requires") or {}) == f.requires
+                norm(existing.get("content")) == norm(replace_imports(f.content))
+                and meta.managed_by == managed_by
+                and meta.description == f.description
+                and meta.sources == f.sources
+                and (meta.requires or {}) == f.requires
             )
             plan.append(PlanItem(f, "unchanged" if same else "update", existing))
     return plan
@@ -439,11 +338,7 @@ def plan_prune(
 ) -> list[dict]:
     """Marked functions whose folder is gone."""
     keep = {f.id for f in files}
-    return [
-        f
-        for f in live
-        if (f.get("meta") or {}).get("managed_by") == managed_by and f["id"] not in keep
-    ]
+    return [f for f in live if FunctionMeta.of(f).managed_by == managed_by and f["id"] not in keep]
 
 
 # ---- deploying ----------------------------------------------------------------
@@ -517,7 +412,7 @@ def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, s
         changes.details.append(f"function: code changed, still {new_v or '(no version)'}")
     _parts(changes, "tool", tools_of(old), tools_of(f.content), tool_version)
     _parts(changes, "skill", skills_of(old), skills_of(f.content), skill_version)
-    live_sources = ((existing or {}).get("meta") or {}).get("sources") or {}
+    live_sources = FunctionMeta.of(existing).sources
     for label, sha in f.sources.items():
         was = live_sources.get(label)
         note = f" ({latest[label]})" if label in latest else ""
@@ -537,8 +432,7 @@ def _with_content(instance: Instance, files: list[FunctionFile], live: list[dict
     out = []
     for fn in live:
         if fn["id"] in wanted:
-            full = _call(instance, "GET", f"{API}/id/{fn['id']}")
-            fn = {**fn, "content": _field(full, "content")}
+            fn = {**fn, "content": field_of(instance.open_webui.function(fn["id"]), "content")}
         out.append(fn)
     return out
 
@@ -547,19 +441,19 @@ def _ensure_global(instance: Instance, fn_id: str, state: Any) -> list[str]:
     """Brings a function declared global to active + global. A toggle is only sent when
     the flag is off, so a run that is already right makes no call."""
     notes = []
-    if not _field(state, "is_active"):
-        _call(instance, "POST", f"{API}/id/{fn_id}/toggle")
+    if not field_of(state, "is_active"):
+        instance.open_webui.toggle(fn_id)
         notes.append("activated")
-    if not _field(state, "is_global"):
-        _call(instance, "POST", f"{API}/id/{fn_id}/toggle/global")
+    if not field_of(state, "is_global"):
+        instance.open_webui.toggle_global(fn_id)
         notes.append("made global")
     return notes
 
 
 def _ensure_not_global(instance: Instance, fn_id: str, state: Any) -> list[str]:
     """Takes a function declared `global: false` (a toggle) out of global, when it is in."""
-    if _field(state, "is_global"):
-        _call(instance, "POST", f"{API}/id/{fn_id}/toggle/global")
+    if field_of(state, "is_global"):
+        instance.open_webui.toggle_global(fn_id)
         return ["made not global"]
     return []
 
@@ -569,9 +463,8 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
     # The list call is also the credential check: a bad key is a 401/403 here, before
     # anything is written. (A missing single function is a 401 too, so it cannot be used
     # to tell "absent" from "unauthorised".)
-    live = _call(instance, "GET", f"{API}/list")
-    if not isinstance(live, list):
-        raise OwppError("GET /functions/list did not return a list")
+    api = instance.open_webui
+    live = api.functions()
 
     bad = [f for f in files if not VALID_ID.fullmatch(f.id)]
     if bad:
@@ -585,7 +478,7 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
     # Only a deploy of every plugin prunes: --only, or a partial build, never does.
     pruned = plan_prune(files, live, managed_by) if plugins.complete and not choices.only else []
     orphans = [] if choices.no_prune else pruned
-    managed = sum(1 for f in live if (f.get("meta") or {}).get("managed_by") == managed_by)
+    managed = sum(1 for f in live if FunctionMeta.of(f).managed_by == managed_by)
     if len(orphans) > 1 and len(orphans) > managed / 2 and not choices.force_prune:
         raise OwppError(
             f"refusing to delete {len(orphans)} of {managed} git-controlled functions "
@@ -633,16 +526,12 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
             )
             continue
 
-        # An update replaces meta, so it is always sent whole.
-        meta: dict = {"description": f.description, "managed_by": managed_by}
-        if f.sources:  # the commit it was deployed from, for the next report
-            meta["sources"] = f.sources
-        # What plugin.yaml requires of the instance ({} for nothing), for `owpp import --instance`.
-        # A function stored without it is not updated for it: a missing one counts as {} above.
-        meta["requires"] = f.requires
-        form = {"id": f.id, "name": f.name, "content": f.content, "meta": meta}
+        # The commit it was deployed from, for the next report; what plugin.yaml requires of
+        # the instance, for `owpp import --instance`. A function stored without `requires` is
+        # not updated for it: a missing one counts as {} above.
+        meta = FunctionMeta(managed_by, f.description, f.sources, f.requires)
         if p.action == "update":
-            updated = _call(instance, "POST", f"{API}/id/{f.id}/update", form)
+            updated = api.update_function(f.id, f.name, f.content, meta)
             state = updated if updated is not None else p.existing
             notes = (
                 _ensure_global(instance, f.id, state)
@@ -665,16 +554,16 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
             )
             continue
 
-        created = _call(instance, "POST", f"{API}/create", form)
+        created = api.create_function(f.id, f.name, f.content, meta)
         notes = []
-        if not _field(created, "is_active"):
-            created = _call(instance, "POST", f"{API}/id/{f.id}/toggle")
+        if not field_of(created, "is_active"):
+            created = api.toggle(f.id)
             notes.append("activated")
         # A new filter is made global (unattached, it does nothing) unless it says
         # `global: false`: a toggle that each user switches on.
-        default_global = _field(created, "type") == "filter" and not f.not_global
-        if (f.want_global or default_global) and not _field(created, "is_global"):
-            _call(instance, "POST", f"{API}/id/{f.id}/toggle/global")
+        default_global = field_of(created, "type") == "filter" and not f.not_global
+        if (f.want_global or default_global) and not field_of(created, "is_global"):
+            api.toggle_global(f.id)
             notes.append("made global")
         results.append(
             Result(f.id, f.file, ", ".join(["created", *notes]), f.kind, f.type, version, details)
@@ -686,7 +575,7 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
         if choices.dry_run:
             results.append(Result(o["id"], "(no file)", "would delete"))
             continue
-        if _call(instance, "DELETE", f"{API}/id/{o['id']}/delete") is not True:
+        if not api.delete_function(o["id"]):
             raise OwppError(f"deleting {o['id']} was not confirmed")
         results.append(Result(o["id"], "(no file)", "deleted"))
     if choices.no_prune:
@@ -709,8 +598,7 @@ def _valves_pass(
         if p.action == "create" and choices.dry_run:
             note = "would set valves"
         else:
-            current = _call(instance, "GET", f"{API}/id/{f.id}/valves")
-            current = current if isinstance(current, dict) else {}
+            current = instance.open_webui.valves(f.id)
             differs = any(
                 k not in current
                 or json.dumps(current[k], sort_keys=True) != json.dumps(v, sort_keys=True)
@@ -721,7 +609,7 @@ def _valves_pass(
             if choices.dry_run:
                 note = "would set valves"
             else:
-                _call(instance, "POST", f"{API}/id/{f.id}/valves/update", {**current, **f.valves})
+                instance.open_webui.update_valves(f.id, {**current, **f.valves})
                 note = "set valves"
         if row:
             row.action = note if row.action == "unchanged" else f"{row.action}, {note}"
@@ -840,7 +728,7 @@ def iframe_sandbox_warning(instance: Instance, plugins: Build) -> str | None:
     if not ids:
         return None
     try:
-        config = _call(instance, "GET", f"{AUTHS}/admin/config")
+        config = instance.open_webui.admin_config()
         settings = config.get("DEFAULT_INTERFACE_SETTINGS") if isinstance(config, dict) else None
         if isinstance(settings, dict) and settings.get(IFRAME_SETTING) is True:
             return None
@@ -901,7 +789,7 @@ def run_deploy(instance: Instance, choices: Choices, env: Mapping[str, str] | No
         return 1
     try:
         with choices.sources:  # its upstream copies are deleted once the deploy is done
-            wait_for_health(instance)
+            instance.open_webui.wait_for_health()
             how = sign_in(instance)
             plugins = plugins_for(choices)
             warning = iframe_sandbox_warning(instance, plugins)  # before writing, never a refusal

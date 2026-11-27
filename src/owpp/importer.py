@@ -20,8 +20,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from .bundle import (
     DOCSTRING,
     VALID_ID,
@@ -33,11 +31,12 @@ from .bundle import (
 from .create import PluginSpec, SkillSpec, SourceSpec, ToolSpec, _yaml, write_plugin
 from .errors import OwppError
 from .imports import add_lib_imports
-from .libraries import BY_NAME, LIBRARIES, VENDORED, exports
-from .manifest import Value, read_text
+from .libraries import BY_NAME, LIBRARIES, VENDORED
+from .manifest import Value, files_of, read_text
+from .openwebui import FunctionMeta, field_of
 from .protocol import VERSION as PROTOCOL_VERSION
-from .sources._git import GIT_URL, Fetcher, git_fetcher, ref_kind, refname, resolve_ref
-from .unbundle import Unbundled, files_of, unbundle
+from .sources import GIT_URL, Sources, refname
+from .unbundle import Unbundled, unbundle
 from .versioning import changelog_text
 
 # Header keys that mean something else in plugin.yaml's `function:` section.
@@ -106,32 +105,11 @@ def _taken_out(
     notes: list[str] = []
     if own.include:
         lines.append(f"include: [{', '.join(own.include)}]")
-    templates = own.data.get("templates")
-    if templates is not None:
-        files |= {f"templates/{p}": v for p, v in files_of(templates).items()}
-    if (static := own.data.get("static")) is not None:
-        files |= {f"static/{p}": v for p, v in files_of(static.get("files") or {}).items()}
-        keys = {
-            k: static[k]
-            for k, default in (("prefix", f"/{plugin_id}"), ("access", "user"))
-            if static.get(k) not in (None, default)
-        }
-        if keys:
-            lines.append(f"static: {_flow(keys)}")
-    if (assets := own.data.get("assets")) is not None:
-        files |= {f"assets/{p}": v for p, v in (assets.get("files") or {}).items()}
-        keys = {
-            k: assets[k]
-            for k, default in (("order", 0), ("wrap", True))
-            if assets.get(k) not in (None, default)
-        }
-        if keys:
-            lines.append(f"assets: {_flow(keys)}")
-    jobs = own.data.get("jobs")
-    if jobs is not None and jobs != BY_NAME["jobs"].default:
-        lines.append(f"jobs: {_flow(jobs)}")
-    if (config := own.data.get("config")) is not None:
-        files["config.yaml"] = yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
+    for lib in LIBRARIES:
+        if (value := own.data.get(lib.name)) is not None:
+            got, keys = lib.write(plugin_id, value)
+            files |= got
+            lines += [f"{key}: {_flow(v)}" for key, v in keys.items()]
     left = [
         lib.name
         for lib in LIBRARIES
@@ -183,17 +161,14 @@ def _taken_out(
         ]
         if tool_include:
             lines.append(f"  include: [{', '.join(tool_include)}]")
-        theirs = code.data.get("templates")
-        if theirs is not None:
-            if templates is None or set(theirs) != set(templates):
-                lines.append(f"  templates: {_flow(sorted(theirs))}")
-            files |= {
-                f"templates/{p}": v
-                for p, v in files_of(theirs).items()
-                if f"templates/{p}" not in files
-            }
+        for lib in LIBRARIES:
+            if lib.for_tools and (value := code.data.get(lib.name)) is not None:
+                got, keys = lib.write_tool(value, own.data.get(lib.name))
+                lines += [f"  {key}: {_flow(v)}" for key, v in keys.items()]
+                for path, content in got.items():
+                    files.setdefault(path, content)  # a file the function has too is its own
         body = code.code[m.end() :] if m else code.code
-        files["tool.py"] = add_lib_imports(body[1:] if body.startswith("\n") else body, exports())
+        files["tool.py"] = add_lib_imports(body[1:] if body.startswith("\n") else body)
         notes.append(
             f"the tool {tool['id']} came with it: tool.py and `tool:` in plugin.yaml. Code the "
             "function and the tool shared (a shared.py) is in both files now: it can go back "
@@ -263,7 +238,7 @@ def import_code(
     if (
         own.found or own.tools or own.skills
     ):  # its code finds the libraries' names in scope no more: it imports them
-        body = add_lib_imports(body, exports())
+        body = add_lib_imports(body)
     title = str(keys.get("title") or plugin_id)
     version = str(keys.get("version") or "")
     manifest = [
@@ -308,16 +283,14 @@ def import_instance(
 ) -> Imported:
     """`import_code` for a function on an Open-WebUI instance (an `Instance`, signed in as the
     deploy signs in). The id stays the instance's, so the first deploy updates that function."""
-    from .deploy import API, _call, _field, sign_in
+    from .deploy import sign_in
 
     sign_in(instance)
-    stored = _call(instance, "GET", f"{API}/id/{function_id}")
-    content = _field(stored, "content")
+    stored = instance.open_webui.function(function_id)
+    content = field_of(stored, "content")
     if not isinstance(content, str) or not content:
         raise OwppError(f"Open-WebUI returned no code for the function {function_id}")
-    meta = _field(stored, "meta")
-    meta = meta if isinstance(meta, dict) else {}
-    requires = meta.get("requires")
+    meta = FunctionMeta.of(stored)
     # Where it came from, without the instance's address: plugin.yaml and the README are committed.
     imported = import_code(
         directory,
@@ -325,9 +298,9 @@ def import_instance(
         plugin_id or function_id,
         f"Open-WebUI (function {function_id})",
         today,
-        requires if isinstance(requires, dict) else None,
+        meta.requires,
     )
-    if meta.get("managed_by") and not isinstance(requires, dict):
+    if meta.managed_by and meta.requires is None:
         imported.notes.append(
             "an owpp that did not record `requires:` deployed it: if its plugin.yaml had one "
             "(iframe_sandbox_allow_same_origin), add it back"
@@ -492,13 +465,11 @@ def import_git(
     directory: Path | str,
     url: str,
     *,
+    sources: Sources,
     plugin_id: str = "",
     path: str = "",
     name: str = "",
     public: bool = False,
-    fetcher: Fetcher = git_fetcher,
-    lookup=resolve_ref,
-    kind_of=ref_kind,
     today: str | None = None,
 ) -> Imported:
     """Write a plugin that takes what a folder of a git repository holds, pinned at the commit
@@ -509,17 +480,15 @@ def import_git(
     git, where = target.git, target.path or "the repository's root"
     kind = ""
     if target.name:
-        kind = kind_of(git, target.name) or ""
+        kind = sources.kind(git, target.name) or ""
         if not kind:
             raise OwppError(f"no branch or tag {target.name} in {git}")
-        sha = lookup(git, refname(kind, target.name))
+        sha = sources.latest(git, refname(kind, target.name))
     else:
-        sha = lookup(git, "HEAD")
+        sha = sources.latest(git, "HEAD")
     if not sha:
         raise OwppError(f"could not look up the commit of {target.name or 'HEAD'} in {git}")
-    prefix = f"{target.path}/" if target.path else ""
-    fetched = fetcher(git, sha, [prefix or "./"])
-    files = {k[len(prefix) :]: v for k, v in fetched.items() if k.startswith(prefix)}
+    files = sources.files(git, sha, target.path)
     src = SourceSpec(
         git,
         sha,

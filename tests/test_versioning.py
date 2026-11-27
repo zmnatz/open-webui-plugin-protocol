@@ -6,6 +6,7 @@ import subprocess
 
 import pytest
 
+from owpp.check import check_plugins, failed
 from owpp.cli import main
 from owpp.create import PluginSpec, SkillSpec, ToolSpec, write_plugin
 from owpp.deploy import deploy, render_report
@@ -159,13 +160,14 @@ class TestBump:
 
 
 class TestChangelog:
-    def test_check_warns_when_the_version_has_no_entry(self, plugin, capsys):
-        assert main(["check", "--strict", "--dir", str(plugin)], env={}) == 0
+    def test_check_warns_when_the_version_has_no_entry(self, plugin):
+        assert not failed(check_plugins(plugin), strict=True)
         bump(plugin, "viz", changelog=False)
         assert changelog_problem(plugin / "viz", "1.0.1") is not None
-        assert main(["check", "--dir", str(plugin)], env={}) == 0  # a warning
-        assert main(["check", "--strict", "--dir", str(plugin)], env={}) == 1
-        assert "warn  viz/CHANGELOG.md has no `## 1.0.1` entry" in capsys.readouterr().out
+        found = list(check_plugins(plugin))
+        assert not failed(found) and failed(found, strict=True)  # a warning
+        (warning,) = [f for f in found if f.kind == "warn"]
+        assert warning.message.startswith("viz/CHANGELOG.md has no `## 1.0.1` entry")
 
 
 # ---- check --since, against a real git repository ------------------------------------
@@ -189,61 +191,62 @@ def repo(plugin):
     return plugin
 
 
-def since(repo, capsys):
-    code = main(["check", "--since", "main", "--dir", str(repo)], env={})
-    return code, capsys.readouterr().out
+def since(repo):
+    """Whether a check since main fails (1 or 0, as `owpp check` exits), and its lines."""
+    found = list(check_plugins(repo, since="main"))
+    return int(failed(found)), "\n".join(map(str, found))
 
 
 class TestCheckSince:
-    def test_nothing_changed_is_fine(self, repo, capsys):
-        assert since(repo, capsys)[0] == 0
+    def test_nothing_changed_is_fine(self, repo):
+        assert since(repo)[0] == 0
 
-    def test_code_changed_without_a_new_version_fails(self, repo, capsys):
+    def test_code_changed_without_a_new_version_fails(self, repo):
         fn = repo / "viz" / "function.py"
         fn.write_text(fn.read_text() + "\nX = 1\n")
-        code, out = since(repo, capsys)
+        code, out = since(repo)
         assert code == 1
         assert (
             "FAIL  viz: changed since main but its version is still 1.0.0 (run `owpp version viz patch`)"
             in out
         )
         bump(repo, "viz")
-        assert since(repo, capsys)[0] == 0
+        assert since(repo)[0] == 0
 
-    def test_a_versioned_tool_needs_its_own_bump(self, repo, capsys):
+    def test_a_versioned_tool_needs_its_own_bump(self, repo):
         tool = repo / "viz" / "tool.py"
         tool.write_text(tool.read_text().replace("What lookup does", "What lookup really does"))
-        code, out = since(repo, capsys)
+        code, out = since(repo)
         assert (
             code == 1 and "FAIL  tool viz: changed since main but its version is still 1.0.0" in out
         )
         assert "FAIL  viz:" not in out  # the function's own code did not change
         bump(repo, "viz", tool=True)
-        assert since(repo, capsys)[0] == 0
+        assert since(repo)[0] == 0
 
-    def test_an_unversioned_skill_is_the_plugins_change(self, repo, capsys):
+    def test_an_unversioned_skill_is_the_plugins_change(self, repo):
         skill = repo / "viz" / "skills" / "draw" / "SKILL.md"
         skill.write_text(skill.read_text() + "\nMore.\n")
-        code, out = since(repo, capsys)
+        code, out = since(repo)
         assert code == 1 and "FAIL  viz: changed since main" in out
         bump(repo, "viz", skill="draw")  # now it has its own version: that is enough
-        assert since(repo, capsys)[0] == 0
+        assert since(repo)[0] == 0
 
-    def test_a_plugin_new_since_then_needs_nothing(self, repo, capsys):
+    def test_a_plugin_new_since_then_needs_nothing(self, repo):
         write_plugin(repo, PluginSpec(id="fresh"))
-        assert since(repo, capsys)[0] == 0
+        assert since(repo)[0] == 0
 
     def test_a_ref_that_is_not_one_is_an_error(self, repo):
         with pytest.raises(OwppError):
-            main(["check", "--since", "nope", "--dir", str(repo)], env={})
+            list(check_plugins(repo, since="nope"))
 
 
 # ---- deploy: never back a version without --force ------------------------------------
 
 
 class TestDowngrade:
-    def test_a_dry_run_warns_and_a_deploy_refuses(self, mock_server, plugin):
-        m = mock_server()
+    def test_a_dry_run_warns_and_a_deploy_refuses(self, open_webui, plugin):
+        m = open_webui()
         deploy(*m.options(plugin))  # 1.0.0 is live
         bump(plugin, "viz", "0.9.0")
         res = deploy(*m.options(plugin, dry_run=True))
@@ -259,8 +262,8 @@ class TestDowngrade:
             deploy(*m.options(plugin))
         assert not any("/update" in c for c in m.calls[writes:])
 
-    def test_force_deploys_it(self, mock_server, plugin):
-        m = mock_server()
+    def test_force_deploys_it(self, open_webui, plugin):
+        m = open_webui()
         deploy(*m.options(plugin))
         bump(plugin, "viz", "0.9.0")
         res = deploy(*m.options(plugin, force=True))
@@ -269,8 +272,8 @@ class TestDowngrade:
         ]
         assert "Deployed with --force." in render_report(res, False)
 
-    def test_an_older_tool_counts_too(self, mock_server, plugin):
-        m = mock_server()
+    def test_an_older_tool_counts_too(self, open_webui, plugin):
+        m = open_webui()
         deploy(*m.options(plugin))
         bump(plugin, "viz", "0.5.0", tool=True)
         with pytest.raises(OwppError, match=r"viz \(tool `viz` 1.0.0 -> 0.5.0\)"):

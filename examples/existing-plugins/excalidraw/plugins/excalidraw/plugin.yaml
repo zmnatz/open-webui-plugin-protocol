@@ -3,7 +3,7 @@
 protocol: "0.7"
 source:
   git: https://github.com/zmnatz/open-webui-plugin-protocol.git
-  ref: a640209db318a41ca110eb0e7f4100b0ce490c1e
+  ref: 3a9424d40e575e5994df62d0c810141c98359aac
   branch: develop
   path: examples/plugins/excalidraw
   plugin: true

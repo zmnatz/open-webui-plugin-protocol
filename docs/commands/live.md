@@ -58,7 +58,7 @@ An `aimock/` folder beside the tests (or the folder `--fixtures` names) **replac
 
 With a stack left running, `owpp live` again uses it (signing in to the accounts already there) and deploys again. `--up` prints the [variables](../environment-variables.md#set-by-owpp-live-for-the-live-tests) to export (the accounts, and `PYTEST_PLUGINS=owpp.live.fixtures`, which loads the fixtures), after which `pytest live/` runs the tests against it as often as you like, and the two variables for `owpp deploy` to put a change on it.
 
-The deploy uses only the throwaway instance's address and admin token: the `OPEN_WEBUI_*` variables in your environment, for a real instance, are not passed on.
+The deploy signs in to the throwaway instance's address with its admin token and nothing else: it does not read the `OPEN_WEBUI_*` variables in your environment, which are for a real instance.
 
 ## Options
 

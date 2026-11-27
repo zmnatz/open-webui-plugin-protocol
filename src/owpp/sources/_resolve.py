@@ -20,7 +20,7 @@ from ..manifest import (
     text_of,
 )
 from . import _git
-from ._git import GIT_URL, MAX_SOURCE_BYTES, SHA40, Fetcher, Lookup
+from ._git import GIT_URL, MAX_SOURCE_BYTES, SHA40, Fetcher, KindOf, Lookup
 from ._upstream import is_plugin_source, write_upstream
 
 MAX_SKILL_FILES = 1000
@@ -139,15 +139,21 @@ class ResolvedPlugin:
 
 
 class Sources:
-    """What one run reads plugin files from git through: each file at its pinned commit,
-    fetched once, and the scratch copies of plugins taken whole from git.
+    """What one run reads from git through: each plugin file at its pinned commit, fetched
+    once, the scratch copies of plugins taken whole from git, and what a branch or tag names.
 
     Use it as a context manager: the scratch copies are deleted when it closes (or when the
     process exits, for one that is never closed)."""
 
-    def __init__(self, fetcher: Fetcher | None = None, lookup: Lookup | None = None):
-        self._fetcher = fetcher if fetcher is not None else _git.git_fetcher
+    def __init__(
+        self,
+        fetcher: Fetcher | None = None,
+        lookup: Lookup | None = None,
+        kind_of: KindOf | None = None,
+    ):
+        self.fetcher = fetcher if fetcher is not None else _git.git_fetcher
         self._lookup = lookup if lookup is not None else _git.resolve_ref
+        self._kind_of = kind_of if kind_of is not None else _git.ref_kind
         self._cache: dict[str, dict[str, Value]] = {}
         self._made: dict[str, Path] = {}
         self._scratch: tempfile.TemporaryDirectory | None = None
@@ -170,6 +176,18 @@ class Sources:
         """The commit a branch or tag of `git` points at now (`refs/heads/<branch>`,
         `refs/tags/<tag>`, a name that may be either, or `HEAD`: the default branch)."""
         return self._lookup(git, ref)
+
+    def kind(self, git: str, name: str) -> str | None:
+        """Whether `name` is a "branch" or a "tag" of `git` (a tag wins, as in git); None
+        when it is neither, or the repository cannot be reached."""
+        return self._kind_of(git, name)
+
+    def files(self, git: str, sha: str, path: str = "") -> dict[str, Value]:
+        """Every file in the folder `path` of `git` ("": the whole repository) at the commit
+        `sha`, by path inside it: for looking at a folder no `source:` names yet."""
+        prefix = f"{path}/" if path else ""
+        got = self.fetcher(git, sha, [prefix or "./"])
+        return {k[len(prefix) :]: v for k, v in got.items() if k.startswith(prefix)}
 
     def resolve(self, folder: Path | str, ref: str | None = None) -> ResolvedPlugin:
         """The plugin in `folder`, with what its `source:` takes fetched at the pinned commit,
@@ -218,7 +236,7 @@ class Sources:
             git, ref, path = re.fullmatch(r"(.*)#([0-9a-f]{40}):(.*)", key, re.DOTALL).groups()
             groups.setdefault(f"{git}#{ref}", (git, ref, []))[2].append(path)
         for git, ref, paths in groups.values():
-            got = self._fetcher(git, ref, paths)
+            got = self.fetcher(git, ref, paths)
             for path in paths:
                 if path.endswith("/"):
                     under = {k: v for k, v in got.items() if k.startswith(path)}

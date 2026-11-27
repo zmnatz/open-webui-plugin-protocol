@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
 import shutil
-from urllib.parse import urlsplit
 
 import pytest
 from conftest import EXAMPLES, FILTER
@@ -12,9 +10,6 @@ from conftest import EXAMPLES, FILTER
 from owpp.bundle import FunctionFile
 from owpp.deploy import (
     MANAGED_BY,
-    Choices,
-    HttpResponse,
-    Instance,
     choices_from_env,
     deploy,
     iframe_sandbox_warning,
@@ -25,7 +20,6 @@ from owpp.deploy import (
     render_report,
     run_deploy,
     sign_in,
-    wait_for_health,
 )
 from owpp.errors import OwppError
 from owpp.sources import Sources
@@ -36,9 +30,9 @@ CREATE = "POST /api/v1/functions/create"
 
 class TestDeployAgainstMock:
     def test_creates_a_missing_filter_activates_it_and_makes_it_global(
-        self, mock_server, functions_dir
+        self, open_webui, functions_dir
     ):
-        m = mock_server()
+        m = open_webui()
         res = deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert m.calls == [
             LIST,
@@ -51,16 +45,16 @@ class TestDeployAgainstMock:
         assert m.state["demo"]["is_global"] is True
 
     def test_only_activates_a_non_filter_and_does_not_double_toggle(
-        self, mock_server, functions_dir
+        self, open_webui, functions_dir
     ):
-        m = mock_server(created_type="event", created_active=True)
+        m = open_webui(created_type="event", created_active=True)
         deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert m.calls == [LIST, CREATE]
 
     def test_updates_changed_code_without_touching_active_global_state(
-        self, mock_server, functions_dir
+        self, open_webui, functions_dir
     ):
-        m = mock_server(
+        m = open_webui(
             live=[
                 {
                     "id": "demo",
@@ -82,16 +76,16 @@ class TestDeployAgainstMock:
         assert m.state["demo"]["is_active"] is True and m.state["demo"]["is_global"] is True
         assert m.state["demo"]["content"] == FILTER
 
-    def test_writes_nothing_when_the_code_already_matches(self, mock_server, functions_dir, git_fn):
-        m = mock_server(live=[git_fn("demo", FILTER)])
+    def test_writes_nothing_when_the_code_already_matches(self, open_webui, functions_dir, git_fn):
+        m = open_webui(live=[git_fn("demo", FILTER)])
         res = deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert m.calls == [LIST, "GET /api/v1/functions/id/demo"]
         assert res[0].action == "unchanged"
 
     def test_reads_the_live_code_by_id_since_the_list_has_no_content(
-        self, mock_server, functions_dir, git_fn
+        self, open_webui, functions_dir, git_fn
     ):
-        m = mock_server(live=[git_fn("demo", FILTER), git_fn("other", FILTER)])
+        m = open_webui(live=[git_fn("demo", FILTER), git_fn("other", FILTER)])
         res = deploy(*m.options(functions_dir({"demo.py": FILTER}), force_prune=True))
         # Only the function that has a folder is fetched; the orphan is not.
         assert [c for c in m.calls if c.startswith("GET")] == [
@@ -101,42 +95,35 @@ class TestDeployAgainstMock:
         assert next(r for r in res if r.id == "demo").action == "unchanged"
 
     def test_import_rewriting_open_webui_applies_on_save_counts_as_unchanged(
-        self, mock_server, functions_dir, git_fn
+        self, open_webui, functions_dir, git_fn
     ):
-        m = mock_server(live=[git_fn("demo", f"{FILTER}from open_webui.config import X\n")])
+        m = open_webui(live=[git_fn("demo", f"{FILTER}from open_webui.config import X\n")])
         res = deploy(*m.options(functions_dir({"demo.py": f"{FILTER}from config import X\n"})))
         assert res[0].action == "unchanged"
         assert not any("/update" in c for c in m.calls)
 
-    def test_dry_run_lists_the_plan_and_writes_nothing(self, mock_server, functions_dir):
-        m = mock_server()
+    def test_dry_run_lists_the_plan_and_writes_nothing(self, open_webui, functions_dir):
+        m = open_webui()
         res = deploy(*m.options(functions_dir({"demo.py": FILTER}), dry_run=True))
         assert m.calls == [LIST]
         assert res[0].action == "would create"
         assert render_report(res, True).startswith("Dry run:")
 
-    def test_fails_on_a_bad_key_before_writing_anything(self, mock_server, functions_dir):
-        m = mock_server()
+    def test_fails_on_a_bad_key_before_writing_anything(self, open_webui, functions_dir):
+        m = open_webui()
         with pytest.raises(OwppError, match="HTTP 401"):
             deploy(*m.options(functions_dir({"demo.py": FILTER}), api_key="sk-wrong"))
         assert m.calls == []
 
-    def test_fails_on_an_empty_functions_directory(self, mock_server, functions_dir):
-        m = mock_server()
+    def test_fails_on_an_empty_functions_directory(self, open_webui, functions_dir):
+        m = open_webui()
         with pytest.raises(OwppError, match="no functions"):
             deploy(*m.options(functions_dir({"README.md": "none"})))
 
-    def test_waits_for_health_and_gives_up(self, mock_server):
-        m = mock_server()
-        wait_for_health(m.instance(), attempts=1, delay=0.001)
-        down = Instance(base_url="http://127.0.0.1:1", api_key="k")
-        with pytest.raises(OwppError, match="did not answer"):
-            wait_for_health(down, attempts=2, delay=0.001)
-
     def test_marks_what_it_deploys_as_git_controlled_in_meta_and_description(
-        self, mock_server, functions_dir
+        self, open_webui, functions_dir
     ):
-        m = mock_server()
+        m = open_webui()
         deploy(*m.options(functions_dir({"demo.py": FILTER})))
         meta = m.state["demo"]["meta"]
         assert meta["managed_by"] == MANAGED_BY
@@ -144,9 +131,9 @@ class TestDeployAgainstMock:
         assert meta["description"].endswith("A demo filter.")
 
     def test_adopts_an_unmarked_function_with_identical_code_by_updating_it(
-        self, mock_server, functions_dir
+        self, open_webui, functions_dir
     ):
-        m = mock_server(
+        m = open_webui(
             live=[
                 {
                     "id": "demo",
@@ -175,9 +162,9 @@ class TestDeclaredGlobal:
         return go
 
     def test_makes_an_unchanged_function_global_when_active_but_not_global(
-        self, mock_server, git_fn, run
+        self, open_webui, git_fn, run
     ):
-        m = mock_server(live=[git_fn("demo", self.GLOBAL_FILTER, is_active=True, is_global=False)])
+        m = open_webui(live=[git_fn("demo", self.GLOBAL_FILTER, is_active=True, is_global=False)])
         res = run(m)
         assert res[0].action == "unchanged, made global"
         assert m.state["demo"]["is_global"] is True
@@ -185,20 +172,20 @@ class TestDeclaredGlobal:
             "POST /api/v1/functions/id/demo/toggle/global"
         ]
 
-    def test_activates_and_makes_global_a_function_that_is_neither(self, mock_server, git_fn, run):
-        m = mock_server(live=[git_fn("demo", self.GLOBAL_FILTER, is_active=False, is_global=False)])
+    def test_activates_and_makes_global_a_function_that_is_neither(self, open_webui, git_fn, run):
+        m = open_webui(live=[git_fn("demo", self.GLOBAL_FILTER, is_active=False, is_global=False)])
         res = run(m)
         assert res[0].action == "unchanged, activated, made global"
         assert m.state["demo"]["is_active"] is True and m.state["demo"]["is_global"] is True
 
-    def test_makes_no_toggle_call_when_already_active_and_global(self, mock_server, git_fn, run):
-        m = mock_server(live=[git_fn("demo", self.GLOBAL_FILTER, is_active=True, is_global=True)])
+    def test_makes_no_toggle_call_when_already_active_and_global(self, open_webui, git_fn, run):
+        m = open_webui(live=[git_fn("demo", self.GLOBAL_FILTER, is_active=True, is_global=True)])
         res = run(m)
         assert res[0].action == "unchanged"
         assert [c for c in m.calls if c.startswith("POST")] == []
 
-    def test_also_fixes_the_flags_when_the_code_is_updated(self, mock_server, run):
-        m = mock_server(
+    def test_also_fixes_the_flags_when_the_code_is_updated(self, open_webui, run):
+        m = open_webui(
             live=[
                 {
                     "id": "demo",
@@ -214,21 +201,21 @@ class TestDeclaredGlobal:
         assert res[0].action == "updated, made global"
         assert m.state["demo"]["is_global"] is True
 
-    def test_makes_a_created_non_filter_global_when_declared(self, mock_server, run):
-        m = mock_server(created_type="event", created_active=True)
+    def test_makes_a_created_non_filter_global_when_declared(self, open_webui, run):
+        m = open_webui(created_type="event", created_active=True)
         res = run(m)
         assert res[0].action == "created, made global"
         assert m.state["demo"]["is_global"] is True
 
-    def test_dry_run_reports_the_toggle_and_changes_nothing(self, mock_server, git_fn, run):
-        m = mock_server(live=[git_fn("demo", self.GLOBAL_FILTER, is_active=True, is_global=False)])
+    def test_dry_run_reports_the_toggle_and_changes_nothing(self, open_webui, git_fn, run):
+        m = open_webui(live=[git_fn("demo", self.GLOBAL_FILTER, is_active=True, is_global=False)])
         res = run(m, dry_run=True)
         assert res[0].action == "would make global"
         assert m.state["demo"]["is_global"] is False
         assert [c for c in m.calls if c.startswith("POST")] == []
 
-    def test_leaves_a_function_not_declared_global_alone(self, mock_server, git_fn, functions_dir):
-        m = mock_server(live=[git_fn("demo", FILTER, is_active=True, is_global=False)])
+    def test_leaves_a_function_not_declared_global_alone(self, open_webui, git_fn, functions_dir):
+        m = open_webui(live=[git_fn("demo", FILTER, is_active=True, is_global=False)])
         res = deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert res[0].action == "unchanged"
         assert m.state["demo"]["is_global"] is False
@@ -246,27 +233,27 @@ class TestDeclaredNotGlobal:
 
         return go
 
-    def test_a_new_toggle_is_activated_but_not_made_global(self, mock_server, run):
-        m = mock_server()
+    def test_a_new_toggle_is_activated_but_not_made_global(self, open_webui, run):
+        m = open_webui()
         res = run(m)
         assert m.calls == [LIST, CREATE, "POST /api/v1/functions/id/demo/toggle"]
         assert res[0].action == "created, activated"
         assert m.state["demo"]["is_global"] is False
 
-    def test_a_toggle_someone_made_global_is_taken_out_again(self, mock_server, git_fn, run):
-        m = mock_server(live=[git_fn("demo", self.TOGGLE, is_active=True, is_global=True)])
+    def test_a_toggle_someone_made_global_is_taken_out_again(self, open_webui, git_fn, run):
+        m = open_webui(live=[git_fn("demo", self.TOGGLE, is_active=True, is_global=True)])
         res = run(m)
         assert res[0].action == "unchanged, made not global"
         assert m.state["demo"]["is_global"] is False
 
-    def test_dry_run_says_so_and_changes_nothing(self, mock_server, git_fn, run):
-        m = mock_server(live=[git_fn("demo", self.TOGGLE, is_active=True, is_global=True)])
+    def test_dry_run_says_so_and_changes_nothing(self, open_webui, git_fn, run):
+        m = open_webui(live=[git_fn("demo", self.TOGGLE, is_active=True, is_global=True)])
         res = run(m, dry_run=True)
         assert res[0].action == "would make not global"
         assert m.state["demo"]["is_global"] is True
 
-    def test_a_toggle_already_out_of_global_makes_no_call(self, mock_server, git_fn, run):
-        m = mock_server(live=[git_fn("demo", self.TOGGLE, is_active=True, is_global=False)])
+    def test_a_toggle_already_out_of_global_makes_no_call(self, open_webui, git_fn, run):
+        m = open_webui(live=[git_fn("demo", self.TOGGLE, is_active=True, is_global=False)])
         res = run(m)
         assert res[0].action == "unchanged"
         assert not any("toggle" in c for c in m.calls)
@@ -274,9 +261,9 @@ class TestDeclaredNotGlobal:
 
 class TestPruning:
     def test_deletes_a_git_controlled_function_whose_folder_is_gone_and_leaves_hand_made_ones(
-        self, mock_server, functions_dir, git_fn
+        self, open_webui, functions_dir, git_fn
     ):
-        m = mock_server(
+        m = open_webui(
             live=[
                 git_fn("demo", FILTER),
                 git_fn("retired", FILTER),
@@ -302,30 +289,28 @@ class TestPruning:
         assert "handmade" in m.state and "demo" in m.state
 
     def test_deletes_a_single_orphan_even_when_it_is_the_only_managed_function(
-        self, mock_server, functions_dir, git_fn
+        self, open_webui, functions_dir, git_fn
     ):
-        m = mock_server(live=[git_fn("retired", FILTER)])
+        m = open_webui(live=[git_fn("retired", FILTER)])
         deploy(*m.options(functions_dir({"demo.py": FILTER})))
         assert "retired" not in m.state and "demo" in m.state
 
-    def test_force_prune_overrides_the_mass_delete_guard(self, mock_server, functions_dir, git_fn):
-        m = mock_server(live=[git_fn("demo", FILTER), git_fn("a", FILTER), git_fn("b", FILTER)])
+    def test_force_prune_overrides_the_mass_delete_guard(self, open_webui, functions_dir, git_fn):
+        m = open_webui(live=[git_fn("demo", FILTER), git_fn("a", FILTER), git_fn("b", FILTER)])
         deploy(*m.options(functions_dir({"demo.py": FILTER}), force_prune=True))
         assert list(m.state) == ["demo"]
 
     def test_dry_run_reports_what_it_would_delete_and_deletes_nothing(
-        self, mock_server, functions_dir, git_fn
+        self, open_webui, functions_dir, git_fn
     ):
-        m = mock_server(live=[git_fn("demo", FILTER), git_fn("retired", FILTER)])
+        m = open_webui(live=[git_fn("demo", FILTER), git_fn("retired", FILTER)])
         res = deploy(*m.options(functions_dir({"demo.py": FILTER}), dry_run=True))
         assert any(r.id == "retired" and r.action == "would delete" for r in res)
         assert "retired" in m.state
         assert m.calls == [LIST, "GET /api/v1/functions/id/demo"]
 
-    def test_fails_if_the_server_does_not_confirm_a_delete(
-        self, mock_server, functions_dir, git_fn
-    ):
-        m = mock_server(live=[git_fn("demo", FILTER), git_fn("retired", FILTER)], fail_delete=True)
+    def test_fails_if_the_server_does_not_confirm_a_delete(self, open_webui, functions_dir, git_fn):
+        m = open_webui(live=[git_fn("demo", FILTER), git_fn("retired", FILTER)], fail_delete=True)
         with pytest.raises(OwppError, match="not confirmed"):
             deploy(*m.options(functions_dir({"demo.py": FILTER})))
 
@@ -347,65 +332,34 @@ class TestValves:
             {"p/plugin.yaml": self.PLUGIN, "p/function.py": "class Event:\n    pass\n"}
         )
 
-    def test_sets_only_the_declared_valves_and_keeps_the_rest(self, mock_server, functions_dir):
-        m = mock_server(created_type="event", created_active=True)
-        m_valves = {"LEVEL": "loose", "OTHER": "keep"}
-        # The mock has no valves routes, so serve them from a fetch wrapper.
-        sent = []
-
-        def fetch(method, url, headers=None, body=None):
-            path = urlsplit(url).path
-            if path.endswith("/valves") and method == "GET":
-                return HttpResponse(200, json.dumps(m_valves))
-            if path.endswith("/valves/update"):
-                sent.append(json.loads(body))
-                return HttpResponse(200, "{}")
-            return opts_fetch(method, url, headers, body)
-
-        opts = m.options(self.make(functions_dir))
-        opts_fetch = opts.instance.fetch
-        opts.instance.fetch = fetch
-        res = deploy(*opts)
-        assert sent == [{"LEVEL": "strict", "OTHER": "keep", "N": 2}]
+    def test_sets_only_the_declared_valves_and_keeps_the_rest(self, open_webui, functions_dir):
+        m = open_webui(
+            created_type="event",
+            created_active=True,
+            valves={"p": {"LEVEL": "loose", "OTHER": "keep"}},
+        )
+        res = deploy(*m.options(self.make(functions_dir)))
+        assert m.valves["p"] == {"LEVEL": "strict", "OTHER": "keep", "N": 2}
+        assert "POST /api/v1/functions/id/p/valves/update" in m.calls
         assert res[0].action == "created, set valves"
 
-    def test_makes_no_call_when_the_valves_already_match(self, mock_server, functions_dir):
-        m = mock_server(created_type="event", created_active=True)
-        sent = []
-
-        def fetch(method, url, headers=None, body=None):
-            path = urlsplit(url).path
-            if path.endswith("/valves") and method == "GET":
-                return HttpResponse(200, json.dumps({"LEVEL": "strict", "N": 2}))
-            sent.append(path)
-            return opts_fetch(method, url, headers, body)
-
-        opts = m.options(self.make(functions_dir))
-        opts_fetch = opts.instance.fetch
-        opts.instance.fetch = fetch
-        res = deploy(*opts)
-        assert not any(p.endswith("/valves/update") for p in sent)
+    def test_makes_no_call_when_the_valves_already_match(self, open_webui, functions_dir):
+        m = open_webui(
+            created_type="event", created_active=True, valves={"p": {"LEVEL": "strict", "N": 2}}
+        )
+        res = deploy(*m.options(self.make(functions_dir)))
+        assert not any(c.endswith("/valves/update") for c in m.calls)
         assert res[0].action == "created"
 
 
 class TestOnly:
-    def test_deploys_only_the_named_plugins_and_never_prunes_then(self, tmp_path):
+    def test_deploys_only_the_named_plugins_and_never_prunes_then(self, tmp_path, open_webui):
         for n in ("mcpo_sync", "stale_data"):  # no git sources: nothing to fetch
             shutil.copytree(EXAMPLES / n, tmp_path / n)
-        calls = []
-
-        def fetch(method, url, headers=None, body=None):
-            calls.append(f"{method} {urlsplit(url).path}")
-            if url.endswith("/functions/list"):
-                body_out = [{"id": "gone", "meta": {"managed_by": MANAGED_BY}}]
-            else:
-                body_out = {"id": "x", "is_active": True, "is_global": False}
-            return HttpResponse(200, json.dumps(body_out))
-
-        instance = Instance(base_url="http://x", api_key="k", fetch=fetch)
-        choices = Choices(dir=tmp_path, dry_run=True, only=["mcpo_sync"])
+        m = open_webui(live=[{"id": "gone", "meta": {"managed_by": MANAGED_BY}}])
+        instance, choices = m.options(tmp_path, dry_run=True, only=["mcpo_sync"])
         assert [r.id for r in deploy(instance, choices)] == ["mcpo_sync"]
-        assert not any(c.startswith("DELETE") for c in calls)
+        assert not any(c.startswith("DELETE") for c in m.calls)
         choices.only = ["nope"]
         with pytest.raises(OwppError, match="no such plugin function nope"):
             deploy(instance, choices)
@@ -482,13 +436,13 @@ class TestVersionReport:
     """A deploy (and above all a dry run) says what changes in versions: the function, each
     tool and skill it installs, and the commit of the repository it takes code from."""
 
-    def deployed(self, mock_server, directory, **kw):
-        m = mock_server()
+    def deployed(self, open_webui, directory, **kw):
+        m = open_webui()
         deploy(*m.options(directory, sources=Sources(repo_fetcher), **kw))
         return m
 
-    def test_a_dry_run_lists_the_versions_that_change(self, mock_server, functions_dir):
-        m = self.deployed(mock_server, functions_dir(versioned("1.0.0")))
+    def test_a_dry_run_lists_the_versions_that_change(self, open_webui, functions_dir):
+        m = self.deployed(open_webui, functions_dir(versioned("1.0.0")))
         newer = functions_dir(versioned("1.1.0", tool_version="2.0", skill="Draw better."))
         res = deploy(*m.options(newer, dry_run=True))
         (r,) = res
@@ -503,27 +457,27 @@ class TestVersionReport:
             "- filter function `viz` (viz/): would update\n  - function: 1.0.0 -> 1.1.0" in report
         )
 
-    def test_code_that_changed_without_a_new_version_is_flagged(self, mock_server, functions_dir):
-        m = self.deployed(mock_server, functions_dir(versioned("1.0.0")))
+    def test_code_that_changed_without_a_new_version_is_flagged(self, open_webui, functions_dir):
+        m = self.deployed(open_webui, functions_dir(versioned("1.0.0")))
         files = versioned("1.0.0")
         files["viz/function.py"] += "X = 1\n"
         (r,) = deploy(*m.options(functions_dir(files), dry_run=True))
         assert r.details == ["function: code changed, still 1.0.0"]
 
-    def test_an_unchanged_function_shows_its_version(self, mock_server, functions_dir):
+    def test_an_unchanged_function_shows_its_version(self, open_webui, functions_dir):
         d = functions_dir(versioned("1.0.0"))
-        m = self.deployed(mock_server, d)
+        m = self.deployed(open_webui, d)
         res = deploy(*m.options(d, dry_run=True))
         assert res[0].details == []
         assert "`viz` (viz/): unchanged (1.0.0)" in render_report(res, True)
 
-    def test_a_new_plugin_lists_everything_it_brings(self, mock_server, functions_dir):
-        m = mock_server()
+    def test_a_new_plugin_lists_everything_it_brings(self, open_webui, functions_dir):
+        m = open_webui()
         (r,) = deploy(*m.options(functions_dir(versioned("1.0.0")), dry_run=True))
         assert r.details == ["function: new (1.0.0)", "tool `viz`: new (1.0)", "skill `draw`: new"]
 
-    def test_the_source_commit_is_recorded_and_reported(self, mock_server, functions_dir):
-        m = self.deployed(mock_server, functions_dir(sourced()))
+    def test_the_source_commit_is_recorded_and_reported(self, open_webui, functions_dir):
+        m = self.deployed(open_webui, functions_dir(sourced()))
         assert m.state["up"]["meta"]["sources"] == {REPO_GIT: PINNED}
         again = deploy(*m.options(functions_dir(sourced()), sources=Sources(repo_fetcher)))
         assert again[0].action == "unchanged" and again[0].details == []
@@ -536,10 +490,10 @@ class TestVersionReport:
         ]
 
     def test_latest_reports_against_the_latest_commits_and_changes_no_file(
-        self, mock_server, functions_dir
+        self, open_webui, functions_dir
     ):
         d = functions_dir(sourced())
-        m = self.deployed(mock_server, d)
+        m = self.deployed(open_webui, d)
         before = (d / "up" / "plugin.yaml").read_text()
         looked_up = []
         res = deploy(
@@ -563,8 +517,8 @@ class TestVersionReport:
         assert (d / "up" / "plugin.yaml").read_text() == before
         assert not any("/update" in c for c in m.calls[-3:])
 
-    def test_latest_without_a_dry_run_is_refused(self, mock_server, functions_dir):
-        m = mock_server()
+    def test_latest_without_a_dry_run_is_refused(self, open_webui, functions_dir):
+        m = open_webui()
         with pytest.raises(OwppError, match="only goes with --dry-run"):
             deploy(*m.options(functions_dir(sourced()), latest=True))
         assert m.calls == []
@@ -582,60 +536,60 @@ class TestSignIn:
         how = sign_in(target.instance)
         return how, deploy(*target)
 
-    def test_an_api_key_is_used_as_it_is(self, mock_server, functions_dir):
-        m = mock_server()
+    def test_an_api_key_is_used_as_it_is(self, open_webui, functions_dir):
+        m = open_webui()
         instance = m.instance()
         assert sign_in(instance) == "an API key" and instance.api_key == "sk-good"
         assert not any("/auths/" in c for c in m.calls)
 
-    def test_user_name_and_password(self, mock_server, functions_dir):
-        m = mock_server(accounts={"admin@example.com": "pw"})
+    def test_user_name_and_password(self, open_webui, functions_dir):
+        m = open_webui(accounts={"admin@example.com": "pw"})
         how, res = self.run(
             m, functions_dir({"demo.py": FILTER}), username="admin@example.com", password="pw"
         )
         assert how == "user admin@example.com" and res[0].action.startswith("created")
         assert m.calls[0] == "POST /api/v1/auths/signin"
 
-    def test_ldap_when_the_password_sign_in_fails(self, mock_server, functions_dir):
-        m = mock_server(ldap={"ada": "pw"})
+    def test_ldap_when_the_password_sign_in_fails(self, open_webui, functions_dir):
+        m = open_webui(ldap={"ada": "pw"})
         how, res = self.run(m, functions_dir({"demo.py": FILTER}), username="ada", password="pw")
         assert how == "LDAP user ada" and res[0].action.startswith("created")
         assert m.calls[:2] == ["POST /api/v1/auths/signin", "POST /api/v1/auths/ldap"]
 
-    def test_wrong_credentials_say_what_was_tried(self, mock_server, functions_dir):
-        m = mock_server(accounts={"admin@example.com": "pw"})
+    def test_wrong_credentials_say_what_was_tried(self, open_webui, functions_dir):
+        m = open_webui(accounts={"admin@example.com": "pw"})
         with pytest.raises(OwppError, match="with a password .*400.*with LDAP .*not enabled"):
             self.run(
                 m, functions_dir({"demo.py": FILTER}), username="admin@example.com", password="no"
             )
 
-    def test_half_a_user_name_and_password_is_refused(self, mock_server, functions_dir):
+    def test_half_a_user_name_and_password_is_refused(self, open_webui, functions_dir):
         with pytest.raises(OwppError, match="go together"):
-            self.run(mock_server(), functions_dir({"demo.py": FILTER}), username="ada")
+            self.run(open_webui(), functions_dir({"demo.py": FILTER}), username="ada")
 
-    def test_an_oidc_token_is_exchanged(self, mock_server, functions_dir):
-        m = mock_server(oidc={"keycloak": "id-token"})
+    def test_an_oidc_token_is_exchanged(self, open_webui, functions_dir):
+        m = open_webui(oidc={"keycloak": "id-token"})
         how, res = self.run(
             m, functions_dir({"demo.py": FILTER}), oidc_token="id-token", oauth_provider="Keycloak"
         )
         assert how == "an OIDC token (keycloak)" and res[0].action.startswith("created")
         assert m.calls[0] == "POST /api/v1/auths/oauth/keycloak/token/exchange"
 
-    def test_an_oidc_exchange_the_instance_does_not_allow(self, mock_server, functions_dir):
+    def test_an_oidc_exchange_the_instance_does_not_allow(self, open_webui, functions_dir):
         with pytest.raises(OwppError, match="ENABLE_OAUTH_TOKEN_EXCHANGE=true"):
-            self.run(mock_server(), functions_dir({"demo.py": FILTER}), oidc_token="t")
+            self.run(open_webui(), functions_dir({"demo.py": FILTER}), oidc_token="t")
 
-    def test_nothing_signs_in_when_the_instance_allows_it(self, mock_server, functions_dir):
-        m = mock_server(open_signin=True)
+    def test_nothing_signs_in_when_the_instance_allows_it(self, open_webui, functions_dir):
+        m = open_webui(open_signin=True)
         how, res = self.run(m, functions_dir({"demo.py": FILTER}))
         assert how == "an open sign-in" and res[0].action.startswith("created")
 
-    def test_nothing_says_what_to_set_when_it_does_not(self, mock_server, functions_dir):
+    def test_nothing_says_what_to_set_when_it_does_not(self, open_webui, functions_dir):
         with pytest.raises(OwppError, match="OPEN_WEBUI_API_KEY.*OPEN_WEBUI_USERNAME.*OIDC"):
-            self.run(mock_server(), functions_dir({"demo.py": FILTER}))
+            self.run(open_webui(), functions_dir({"demo.py": FILTER}))
 
-    def test_the_account_must_be_an_admin(self, mock_server, functions_dir):
-        m = mock_server(open_signin=True, role="user")
+    def test_the_account_must_be_an_admin(self, open_webui, functions_dir):
+        m = open_webui(open_signin=True, role="user")
         with pytest.raises(OwppError, match="not an admin"):
             self.run(m, functions_dir({"demo.py": FILTER}))
         assert not any("/functions" in c for c in m.calls)
@@ -672,18 +626,18 @@ class TestIframeRequirementWarning:
             {"demo/plugin.yaml": self.PLUGIN, "demo/function.py": "class Event:\n    pass\n"}
         )
 
-    def test_no_requirement_never_reads_the_admin_config(self, mock_server, functions_dir):
-        m = mock_server()
+    def test_no_requirement_never_reads_the_admin_config(self, open_webui, functions_dir):
+        m = open_webui()
         assert warning_for(m.options(functions_dir({"demo.py": FILTER}))) is None
         assert m.calls == []
 
-    def test_setting_on_means_no_warning(self, mock_server, functions_dir):
-        m = mock_server(interface_settings={"iframeSandboxAllowSameOrigin": True})
+    def test_setting_on_means_no_warning(self, open_webui, functions_dir):
+        m = open_webui(interface_settings={"iframeSandboxAllowSameOrigin": True})
         assert warning_for(m.options(self.make(functions_dir))) is None
         assert m.calls == ["GET /api/v1/auths/admin/config"]
 
-    def test_only_that_excludes_the_plugin_does_not_warn(self, mock_server, functions_dir):
-        m = mock_server()
+    def test_only_that_excludes_the_plugin_does_not_warn(self, open_webui, functions_dir):
+        m = open_webui()
         d = functions_dir(
             {
                 "demo/plugin.yaml": self.PLUGIN,
@@ -695,9 +649,9 @@ class TestIframeRequirementWarning:
         assert m.calls == []
 
     def test_missing_setting_warns_but_the_deploy_still_writes(
-        self, mock_server, functions_dir, capsys
+        self, open_webui, functions_dir, capsys
     ):
-        m = mock_server(created_type="event", created_active=True)
+        m = open_webui(created_type="event", created_active=True)
         opts = m.options(self.make(functions_dir))
         assert run_deploy(*opts, env={}) == 0
         out = capsys.readouterr().out
@@ -707,10 +661,23 @@ class TestIframeRequirementWarning:
         assert "POST /api/v1/functions/create" in m.calls
 
     def test_unreadable_admin_config_warns_without_stopping_the_deploy(
-        self, mock_server, functions_dir
+        self, open_webui, functions_dir
     ):
-        m = mock_server(admin_config_status=403, created_type="event", created_active=True)
+        m = open_webui(admin_config_status=403, created_type="event", created_active=True)
         opts = m.options(self.make(functions_dir))
         warning = warning_for(opts)
         assert warning and "could not be read" in warning
         assert any(r.action.startswith("created") for r in deploy(*opts))
+
+
+def test_deploy_and_versioning_share_one_text_normaliser():
+    # Both compare stored code with a local file, so both must treat CRLF and trailing space alike.
+    import owpp.deploy as deploy
+    import owpp.versioning as versioning
+
+    assert deploy.norm is versioning.norm
+    files = [FunctionFile(id="a", content="x = 1\r\n", description="d")]
+    live = [
+        {"id": "a", "content": "x = 1   \n", "meta": {"managed_by": "mine", "description": "d"}}
+    ]
+    assert plan_deploy(files, live, "mine")[0].action == "unchanged"

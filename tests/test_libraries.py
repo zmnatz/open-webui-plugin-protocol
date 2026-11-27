@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import ast
 import importlib
+import json
 
 import pytest
+from conftest import write_tree
 
 import owpp.lib
+from owpp.bundle import bundle_function
 from owpp.errors import OwppError
+from owpp.importer import import_code
 from owpp.libraries import (
     BY_NAME,
     FROM_RUNTIME,
@@ -23,7 +27,9 @@ from owpp.libraries import (
     table,
     wanted,
 )
+from owpp.manifest import read_manifest
 from owpp.testing.mock import MockOpenWebUI
+from owpp.unbundle import unbundle
 
 CODE = '"""\ntitle: T\n"""\nx = 1\n'
 
@@ -152,7 +158,141 @@ def test_library_files_import_on_their_own_with_their_defaults():
     assert RUNTIME_FILE.exists()
 
 
-def test_every_library_a_tool_may_ask_for_has_a_reader_for_its_data():
-    from owpp.bundle import TOOL_DATA_READERS
+# Each entry that carries data reads it from a plugin folder and writes it back: a plugin with
+# settings that are not the defaults, bundled and unbundled, is the same folder again.
+ROUND_TRIPS = {
+    "static": {
+        "plugin.yaml": 'protocol: "0.5"\nfunction: {title: Demo}\n'
+        "static: {prefix: /demo-files, access: admin}\n",
+        "function.py": "class Filter:\n    pass\n",
+        "static/app.js": "console.log(1)\n",
+        "static/img/logo.bin": bytes([0xFF, 0x00, 0x10]),
+    },
+    "assets": {
+        "plugin.yaml": 'protocol: "0.5"\nfunction: {title: Demo}\nassets: {order: 5, wrap: false}\n',
+        "assets/loader.js": "console.log('demo')\n",
+        "assets/custom.css": "body { color: red }\n",
+    },
+    "jobs": {
+        "plugin.yaml": 'protocol: "0.5"\nfunction: {title: Demo}\n'
+        'jobs: {sync_every_minutes: "${DEMO_MINUTES:-5}", adopt_markers: [old-sync]}\n',
+        "function.py": "class Filter:\n    pass\n",
+    },
+    "templates": {
+        "plugin.yaml": 'protocol: "0.5"\nfunction: {title: Demo}\n',
+        "function.py": "class Filter:\n    pass\n",
+        "templates/page.html": "<p>{{name}}</p>\n",
+        "templates/img/logo.bin": bytes([0xFF, 0x00, 0x10]),
+    },
+    "config": {
+        "plugin.yaml": 'protocol: "0.5"\nfunction: {title: Demo}\n',
+        "function.py": "class Filter:\n    pass\n",
+        "config.yaml": "greeting: héllo\nlimits:\n  retries: 3\n  url: ${DEMO_URL:-}\n",
+    },
+}
 
-    assert sorted(TOOL_DATA_READERS) == sorted(lib.name for lib in LIBRARIES if lib.for_tools)
+
+def _bytes(files):
+    return {p: v.encode() if isinstance(v, str) else v for p, v in files.items()}
+
+
+def test_every_library_that_carries_data_converts_it_both_ways():
+    """An entry with a data placeholder reads and writes that data, and has a round trip below."""
+    carrying = [lib for lib in LIBRARIES if lib.placeholder]
+    assert sorted(ROUND_TRIPS) == sorted(lib.name for lib in carrying)
+    for lib in carrying:
+        assert lib.read and lib.write, lib.name
+
+
+@pytest.mark.parametrize("name", ROUND_TRIPS)
+def test_an_entry_reads_its_data_and_writes_it_back(tmp_path, name):
+    """The entry's data, bundled into the function and unbundled out of it, writes back the
+    files and the plugin.yaml key it was read from, settings that are not the defaults included."""
+    folder = write_tree(tmp_path / "demo", ROUND_TRIPS[name])
+    manifest = read_manifest(folder)
+    lib = BY_NAME[name]
+    data = lib.read(folder, manifest)
+    own = unbundle(bundle_function(folder))
+    assert own.data[name] == data
+    files, keys = lib.write("demo", own.data[name])
+    code = ("plugin.yaml", "function.py")
+    assert _bytes(files) == _bytes({p: v for p, v in ROUND_TRIPS[name].items() if p not in code})
+    assert keys == ({name: manifest[name]} if name in manifest else {})
+
+
+@pytest.mark.parametrize("name", ROUND_TRIPS)
+def test_an_entry_with_its_defaults_writes_no_key(tmp_path, name):
+    """Settings left at the entry's defaults are not written to plugin.yaml."""
+
+    tree = dict(ROUND_TRIPS[name])
+    tree["plugin.yaml"] = 'protocol: "0.5"\nfunction: {title: Demo}\n'
+    if name == "jobs":  # held by its key alone, so an empty one
+        tree["plugin.yaml"] += "jobs: {}\n"
+    folder = write_tree(tmp_path / "demo", tree)
+    lib = BY_NAME[name]
+    _, keys = lib.write("demo", lib.read(folder, read_manifest(folder)))
+    assert keys == {}
+
+
+@pytest.mark.parametrize(
+    "jobs",
+    [{"sync_every_minutes": 0}, {"adopt_markers": ["old-sync"]}],
+)
+def test_jobs_writes_only_the_settings_that_are_not_defaults(tmp_path, jobs):
+    """Each of the jobs settings is written back to plugin.yaml on its own."""
+    tree = dict(ROUND_TRIPS["jobs"])
+    tree["plugin.yaml"] = f'protocol: "0.5"\nfunction: {{title: Demo}}\njobs: {json.dumps(jobs)}\n'
+    folder = write_tree(tmp_path / "demo", tree)
+    lib = BY_NAME["jobs"]
+    assert lib.write("demo", lib.read(folder, read_manifest(folder))) == ({}, {"jobs": jobs})
+
+
+def test_an_imported_plugin_with_every_librarys_data_is_the_same_folder(tmp_path):
+    """owpp import of a bundle with every library's data, settings that are not the defaults,
+    writes back the same files and plugin.yaml keys, and needs no include:."""
+    keys = {
+        "static": {"prefix": "/demo-files", "access": "public"},
+        "assets": {"order": -2, "wrap": False},
+        "jobs": {"sync_every_minutes": 5, "adopt_markers": ["old-sync"]},
+    }
+    tree = {path: v for files in ROUND_TRIPS.values() for path, v in files.items()}
+    tree["plugin.yaml"] = 'protocol: "0.5"\nfunction: {title: Demo}\n' + "".join(
+        f"{name}: {json.dumps(value)}\n" for name, value in keys.items()
+    )
+    tree["function.py"] = (
+        "from owpp.lib import PluginAssets\n\n\nclass Event(PluginAssets):\n    pass\n"
+    )
+    src = write_tree(tmp_path / "src" / "demo", tree)
+    folder = import_code(tmp_path / "plugins", bundle_function(src), "demo", "x").folder
+    got = read_manifest(folder)
+    assert {name: got[name] for name in keys} == keys
+    assert "include" not in got
+    for path in tree:
+        if path not in ("plugin.yaml", "function.py"):
+            assert (folder / path).read_bytes() == (src / path).read_bytes(), path
+    assert bundle_function(folder) == bundle_function(src)
+
+
+@pytest.mark.parametrize("listed", [None, ["card/"]])
+def test_an_imported_tools_templates_are_the_same(tmp_path, listed):
+    """owpp import of a function with a tool that embeds templates, all of them or the ones
+    `tool: templates:` lists, writes that list back only when it narrows them."""
+    narrowed = f"  templates: {json.dumps(listed)}\n" if listed else ""
+    src = write_tree(
+        tmp_path / "src" / "demo",
+        {
+            "plugin.yaml": 'protocol: "0.5"\nfunction: {title: Demo}\n'
+            "tool:\n  id: demo_tool\n  title: Demo\n  include: [templates]\n" + narrowed,
+            "function.py": "class Filter:\n    pass\n",
+            "tool.py": "class Tools:\n    pass\n",
+            "templates/card/a.html": "<a></a>\n",
+            "templates/page.html": "<p></p>\n",
+        },
+    )
+    folder = import_code(tmp_path / "plugins", bundle_function(src), "demo", "x").folder
+    tool = read_manifest(folder)["tool"]
+    assert tool["include"] == ["templates"]
+    assert tool.get("templates") == (["card/a.html"] if listed else None)
+    for path in ("templates/card/a.html", "templates/page.html"):
+        assert (folder / path).read_bytes() == (src / path).read_bytes()
+    assert bundle_function(folder) == bundle_function(src)

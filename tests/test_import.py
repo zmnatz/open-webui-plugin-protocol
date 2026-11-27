@@ -3,15 +3,19 @@ repository) becomes a plugin folder with a plugin.yaml, ready to test."""
 
 from __future__ import annotations
 
+import ssl
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
-from conftest import write_tree
+from conftest import FakeRepo, write_tree
+from fake_open_webui import FakeOpenWebUI, serve
+from pki import make_pki
 
 from owpp.bundle import bundle_function, load_function_files
 from owpp.cli import main
+from owpp.embedding import runtime_start
 from owpp.errors import OwppError
 from owpp.importer import import_code, import_file, import_git, import_instance, parse_git_url
 from owpp.libraries import BY_NAME
@@ -135,39 +139,20 @@ REPO = {
 }
 
 
-class Git:
-    """A repository with REPO's files at SHA, on branch main and tag v1."""
+def their_repo(files=None) -> FakeRepo:
+    """A repository with REPO's files at SHA, which is branch main, tag v1 and HEAD."""
+    return FakeRepo(
+        GIT,
+        REPO if files is None else files,
+        sha=SHA,
+        branches={"main": SHA},
+        tags={"v1": SHA},
+        head=SHA,
+    )
 
-    def __init__(self, files=None):
-        self.files = REPO if files is None else files
-        self.asked: list[tuple[str, str, list[str]]] = []
 
-    def fetcher(self, git, ref, paths):
-        self.asked.append((git, ref, paths))
-        assert (git, ref) == (GIT, SHA)
-        out = {}
-        for path in paths:
-            base = "" if path == "./" else path
-            out |= {k: v for k, v in self.files.items() if k.startswith(base)}
-        return out
-
-    @staticmethod
-    def lookup(git, ref):
-        return SHA if ref in ("refs/heads/main", "refs/tags/v1", "HEAD") else None
-
-    @staticmethod
-    def kind_of(git, name):
-        return {"main": "branch", "v1": "tag"}.get(name)
-
-    def run(self, directory, url, **kw):
-        return import_git(
-            directory,
-            url,
-            fetcher=self.fetcher,
-            lookup=self.lookup,
-            kind_of=self.kind_of,
-            **kw,
-        )
+def run_import(directory, url, files=None, **kw):
+    return import_git(directory, url, sources=their_repo(files).sources(), **kw)
 
 
 class TestGitUrls:
@@ -210,9 +195,8 @@ class TestGitUrls:
 
 class TestFromGit:
     def test_finds_the_function_the_tool_and_the_skill_and_pins_them(self, tmp_path):
-        git = Git()
         plugins = tmp_path / "plugins"
-        imported = git.run(plugins, "https://github.com/someone/their-plugins/tree/main/viz")
+        imported = run_import(plugins, "https://github.com/someone/their-plugins/tree/main/viz")
         assert imported.folder == plugins / "viz"
         manifest = read_manifest(imported.folder)
         assert manifest["source"] == {"git": GIT, "ref": SHA, "branch": "main", "path": "viz"}
@@ -224,17 +208,17 @@ class TestFromGit:
         assert any("private" in n for n in imported.notes)
 
     def test_what_it_writes_bundles_with_everything_it_found(self, tmp_path):
-        git = Git()
+        repo = their_repo()
         plugins = tmp_path / "plugins"
-        git.run(plugins, "https://github.com/someone/their-plugins/tree/main/viz")
-        with Sources(git.fetcher) as sources:
+        url = "https://github.com/someone/their-plugins/tree/main/viz"
+        import_git(plugins, url, sources=repo.sources())
+        with repo.sources() as sources:
             (fn,) = load_function_files(plugins, sources)
         assert fn.type == "filter" and SHOUT_CODE.strip() in fn.content
         assert "class Tools" in fn.content and "visualize" in fn.content
 
     def test_public_makes_the_tool_and_skills_public(self, tmp_path):
-        git = Git()
-        imported = git.run(
+        imported = run_import(
             tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/viz", public=True
         )
         manifest = read_manifest(imported.folder)
@@ -243,9 +227,10 @@ class TestFromGit:
         assert not any("private" in n for n in imported.notes)
 
     def test_a_file_url_takes_that_function_and_whatever_is_beside_it(self, tmp_path):
-        git = Git({**REPO, "viz/older.py": SHOUT})
-        imported = git.run(
-            tmp_path / "p", "https://github.com/someone/their-plugins/blob/v1/viz/shout.py"
+        imported = run_import(
+            tmp_path / "p",
+            "https://github.com/someone/their-plugins/blob/v1/viz/shout.py",
+            {**REPO, "viz/older.py": SHOUT},
         )
         manifest = read_manifest(imported.folder)
         assert imported.folder.name == "shout"
@@ -254,24 +239,22 @@ class TestFromGit:
         assert manifest["tool"]["file"] == "tool.py"
 
     def test_two_functions_in_one_folder_are_refused_by_name(self, tmp_path):
-        git = Git({**REPO, "viz/older.py": SHOUT})
+        url = "https://github.com/someone/their-plugins/tree/main/viz"
         with pytest.raises(OwppError, match=r"two functions in viz: older\.py, shout\.py"):
-            git.run(tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/viz")
+            run_import(tmp_path / "p", url, {**REPO, "viz/older.py": SHOUT})
 
     def test_only_a_tool_and_skills_is_an_installer(self, tmp_path):
         files = {k: v for k, v in REPO.items() if k != "viz/shout.py"}
-        imported = Git(files).run(
-            tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/viz"
-        )
+        url = "https://github.com/someone/their-plugins/tree/main/viz"
+        imported = run_import(tmp_path / "p", url, files)
         manifest = read_manifest(imported.folder)
         assert "file" not in manifest["function"] and manifest["function"]["global"] is True
         assert manifest["tool"]["file"] == "tool.py"
 
     def test_a_whole_owpp_plugin_is_taken_whole(self, tmp_path):
         files = {"viz/plugin.yaml": 'protocol: "0.5"\nfunction: {title: Viz}\n', **REPO}
-        imported = Git(files).run(
-            tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/viz"
-        )
+        url = "https://github.com/someone/their-plugins/tree/main/viz"
+        imported = run_import(tmp_path / "p", url, files)
         manifest = read_manifest(imported.folder)
         assert manifest["source"] == {
             "git": GIT,
@@ -284,17 +267,18 @@ class TestFromGit:
 
     def test_a_folder_with_nothing_to_take_is_refused(self, tmp_path):
         with pytest.raises(OwppError, match="no function, tool or skill in other"):
-            Git().run(tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/other")
+            run_import(tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/other")
 
     def test_a_branch_that_is_not_there_is_refused(self, tmp_path):
         with pytest.raises(OwppError, match="no branch or tag nope"):
-            Git().run(tmp_path / "p", "https://github.com/someone/their-plugins/tree/nope/viz")
+            run_import(tmp_path / "p", "https://github.com/someone/their-plugins/tree/nope/viz")
 
     def test_the_repository_root_is_read_whole(self, tmp_path):
         files = {"shout.py": SHOUT, "README.md": "hi\n"}
-        git = Git(files)
-        imported = git.run(tmp_path / "p", "https://github.com/someone/their-plugins")
-        assert git.asked[-1][2] == ["./"]
+        repo = their_repo(files)
+        url = "https://github.com/someone/their-plugins"
+        imported = import_git(tmp_path / "p", url, sources=repo.sources())
+        assert repo.fetched[-1][2] == ["./"]
         assert imported.folder.name == "their_plugins"
         manifest = read_manifest(imported.folder)
         assert "branch" not in manifest["source"] and manifest["source"]["path"] == ""
@@ -305,10 +289,10 @@ class TestFromGit:
 
 class TestFromOpenWebUI:
     def test_a_function_on_the_instance_becomes_a_plugin_its_deploy_leaves_unchanged(
-        self, tmp_path, mock_server
+        self, tmp_path, open_webui
     ):
         """The id is the instance's, so the deploy updates that function, with the same code."""
-        server = mock_server(live=[{"id": "shout", "name": "Shout", "content": SHOUT}])
+        server = open_webui(live=[{"id": "shout", "name": "Shout", "content": SHOUT}])
         plugins = tmp_path / "plugins"
         imported = import_instance(plugins, server.instance(), "shout")
         assert imported.folder == plugins / "shout"
@@ -320,8 +304,8 @@ class TestFromOpenWebUI:
         readme = (imported.folder / "README.md").read_text()
         assert server.base_url not in readme  # where it came from, without the instance's address
 
-    def test_a_function_that_is_not_there_is_an_error(self, tmp_path, mock_server):
-        server = mock_server()
+    def test_a_function_that_is_not_there_is_an_error(self, tmp_path, open_webui):
+        server = open_webui()
         with pytest.raises(OwppError, match="HTTP 401"):
             import_instance(tmp_path / "plugins", server.instance(), "nope")
 
@@ -354,8 +338,8 @@ class TestWhatOwppPutIn:
         imported = import_code(tmp_path, deployed, name, "Open-WebUI")
         assert _bundle(imported.folder) == deployed
 
-    def test_the_tool_its_templates_and_config_come_back_as_files(self, tmp_path, mock_server):
-        server = mock_server(
+    def test_the_tool_its_templates_and_config_come_back_as_files(self, tmp_path, open_webui):
+        server = open_webui(
             live=[
                 {
                     "id": "excalidraw",
@@ -375,7 +359,7 @@ class TestWhatOwppPutIn:
         assert "assets_url" in (folder / "config.yaml").read_text()
         for name in ("function.py", "tool.py"):
             code = (folder / name).read_text()
-            assert "# end plugin" not in code and "plugin runtime" not in code
+            assert "# end plugin" not in code and runtime_start(code) < 0
             assert "from owpp.lib import" in code
         lint = subprocess.run(
             [sys.executable, "-m", "owpp", "check", "--dir", str(tmp_path / "plugins"), "--strict"],
@@ -447,7 +431,7 @@ class TestWhatOwppPutIn:
         assert any("still holds owpp's routes" in n for n in imported.notes)
 
     def test_static_binary_files_and_a_tool_that_is_the_function_round_trip(
-        self, tmp_path, mock_server
+        self, tmp_path, open_webui
     ):
         """Deployed and imported back from the instance: static/ (with its settings), binary
         files, a skill, a tool that is the function's own bundle, and requires:."""
@@ -469,8 +453,8 @@ class TestWhatOwppPutIn:
                 "demo/skills/draw/icon.bin": bytes([0x89, 0x50]),
             },
         )
-        server = mock_server()
-        env = {"OPEN_WEBUI_URL": server.base_url, "OPEN_WEBUI_API_KEY": "sk-good"}
+        server = open_webui()
+        env = {"OPEN_WEBUI_URL": server.serve(), "OPEN_WEBUI_API_KEY": "sk-good"}
         assert main(["deploy", "--dir", str(src)], env=env) == 0
         plugins = tmp_path / "plugins"
         assert main(["import", "--instance", "demo", "--dir", str(plugins)], env=env) == 0
@@ -484,12 +468,10 @@ class TestWhatOwppPutIn:
         assert _bundle(folder) == _bundle(src / "demo")
 
     def test_a_function_an_older_owpp_deployed_says_requires_may_be_missing(
-        self, tmp_path, mock_server
+        self, tmp_path, open_webui
     ):
         meta = {"description": "x", "managed_by": "owpp"}  # no `requires`: deployed before it
-        server = mock_server(
-            live=[{"id": "shout", "name": "Shout", "content": SHOUT, "meta": meta}]
-        )
+        server = open_webui(live=[{"id": "shout", "name": "Shout", "content": SHOUT, "meta": meta}])
         imported = import_instance(tmp_path, server.instance(), "shout")
         assert any("did not record `requires:`" in n for n in imported.notes)
         assert "requires" not in read_manifest(imported.folder)
@@ -506,12 +488,49 @@ class TestTheCommand:
         assert "owpp test shout" in out  # what to do next
 
     def test_imports_from_the_instance_with_the_deploys_credentials(
-        self, tmp_path, mock_server, capsys
+        self, tmp_path, open_webui, capsys
     ):
-        server = mock_server(live=[{"id": "shout", "name": "Shout", "content": SHOUT}])
-        env = {"OPEN_WEBUI_URL": server.base_url, "OPEN_WEBUI_API_KEY": "sk-good"}
+        server = open_webui(live=[{"id": "shout", "name": "Shout", "content": SHOUT}])
+        env = {"OPEN_WEBUI_URL": server.serve(), "OPEN_WEBUI_API_KEY": "sk-good"}
         plugins = tmp_path / "plugins"
         assert main(["import", "--instance", "shout", "--dir", str(plugins)], env=env) == 0
+        assert (plugins / "shout" / "function.py").read_text() == SHOUT_CODE
+
+    def test_imports_from_git_through_the_commands_sources(self, tmp_path):
+        repo = their_repo()
+        plugins = tmp_path / "plugins"
+        assert (
+            main(
+                ["import", GIT, "--path", "viz", "--dir", str(plugins)],
+                env={},
+                sources=repo.sources,
+            )
+            == 0
+        )
+        assert read_manifest(plugins / "viz")["source"]["ref"] == SHA
+
+    def test_imports_from_an_instance_with_the_certificate_flags(self, tmp_path):
+        """An instance with a private CA that requires mutual TLS: --ca-cert, --client-cert and
+        --client-key are what get in, and they win over their variables, as for deploy."""
+        pki = make_pki(tmp_path / "pki")
+        tls = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH, cafile=pki / "ca.pem")
+        tls.load_cert_chain(pki / "server.pem", pki / "server.key")
+        tls.verify_mode = ssl.CERT_REQUIRED
+        fake = FakeOpenWebUI(live=[{"id": "shout", "name": "Shout", "content": SHOUT}])
+        plugins = tmp_path / "plugins"
+        with serve(fake, tls) as url:
+            env = {
+                "OPEN_WEBUI_URL": url,
+                "OPEN_WEBUI_API_KEY": "sk-good",
+                "OPEN_WEBUI_CA_CERT": str(tmp_path / "not-this-one.pem"),
+                "OPEN_WEBUI_CLIENT_CERT": str(tmp_path / "nor-this-one.pem"),
+                "OPEN_WEBUI_CLIENT_KEY": str(tmp_path / "nor-this-one.key"),
+            }
+            flags = ["--ca-cert", str(pki / "ca.pem")]
+            flags += ["--client-cert", str(pki / "client.pem")]
+            flags += ["--client-key", str(pki / "client.key")]
+            argv = ["import", "--instance", "shout", "--dir", str(plugins), *flags]
+            assert main(argv, env=env) == 0
         assert (plugins / "shout" / "function.py").read_text() == SHOUT_CODE
 
     def test_takes_one_thing_to_import(self, tmp_path, capsys):

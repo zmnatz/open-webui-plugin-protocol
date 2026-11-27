@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from conftest import write_tree
+from conftest import FakeRepo, write_tree
 
 from owpp.cli import main
 from owpp.errors import OwppError
@@ -44,16 +44,10 @@ def plugins(tmp_path):
     return make
 
 
-def run(directory, ids=None, dry_run=False, kinds=None):
+def run(directory, ids=None, dry_run=False, repo=None):
     lines: list[str] = []
-    asked: list[tuple[str, str]] = []
-
-    def kind_of(git, name):
-        asked.append((git, name))
-        return (kinds or {}).get(name)
-
-    code = migrate(directory, ids, dry_run=dry_run, out=lines.append, kind_of=kind_of)
-    run.asked = asked  # type: ignore[attr-defined]
+    sources = (repo or FakeRepo(GIT)).sources()
+    code = migrate(directory, ids, dry_run=dry_run, out=lines.append, sources=sources)
     return code, "\n".join(lines)
 
 
@@ -120,12 +114,20 @@ class TestTrackToBranchOrTag:
     @pytest.mark.parametrize("flow", [False, True])
     def test_track_becomes_what_the_repository_says_it_is(self, plugins, kind, flow):
         d = plugins(old=tracked("v2", flow=flow))
-        code, out = run(d, kinds={"v2": kind})
+        refs = {"v2": SHA}
+        repo = FakeRepo(GIT, branches=refs) if kind == "branch" else FakeRepo(GIT, tags=refs)
+        code, out = run(d, repo=repo)
         assert code == 0 and "migrated 0.2 -> 0.3 -> 0.5 -> 0.7" in out
-        assert run.asked == [(GIT, "v2")]
+        assert repo.kinds_asked == [(GIT, "v2")]
         text = (d / "old" / "plugin.yaml").read_text()
         assert text == tracked("v2", '"0.7"', flow).replace("track:", f"{kind}:")
         assert read_manifest(d / "old")["source"][kind] == "v2"
+
+    def test_the_command_asks_its_sources(self, plugins):
+        d = plugins(old=tracked("v2"))
+        repo = FakeRepo(GIT, tags={"v2": SHA})
+        assert main(["migrate", "--dir", str(d)], env={}, sources=repo.sources) == 0
+        assert read_manifest(d / "old")["source"]["tag"] == "v2"
 
     def test_a_name_it_cannot_decide_is_left_for_the_user(self, plugins):
         d = plugins(old=tracked("main"))
@@ -153,20 +155,23 @@ class TestSteps:
             "STEPS",
             (
                 mod.Step(
-                    "0.0", "0.1", lambda text, manifest, kind_of: text.replace('"0.0"', '"0.1"')
+                    "0.0", "0.1", lambda text, manifest, sources: text.replace('"0.0"', '"0.1"')
                 ),
                 *mod.STEPS,
             ),
         )
         text, old, steps = migrate_text(
-            'protocol: "0.0"\nfunction: {title: T}\n', "0.0", "p/plugin.yaml"
+            'protocol: "0.0"\nfunction: {title: T}\n',
+            "0.0",
+            "p/plugin.yaml",
+            FakeRepo(GIT).sources(),
         )
         assert old == "0.0" and steps == ["0.0", "0.1", "0.2", "0.3", "0.5"]
         assert 'protocol: "0.7"' in text
 
     def test_a_version_with_no_step_is_refused(self):
         with pytest.raises(OwppError, match="cannot migrate protocol 0.0"):
-            migrate_text('protocol: "0.0"\n', "0.0", "p/plugin.yaml")
+            migrate_text('protocol: "0.0"\n', "0.0", "p/plugin.yaml", FakeRepo(GIT).sources())
 
 
 V03 = 'protocol: "0.3"\nfunction:\n  title: T\ninclude: [routes, events]\ntool:\n  id: t\n'

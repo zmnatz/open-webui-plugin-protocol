@@ -25,7 +25,8 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from .bundle import FunctionFile, load_function_files, parse_frontmatter, parse_skill, runtime_data
+from .bundle import FunctionFile, load_function_files, parse_frontmatter, parse_skill
+from .embedding import runtime_data, without_runtime_data
 from .errors import OwppError
 from .manifest import get, parse_yaml, read_manifest, read_text, set_key, text_of
 from .sources import Sources, is_plugin_source
@@ -48,7 +49,7 @@ def version_of(content: str | None) -> str:
 
 def own_code(content: str | None) -> str:
     """A function's code without the tool and skills it embeds, which are versioned apart."""
-    return re.sub(r"^_PLUGIN = _json\.loads\(.*\)$", "", norm(content), flags=re.M)
+    return without_runtime_data(norm(content))
 
 
 def tools_of(content: str | None) -> dict[str, dict]:

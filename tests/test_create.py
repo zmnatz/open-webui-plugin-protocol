@@ -8,10 +8,11 @@ import subprocess
 import sys
 
 import pytest
-from conftest import fake_sources
+from conftest import FILTER, FakeRepo, fake_sources
 
 from owpp.bundle import load_function_files
-from owpp.cli import check_bundle, main
+from owpp.check import check_bundle
+from owpp.cli import main
 from owpp.create import (
     CODE_TYPES,
     FILTER_HOOKS,
@@ -28,7 +29,8 @@ from owpp.imports import missing_lib_imports
 from owpp.libraries import exports
 from owpp.lint import lint_plugin
 from owpp.manifest import read_manifest
-from owpp.wizard import Prompter, resolve_ref, run_wizard
+from owpp.sources import Sources
+from owpp.wizard import Prompter, run_wizard
 
 SHA = "917c88f3029c0c6500139ba7b7b061f358d8aaea"
 GIT = "https://github.com/owner/repo.git"
@@ -381,13 +383,17 @@ def scripted(answers: list[str]):
     return read
 
 
+def git_repo() -> FakeRepo:
+    """The repository the wizard is pointed at: branch main and tag v1.2, both at SHA."""
+    return FakeRepo(GIT, sha=SHA, branches={"main": SHA}, tags={"v1.2": SHA})
+
+
 def wizard(
     directory,
     answers,
     preset_id="",
-    resolve=lambda git, ref: SHA,
+    repo=None,
     check=True,
-    kind_of=lambda git, name: "tag" if name.startswith("v") else "branch",
 ):
     read = scripted(answers)
     out = io.StringIO()
@@ -398,8 +404,7 @@ def wizard(
         check=(lambda d, i: main(["check", i, "--strict", "--dir", str(d)], env={}))
         if check
         else None,
-        resolve=resolve,
-        kind_of=kind_of,
+        sources=(repo or git_repo()).sources(),
     )
     return code, out.getvalue(), read
 
@@ -471,7 +476,7 @@ class TestWizard:
         assert fn.type == "action"
 
     def test_from_git_it_installs_a_tool_and_skills_at_a_commit(self, tmp_path):
-        looked_up = []
+        repo = git_repo()
         answers = [
             *["", "viz", "", "git"],
             *[GIT, "v1.2", "plugins/viz"],  # repository, tag, folder
@@ -481,14 +486,9 @@ class TestWizard:
             *["", "", "", ""],  # header
             "",  # write
         ]
-        code, out, read = wizard(
-            tmp_path,
-            answers,
-            resolve=lambda git, ref: looked_up.append((git, ref)) or SHA,
-            check=False,
-        )
+        code, out, read = wizard(tmp_path, answers, repo=repo, check=False)
         assert code == 0, out
-        assert read.left == [] and looked_up == [(GIT, "v1.2")]
+        assert read.left == [] and repo.looked_up == [(GIT, "v1.2")]
         assert "Stage 6/6 · Review and write" in out and f"v1.2 is commit {SHA}" in out
         m = read_manifest(tmp_path / "viz")
         # The tag it was given is what owpp pull follows.
@@ -512,22 +512,35 @@ class TestWizard:
     def test_a_ref_it_cannot_look_up_asks_for_the_commit(self, tmp_path):
         answers = [
             *["", "pinned", "", "git", GIT, "main", "not-a-sha", SHA, ""],
+            "",  # nor can it tell what main is: a branch
             *["y", "", "n", "", "", ""],
         ]
-        code, out, read = wizard(tmp_path, answers, resolve=lambda git, ref: None, check=False)
+        offline = FakeRepo(GIT)  # no branch or tag to find
+        code, out, read = wizard(tmp_path, answers, repo=offline, check=False)
         assert code == 0, out
         assert "could not look up main" in out and "40 lowercase hex" in out
-        assert read_manifest(tmp_path / "pinned")["source"]["ref"] == SHA
+        source = read_manifest(tmp_path / "pinned")["source"]
+        assert source["ref"] == SHA and source["branch"] == "main"
 
-    def test_a_name_it_cannot_tell_is_asked_branch_or_tag(self, tmp_path):
+    def test_a_name_it_cannot_tell_is_asked_branch_or_tag(self, tmp_path, monkeypatch):
         answers = [
             *["", "pinned", "", "git", GIT, "stable", "", "2"],
             *["y", "", "n", "", "", ""],
         ]
-        code, out, read = wizard(tmp_path, answers, kind_of=lambda git, name: None, check=False)
+        repo = FakeRepo(GIT, sha=SHA, branches={"stable": SHA})
+        monkeypatch.setattr(repo, "kind", lambda git, name: None)  # the second question fails
+        code, out, read = wizard(tmp_path, answers, repo=repo, check=False)
         assert code == 0, out
         assert "Is stable a branch or a tag?" in out and read.left == []
         assert read_manifest(tmp_path / "pinned")["source"]["tag"] == "stable"
+
+    def test_owpp_create_reads_git_through_the_commands_sources(self, tmp_path, monkeypatch):
+        repo = git_repo()
+        repo.commits[SHA]["function.py"] = FILTER  # `owpp check` runs on what it writes
+        answers = ["", "viz", "", "git", GIT, "main", "", "y", "", "n", "", "", ""]
+        monkeypatch.setattr(sys, "stdin", io.StringIO("\n".join(answers) + "\n"))
+        main(["create", "--dir", str(tmp_path)], env={}, sources=repo.sources)
+        assert read_manifest(tmp_path / "viz")["source"]["branch"] == "main"
 
     def test_taking_nothing_from_git_writes_nothing(self, tmp_path):
         answers = ["", "empty", "", "git", GIT, SHA, "", "", "n", ""]
@@ -561,9 +574,10 @@ class TestWizard:
 
 
 def test_a_full_sha_needs_no_lookup():
-    """resolve_ref asks git only for a branch or tag."""
-    assert resolve_ref("https://example.invalid/repo.git", SHA) == SHA
-    assert resolve_ref("/not/a/url", "main") is None
+    """Sources asks git only for a branch or tag."""
+    with Sources() as sources:
+        assert sources.latest("https://example.invalid/repo.git", SHA) == SHA
+        assert sources.latest("/not/a/url", "main") is None
 
 
 class TestFromASpec:

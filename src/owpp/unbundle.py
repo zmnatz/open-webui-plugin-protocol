@@ -17,32 +17,18 @@ What is left is the plugin's own code. Nothing else is changed.
 
 from __future__ import annotations
 
-import base64
 import json
 import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .libraries import BY_NAME, LIBRARIES, VENDORED, Library, _text, closure
+from .embedding import runtime_data, runtime_start
+from .libraries import BY_NAME, LIBRARIES, LITERAL, VENDORED, Library, _text, closure, held_by
 
-# The runtime's first line, as the bundler appends it (src/owpp/runtime/plugin_runtime.py).
-_RUNTIME_START = (
-    "\n\n# =============================================================== plugin runtime\n"
-)
-_RUNTIME_DATA = re.compile(r'^_PLUGIN = _json\.loads\(("(?:[^"\\\n]|\\.)*")\)$', re.M)
 _HEADER = re.compile(r'\s*"""[\s\S]*?"""\n')
 _FUTURE = re.compile(r"(?:from __future__ import [^\n]+\n)+")
-# A JSON string literal, as json_literal writes it.
-_LITERAL = r'("(?:[^"\\\n]|\\.)*")'
 # What the protocol says to copy: its blocks from their first banner line to their end line.
 _BANNER = re.compile(r"^# =+\n", re.M)
-# Where a library carries data, the folder or key it came from.
-_DATA_FROM = {
-    "static": "static/",
-    "templates": "templates/",
-    "assets": "assets/",
-    "config": "config.yaml",
-}
 
 
 @dataclass
@@ -51,7 +37,7 @@ class Unbundled:
 
     code: str
     include: list[str] = field(default_factory=list)
-    # Each library's data: {library name: data} (static, templates, assets, config, jobs).
+    # Each library's data: {library name: data}, for those that carry some.
     data: dict[str, Any] = field(default_factory=dict)
     tools: list[dict] = field(default_factory=list)
     skills: list[dict] = field(default_factory=list)
@@ -77,7 +63,7 @@ def _data(lib: Library, block: str) -> Any:
     if use is None:
         return None
     before, _, after = use.partition(lib.placeholder)
-    m = re.search(f"^{re.escape(before)}{_LITERAL}{re.escape(after)}$", block, re.M)
+    m = re.search(f"^{re.escape(before)}{LITERAL}{re.escape(after)}$", block, re.M)
     return json.loads(json.loads(m.group(1))) if m else None
 
 
@@ -124,12 +110,10 @@ def unbundle(content: str) -> Unbundled:
     """`content` without owpp's libraries and runtime, and the protocol's byte-identical blocks
     (see the module's docstring)."""
     code, tools, skills = content, [], []
-    at = code.find(_RUNTIME_START)
+    at = runtime_start(code)
     if at >= 0:
-        m = _RUNTIME_DATA.search(code, at)
-        if m:
-            data = json.loads(json.loads(m.group(1)))
-            tools, skills = data.get("tools", []), data.get("skills", [])
+        data = runtime_data(code[at:])
+        tools, skills = data["tools"], data["skills"]
         code = code[:at]
     header = _HEADER.match(code)
     found: list[str] = []
@@ -156,19 +140,7 @@ def unbundle(content: str) -> Unbundled:
 def _include(found: list[str], data: dict[str, Any]) -> list[str]:
     """The `include:` that gives a bundle the libraries `found` again: without the ones the
     plugin's files turn on, or that another one pulls in."""
-    held = {_DATA_FROM[name] for name in data if name in _DATA_FROM}
-    if "jobs" in data and data["jobs"] != BY_NAME["jobs"].default:
-        held.add("jobs:")
+    held = held_by(data)
     on = {lib.name for lib in LIBRARIES if lib.on_when in held}
     pulled = set(closure([p for name in [*found, *on] for p in BY_NAME[name].pulls_in]))
     return [name for name in found if name not in on and name not in pulled]
-
-
-def files_of(entries: dict[str, dict] | list[dict]) -> dict[str, str | bytes]:
-    """{path: text or bytes} from the runtime's file entries ({path: {content, encoding?}} or
-    [{path, content, encoding?}])."""
-    items = entries.items() if isinstance(entries, dict) else ((e["path"], e) for e in entries)
-    return {
-        path: base64.b64decode(e["content"]) if e.get("encoding") == "base64" else e["content"]
-        for path, e in items
-    }

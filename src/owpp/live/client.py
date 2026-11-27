@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import os
-import urllib.error
 import urllib.request
+
+from owpp.openwebui import OpenWebUI, urllib_fetch
 
 
 def url() -> str:
@@ -32,29 +34,16 @@ def account(name: str) -> dict:
 
 
 class Api:
-    """Open-WebUI's HTTP API as one account. Returns (status, parsed body), also on an error."""
+    """Open-WebUI's HTTP API as one account. Returns (status, parsed body), also on an error:
+    Open-WebUI says why in `detail`. A thin layer over owpp's own adapter (owpp.openwebui)."""
 
     def __init__(self, token: str, timeout: float = 120):
         self.token = token
         self.timeout = timeout
 
     def __call__(self, method: str, path: str, body: dict | list | None = None):
-        request = urllib.request.Request(
-            url() + path,
-            method=method,
-            data=None if body is None else json.dumps(body).encode(),
-            headers={"Content-Type": "application/json", "Authorization": f"Bearer {self.token}"},
-        )
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                return response.status, json.loads(response.read() or b"null")
-        except urllib.error.HTTPError as error:
-            # Keep the body: Open-WebUI says why in `detail`.
-            text = error.read().decode(errors="replace")
-            try:
-                return error.code, json.loads(text)
-            except json.JSONDecodeError:
-                return error.code, text
+        fetch = functools.partial(urllib_fetch, timeout=self.timeout)
+        return OpenWebUI(url(), fetch, self.token).request(method, path, body)
 
 
 class Aimock:

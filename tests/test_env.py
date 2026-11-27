@@ -12,7 +12,7 @@ from conftest import write_plugin
 
 from owpp import envtemplate
 from owpp.bundle import bundle_function, env_references, load_function_files
-from owpp.cli import main
+from owpp.check import Finding, check_plugins, failed
 from owpp.errors import OwppError
 
 HEX = "0" * 32
@@ -21,12 +21,10 @@ CORE = None
 
 def core():
     """The core library, run on its own."""
-    from owpp.bundle import RUNTIME_DIR
+    from owpp.libraries import LIB_DIR
 
     namespace: dict = {"__name__": "function_demo_" + HEX}
-    exec(
-        compile((RUNTIME_DIR / "lib" / "plugin_core.py").read_text(), "core.py", "exec"), namespace
-    )
+    exec(compile((LIB_DIR / "plugin_core.py").read_text(), "core.py", "exec"), namespace)
     return namespace
 
 
@@ -271,7 +269,7 @@ class TestWhichVariablesAPluginReads:
         )
         assert env_references(tmp_path / "p") == [("N", "60"), ("FLAG", "true"), ("HOST", None)]
 
-    def test_owpp_check_prints_them_and_does_not_fail_on_them(self, tmp_path, capsys):
+    def test_check_lists_them_and_does_not_fail_on_them(self, tmp_path):
         write_plugin(
             tmp_path / "p",
             {
@@ -280,14 +278,16 @@ class TestWhichVariablesAPluginReads:
                 "function.py": "class Event:\n    pass\n",
             },
         )
-        assert main(["check", "--dir", str(tmp_path)], env={}) == 0
-        out = capsys.readouterr().out
-        assert "env   FLAG (default true)" in out and "env   HOST (no default)" in out
+        found = list(check_plugins(tmp_path))
+        assert [f for f in found if f.kind == "env"] == [
+            Finding("env", "FLAG (default true)"),
+            Finding("env", "HOST (no default)"),
+        ]
+        assert not failed(found)
 
-    def test_a_plugin_with_none_prints_nothing(self, tmp_path, capsys):
+    def test_a_plugin_with_none_lists_nothing(self, tmp_path):
         write_plugin(
             tmp_path / "p",
             {"plugin.yaml": "function:\n  title: T\n", "function.py": "class Event:\n    pass\n"},
         )
-        main(["check", "--dir", str(tmp_path)], env={})
-        assert "env " not in capsys.readouterr().out
+        assert "env" not in [f.kind for f in check_plugins(tmp_path)]

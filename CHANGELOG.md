@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.7.1 (2026-11-27)
+
+- `owpp check` finds undefined names scope by scope, as Python does: a name defined only inside another function or class is now reported, and names bound by `match` patterns no longer are.
+- `MockOpenWebUI(sources=...)` takes the `Sources` it reads a `source:` plugin's files through. The `owui` fixture still fetches each file once per test run; a mock you make yourself without one now fetches for itself rather than sharing with the run ([the mock](docs/testing/mock.md)).
+- `owpp import` writes only the `jobs:` settings that differ from their defaults, as it already did for `static:` and `assets:` ([owpp import](docs/commands/import.md), [#97](https://github.com/zmnatz/open-webui-plugin-protocol/issues/97)).
+- `owpp import --instance` takes `--ca-cert`, `--client-cert` and `--client-key`, as `owpp deploy` does ([owpp import](docs/commands/import.md), [#96](https://github.com/zmnatz/open-webui-plugin-protocol/issues/96)).
+
 ## 0.7.0 (2026-11-27)
 
 The headline is **live tests**: a plugins repository tests its plugins on a real, throwaway Open-WebUI, over its API and in the browser, with one command, and an agent can write those tests for a plugin that already works.

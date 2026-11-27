@@ -3,6 +3,7 @@
 ```
 owpp import <url|file> [--id ID] [--path FOLDER] [--ref BRANCH|TAG] [--public] [--dir FOLDER]
 owpp import --instance ID [--id ID] [--dir FOLDER]
+            [--ca-cert PEM] [--client-cert PEM] [--client-key PEM]
 ```
 
 Makes a plugin folder from code that already exists, then runs [`owpp check`](check.md) on it. What it writes is a plugin like any other, with a `plugin.yaml`, so it is tested with [`owpp test`](test.md) and deployed with [`owpp deploy`](deploy.md). It refuses a folder that exists.
@@ -46,7 +47,7 @@ A function owpp deployed is its bundle: owpp's [libraries](../libraries.md), the
 | In the bundle | In the folder it writes |
 | --- | --- |
 | a library (`# end plugin ... library`) | a name in `include:` (one that `templates/`, `static/`, `config.yaml` or another library turns on is left out) |
-| its data | `templates/`, `static/`, `assets/`, `config.yaml`, `jobs:`, and `static:` or `assets:` settings that are not the defaults |
+| its data | `templates/`, `static/`, `assets/`, `config.yaml`, and the `jobs:`, `static:` and `assets:` settings that are not the defaults |
 | the runtime's tool | `tool.py` and `tool:` (its header keys, `include:`, `access:`, `valves:`) |
 | the runtime's skills | `skills/<id>/`, with `access: public` in a public skill's `SKILL.md` |
 | `meta.requires` (with `--instance`) | `requires:` |
@@ -55,7 +56,7 @@ The code that used those libraries gets the `from owpp.lib import` line it needs
 
 The [Shared Assets Protocol](https://github.com/Classic298/open-webui-plugins/tree/main/shared-assets-protocol)'s two blocks (the shared asset block and live reload), anywhere in a function, become `include: [shared_assets]` and `live_reload` when they are byte-identical to owpp's copy, as the protocol asks of every copy. Left in, they would fail `owpp check`, which refuses a function's own code that changes `app.routes`. A copy that differs is the plugin's own code and stays, and the report says so: `owpp check` refuses it, so import that plugin from git (which takes its code as it is), or replace the block with `include:`.
 
-`--instance` signs in as [`owpp deploy`](deploy.md#signing-in) does, from the same [environment variables](../environment-variables.md#signing-in), and keeps the function's id. The first deploy then updates that function (and marks it as managed) instead of adding a second copy. Its valves are not copied, since they may hold keys or passwords: the deploy keeps the instance's, and defaults go under `function: valves:`.
+`--instance` signs in as [`owpp deploy`](deploy.md#signing-in) does, from the same [environment variables](../environment-variables.md#signing-in) and with the same [TLS](../environment-variables.md#tls) variables and flags, and keeps the function's id. The first deploy then updates that function (and marks it as managed) instead of adding a second copy. Its valves are not copied, since they may hold keys or passwords: the deploy keeps the instance's, and defaults go under `function: valves:`.
 
 ## Options
 
@@ -63,6 +64,9 @@ The [Shared Assets Protocol](https://github.com/Classic298/open-webui-plugins/tr
 | --- | --- |
 | `url\|file` | A git URL, or a `.py` file. A folder on disk is refused: give its repository's URL, so the code is pinned. |
 | `--instance ID` | Import the function with this id from the instance at `OPEN_WEBUI_URL`. |
+| `--ca-cert PEM` | With `--instance`: as [`owpp deploy`'s](deploy.md#options). |
+| `--client-cert PEM` | With `--instance`: as [`owpp deploy`'s](deploy.md#options). |
+| `--client-key PEM` | With `--instance`: as [`owpp deploy`'s](deploy.md#options). |
 | `--id ID` | The plugin's id. Default: the file's name, the folder's (the repository's, for its root), or the instance's id. Hyphens become underscores. |
 | `--path FOLDER` | With a clone URL: the folder in the repository. |
 | `--ref BRANCH\|TAG` | With a clone URL: the branch or tag to pin and follow. Default: the default branch. |

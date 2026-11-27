@@ -95,10 +95,10 @@ class TestBuild:
             built(plugins, tmp_path / "mine")
         assert (tmp_path / "mine" / "notes.txt").read_text() == "keep me\n"
 
-    def test_the_command(self, plugins, tmp_path, monkeypatch, capsys):
-        monkeypatch.setattr("owpp.cli.Sources", lambda: Sources(fake_fetcher()))
+    def test_the_command(self, plugins, tmp_path, capsys):
         out = tmp_path / "dist"
-        assert main(["build", "--dir", str(plugins), "--out", str(out)], env={}) == 0
+        argv = ["build", "--dir", str(plugins), "--out", str(out)]
+        assert main(argv, env={}, sources=lambda: Sources(fake_fetcher())) == 0
         printed = capsys.readouterr().out
         assert f"built {out / 'up.py'}" in printed
         assert f"2 function(s) in {out}: every plugin" in printed
@@ -125,10 +125,10 @@ class TestReadingABuild:
 
 class TestDeployFrom:
     def test_it_deploys_the_build_as_the_folder_would_and_reads_no_git(
-        self, plugins, tmp_path, mock_server
+        self, plugins, tmp_path, open_webui
     ):
         out = built(plugins, tmp_path / "dist")
-        from_folder, from_build = mock_server(), mock_server()
+        from_folder, from_build = open_webui(), open_webui()
         deploy(*from_folder.options(plugins, sources=Sources(fake_fetcher())))
         res = deploy(
             *from_build.options(tmp_path / "elsewhere", from_dir=out, sources=Sources(no_git))
@@ -140,9 +140,9 @@ class TestDeployFrom:
             assert from_build.state[fn_id]["meta"] == live["meta"]
 
     def test_a_complete_build_prunes_and_a_partial_one_never_does(
-        self, plugins, tmp_path, mock_server, git_fn
+        self, plugins, tmp_path, open_webui, git_fn
     ):
-        m = mock_server(live=[git_fn("demo", FILTER), git_fn("retired", FILTER)])
+        m = open_webui(live=[git_fn("demo", FILTER), git_fn("retired", FILTER)])
         partial = built(plugins, tmp_path / "some", ["demo"])
         deploy(*m.options(tmp_path, from_dir=partial, sources=Sources(no_git)))
         assert "retired" in m.state
@@ -151,36 +151,36 @@ class TestDeployFrom:
         assert any(r.id == "retired" and r.action == "deleted" for r in res)
         assert "retired" not in m.state
 
-    def test_only_narrows_the_build(self, plugins, tmp_path, mock_server):
-        m = mock_server()
+    def test_only_narrows_the_build(self, plugins, tmp_path, open_webui):
+        m = open_webui()
         out = built(plugins, tmp_path / "dist")
         res = deploy(*m.options(tmp_path, from_dir=out, only=["demo"], sources=Sources(no_git)))
         assert [r.id for r in res] == ["demo"]
 
     def test_a_build_at_the_latest_commits_deploys_only_as_a_dry_run(
-        self, plugins, tmp_path, mock_server
+        self, plugins, tmp_path, open_webui
     ):
         out = tmp_path / "dist"
         write_build(Build(read_build(built(plugins, out)).files, latest={"x": "y"}), out)
-        m = mock_server()
+        m = open_webui()
         with pytest.raises(OwppError, match="only deploys as a dry run"):
             deploy(*m.options(tmp_path, from_dir=out, sources=Sources(no_git)))
         assert m.calls == []
         res = deploy(*m.options(tmp_path, from_dir=out, dry_run=True, sources=Sources(no_git)))
         assert {r.action for r in res} == {"would create"} and m.state == {}
 
-    def test_latest_needs_the_sources(self, plugins, tmp_path, mock_server):
+    def test_latest_needs_the_sources(self, plugins, tmp_path, open_webui):
         out = built(plugins, tmp_path / "dist")
-        opts = mock_server().options(tmp_path, from_dir=out, dry_run=True, latest=True)
+        opts = open_webui().options(tmp_path, from_dir=out, dry_run=True, latest=True)
         with pytest.raises(OwppError, match="--latest needs the sources.*owpp build --latest"):
             plugins_for(opts.choices)
 
 
 class TestNoPrune:
     def test_it_deletes_nothing_and_lists_what_a_full_deploy_would(
-        self, mock_server, functions_dir, git_fn
+        self, open_webui, functions_dir, git_fn
     ):
-        m = mock_server(live=[git_fn("demo", FILTER), git_fn("a", FILTER), git_fn("b", FILTER)])
+        m = open_webui(live=[git_fn("demo", FILTER), git_fn("a", FILTER), git_fn("b", FILTER)])
         res = deploy(*m.options(functions_dir({"demo.py": FILTER}), no_prune=True))
         assert {r.id: r.action for r in res if r.id != "demo"} == {
             "a": "not deleted (--no-prune)",

@@ -91,29 +91,29 @@ The [ownership marker](commands/deploy.md#the-ownership-marker) the deploy write
 
 ## TLS
 
-Each of these is a path to a PEM file (`~` is expanded) or the PEM text itself, as a CI secret holds it. A path that is not a file stops the deploy with `<variable>: no file <path> (give a path to a PEM file, or the PEM itself)`. With none of them set, the deploy uses Python's defaults: the system's CAs, and no client certificate.
+Each of these is a path to a PEM file (`~` is expanded) or the PEM text itself, as a CI secret holds it. A path that is not a file stops `owpp deploy` (or [`owpp import --instance`](commands/import.md), which reads them too) with `<variable>: no file <path> (give a path to a PEM file, or the PEM itself)`. With none of them set, both use Python's defaults: the system's CAs, and no client certificate.
 
 ### `OPEN_WEBUI_CA_CERT`
 
 CA certificates to trust besides the system's: a private CA, or a self-signed Open-WebUI.
 
 - **Default**: none.
-- **Read by**: `owpp deploy`, as the default of `--ca-cert`, which wins over it.
+- **Read by**: `owpp deploy` and `owpp import --instance`, as the default of `--ca-cert`, which wins over it.
 
 ### `OPEN_WEBUI_CLIENT_CERT`
 
 A client certificate to present, for a server or proxy that requires mutual TLS. It may hold the private key too.
 
 - **Default**: none.
-- **Read by**: `owpp deploy`, as the default of `--client-cert`, which wins over it.
+- **Read by**: `owpp deploy` and `owpp import --instance`, as the default of `--client-cert`, which wins over it.
 
 ### `OPEN_WEBUI_CLIENT_KEY`
 
 The private key of [`OPEN_WEBUI_CLIENT_CERT`](#open_webui_client_cert), when it is not in the same PEM.
 
 - **Default**: none.
-- **Read by**: `owpp deploy`, as the default of `--client-key`, which wins over it.
-- It needs a client certificate: without one the deploy stops with `OPEN_WEBUI_CLIENT_KEY needs OPEN_WEBUI_CLIENT_CERT`.
+- **Read by**: `owpp deploy` and `owpp import --instance`, as the default of `--client-key`, which wins over it.
+- It needs a client certificate: without one the command stops with `OPEN_WEBUI_CLIENT_KEY needs OPEN_WEBUI_CLIENT_CERT`.
 
 ## Set by owpp live, for the live tests
 

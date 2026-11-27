@@ -4,7 +4,7 @@
 owpp check [id ...] [--strict] [--since ref] [--dir FOLDER]
 ```
 
-Bundles each plugin exactly as [`owpp deploy`](deploy.md) would, then, for the function and each tool it embeds, compiles it and lists names that are used but never defined or imported (a typo, or a library the plugin forgot to `include`). With no ids it checks every plugin. It fetches remote sources, so it checks the real upstream code. The [GitHub Action](../tooling.md#github-action) runs it before every deploy.
+Bundles each plugin exactly as [`owpp deploy`](deploy.md) would, then, for the function and each tool it embeds, compiles it and lists names that are used but never defined or imported where Python would look for them (a typo, or a library the plugin forgot to `include`; a variable of another function does not count). With no ids it checks every plugin. It fetches remote sources, so it checks the real upstream code. The [GitHub Action](../tooling.md#github-action) runs it before every deploy.
 
 ```
 $ owpp check
