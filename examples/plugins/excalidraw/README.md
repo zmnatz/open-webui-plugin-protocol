@@ -15,7 +15,7 @@ A shared Excalidraw drawing per chat, opened in the Artifacts side panel.
 
 The function is global and is the parent of the tool: enabling it installs the `excalidraw` Tool (public), disabling or deleting it removes it. By default the editor's code (React, Excalidraw) loads from esm.sh in the user's browser; to run with nothing from the internet, [host it yourself](#self-hosting-the-editor).
 
-Every route requires a signed-in user (the `routes` library). The editor page opens only for a user who can write to the chat (`chat_id: WritableChat`). Its API is called from the sandboxed panel, so it does not rely on cookies: it takes a short-lived token that is tied to the chat and handed out only on that signed-in page load; there is no permanent link. The page itself needs the session, which inside the panel means the setting [below](#requirement-iframe-sandbox-allow-same-origin) ([libraries](../../../docs/libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin) explains why for any plugin).
+Every route requires a signed-in user (the `routes` library). The editor page opens only for a user who can write to the chat (`chat_id: WritableChat`). Its API checks a short-lived token instead: it is tied to the chat and handed out only on that signed-in page load; there is no permanent link. The page itself needs the session, which inside the panel means the setting [below](#requirement-iframe-sandbox-allow-same-origin) ([libraries](../../../docs/libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin) explains why for any plugin).
 
 Valve (Admin Panel > Functions > Excalidraw): `SESSION_TOKEN_HOURS`.
 
@@ -46,7 +46,7 @@ Out of the box the user's browser fetches the editor from [esm.sh](https://esm.s
 
    This writes `editor.js` (React, ReactDOM and Excalidraw in one module), the code-split chunks it loads on demand (languages, diagram conversion), `index.css` and Excalidraw's fonts, about 21 MB in all (mostly one CJK font, `fonts/Xiaolai`, which you can delete: those characters then use system fonts).
 
-2. **Serve** that folder from any static web server, **with an `Access-Control-Allow-Origin: *` header**. The editor runs in Open-WebUI's sandboxed Artifacts iframe, whose origin is opaque, so its module and font requests are cross-origin. For nginx:
+2. **Serve** that folder from any static web server, **with an `Access-Control-Allow-Origin: *` header**. The editor loads its modules and fonts from that server, another origin than Open-WebUI's, so the browser needs the header. For nginx:
 
    ```nginx
    location /excalidraw-assets/ {
