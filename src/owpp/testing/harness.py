@@ -421,9 +421,12 @@ class LoadedPlugin:
         model: str = "mock-model",
         **kwargs,
     ):
-        """Call a method of the instance the way Open-WebUI does: with the stored valves applied
-        and the `__name__` arguments it takes (`__user__`, `__metadata__`, `__request__`, `__id__`,
-        `__event_emitter__`, `__chat_id__`, `__app__`, and `__model__`, the model `model` names)."""
+        """Call a method of the instance directly, with the stored valves applied and the
+        `__name__` arguments it takes: those Open-WebUI's chat middleware passes (`__user__`,
+        `__metadata__`, `__model__` as Open-WebUI lists `model`, `__event_emitter__`,
+        `__event_call__`, `__oauth_token__`, `__request__`, `__chat_id__`, `__message_id__`),
+        `__id__`, and `__app__`, as Open-WebUI's event dispatch passes it. For the whole chat
+        pipeline, use `owui.send()`."""
         from open_webui.models.functions import Functions
 
         instance = self.instance
@@ -442,8 +445,10 @@ class LoadedPlugin:
         chat_id: str | None = None,
         model: str = "mock-model",
     ) -> dict:
-        """A chat request with `model` passing through this filter on its way to the model."""
-        return self.call("inlet", body, user=user, chat_id=chat_id, model=model)
+        """A chat request with `model` passing through this filter on its way to the model, as
+        Open-WebUI runs one filter (its `process_filter_function`: the stored valves, the user's
+        valves, and the arguments the handler takes)."""
+        return self._filter("inlet", body, user, chat_id, model)
 
     def outlet(
         self,
@@ -452,8 +457,25 @@ class LoadedPlugin:
         chat_id: str | None = None,
         model: str = "mock-model",
     ) -> dict:
-        """A finished reply from `model` passing through this filter."""
-        return self.call("outlet", body, user=user, chat_id=chat_id, model=model)
+        """A finished reply from `model` passing through this filter, as Open-WebUI runs it."""
+        return self._filter("outlet", body, user, chat_id, model)
+
+    def _filter(self, filter_type, body, user, chat_id, model) -> dict:
+        from open_webui.models.functions import Functions
+        from open_webui.utils.filter import process_filter_function
+
+        owui = self.owui
+        row = owui.run(Functions.get_function_by_id(self.id))
+        extra = owui._chat_params(user, chat_id, model)
+
+        async def go():
+            form, _, _ = await process_filter_function(
+                extra["__request__"], row, filter_type, body, extra, None, None, [self.id]
+            )
+            return form
+
+        with owui._missing_packages():
+            return owui.run(go())
 
 
 class LoadedTool:
@@ -570,6 +592,7 @@ class Harness:
         self._model_reply: str = ""
         self.requirements: list[str] = []
         self.served_models: list[str] = []
+        self.event_call_reply: Any = None
         self.plugins: dict[str, LoadedPlugin] = {}
         self._missing: ModuleNotFoundError | None = None
         self._open = False
@@ -674,8 +697,9 @@ class Harness:
         return User(**dict(model), token=token, model=model)
 
     def user_dict(self, user: User) -> dict:
-        """The `__user__` a function or tool is given."""
-        return {**user.model.model_dump(), "valves": {}}
+        """The `__user__` a function or tool is given (Open-WebUI adds a filter's user valves
+        to it as `valves`)."""
+        return user.model.model_dump()
 
     def add_chat(
         self,
@@ -985,6 +1009,26 @@ class Harness:
             self.served_models.append(model_id)
         self._serve()
 
+    def send(
+        self, user: User, message: str | list[dict], model: str = "mock-model", **body
+    ) -> dict:
+        """Send a chat request as the user's browser does (`POST /api/chat/completions`), so
+        Open-WebUI's own chat pipeline runs: the filters it picks for the chat (global ones, the
+        model's, those in `filter_ids`), the tools in `tool_ids`, the model (aimock), and the
+        outlets. `message` is the user's message, or the whole `messages` list. Other keys of
+        the request go in `body` (`chat_id`, `tool_ids`, `stream`, ...). Returns the response."""
+        if not self._rt.model.running:
+            self._serve()
+        messages = [{"role": "user", "content": message}] if isinstance(message, str) else message
+        request = {"model": model, "messages": messages, "stream": False, **body}
+        with self._missing_packages(), self.client(user) as client:
+            response = client.post("/api/chat/completions", json=request)
+        if response.status_code != 200:
+            raise RuntimeError(
+                f"POST /api/chat/completions: HTTP {response.status_code}: {response.text}"
+            )
+        return response.json() if not request.get("stream") else response.text
+
     @property
     def completions(self) -> list[dict]:
         """Each chat request the model got, as Open-WebUI sent it (aimock's journal)."""
@@ -1019,23 +1063,32 @@ class Harness:
 
     # ---- calling plugin code ----------------------------------------------------------------
 
+    def _chat_params(self, user, chat_id, model) -> dict:
+        """The arguments Open-WebUI's chat middleware gives plugins (utils/middleware.py,
+        `extra_params`): `__model__` is the model as Open-WebUI lists it, if it does."""
+        listed = (getattr(self.app.state, "MODELS", None) or {}).get(model) if model else None
+        metadata = {
+            "chat_id": chat_id,
+            "message_id": None,
+            "session_id": None,
+            "user_id": user.id if user else None,
+            "model": listed,
+        }
+        return {
+            "__event_emitter__": self._emitter(chat_id),
+            "__event_call__": self._caller(chat_id),
+            "__user__": user.model.model_dump() if user else {},
+            "__metadata__": metadata,
+            "__oauth_token__": None,
+            "__request__": self.request(user),
+            "__model__": listed or ({"id": model, "name": model} if model else None),
+            "__chat_id__": chat_id,
+            "__message_id__": None,
+        }
+
     def _invoke(self, fn, args, kwargs, user, chat_id, own_id, model=None):
         accepted = inspect.signature(fn).parameters
-        extra = {
-            "__model__": {"id": model, "name": model} if model else None,
-            "__user__": self.user_dict(user) if user else None,
-            "__metadata__": {
-                "chat_id": chat_id,
-                "user_id": user.id if user else None,
-                "message_id": None,
-                "session_id": None,
-            },
-            "__chat_id__": chat_id,
-            "__request__": self.request(user),
-            "__app__": self.app,
-            "__id__": own_id,
-            "__event_emitter__": self._emitter(chat_id),
-        }
+        extra = {**self._chat_params(user, chat_id, model), "__id__": own_id, "__app__": self.app}
         for name, value in extra.items():
             if name in accepted and name not in kwargs:
                 kwargs[name] = value
@@ -1059,6 +1112,16 @@ class Harness:
             if missing is None:
                 raise
             raise _explained(missing) from error
+
+    def _caller(self, chat_id):
+        """`__event_call__`: a question to the user's browser. It is recorded in `chat_events`,
+        and answered with `event_call_reply`."""
+
+        async def call(event: dict):
+            self.chat_events.append((chat_id, event))
+            return self.event_call_reply
+
+        return call
 
     def _emitter(self, chat_id):
         async def emit(event: dict):

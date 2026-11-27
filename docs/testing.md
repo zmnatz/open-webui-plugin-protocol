@@ -6,7 +6,7 @@ Test a plugin in three layers. Each layer finds problems that the layer before i
 | --- | --- | --- | --- |
 | **Check** | [`owpp check --strict`](commands/check.md) | The bundle fails or does not compile. A name is used but never defined. A manifest is wrong. With `--since`, a change has no new version. | Nothing |
 | **Unit tests** | [`owpp test`](commands/test.md) | The plugin's own logic is wrong. Examples: what a filter does to a chat, what a tool answers, who can open a page, what the plugin installs. The tests run against the real Open-WebUI, in the test process: the [test harness](testing/harness.md). | The `test` extra. For a test that asks a model: Bun, Node or Docker |
-| **On a real Open-WebUI** | [`owpp live`](commands/live.md) for the live tests. By hand, each test's **By hand** steps and the README's `## Test` list. | Something that [the harness does not run](testing/harness.md#what-the-harness-fakes), such as the chat pipeline, a real model, sign-in providers or the browser. | Docker (`owpp live`), or an instance |
+| **On a real Open-WebUI** | [`owpp live`](commands/live.md) for the live tests. By hand, each test's **By hand** steps and the README's `## Test` list. | Something that [the harness does not run](testing/harness.md#what-the-harness-fakes), such as a real model, sign-in providers or the browser. | Docker (`owpp live`), or an instance |
 
 CI runs the first two layers on every change. If you set up a [live check](testing/ci.md#a-live-check), CI also runs the live tests. Do the **By hand** steps before a release. Also do them when a change affects how the plugin works with Open-WebUI.
 

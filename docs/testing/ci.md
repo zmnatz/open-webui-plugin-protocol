@@ -34,7 +34,7 @@ Pin the same owpp version here as in the deploy (`uses: zmnatz/open-webui-plugin
 
 ## A live check
 
-The test harness runs Open-WebUI's code, with aimock as its model, but not a chat pipeline, a real model or a browser ([what the harness fakes](harness.md#what-the-harness-fakes)). A second workflow can run your [live tests](live.md#live-tests-in-your-repository) with [`owpp live`](../commands/live.md), which finds the problems that only these show. GitHub's runners have Docker:
+The test harness runs Open-WebUI's code, with aimock as its model, but not a real model or a browser ([what the harness fakes](harness.md#what-the-harness-fakes)). A second workflow can run your [live tests](live.md#live-tests-in-your-repository) with [`owpp live`](../commands/live.md), which finds the problems that only these show. GitHub's runners have Docker:
 
 ```yaml
 # .github/workflows/live.yml in your repository

@@ -84,8 +84,9 @@ Open-WebUI catches an error in an Event function and logs it. So a test sees the
 
 | Call | What happens |
 | --- | --- |
-| `plugin.inlet(body, user=, chat_id=, model=)`, `plugin.outlet(...)` | A chat request or reply goes through a filter. `model` is the id of the chat's model. The filter gets it as `__model__` (`{"id", "name"}`). Default: `"mock-model"`. |
-| `plugin.call("method", *args, user=, chat_id=, **kwargs)` | Calls any method of the function's instance, with the stored valves applied. It supplies these arguments if the method accepts them: `__user__`, `__metadata__`, `__request__`, `__id__`, `__event_emitter__`, `__chat_id__`, `__app__` and `__model__`. |
+| `owui.send(user, message, model="mock-model", **body)` | Sends a chat request as the browser does (`POST /api/chat/completions`). Open-WebUI's chat pipeline runs: the filters that it picks for the chat (global filters, the model's filters, those in `filter_ids`), the tools in `tool_ids`, the model, and the outlets. `message` is the user's text, or the whole `messages` list. It returns the response. |
+| `plugin.inlet(body, user=, chat_id=, model=)`, `plugin.outlet(...)` | One filter, run with Open-WebUI's own code (`process_filter_function`): the stored valves, the user's valves in `__user__["valves"]`, and the arguments that the handler takes. `model` is the id of the chat's model. Default: `"mock-model"`. |
+| `plugin.call("method", *args, user=, chat_id=, **kwargs)` | Calls any method of the function's instance directly, with the stored valves applied. It supplies the arguments that Open-WebUI's chat middleware gives, if the method takes them: `__user__`, `__metadata__`, `__model__`, `__event_emitter__`, `__event_call__`, `__oauth_token__`, `__request__`, `__chat_id__` and `__message_id__`. It also supplies `__id__`, and `__app__`, as Open-WebUI gives it to an event handler. |
 | `owui.tool(id)` | The installed tool, loaded by Open-WebUI's loader with its stored valves. `.call("method", ..., user=, chat_id=)` calls a method as the model does. `.specs` is what Open-WebUI tells the model about the tool. |
 | `owui.client(user=None, **kw)` | An `httpx.Client` for the app, signed in as `user`, or signed out. It follows redirects. To see a redirect, pass `follow_redirects=False`. |
 | `owui.run(coroutine)` | Runs async code on Open-WebUI's event loop. Then the tasks that the code started run until they finish or wait. |
@@ -102,7 +103,8 @@ Open-WebUI catches an error in an Event function and logs it. So a test sees the
 | `owui.functions`, `function_valves`, `tools`, `tool_valves`, `skills`, `models`, `users` | The rows, by id. The harness reads them from the database each time. |
 | `owui.config` | The config table, by key. A change is saved with Open-WebUI's `Config.upsert`. |
 | `owui.emitted` | `[(event, data)]` sent on the socket (`sio.emit`). |
-| `owui.chat_events` | `[(chat_id, event)]` sent through `__event_emitter__` in a call that the test made. |
+| `owui.chat_events` | `[(chat_id, event)]` sent through `__event_emitter__` or `__event_call__` in a call that the test made. |
+| `owui.event_call_reply` | What `__event_call__` answers: what the user would reply. Default: `None`. |
 | `owui.model_reply`, `owui.serve_model(id)`, `owui.completions` | For a plugin that asks a model: the answer of [the model](#the-model-aimock), another model id that it answers as, and every request that Open-WebUI sent it. |
 | `owui.requirements` | The `requirements:` of each plugin that Open-WebUI loaded. The harness does not install them. |
 | `owui.data_dir`, `owui.static_dir`, `owui.app` | Open-WebUI's `DATA_DIR` and `STATIC_DIR`, and its FastAPI app. |
@@ -141,12 +143,11 @@ The first start downloads aimock.
 The harness changes these parts of Open-WebUI, so that a test can control them and see what they did:
 
 - **The socket.** `sio.emit` records to `owui.emitted`. No browser is connected.
-- **`__event_emitter__`.** In a call that the test makes, it records to `owui.chat_events`.
+- **`__event_emitter__` and `__event_call__`.** In a call that the test makes, they record to `owui.chat_events`. `__event_call__` answers `owui.event_call_reply`.
 - **Requirements.** Open-WebUI does not install a plugin's `requirements:` with pip. The harness records them in `owui.requirements`.
 
 These parts of a real instance are not in the harness:
 
-- the chat pipeline that decides which filters and tools run for a chat;
 - a real model (aimock answers from fixtures);
 - OIDC, LDAP and trusted-header sign-in;
 - Redis, multiple workers, and `live_reload` across containers;

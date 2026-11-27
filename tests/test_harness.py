@@ -325,6 +325,67 @@ def test_open_webuis_model_is_aimock():
         assert text == "blue"
 
 
+SHOUT = """
+SEEN = {}
+
+
+class Filter:
+    def inlet(self, body, __model__=None, __event_call__=None):
+        SEEN["model"] = __model__["id"]
+        SEEN["can_ask_the_user"] = __event_call__ is not None
+        body["messages"][-1]["content"] = body["messages"][-1]["content"].upper()
+        return body
+
+    def outlet(self, body):
+        SEEN["outlet"] = True
+        return body
+"""
+
+
+def test_send_runs_open_webuis_chat_pipeline(tmp_path):
+    """`owui.send` is a chat request as the browser sends it: Open-WebUI runs the global
+    filter's inlet, asks the model (aimock) and runs the outlet."""
+    folder = plugin_folder(tmp_path, SHOUT, manifest="function:\n  title: Shout\n  global: true\n")
+    with Harness() as owui:
+        plugin = owui.load(folder)
+        owui.model_reply = "hi"
+        reply = owui.send(owui.add_user("Ada"), "hello")
+        assert reply["choices"][0]["message"]["content"] == "hi"
+        assert owui.completions[-1]["messages"][-1]["content"] == "HELLO"
+        assert plugin.module.SEEN == {
+            "model": "mock-model",
+            "can_ask_the_user": True,
+            "outlet": True,
+        }
+
+
+USER_VALVES = """
+from pydantic import BaseModel
+
+
+class Filter:
+    class UserValves(BaseModel):
+        shout: bool = False
+
+    def inlet(self, body, __user__=None):
+        return {**body, "shout": __user__["valves"].shout}
+"""
+
+
+def test_a_filter_gets_the_users_own_valves(tmp_path):
+    """`plugin.inlet` runs the filter as Open-WebUI runs one: the user's valves are in
+    `__user__["valves"]`."""
+    folder = plugin_folder(tmp_path, USER_VALVES)
+    with Harness() as owui:
+        from open_webui.models.functions import Functions  # noqa: PLC0415
+
+        plugin = owui.load(folder)
+        ada = owui.add_user("Ada")
+        assert plugin.inlet({"messages": []}, user=ada)["shout"] is False
+        owui.run(Functions.update_user_valves_by_id_and_user_id("demo", ada.id, {"shout": True}))
+        assert plugin.inlet({"messages": []}, user=ada)["shout"] is True
+
+
 def test_a_plugins_requirements_are_recorded_not_installed(tmp_path):
     folder = plugin_folder(
         tmp_path,

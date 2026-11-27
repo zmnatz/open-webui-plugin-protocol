@@ -1,6 +1,6 @@
 # On a real Open-WebUI
 
-The [test harness](harness.md) runs Open-WebUI's code, but [it fakes some parts](harness.md#what-the-harness-fakes). Test those parts on a real Open-WebUI. Examples are the chat pipeline, a real model, sign-in providers and the browser. You can do this by hand, or with live tests that [`owpp live`](../commands/live.md) runs on a throwaway Open-WebUI.
+The [test harness](harness.md) runs Open-WebUI's code, but [it fakes some parts](harness.md#what-the-harness-fakes). Test those parts on a real Open-WebUI. Examples are a real model, sign-in providers, several workers and the browser. You can do this by hand, or with live tests that [`owpp live`](../commands/live.md) runs on a throwaway Open-WebUI.
 
 ## By hand
 

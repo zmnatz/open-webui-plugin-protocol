@@ -23,7 +23,7 @@ def test_a_message_with_an_image_goes_to_the_vision_model(owui, plugin):
 - To call the other two methods, use `plugin.call("request", body, ...)` and `plugin.call("stream", chunk)`.
 - **A reply:** Open-WebUI 0.12 and later give an outlet a last message with `content` and an `output` list. The chat shows the reply from the list. Make your filter change both. The [`clear_thinking_tags` tests](https://github.com/zmnatz/open-webui-plugin-protocol/tree/main/examples/plugins/clear_thinking_tags/tests) build such a reply.
 - **Events:** `owui.chat_events` records the status lines and other events that the filter sends through `__event_emitter__`, as `(chat_id, event)`.
-- **Which chats use the filter:** Open-WebUI's chat pipeline decides which filters run for a chat. A filter can be global, set for a model or turned on by the user. The harness calls the filter directly, not through this pipeline. Test it [on a real Open-WebUI](live.md).
+- **Which chats use the filter:** Open-WebUI's chat pipeline decides which filters run for a chat. A filter can be global, set for a model or turned on by the user. `plugin.inlet` calls the filter directly. To test the pipeline, send a chat with `owui.send(user, "hello")`: Open-WebUI then picks the filters, asks the model and runs the outlets.
 
 Examples: [`vision_router`](../examples/vision_router.md) (inlet), [`clear_thinking_tags`](../examples/clear_thinking_tags.md) (outlet), [`excalidraw`](../examples/excalidraw.md) (an outlet that adds to the reply).
 

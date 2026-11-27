@@ -57,7 +57,7 @@ For each line:
 
 Each test is named as a sentence about the plugin and has the docstring owpp's tests carry (what it checks, then `By hand:`): https://zmnatz.github.io/open-webui-plugin-protocol/testing/writing/#describe-every-test
 
-Code written outside owpp meets the harness's limits (an older Open-WebUI's API, a package the slim image lacks, a service it calls): https://zmnatz.github.io/open-webui-plugin-protocol/testing/kinds/#a-function-written-elsewhere. A failure from the older API is a finding; behaviour out of the harness's reach (the chat pipeline, the page in a browser) goes in By hand.
+Code written outside owpp meets the harness's limits (an older Open-WebUI's API, a package the slim image lacks, a service it calls): https://zmnatz.github.io/open-webui-plugin-protocol/testing/kinds/#a-function-written-elsewhere. A failure from the older API is a finding; behaviour out of the harness's reach (the page in a browser, several workers) goes in By hand.
 
 Done when every line of the list has a test with both docstring paragraphs, `owpp test <id>` passes, and every finding is in your report.
 
@@ -69,7 +69,7 @@ Done when each By hand step is in the list.
 
 ## 5. Live tests, on a real Open-WebUI
 
-The unit tests already run the real Open-WebUI: routes, sign-in, grants, valves, events, what is installed, and what Open-WebUI sends the model. Write a live test only for a By hand step that the harness cannot reach: the page in a browser (a script, a button, the Artifacts panel), the chat pipeline choosing the filters and tools of a chat, a deploy to a running Open-WebUI that then restarts, or several workers. For each such step, write a live test that asserts it on a throwaway Open-WebUI v0.13.5 in Docker, with aimock answering as its models. `owpp live` starts it, deploys the plugins and runs the tests: https://zmnatz.github.io/open-webui-plugin-protocol/testing/live/#live-tests-in-your-repository
+The unit tests already run the real Open-WebUI: routes, sign-in, grants, valves, events, what is installed, and the chat pipeline (`owui.send`: the filters Open-WebUI picks, the model, the outlets). Write a live test only for a By hand step that the harness cannot reach: the page in a browser (a script, a button, the Artifacts panel), a deploy to a running Open-WebUI that then restarts, or several workers. For each such step, write a live test that asserts it on a throwaway Open-WebUI v0.13.5 in Docker, with aimock answering as its models. `owpp live` starts it, deploys the plugins and runs the tests: https://zmnatz.github.io/open-webui-plugin-protocol/testing/live/#live-tests-in-your-repository
 
 - **Where**: in a plugins repository, `live/test_<id>.py` beside `plugins/`. In the owpp repository, for one of its examples, `tools/live/` (and follow `docs/agents/examples.md`, steps 3 to 5).
 - **Over the API** (which model a request goes to, what reaches the model, a grant): the `api` and `user_api` fixtures (each call returns `(status, body)`), and `aimock.requests()` for what Open-WebUI sent the model.

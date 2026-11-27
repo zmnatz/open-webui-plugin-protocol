@@ -37,6 +37,7 @@ Caution: move all the pins before you migrate (CI, the action, your own computer
     - Valves that Open-WebUI refuses raise `OwppError` with `HTTP 400`, not a `ValueError`.
     - `owui.client()` is an `httpx.Client`, not a Starlette `TestClient`.
     - The model is aimock: a test that sets `owui.model_reply` needs Bun, Node or Docker. A model id other than `mock-model` needs `owui.serve_model(id)`. `owui.completions` holds the requests as Open-WebUI sent them, without `metadata` ([the model](testing/harness.md#the-model-aimock)).
+    - `plugin.inlet()` and `plugin.outlet()` run the filter with Open-WebUI's own code. `__model__` is the model as Open-WebUI lists it, `__user__` has the user's valves in `valves`, and a filter does not get `__app__`, as on an instance. `owui.send(user, text)` runs the whole chat pipeline.
     - `MockOpenWebUI` and `Record` are gone. Outside pytest, use `with Harness() as owui:` from `owpp.testing`.
 - **The `open_webui` type stubs are gone.** An editor finds `open_webui` in the cached wheel: `owpp test --editor` gives its folder ([in an editor](testing/harness.md#in-an-editor)).
 
