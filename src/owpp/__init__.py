@@ -1,3 +1,3 @@
 """owpp: write, test and deploy Open-WebUI plugins from a git repository."""
 
-__version__ = "0.7.0"
+__version__ = "0.7.1"
