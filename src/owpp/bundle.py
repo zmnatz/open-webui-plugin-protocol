@@ -27,7 +27,6 @@ one is replaced by the text of that file in the same folder.
 from __future__ import annotations
 
 import ast
-import json
 import os
 import re
 from dataclasses import dataclass, field
@@ -37,6 +36,7 @@ from typing import Any
 import yaml
 
 from . import envtemplate
+from .embedding import embed_runtime
 from .errors import OwppError
 from .events import problem_with
 from .flatten import FILE_TOKEN, flatten
@@ -44,9 +44,7 @@ from .libraries import (
     BY_NAME,
     FROM_RUNTIME,
     exports,
-    fill,
     hoist_future,
-    json_literal,
     link,
     wanted,
 )
@@ -62,9 +60,6 @@ from .manifest import (
     text_of,
 )
 from .sources import ResolvedPlugin, Sources
-
-RUNTIME_DIR = Path(__file__).resolve().parent / "runtime"
-RUNTIME = RUNTIME_DIR / "plugin_runtime.py"
 
 NOTE = "Git-controlled: edits made here are overwritten on the next deploy."
 
@@ -270,10 +265,6 @@ def _tool_valves(folder: Path, valves: Any) -> dict:
     return valves
 
 
-def _runtime_source(data: dict) -> str:
-    return fill(read_text(RUNTIME), "__PLUGIN_DATA__", json_literal(data))
-
-
 def _plugin_resources(plugin: ResolvedPlugin) -> dict:
     """The tool and skills a plugin declares, as the data the runtime installs."""
     folder, manifest = plugin.root, plugin.manifest
@@ -368,7 +359,7 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
     }
     for t in tools:
         if not t["self"]:
-            t["content"] += _runtime_source(ids)
+            t["content"] = embed_runtime(t["content"], ids)
     return {"tools": tools, "skills": skills}
 
 
@@ -735,7 +726,7 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
         _check_lib_imports(folder, from_lib, libs, runtime=has_resources, include="include")
     code = link(code, manifest.get("include"), folder.name, held, data)
     if has_resources:
-        code += _runtime_source(res)
+        code = embed_runtime(code, res)
     return code
 
 
@@ -796,11 +787,11 @@ def library_code(folder: Path | str, name: str = "function") -> str:
             "tools": [{"id": t["id"]} for t in res["tools"]],
             "skills": [{"id": k["id"]} for k in res["skills"]],
         }
-        return code + _runtime_source(ids)
+        return embed_runtime(code, ids)
     held, data = _library_data(folder, manifest, BY_NAME["assets"].read(folder, manifest))
     code = link(header, manifest.get("include"), folder.name, held, data)
     if res["tools"] or res["skills"]:
-        code += _runtime_source(res)
+        code = embed_runtime(code, res)
     return code
 
 
@@ -840,16 +831,6 @@ class FunctionFile:
     # The folder that was bundled: the plugin folder, or for a plugin taken whole from git the
     # upstream folder as fetched, with the local overrides applied. None for a loose <id>.py.
     root: Path | None = None
-
-
-def runtime_data(content: str | None) -> dict:
-    """The tool and skills a function bundle installs (its embedded runtime data):
-    {"tools": [...], "skills": [...]}, empty for code with none."""
-    m = re.search(r'_PLUGIN = _json\.loads\((".*")\)\n', content or "")
-    if not m:
-        return {"tools": [], "skills": []}
-    data = json.loads(json.loads(m.group(1)))
-    return {"tools": data.get("tools", []), "skills": data.get("skills", [])}
 
 
 def _make_item(

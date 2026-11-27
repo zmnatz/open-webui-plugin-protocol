@@ -29,9 +29,10 @@ from pathlib import Path
 import yaml
 
 from . import __version__
-from .bundle import FunctionFile, env_references, load_function_files, runtime_data
+from .bundle import FunctionFile, env_references, load_function_files
 from .create import CLASS, PluginSpec, spec_from_data, write_plugin
 from .deploy import choices_from_env, instance_from_env, run_deploy
+from .embedding import runtime_data
 from .errors import OwppError
 from .lint import lint_notes, lint_plugin
 from .manifest import parse_yaml, plugin_folders, read_manifest, read_text

@@ -21,12 +21,10 @@ CORE = None
 
 def core():
     """The core library, run on its own."""
-    from owpp.bundle import RUNTIME_DIR
+    from owpp.libraries import LIB_DIR
 
     namespace: dict = {"__name__": "function_demo_" + HEX}
-    exec(
-        compile((RUNTIME_DIR / "lib" / "plugin_core.py").read_text(), "core.py", "exec"), namespace
-    )
+    exec(compile((LIB_DIR / "plugin_core.py").read_text(), "core.py", "exec"), namespace)
     return namespace
 
 

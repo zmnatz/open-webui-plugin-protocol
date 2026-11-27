@@ -6,7 +6,15 @@ import json
 import re
 
 import pytest
-from conftest import DOCS, EXAMPLES, FILTER, embedded, fake_sources, write_tree
+from conftest import (
+    DOCS,
+    EXAMPLES,
+    FILTER,
+    above_runtime,
+    embedded,
+    fake_sources,
+    write_tree,
+)
 
 from owpp.bundle import (
     FunctionFile,
@@ -229,7 +237,7 @@ class TestToolAndSkills:
             },
         )
         (fn,) = load_function_files(d)
-        code = fn.content.split("_PLUGIN = ")[0]
+        code = above_runtime(fn.content)
         at = code.index
         # header, then the built-in library, then shared.py, then function.py
         assert code.startswith('"""\ntitle: T')
@@ -436,7 +444,7 @@ class TestToolAndSkills:
             {"function.py": "class Filter:\n    pass\n", "tool.py": "class Tools:\n    pass\n"},
         )
         (fn,) = load_function_files(d)
-        code = fn.content.split("_PLUGIN = ")[0]
+        code = above_runtime(fn.content)
         tool = embedded(fn.content)["tools"][0]["content"]
         assert "def plugin_mount(" in code and "def plugin_chat_read(" not in code
         assert "async def plugin_chat_read(" in tool and "def plugin_mount(" not in tool
@@ -1148,7 +1156,7 @@ class TestExamples:
         # The Tool is its own bundle (tool.py), declared in plugin.yaml and installed by the
         # runtime appended to the function, not by code inside the function.
         assert fn.content.endswith("_plugin_start()\n")
-        above = fn.content.split("_PLUGIN = ")[0]  # the tool's code is also inside the data literal
+        above = above_runtime(fn.content)
         assert "class Tools:" not in above
         tool = embedded(fn.content)["tools"][0]
         assert tool["self"] is False
