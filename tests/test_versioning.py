@@ -242,8 +242,8 @@ class TestCheckSince:
 
 
 class TestDowngrade:
-    def test_a_dry_run_warns_and_a_deploy_refuses(self, mock_server, plugin):
-        m = mock_server()
+    def test_a_dry_run_warns_and_a_deploy_refuses(self, open_webui, plugin):
+        m = open_webui()
         deploy(*m.options(plugin))  # 1.0.0 is live
         bump(plugin, "viz", "0.9.0")
         res = deploy(*m.options(plugin, dry_run=True))
@@ -259,8 +259,8 @@ class TestDowngrade:
             deploy(*m.options(plugin))
         assert not any("/update" in c for c in m.calls[writes:])
 
-    def test_force_deploys_it(self, mock_server, plugin):
-        m = mock_server()
+    def test_force_deploys_it(self, open_webui, plugin):
+        m = open_webui()
         deploy(*m.options(plugin))
         bump(plugin, "viz", "0.9.0")
         res = deploy(*m.options(plugin, force=True))
@@ -269,8 +269,8 @@ class TestDowngrade:
         ]
         assert "Deployed with --force." in render_report(res, False)
 
-    def test_an_older_tool_counts_too(self, mock_server, plugin):
-        m = mock_server()
+    def test_an_older_tool_counts_too(self, open_webui, plugin):
+        m = open_webui()
         deploy(*m.options(plugin))
         bump(plugin, "viz", "0.5.0", tool=True)
         with pytest.raises(OwppError, match=r"viz \(tool `viz` 1.0.0 -> 0.5.0\)"):

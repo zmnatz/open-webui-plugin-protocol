@@ -1,8 +1,8 @@
 """The stack `owpp live` runs: owpp's compose file (Open-WebUI and aimock), with the repository's
 own compose file layered on top, its aimock fixtures, and two throwaway accounts.
 
-Docker and HTTP go through the `run` and `http` callables a `Stack` is given, so the command can
-be tested without either.
+Docker goes through the `run` callable a `Stack` is given, and Open-WebUI through the adapter
+(owpp.openwebui) over its `fetch`, so the command can be tested without either.
 """
 
 from __future__ import annotations
@@ -10,13 +10,12 @@ from __future__ import annotations
 import json
 import subprocess
 import time
-import urllib.error
-import urllib.request
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from owpp.errors import OwppError
+from owpp.openwebui import Fetch, OpenWebUI, SignInRefused, urllib_fetch
 
 HERE = Path(__file__).resolve().parent
 COMPOSE = HERE / "compose.yaml"
@@ -34,20 +33,6 @@ USER = {
 }
 
 Run = Callable[..., subprocess.CompletedProcess]
-Http = Callable[[str, str, "dict | None", "str | None"], object]
-
-
-def http(url: str, method: str, body: dict | None = None, token: str | None = None):
-    """One JSON request; raises urllib's errors."""
-    request = urllib.request.Request(
-        url,
-        method=method,
-        data=None if body is None else json.dumps(body).encode(),
-        headers={"Content-Type": "application/json"}
-        | ({"Authorization": f"Bearer {token}"} if token else {}),
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.loads(response.read() or b"null")
 
 
 @dataclass
@@ -60,7 +45,7 @@ class Stack:
     port: int = 3000
     aimock_port: int = 4010
     run: Run = subprocess.run
-    http: Http = http
+    fetch: Fetch = urllib_fetch
     sleep: Callable[[float], None] = time.sleep
     env: Mapping[str, str] = field(default_factory=dict)
 
@@ -140,30 +125,26 @@ class Stack:
     def down(self) -> None:
         self._docker("down", "--volumes", check=False)
 
-    def api(self, method: str, path: str, body: dict | None = None, token: str | None = None):
-        return self.http(self.url + path, method, body, token)
+    @property
+    def open_webui(self) -> OpenWebUI:
+        return OpenWebUI(self.url, self.fetch)
 
-    def wait_for_health(self, seconds: float = 600) -> None:
-        deadline = time.monotonic() + seconds
-        while time.monotonic() < deadline:
-            try:
-                answer = self.api("GET", "/health")
-                if isinstance(answer, dict) and answer.get("status"):
-                    return
-            except (urllib.error.URLError, ConnectionError, TimeoutError, json.JSONDecodeError):
-                pass
-            self.sleep(2)
-        raise OwppError(f"Open-WebUI did not answer {self.url}/health within {seconds:.0f}s")
+    def wait_for_health(self, seconds: float = 600, every: float = 2) -> None:
+        """A container that has just started takes a while: tries every `every` seconds."""
+        attempts = max(1, int(seconds / every))
+        self.open_webui.wait_for_health(attempts, every, self.sleep)
 
     def accounts(self) -> tuple[dict, dict]:
         """The admin and the user, each with its token. Signs them up on a fresh instance, and
         signs in when they are already there (a stack left running with --up)."""
+        api = self.open_webui
         try:
-            admin = self.api("POST", "/api/v1/auths/signup", ADMIN)["token"]
-            self.api("POST", "/api/v1/auths/add", USER, admin)
-        except urllib.error.HTTPError:
-            admin = self.api("POST", "/api/v1/auths/signin", ADMIN)["token"]
-        user = self.api("POST", "/api/v1/auths/signin", USER)["token"]
+            admin = api.sign_up(ADMIN["name"], ADMIN["email"], ADMIN["password"])["token"]
+        except SignInRefused:
+            admin = api.sign_in(ADMIN["email"], ADMIN["password"])["token"]
+        else:
+            api.as_account(admin).add_user(USER["name"], USER["email"], USER["password"])
+        user = api.sign_in(USER["email"], USER["password"])["token"]
         return {**ADMIN, "token": admin}, {**USER, "token": user}
 
     def test_env(self, admin: dict, user: dict, failures: Path) -> dict[str, str]:

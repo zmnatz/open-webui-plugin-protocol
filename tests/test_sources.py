@@ -238,9 +238,9 @@ class TestBundling:
             load_function_files(plugin(MANIFEST).parent)
 
     def test_deploy_fetches_the_sources_and_creates_the_function_with_them_embedded(
-        self, plugin, mock_server
+        self, plugin, open_webui
     ):
-        m = mock_server()
+        m = open_webui()
         fetched = []
 
         def fetcher(git_url, ref, paths):

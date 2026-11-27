@@ -1,20 +1,17 @@
-"""Shared helpers: plugin folders on disk, a stand-in for Open-WebUI's admin API, fake git sources."""
+"""Shared helpers: plugin folders on disk, an Open-WebUI in memory, fake git sources."""
 
 from __future__ import annotations
 
-import dataclasses
+import contextlib
 import json
 import re
-import threading
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import NamedTuple
-from urllib.parse import urlsplit
 
 import pytest
+from fake_open_webui import FakeOpenWebUI, serve
 
 from owpp.bundle import load_function_files
-from owpp.deploy import MANAGED_BY, Choices, Instance
+from owpp.openwebui import MANAGED_BY
 from owpp.sources import Sources
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples" / "plugins"
@@ -34,7 +31,7 @@ SKILL_MD = "---\nname: s\n---\nbody\n"
 
 @pytest.fixture(autouse=True)
 def _no_proxy(monkeypatch):
-    """The mock server is on localhost; never send those requests through a proxy."""
+    """A served fake Open-WebUI is on localhost; never send those requests through a proxy."""
     for name in (
         "http_proxy",
         "https_proxy",
@@ -145,180 +142,18 @@ def git_fn(functions_dir):
     return make
 
 
-# ---- a stand-in for Open-WebUI's admin API --------------------------------------
-
-
-INSTANCE_FIELDS = {f.name for f in dataclasses.fields(Instance)}
-
-
-class Target(NamedTuple):
-    """Where and what to deploy: `deploy(*target)`."""
-
-    instance: Instance
-    choices: Choices
-
-
-class MockServer:
-    """Just enough state to see which calls a deploy makes."""
-
-    def __init__(
-        self,
-        live=(),
-        key="sk-good",
-        created_type="filter",
-        created_active=False,
-        fail_delete=False,
-        accounts=None,  # {email: password}: /auths/signin
-        ldap=None,  # {user: password}: /auths/ldap
-        oidc=None,  # {provider: token}: /auths/oauth/<provider>/token/exchange
-        open_signin=False,  # an empty sign-in works (WEBUI_AUTH=False, or a trusted header)
-        role="admin",  # of whoever signs in
-        interface_settings=None,  # DEFAULT_INTERFACE_SETTINGS in the admin config
-        admin_config_status=200,  # 403: a signed-in account that cannot read the admin config
-    ):
-        self.calls: list[str] = []
-        self.interface_settings = interface_settings or {}
-        self.admin_config_status = admin_config_status
-        accounts, ldap, oidc = accounts or {}, ldap or {}, oidc or {}
-        self.state: dict[str, dict] = {f["id"]: dict(f) for f in live}
-        outer = self
-
-        class Handler(BaseHTTPRequestHandler):
-            def log_message(self, *args):
-                pass
-
-            def _send(self, obj, status=200):
-                body = json.dumps(obj).encode()
-                self.send_response(status)
-                self.send_header("Content-Type", "application/json")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-
-            def _handle(self, method):
-                path = urlsplit(self.path).path
-                if path == "/health":
-                    return self._send({"status": True})
-                if path == "/api/v1/auths/admin/config":
-                    outer.calls.append("GET /api/v1/auths/admin/config")
-                    if outer.admin_config_status != 200:
-                        return self._send({"detail": "not allowed"}, outer.admin_config_status)
-                    return self._send({"DEFAULT_INTERFACE_SETTINGS": outer.interface_settings})
-                if path.startswith("/api/v1/auths/"):  # signing in needs no credential
-                    raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-                    form = json.loads(raw) if raw else {}
-                    outer.calls.append(f"POST {path}")
-                    signed_in = {"token": key, "role": role, "email": "admin@example.com"}
-                    if path == "/api/v1/auths/signin":
-                        if form.get("email") == "" and form.get("password") == "":
-                            ok = open_signin
-                        else:
-                            ok = accounts.get(form.get("email")) == form.get("password")
-                        if ok:
-                            return self._send(signed_in)
-                        return self._send(
-                            {"detail": "The email or password provided is incorrect."}, 400
-                        )
-                    if path == "/api/v1/auths/ldap":
-                        if not ldap:
-                            return self._send({"detail": "LDAP authentication is not enabled"}, 400)
-                        if ldap.get(form.get("user")) == form.get("password"):
-                            return self._send(signed_in)
-                        return self._send({"detail": "Invalid credentials"}, 400)
-                    exchange = re.fullmatch(r"/api/v1/auths/oauth/([^/]+)/token/exchange", path)
-                    if exchange:
-                        if not oidc:
-                            return self._send({"detail": "Token exchange is disabled"}, 403)
-                        if oidc.get(exchange.group(1)) == form.get("token"):
-                            return self._send(signed_in)
-                        return self._send({"detail": "Invalid token"}, 400)
-                    return self._send({"detail": "not found"}, 404)
-                if self.headers.get("Authorization") != f"Bearer {key}":
-                    return self._send({"detail": "nope"}, 401)
-                body = None
-                if method == "POST":
-                    raw = self.rfile.read(int(self.headers.get("Content-Length") or 0))
-                    body = json.loads(raw) if raw else None
-                outer.calls.append(f"{method} {path}")
-                state = outer.state
-                # Like the real API: the list has no `content`; GET /id/<id> does.
-                if path == "/api/v1/functions/list":
-                    return self._send(
-                        [{k: v for k, v in f.items() if k != "content"} for f in state.values()]
-                    )
-                one = re.fullmatch(r"/api/v1/functions/id/([^/]+)", path)
-                if one and method == "GET":
-                    f = state.get(one.group(1))
-                    return self._send(f) if f else self._send({"detail": "not found"}, 401)
-                if path == "/api/v1/functions/create":
-                    f = {
-                        "id": body["id"],
-                        "name": body["name"],
-                        "content": body["content"],
-                        "meta": body["meta"],
-                        "type": created_type,
-                        "is_active": created_active,
-                        "is_global": False,
-                    }
-                    state[body["id"]] = f
-                    return self._send(f)
-                delete = re.fullmatch(r"/api/v1/functions/id/([^/]+)/delete", path)
-                if delete and method == "DELETE":
-                    existed = state.pop(delete.group(1), None) is not None
-                    return self._send(False if fail_delete else existed)
-                m = re.fullmatch(r"/api/v1/functions/id/([^/]+)/(update|toggle)(/global)?", path)
-                if m:
-                    f = state.get(m.group(1))
-                    if not f:
-                        return self._send({"detail": "not found"}, 401)
-                    if m.group(2) == "update":
-                        f.update(content=body["content"], name=body["name"], meta=body["meta"])
-                    elif m.group(3):
-                        f["is_global"] = not f["is_global"]
-                    else:
-                        f["is_active"] = not f["is_active"]
-                    return self._send(f)
-                return self._send("?", 404)
-
-            def do_GET(self):
-                self._handle("GET")
-
-            def do_POST(self):
-                self._handle("POST")
-
-            def do_DELETE(self):
-                self._handle("DELETE")
-
-        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
-        self.base_url = f"http://127.0.0.1:{self._server.server_address[1]}"
-        threading.Thread(
-            target=self._server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
-        ).start()
-
-    def instance(self, **kwargs) -> Instance:
-        """This server, signed in with the good key unless told otherwise."""
-        kwargs.setdefault("api_key", "sk-good")
-        return Instance(base_url=self.base_url, **kwargs)
-
-    def options(self, directory: Path, **kwargs) -> Target:
-        """(instance, choices) for deploying `directory` here: the keyword arguments that are
-        Instance fields go to the instance, the rest to the choices."""
-        connection = {k: kwargs.pop(k) for k in list(kwargs) if k in INSTANCE_FIELDS}
-        return Target(self.instance(**connection), Choices(dir=Path(directory), **kwargs))
-
-    def close(self):
-        self._server.shutdown()
-        self._server.server_close()
+# ---- an Open-WebUI in memory (fake_open_webui.py) --------------------------------------
 
 
 @pytest.fixture
-def mock_server():
-    servers: list[MockServer] = []
+def open_webui():
+    """Make a FakeOpenWebUI; `.serve()` on the made one puts it behind a real HTTP server, until
+    the test ends, and gives its URL."""
+    with contextlib.ExitStack() as stack:
 
-    def make(**kwargs) -> MockServer:
-        servers.append(MockServer(**kwargs))
-        return servers[-1]
+        def make(**kwargs) -> FakeOpenWebUI:
+            fake = FakeOpenWebUI(**kwargs)
+            fake.serve = lambda: stack.enter_context(serve(fake))
+            return fake
 
-    yield make
-    for s in servers:
-        s.close()
+        yield make
