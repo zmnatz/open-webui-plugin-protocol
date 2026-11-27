@@ -6,13 +6,13 @@ Both are in the repository as plugins repositories, with their tests and a scrip
 
 | | Better Banners | Excalidraw |
 | --- | --- | --- |
-| The plugin | Classic298's [Better Banners](https://github.com/Classic298/open-webui-plugins/tree/main/better-banners) 1.0.4: an event function whose behaviour is mostly a script on the chat page | This repository's [Excalidraw](../examples/excalidraw.md): a filter, a tool and an editor page in the Artifacts panel |
+| The plugin | Classic298's [Better Banners](https://github.com/Classic298/open-webui-plugins/tree/main/better-banners) 1.0.4: an event function whose behaviour is mostly a script on the chat page | This repository's [Excalidraw](../examples/excalidraw.md) 3.1.0: a filter, a tool and an editor page in the Artifacts panel |
 | Brought in with | `owpp import <the folder's URL>` | the folder, its tests removed: `owpp import --instance` could not bring it back then (see [what the experiments found](#what-the-experiments-found)) |
 | Tests against the mock | 17 (13 tests), all passing at the first run | 34 (26 tests), 33 passing at the first run (two expected status codes were wrong) |
 | Live tests | 11, in the browser | 7, in the browser and over the API, after four rounds of fixing the tests |
 | Tests that already existed | [Page Banners](../examples/page_banners.md)' (a variant of it): 11 against the mock, none live | Excalidraw's own: 50 (41 tests) against the mock, 4 live |
 
-Everything ran on Open-WebUI v0.13.5, with [`owpp live`](../commands/live.md).
+Everything ran on Open-WebUI v0.13.5, with [`owpp live`](../commands/live.md). Excalidraw was then updated to 3.1.1 because of what the experiment found ([below](#what-the-experiments-found)), and the example now takes 3.1.1. The numbers on this page are for 3.1.0. On 3.1.1 the skill's tests pass except one assertion of the CORS header 3.1.1 dropped, which is updated, and its 7 live tests pass.
 
 ## Did the tests catch bugs?
 

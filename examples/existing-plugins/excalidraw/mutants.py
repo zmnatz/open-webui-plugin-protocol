@@ -100,12 +100,6 @@ MUTANTS = {
         "not plugin_check_token(t, chat_id)",
         "not t",
     ),
-    "no-cors": (
-        "the scene API answers without its CORS header",
-        "function.py",
-        '                return JSONResponse({"changed": False, "version": since}, headers=CORS)\n            return JSONResponse({"changed": True, **scene}, headers=CORS)',
-        '                return JSONResponse({"changed": False, "version": since}, headers=NO_STORE)\n            return JSONResponse({"changed": True, **scene}, headers=NO_STORE)',
-    ),
     "assets-url-unchecked": (
         "any assets_url is used, javascript: included",
         "function.py",

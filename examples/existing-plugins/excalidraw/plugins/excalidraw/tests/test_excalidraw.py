@@ -362,7 +362,8 @@ def test_the_scene_api_answers_with_the_pages_token_and_says_when_nothing_change
     api = owui.client()
     first = api.get(f"/excalidraw/api/scenes/{chat}", params={"t": t})
     assert first.status_code == 200
-    assert first.headers["access-control-allow-origin"] == "*"
+    # Excalidraw 3.1.1 dropped the header (the editor is same-origin); 3.1.0 sent `*`.
+    assert "access-control-allow-origin" not in first.headers
     body = first.json()
     assert (body["changed"], body["version"], body["elements"]) == (True, 1, [RECT])
     again = api.get(f"/excalidraw/api/scenes/{chat}", params={"t": t, "since": 1})
