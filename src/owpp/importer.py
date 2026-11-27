@@ -33,7 +33,7 @@ from .bundle import (
 from .create import PluginSpec, SkillSpec, SourceSpec, ToolSpec, _yaml, write_plugin
 from .errors import OwppError
 from .imports import add_lib_imports
-from .libraries import BY_NAME, LIBRARIES, exports
+from .libraries import BY_NAME, LIBRARIES, VENDORED, exports
 from .manifest import Value, read_text
 from .protocol import VERSION as PROTOCOL_VERSION
 from .sources._git import GIT_URL, Fetcher, git_fetcher, ref_kind, refname, resolve_ref
@@ -132,6 +132,25 @@ def _taken_out(
         lines.append(f"jobs: {_flow(jobs)}")
     if (config := own.data.get("config")) is not None:
         files["config.yaml"] = yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
+    left = [
+        lib.name
+        for lib in LIBRARIES
+        if lib.name not in own.found and lib.name not in VENDORED and lib.end in own.code
+    ]
+    protocol = [n for n in VENDORED if n not in own.found and BY_NAME[n].end in own.code]
+    if protocol:
+        notes.append(
+            "its Shared Assets Protocol block is not byte-identical to owpp's (another version "
+            "of the protocol), so it stays in function.py, where `owpp check` refuses its change "
+            "to app.routes: import it from git instead (`owpp import <URL>`), which takes the "
+            f"code as it is, or replace the block with include: [{', '.join(protocol)}]"
+        )
+    if left:
+        notes.append(
+            f"function.py still holds owpp's {', '.join(left)} (a `# end ...` line): a copy this "
+            "owpp does not recognise, from another version. Delete each block and add its name "
+            "to include:, or `owpp check` refuses what it does"
+        )
     if own.found:
         notes.append(
             f"owpp's code in it is back to what it was made from: {', '.join(own.found)}"
@@ -197,10 +216,16 @@ def _taken_out(
 
 
 def import_code(
-    directory: Path | str, content: str, plugin_id: str, where: str, today: str | None = None
+    directory: Path | str,
+    content: str,
+    plugin_id: str,
+    where: str,
+    today: str | None = None,
+    requires: dict | None = None,
 ) -> Imported:
     """Write `<directory>/<plugin_id>/` from a function's code: plugin.yaml holds its header,
-    function.py the rest. `where` says where the code came from, for the README."""
+    function.py the rest. `where` says where the code came from, for the README; `requires` is
+    plugin.yaml's `requires:`, when the deploy recorded it."""
     plugin_id = _check_id(plugin_id)
     m = DOCSTRING.match(content)
     header = parse_frontmatter(content)
@@ -247,6 +272,7 @@ def import_code(
         "function:",
         *(f"  {k}: {_header_value(v)}" for k, v in keys.items()),
         *extra,
+        *(["requires:", *(f"  {k}: {_flow(v)}" for k, v in requires.items())] if requires else []),
     ]
     files: dict[str, str | bytes] = {
         **more_files,
@@ -289,10 +315,23 @@ def import_instance(
     content = _field(stored, "content")
     if not isinstance(content, str) or not content:
         raise OwppError(f"Open-WebUI returned no code for the function {function_id}")
+    meta = _field(stored, "meta")
+    meta = meta if isinstance(meta, dict) else {}
+    requires = meta.get("requires")
     # Where it came from, without the instance's address: plugin.yaml and the README are committed.
     imported = import_code(
-        directory, content, plugin_id or function_id, f"Open-WebUI (function {function_id})", today
+        directory,
+        content,
+        plugin_id or function_id,
+        f"Open-WebUI (function {function_id})",
+        today,
+        requires if isinstance(requires, dict) else None,
     )
+    if meta.get("managed_by") and not isinstance(requires, dict):
+        imported.notes.append(
+            "an owpp that did not record `requires:` deployed it: if its plugin.yaml had one "
+            "(iframe_sandbox_allow_same_origin), add it back"
+        )
     imported.notes.append(
         "valves are not copied (they may hold keys or passwords): the deploy keeps the "
         "instance's, and defaults go under `function: valves:` in plugin.yaml"
