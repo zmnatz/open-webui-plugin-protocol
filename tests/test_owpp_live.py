@@ -11,12 +11,15 @@ import sys
 from pathlib import Path
 
 import pytest
+from conftest import FILTER, write_tree
 from fake_open_webui import FakeOpenWebUI
 
-from owpp.cli import build_parser, main
+from owpp.cli import build_parser, main, parse_command, plugins_dir
 from owpp.errors import OwppError
 from owpp.live import command as live_command
 from owpp.live.stack import COMPOSE, DEFAULT_FIXTURES, Stack
+from owpp.openwebui import MANAGED_BY
+from owpp.sources import Sources
 
 
 class Docker:
@@ -49,45 +52,47 @@ class Docker:
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
     """A plugins repository: plugins/ and live/, as the working directory."""
-    (tmp_path / "plugins" / "shout").mkdir(parents=True)
-    (tmp_path / "live").mkdir()
-    (tmp_path / "live" / "test_it.py").write_text("def test_it():\n    pass\n")
+    write_tree(
+        tmp_path,
+        {"plugins/shout.py": FILTER, "live/test_it.py": "def test_it():\n    pass\n"},
+    )
     monkeypatch.chdir(tmp_path)
     return tmp_path
 
 
-@pytest.fixture
-def deploys(monkeypatch):
-    """`owpp deploy`, recorded instead of run: each call's argv and environment."""
-    calls: list[tuple[list[str], dict]] = []
+class Recording(FakeOpenWebUI):
+    """A FakeOpenWebUI that keeps every request as it was sent: (url, headers, body)."""
 
-    def deploy(argv, env):
-        calls.append((list(argv), dict(env)))
-        return 0
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.requests: list[tuple[str, dict, bytes]] = []
 
-    monkeypatch.setattr(live_command, "owpp_main", deploy)
-    return calls
+    def __call__(self, method, url, headers=None, body=None):
+        self.requests.append((url, dict(headers or {}), body or b""))
+        return super().__call__(method, url, headers, body)
+
+    def deploy_tokens(self) -> set[str]:
+        """The Authorization header of each request to the functions API."""
+        return {h.get("Authorization", "") for u, h, _ in self.requests if "/functions/" in u}
 
 
-def signed_up() -> FakeOpenWebUI:
+def signed_up() -> Recording:
     """An Open-WebUI that already has owpp live's accounts: a stack left running with --up."""
-    return FakeOpenWebUI(
+    return Recording(
         accounts={"admin@example.com": "owpp-live-admin", "bob@example.com": "owpp-live-user"}
     )
 
 
 def live(argv: list[str], env=None, docker=None, owui=None, sleeps=None):
-    """Run `owpp live <argv>` with the stand-ins, as main() would."""
-    parser = build_parser()
-    passthrough = argv[argv.index("--") + 1 :] if "--" in argv else []
-    argv = argv[: argv.index("--")] if "--" in argv else argv
-    args = parser.parse_args(["live", *argv])
-    args.pytest_args = passthrough
-    directory = Path(args.dir or "plugins").resolve()
+    """Run `owpp live <argv>` as main() would, with Docker, Open-WebUI and the clock as
+    stand-ins."""
+    args = parse_command(["live", *argv])
+    args.sources = Sources()
+    env = env or {}
     return live_command.run_command(
         args,
-        directory,
-        env or {},
+        plugins_dir(args, env),
+        env,
         run=docker or Docker(),
         fetch=owui or FakeOpenWebUI(),
         sleep=(sleeps.append if sleeps is not None else lambda s: None),
@@ -147,23 +152,21 @@ def test_owpps_compose_file_uses_the_variables_owpp_live_sets():
 # ---- owpp live --------------------------------------------------------------------------------
 
 
-def test_it_starts_the_stack_deploys_runs_the_tests_and_stops_it(repo, deploys):
-    """Up, sign up the admin and the user, `owpp deploy` with the admin's token, pytest on the
-    tests folder with the accounts in its environment, then down."""
-    docker, owui = Docker(), FakeOpenWebUI()
+def test_it_starts_the_stack_deploys_runs_the_tests_and_stops_it(repo):
+    """Up, sign up the admin and the user, deploy with the admin's token, pytest on the tests
+    folder with the accounts in its environment, then down."""
+    docker, owui = Docker(), Recording()
     assert live([], docker=docker, owui=owui) == 0
     assert docker.actions() == ["up", "down"]
-    assert owui.calls == [
+    assert owui.calls[:3] == [
         "POST /api/v1/auths/signup",
         "POST /api/v1/auths/add",
         "POST /api/v1/auths/signin",
     ]
     assert owui.accounts["admin@example.com"]["role"] == "admin"
     assert owui.accounts["bob@example.com"]["role"] == "user"
-    (argv, env), *_ = deploys
-    assert argv == ["deploy", "--dir", str(repo / "plugins")]
-    assert env["OPEN_WEBUI_URL"] == "http://127.0.0.1:3000"
-    assert env["OPEN_WEBUI_API_KEY"] == "admin-token"
+    assert owui.state["shout"]["meta"]["managed_by"] == MANAGED_BY
+    assert owui.deploy_tokens() == {"Bearer admin-token"}
     command = docker.pytest()
     assert command[:4] == [sys.executable, "-m", "pytest", str(repo / "live")]
     tests_env = docker.envs[docker.commands.index(command)]
@@ -174,63 +177,81 @@ def test_it_starts_the_stack_deploys_runs_the_tests_and_stops_it(repo, deploys):
     assert tests_env["PYTEST_PLUGINS"] == "owpp.live.fixtures"
 
 
-def test_the_callers_own_pytest_plugins_still_load(repo, deploys):
+def test_the_callers_own_pytest_plugins_still_load(repo):
     docker = Docker()
     live([], env={"PYTEST_PLUGINS": "mine"}, docker=docker)
     tests_env = docker.envs[docker.commands.index(docker.pytest())]
     assert tests_env["PYTEST_PLUGINS"] == "mine,owpp.live.fixtures"
 
 
-def test_its_exit_code_is_the_tests_and_the_stack_stops_either_way(repo, deploys):
+def test_its_exit_code_is_the_tests_and_the_stack_stops_either_way(repo):
     docker = Docker(pytest_code=1)
     assert live([], docker=docker) == 1
     assert docker.actions() == ["up", "down"]
 
 
-def test_arguments_after_two_dashes_go_to_pytest(repo, deploys):
+def test_arguments_after_two_dashes_go_to_pytest(repo):
     docker = Docker()
     live(["--", "-k", "chat", "-x"], docker=docker)
     assert docker.pytest()[-3:] == ["-k", "chat", "-x"]
 
 
-def test_the_deploy_never_signs_in_with_the_callers_own_instance(repo, deploys):
-    """Only the throwaway instance's address and token: a password or OIDC token in the
-    environment, meant for a real instance, is not passed on."""
-    env = {
+def test_the_callers_own_credentials_cannot_reach_the_stack(repo, monkeypatch):
+    """Every OPEN_WEBUI_* variable of a real instance set, in the caller's environment and the
+    process's: every request still goes to the throwaway stack, signed in with its own admin's
+    token, and none of the caller's values is in any of them."""
+    callers = {
         "OPEN_WEBUI_URL": "https://chat.example.com",
         "OPEN_WEBUI_API_KEY": "sk-real",
-        "OPEN_WEBUI_USERNAME": "me@example.com",
-        "OPEN_WEBUI_PASSWORD": "secret",
-        "OPEN_WEBUI_OIDC_TOKEN": "oidc",
+        "OPEN_WEBUI_USERNAME": "me@real.example",
+        "OPEN_WEBUI_PASSWORD": "real-password",
+        "OPEN_WEBUI_OIDC_TOKEN": "real-oidc-token",
+        "OPEN_WEBUI_OAUTH_PROVIDER": "real-provider",
+        "OPEN_WEBUI_CA_CERT": "/no/such/real-ca.pem",
+        "OPEN_WEBUI_CLIENT_CERT": "/no/such/real-client.pem",
+        "OPEN_WEBUI_CLIENT_KEY": "/no/such/real-client.key",
     }
-    live([], env=env)
-    (_, deploy_env), *_ = deploys
-    assert {k: v for k, v in deploy_env.items() if k.startswith("OPEN_WEBUI_")} == {
-        "OPEN_WEBUI_URL": "http://127.0.0.1:3000",
-        "OPEN_WEBUI_API_KEY": "admin-token",
-    }
+    for name, value in callers.items():
+        monkeypatch.setenv(name, value)
+    owui = Recording()
+    assert live([], env=callers, owui=owui) == 0
+    assert "shout" in owui.state
+    assert owui.deploy_tokens() == {"Bearer admin-token"}
+    for url, headers, body in owui.requests:
+        assert url.startswith("http://127.0.0.1:3000/"), url
+        assert headers.get("Authorization", "Bearer admin-token") == "Bearer admin-token"
+        sent = f"{url} {headers} {body.decode()}"
+        assert not [v for v in callers.values() if v in sent], sent
 
 
-def test_a_failed_deploy_stops_the_stack_and_runs_no_tests(repo, monkeypatch):
-    monkeypatch.setattr(live_command, "owpp_main", lambda argv, env: 1)
+def test_the_deploy_reads_the_ownership_marker_from_the_environment(repo):
+    owui = FakeOpenWebUI()
+    live([], env={"OWPP_MANAGED_BY": "mine"}, owui=owui)
+    assert owui.state["shout"]["meta"]["managed_by"] == "mine"
+
+
+def test_a_failed_deploy_stops_the_stack_and_runs_no_tests(repo, capsys):
+    (repo / "plugins" / "shout.py").unlink()  # nothing to deploy
     docker = Docker()
     with pytest.raises(OwppError, match="deploy"):
         live([], docker=docker)
+    assert "no functions" in capsys.readouterr().err
     assert docker.actions() == ["up", "down"]
     assert docker.pytest() is None
 
 
-def test_keep_leaves_it_running(repo, deploys, capsys):
+def test_keep_leaves_it_running(repo, capsys):
     docker = Docker()
     live(["--keep"], docker=docker)
     assert docker.actions() == ["up"]
     assert "owpp live --down" in capsys.readouterr().out
 
 
-def test_up_deploys_runs_no_tests_and_prints_how_to_reach_it(repo, deploys, capsys):
-    docker = Docker()
-    assert live(["--up"], docker=docker) == 0
+def test_up_deploys_runs_no_tests_and_prints_how_to_reach_it(repo, capsys):
+    docker, owui = Docker(), FakeOpenWebUI()
+    assert live(["--up"], docker=docker, owui=owui) == 0
     assert docker.actions() == ["up"]
+    assert "shout" in owui.state
     assert docker.pytest() is None
     out = capsys.readouterr().out
     assert "admin@example.com" in out
@@ -239,19 +260,18 @@ def test_up_deploys_runs_no_tests_and_prints_how_to_reach_it(repo, deploys, caps
     assert "OPEN_WEBUI_API_KEY=admin-token" in out
 
 
-def test_up_again_signs_in_to_the_accounts_already_there(repo, deploys):
+def test_up_again_signs_in_to_the_accounts_already_there(repo):
     owui = signed_up()
     live(["--up"], owui=owui)
-    assert owui.calls == [
+    assert owui.calls[:3] == [
         "POST /api/v1/auths/signup",
         "POST /api/v1/auths/signin",
         "POST /api/v1/auths/signin",
     ]
-    (_, env), *_ = deploys
-    assert env["OPEN_WEBUI_API_KEY"] == "admin-token"
+    assert owui.deploy_tokens() == {"Bearer admin-token"}
 
 
-def test_it_waits_for_open_webui_to_answer_before_signing_up(repo, deploys):
+def test_it_waits_for_open_webui_to_answer_before_signing_up(repo):
     """A container that has just started refuses connections for a while: /health is tried
     every two seconds until it answers."""
     sleeps: list[float] = []
@@ -261,29 +281,29 @@ def test_it_waits_for_open_webui_to_answer_before_signing_up(repo, deploys):
     assert owui.calls[0] == "POST /api/v1/auths/signup"
 
 
-def test_an_open_webui_that_never_answers_stops_the_stack(repo, deploys):
-    docker = Docker()
+def test_an_open_webui_that_never_answers_stops_the_stack(repo):
+    docker, owui = Docker(), FakeOpenWebUI(starting=10_000)
     with pytest.raises(OwppError, match="did not answer"):
-        live([], docker=docker, owui=FakeOpenWebUI(starting=10_000))
+        live([], docker=docker, owui=owui)
     assert docker.actions() == ["up", "down"]
-    assert not deploys
+    assert owui.calls == []
 
 
-def test_down_only_stops_it(repo, deploys):
-    docker = Docker()
-    assert live(["--down"], docker=docker) == 0
+def test_down_only_stops_it(repo):
+    docker, owui = Docker(), FakeOpenWebUI()
+    assert live(["--down"], docker=docker, owui=owui) == 0
     assert docker.actions() == ["down"]
-    assert not deploys
+    assert owui.calls == []
 
 
-def test_no_tests_folder_is_refused_before_anything_starts(repo, deploys):
+def test_no_tests_folder_is_refused_before_anything_starts(repo):
     docker = Docker()
     with pytest.raises(OwppError, match="no live tests"):
         live(["--tests", "elsewhere"], docker=docker)
     assert docker.commands == []
 
 
-def test_no_docker_says_it_is_needed(repo, deploys):
+def test_no_docker_says_it_is_needed(repo):
     with pytest.raises(OwppError, match="needs Docker"):
         live([], docker=Docker(missing=True))
 

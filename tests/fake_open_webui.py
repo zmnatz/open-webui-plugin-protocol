@@ -8,6 +8,7 @@ from __future__ import annotations
 import contextlib
 import json
 import re
+import ssl
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -204,8 +205,9 @@ def _json(obj, status=200) -> HttpResponse:
 
 
 @contextlib.contextmanager
-def serve(fetch):
-    """`fetch` (a FakeOpenWebUI) behind a real HTTP server on localhost: yields its base URL."""
+def serve(fetch, tls: ssl.SSLContext | None = None):
+    """`fetch` (a FakeOpenWebUI) behind a real HTTP server on localhost, over HTTPS with `tls`:
+    yields its base URL."""
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -226,11 +228,13 @@ def serve(fetch):
         do_GET = do_POST = do_DELETE = _handle
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    if tls:
+        server.socket = tls.wrap_socket(server.socket, server_side=True)
     threading.Thread(
         target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True
     ).start()
     try:
-        yield f"http://127.0.0.1:{server.server_address[1]}"
+        yield f"{'https' if tls else 'http'}://127.0.0.1:{server.server_address[1]}"
     finally:
         server.shutdown()
         server.server_close()

@@ -14,16 +14,9 @@ import sys
 from collections.abc import Mapping
 from pathlib import Path
 
+from ..deploy import Instance, choices_from_env, run_deploy
 from ..errors import OwppError
 from .stack import Stack
-
-
-def owpp_main(argv: list[str], env: Mapping[str, str]) -> int:
-    """owpp's own CLI, for the deploy (imported here: owpp.cli imports this module)."""
-    from ..cli import main
-
-    return main(argv, env)
-
 
 HELP = "deploy the plugins to a throwaway Open-WebUI (aimock as its models) and run the live tests"
 
@@ -92,13 +85,11 @@ def run_command(
     try:
         stack.wait_for_health()
         admin, user = stack.accounts()
-        deploy_env = dict(env) | {"OPEN_WEBUI_URL": stack.url, "OPEN_WEBUI_API_KEY": admin["token"]}
-        # Only the throwaway instance's credentials: never the ones in the caller's environment.
-        signing_in = ("OPEN_WEBUI_URL", "OPEN_WEBUI_API_KEY")
-        for name in [n for n in deploy_env if n.startswith("OPEN_WEBUI_") and n not in signing_in]:
-            del deploy_env[name]
-        code = owpp_main(["deploy", "--dir", str(directory)], deploy_env)
-        if code:
+        # Built from the stack alone, so the caller's credentials for a real instance (the
+        # OPEN_WEBUI_* variables) have no way into the deploy.
+        instance = Instance(base_url=stack.url, api_key=admin["token"], fetch=stack.fetch)
+        choices = choices_from_env(env, dir=directory, sources=args.sources)
+        if run_deploy(instance, choices, env):
             raise OwppError("owpp deploy to the live Open-WebUI failed (above)")
         test_env = stack.test_env(admin, user, stack.tests / "failures")
         if env.get("PYTEST_PLUGINS"):  # the caller's own plugins too

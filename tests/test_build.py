@@ -95,10 +95,10 @@ class TestBuild:
             built(plugins, tmp_path / "mine")
         assert (tmp_path / "mine" / "notes.txt").read_text() == "keep me\n"
 
-    def test_the_command(self, plugins, tmp_path, monkeypatch, capsys):
-        monkeypatch.setattr("owpp.cli.Sources", lambda: Sources(fake_fetcher()))
+    def test_the_command(self, plugins, tmp_path, capsys):
         out = tmp_path / "dist"
-        assert main(["build", "--dir", str(plugins), "--out", str(out)], env={}) == 0
+        argv = ["build", "--dir", str(plugins), "--out", str(out)]
+        assert main(argv, env={}, sources=lambda: Sources(fake_fetcher())) == 0
         printed = capsys.readouterr().out
         assert f"built {out / 'up.py'}" in printed
         assert f"2 function(s) in {out}: every plugin" in printed

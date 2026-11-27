@@ -537,10 +537,9 @@ class TestWizard:
     def test_owpp_create_reads_git_through_the_commands_sources(self, tmp_path, monkeypatch):
         repo = git_repo()
         repo.commits[SHA]["function.py"] = FILTER  # `owpp check` runs on what it writes
-        monkeypatch.setattr("owpp.cli.Sources", repo.sources)
         answers = ["", "viz", "", "git", GIT, "main", "", "y", "", "n", "", "", ""]
         monkeypatch.setattr(sys, "stdin", io.StringIO("\n".join(answers) + "\n"))
-        main(["create", "--dir", str(tmp_path)], env={})
+        main(["create", "--dir", str(tmp_path)], env={}, sources=repo.sources)
         assert read_manifest(tmp_path / "viz")["source"]["branch"] == "main"
 
     def test_taking_nothing_from_git_writes_nothing(self, tmp_path):
