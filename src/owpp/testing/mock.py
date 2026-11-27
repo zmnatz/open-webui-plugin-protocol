@@ -37,8 +37,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from ..bundle import bundle_function, function_type, parse_frontmatter
+from ..bundle import bundle_function, function_meta, function_type, parse_frontmatter
 from ..manifest import read_manifest
+from ..openwebui import replace_imports
 from ..sources import Sources
 
 # Modules a test run leaves behind and the mock removes on close: Open-WebUI's, the loaded
@@ -668,7 +669,10 @@ class MockOpenWebUI:
         content: str | None = None,
     ) -> LoadedPlugin:
         """Bundle a plugin folder as `owpp deploy` would, store it as a function, and load
-        it as Open-WebUI does. `valves` are the stored valves (default: the manifest's).
+        it as Open-WebUI does. The row is what a deploy leaves: its `meta` (under the default
+        ownership marker) with the header as `meta.manifest`, and the code with its imports
+        rewritten as Open-WebUI rewrites them. `valves` are the stored valves (default: the
+        manifest's).
         A `source:` plugin's files are fetched from git at the pinned commit, as the deploy
         does, through the mock's Sources (each file once). `sources` stands in for them
         instead, so a test needs no network:
@@ -695,6 +699,8 @@ class MockOpenWebUI:
             valves = fn.get("valves") or {}
         types_ = function_type(content)
         frontmatter = parse_frontmatter(content)
+        meta = function_meta(content, plugin).stored()  # of the code as sent, as a deploy does
+        content = replace_imports(content)
         existing = self.functions.get(id)
         self.functions[id] = Record(
             id=id,
@@ -702,7 +708,7 @@ class MockOpenWebUI:
             name=frontmatter.get("title") or id,
             type=types_[0] if types_ else "filter",
             content=content,
-            meta=Record(description=frontmatter.get("description"), manifest=frontmatter),
+            meta=Record(**meta, manifest=parse_frontmatter(content)),
             is_active=active if existing is None else existing.is_active,
             is_global=bool(fn.get("global")) if existing is None else existing.is_global,
             created_at=_now() if existing is None else existing.created_at,
@@ -1212,9 +1218,6 @@ class MockOpenWebUI:
                     {"index": 0, "message": {"role": "assistant", "content": mock.model_reply}}
                 ],
             }
-
-        def replace_imports(content):
-            return content
 
         async def load_tool_module_by_id(tool_id, content=None):
             if content is None:

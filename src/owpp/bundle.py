@@ -60,6 +60,7 @@ from .manifest import (
     read_text,
     text_of,
 )
+from .openwebui import MANAGED_BY, FunctionMeta
 from .sources import ResolvedPlugin, Sources
 
 NOTE = "Git-controlled: edits made here are overwritten on the next deploy."
@@ -721,6 +722,20 @@ class FunctionFile:
     root: Path | None = None
 
 
+def function_meta(content: str, plugin: ResolvedPlugin | None = None) -> FunctionMeta:
+    """The meta a deploy stores with a function, under its default ownership marker: the
+    header's description behind the note the UI shows and, for a plugin folder, the commits its
+    sources were pinned to and what its manifest `requires:`."""
+    description = " ".join(text_of(parse_frontmatter(content).get("description")).split())
+    requires = plugin.manifest.get("requires") if plugin else None
+    return FunctionMeta(
+        managed_by=MANAGED_BY,
+        description=f"{NOTE} {description}" if description else NOTE,
+        sources=dict(plugin.pins) if plugin else {},
+        requires=dict(requires) if isinstance(requires, dict) else {},
+    )
+
+
 def _make_item(
     kind: str,
     id: str,
@@ -728,6 +743,7 @@ def _make_item(
     content: str,
     valves: dict | None = None,
     global_: bool | None = None,
+    plugin: ResolvedPlugin | None = None,
 ) -> FunctionFile:
     check_frontmatter(file, content)
     meta = parse_frontmatter(content)
@@ -743,7 +759,7 @@ def _make_item(
         raise OwppError(
             f"{file}: `global` only applies to filters and actions, not to {types[0]} functions"
         )
-    description = " ".join(text_of(meta.get("description")).split())
+    stored = function_meta(content, plugin)
     return FunctionFile(
         kind=kind,
         type=types[0],
@@ -754,7 +770,9 @@ def _make_item(
         content=content,
         valves=valves,
         name=text_of(coalesce(meta.get("title"), id)),
-        description=f"{NOTE} {description}" if description else NOTE,
+        description=stored.description,
+        sources=stored.sources,
+        requires=stored.requires,
     )
 
 
@@ -795,10 +813,8 @@ def load_function_files(
                 content,
                 valves=fn.get("valves"),
                 global_=declared if isinstance(declared, bool) and "file" in fn else None,
+                plugin=plugin,
             )
             item.root = plugin.root
-            item.sources = dict(plugin.pins)
-            requires = plugin.manifest.get("requires")
-            item.requires = dict(requires) if isinstance(requires, dict) else {}
             loaded.append(item)
     return loaded

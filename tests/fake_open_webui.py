@@ -15,8 +15,9 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
+from owpp.bundle import parse_frontmatter
 from owpp.deploy import Choices, Instance
-from owpp.openwebui import HttpResponse
+from owpp.openwebui import HttpResponse, replace_imports
 
 INSTANCE_FIELDS = set(Instance.__dataclass_fields__)
 
@@ -164,8 +165,7 @@ class FakeOpenWebUI:
             f = {
                 "id": body["id"],
                 "name": body["name"],
-                "content": body["content"],
-                "meta": body["meta"],
+                **_saved(body),
                 "type": self.created_type,
                 "is_active": self.created_active,
                 "is_global": False,
@@ -185,7 +185,7 @@ class FakeOpenWebUI:
         if rest == "" and method == "GET":
             return _json(f)
         if rest == "/update":
-            f.update(content=body["content"], name=body["name"], meta=body["meta"])
+            f.update(name=body["name"], **_saved(body))
         elif rest == "/toggle":
             f["is_active"] = not f["is_active"]
         elif rest == "/toggle/global":
@@ -198,6 +198,13 @@ class FakeOpenWebUI:
         else:
             return _json("?", 404)
         return _json(f)
+
+
+def _saved(form: dict) -> dict:
+    """The code and meta as Open-WebUI saves them: imports rewritten, and the header it reads
+    from the code added to the meta as `manifest`."""
+    content = replace_imports(form["content"])
+    return {"content": content, "meta": {**form["meta"], "manifest": parse_frontmatter(content)}}
 
 
 def _json(obj, status=200) -> HttpResponse:

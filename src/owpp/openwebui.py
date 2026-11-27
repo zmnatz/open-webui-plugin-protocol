@@ -1,7 +1,8 @@
 """Open-WebUI's HTTP API, as owpp speaks it: signing in and signing up, waiting for the instance
-to be healthy, the functions endpoints, and the `meta` the deploy stores with each function (and
-`owpp import --instance` reads back). The deploy, `owpp import` and `owpp live`'s stack all talk to
-an instance through an `OpenWebUI`; the live tests' `Api` is a thin layer over the same one.
+to be healthy, the functions endpoints, the `meta` the deploy stores with each function (and
+`owpp import --instance` reads back), and the rewrite Open-WebUI makes to code before it stores it.
+The deploy, `owpp import` and `owpp live`'s stack all talk to an instance through an `OpenWebUI`;
+the live tests' `Api` is a thin layer over the same one.
 
 Every request goes through a `Fetch`: urllib (`urllib_fetch`) in production, an in-memory
 Open-WebUI in owpp's tests. Only the standard library is needed (docs/adr/0003).
@@ -78,7 +79,21 @@ def field_of(obj: Any, key: str) -> Any:
     return obj.get(key) if isinstance(obj, dict) else None
 
 
-# ---- the meta the deploy stores ---------------------------------------------------------
+# ---- what Open-WebUI stores -------------------------------------------------------------
+
+
+def replace_imports(content: Any) -> str:
+    """Open-WebUI rewrites these import prefixes in the code before it stores it
+    (utils/plugin.py replace_imports), so the stored copy of a file that uses them never
+    equals the file. The deploy compares against the rewritten text, and the mock Open-WebUI
+    stores it."""
+    return (
+        str(content or "")
+        .replace("from utils", "from open_webui.utils")
+        .replace("from apps", "from open_webui.apps")
+        .replace("from main", "from open_webui.main")
+        .replace("from config", "from open_webui.config")
+    )
 
 
 @dataclass(frozen=True)

@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+from owpp.deploy import deploy
 from owpp.sources import Sources
 from owpp.testing import MockOpenWebUI
 
@@ -272,3 +273,55 @@ def test_a_plugin_can_ask_a_model(tmp_path):
         reply = owui.run(generate_chat_completion(None, form_data=asked, user=None))
         assert reply["choices"][0]["message"]["content"] == "blue"
         assert owui.completions == [asked]
+
+
+UPSTREAM_FILTER = '''"""
+title: Upstream Filter
+description: Reads its settings from config.
+"""
+
+from utils.misc import get_last_user_message_item
+
+
+class Filter:
+    def inlet(self, body):
+        return {**body, "last": get_last_user_message_item(body["messages"])}
+'''
+
+
+def test_the_mock_stores_a_function_as_a_deploy_leaves_it_on_open_webui(tmp_path, open_webui):
+    """The same plugin, deployed to the adapter's in-memory fake and loaded into the mock, is the
+    same row in both: the meta a deploy writes (the ownership marker, the description with its
+    note, the commit of the git source, `requires:`) beside the header Open-WebUI adds as
+    `manifest`, and the code with its imports rewritten as Open-WebUI rewrites them on save."""
+    folder = tmp_path / "plugins" / "demo"
+    folder.mkdir(parents=True)
+    (folder / "plugin.yaml").write_text(
+        f"source:\n  git: https://example.com/repo.git\n  ref: {PINNED}\n  path: p\n"
+        "function:\n  file: filter.py\n  global: true\n"
+        "requires:\n  iframe_sandbox_allow_same_origin: true\n"
+    )
+    fake = open_webui()
+    with Sources(lambda git, ref, paths: {p: UPSTREAM_FILTER for p in paths}) as sources:
+        deploy(*fake.options(folder.parent, sources=sources))
+        with MockOpenWebUI(sources=sources) as owui:
+            plugin = owui.load(folder)
+            row = plugin.row.model_dump()
+            assert plugin.inlet({"messages": [{"role": "user", "content": "hi"}]})["last"]
+    deployed = fake.state["demo"]
+    assert {key: row[key] for key in deployed} == deployed
+    assert deployed["meta"]["sources"] == {"https://example.com/repo.git p": PINNED}
+    assert deployed["meta"]["requires"] == {"iframe_sandbox_allow_same_origin": True}
+    assert "from open_webui.utils.misc import" in deployed["content"]
+
+
+def test_the_mocks_replace_imports_rewrites_what_open_webuis_does():
+    """The runtime installs a plugin's tool through `replace_imports`, so the mock's rewrites the
+    old import prefixes as Open-WebUI's does."""
+    with MockOpenWebUI():
+        from open_webui.utils.plugin import replace_imports  # noqa: PLC0415
+
+        old = "from utils.a import b\nfrom apps.c import d\nfrom main import e\nfrom config import f\n"
+        new = old.replace("from ", "from open_webui.")
+        assert replace_imports(old) == new
+        assert replace_imports(new) == new
