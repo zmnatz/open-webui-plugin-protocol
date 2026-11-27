@@ -1,7 +1,12 @@
-"""An Open-WebUI in memory, behind the same `Fetch` port urllib is (owpp.openwebui): the deploy,
-`owpp import --instance` and `owpp live`'s stack are tested against it. `serve()` puts it behind
-a real HTTP server, for the contract test of the urllib adapter and for commands run through
-`main()` with only an OPEN_WEBUI_URL."""
+"""An Open-WebUI in memory, behind the same `Fetch` port urllib is (owpp.openwebui), for what the
+real one (real_open_webui.py, the test harness) cannot give on demand: sign-in by LDAP, OIDC or
+a trusted header, an account that is not an admin, an instance that is still starting, a delete
+that fails, a function created already active, two instances side by side, and `owpp live`'s
+sign-up. Every other deploy and import test runs against the real Open-WebUI.
+
+`serve()` puts it behind a real HTTP server, for the contract test of the urllib adapter and for
+commands run through `main()` with only an OPEN_WEBUI_URL. tests/test_harness.py checks that a
+function it stores is the row the real Open-WebUI stores."""
 
 from __future__ import annotations
 

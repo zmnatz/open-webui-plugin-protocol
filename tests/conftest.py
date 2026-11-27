@@ -213,6 +213,25 @@ def git_fn(functions_dir):
     return make
 
 
+# ---- the real Open-WebUI, behind the Fetch port (real_open_webui.py) --------------------
+
+
+@pytest.fixture
+def real_open_webui():
+    """Make a RealOpenWebUI: the test harness, as deploy and import are given an Open-WebUI.
+    One for each test."""
+    from real_open_webui import RealOpenWebUI
+
+    from owpp.testing import Harness
+
+    with contextlib.ExitStack() as stack:
+
+        def make(**kwargs) -> RealOpenWebUI:
+            return RealOpenWebUI(stack.enter_context(Harness()), **kwargs)
+
+        yield make
+
+
 # ---- an Open-WebUI in memory (fake_open_webui.py) --------------------------------------
 
 

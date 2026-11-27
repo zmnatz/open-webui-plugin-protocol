@@ -289,10 +289,10 @@ class TestFromGit:
 
 class TestFromOpenWebUI:
     def test_a_function_on_the_instance_becomes_a_plugin_its_deploy_leaves_unchanged(
-        self, tmp_path, open_webui
+        self, tmp_path, real_open_webui
     ):
         """The id is the instance's, so the deploy updates that function, with the same code."""
-        server = open_webui(live=[{"id": "shout", "name": "Shout", "content": SHOUT}])
+        server = real_open_webui(live=[{"id": "shout", "name": "Shout", "content": SHOUT}])
         plugins = tmp_path / "plugins"
         imported = import_instance(plugins, server.instance(), "shout")
         assert imported.folder == plugins / "shout"
@@ -304,8 +304,8 @@ class TestFromOpenWebUI:
         readme = (imported.folder / "README.md").read_text()
         assert server.base_url not in readme  # where it came from, without the instance's address
 
-    def test_a_function_that_is_not_there_is_an_error(self, tmp_path, open_webui):
-        server = open_webui()
+    def test_a_function_that_is_not_there_is_an_error(self, tmp_path, real_open_webui):
+        server = real_open_webui()
         with pytest.raises(OwppError, match="HTTP 401"):
             import_instance(tmp_path / "plugins", server.instance(), "nope")
 
@@ -338,8 +338,8 @@ class TestWhatOwppPutIn:
         imported = import_code(tmp_path, deployed, name, "Open-WebUI")
         assert _bundle(imported.folder) == deployed
 
-    def test_the_tool_its_templates_and_config_come_back_as_files(self, tmp_path, open_webui):
-        server = open_webui(
+    def test_the_tool_its_templates_and_config_come_back_as_files(self, tmp_path, real_open_webui):
+        server = real_open_webui(
             live=[
                 {
                     "id": "excalidraw",
@@ -468,10 +468,12 @@ class TestWhatOwppPutIn:
         assert _bundle(folder) == _bundle(src / "demo")
 
     def test_a_function_an_older_owpp_deployed_says_requires_may_be_missing(
-        self, tmp_path, open_webui
+        self, tmp_path, real_open_webui
     ):
         meta = {"description": "x", "managed_by": "owpp"}  # no `requires`: deployed before it
-        server = open_webui(live=[{"id": "shout", "name": "Shout", "content": SHOUT, "meta": meta}])
+        server = real_open_webui(
+            live=[{"id": "shout", "name": "Shout", "content": SHOUT, "meta": meta}]
+        )
         imported = import_instance(tmp_path, server.instance(), "shout")
         assert any("did not record `requires:`" in n for n in imported.notes)
         assert "requires" not in read_manifest(imported.folder)
