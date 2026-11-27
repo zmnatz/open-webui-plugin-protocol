@@ -4,9 +4,11 @@
 owpp bundle <id> [out.py] [--dir FOLDER]
 ```
 
-Prints the code that [`owpp deploy`](deploy.md) would store for one plugin: the single file Open-WebUI keeps, with its libraries, runtime and embedded tools and skills. With `out.py`, it writes the file instead. Use it to read or diff what is deployed; [bundling](../bundling.md) says what goes in, in which order.
+`owpp bundle` prints the code that [`owpp deploy`](deploy.md) stores for one plugin. This bundle is the single file that Open-WebUI keeps. It holds the function with its libraries and, if the plugin has them, its tool, its skills and the runtime.
 
-An id that is not in the plugins folder fails with `no plugin "<id>" in <folder>`.
+With `out.py`, the command writes the bundle to that file instead. Use the command to read the code before you deploy it, or to compare two versions of it. For the contents of a bundle and their order, see [bundling](../bundling.md).
+
+If the id is not in the plugins folder, the command fails with `no plugin "<id>" in <folder>`.
 
 ## Options
 
@@ -25,5 +27,5 @@ owpp bundle excalidraw build/excalidraw.py
 
 ## Related
 
-- [`owpp check`](check.md): bundles and compiles every plugin.
-- [Bundling](../bundling.md): what ends up in the file.
+- [`owpp check`](check.md): bundle and compile every plugin.
+- [Bundling](../bundling.md): what the file contains.

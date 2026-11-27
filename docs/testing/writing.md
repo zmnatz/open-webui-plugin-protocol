@@ -18,39 +18,60 @@ def test_only_admins_see_it(owui, plugin):
     assert owui.client(owui.admin).get("/stale-data").status_code == 200
 ```
 
-The fixtures come with owpp (a pytest plugin, registered whenever owpp is installed):
+The pytest fixtures come with owpp. They are in a pytest plugin that is active wherever owpp is installed:
 
 | Fixture | What it is |
 | --- | --- |
-| `owui` | A fresh `MockOpenWebUI` for this test. It is installed into `sys.modules` and taken out again afterwards, along with everything the plugin left there. |
-| `plugin_dir` | The folder of the plugin the test file is in (the nearest `plugin.yaml` above it). |
-| `plugin` | That plugin, bundled and loaded into `owui`: enabled, with the manifest's valves. Startup has not run yet. |
+| `owui` | A new `MockOpenWebUI` for this test. It goes into `sys.modules`. After the test, owpp removes it, with everything that the plugin left there. |
+| `plugin_dir` | The folder of the plugin that contains the test file (the nearest folder above the file with a `plugin.yaml`). |
+| `plugin` | That plugin, bundled and loaded into `owui`: enabled, with the valves from the manifest. Startup has not run yet. |
 
-Outside pytest, use `with MockOpenWebUI() as owui:` from `owpp.testing`. A fixture of your own can replace `plugin`, to load with other valves or with [stand-ins for code from git](kinds.md#code-from-git).
+Outside pytest, use `with MockOpenWebUI() as owui:` from `owpp.testing`. You can replace `plugin` with a fixture of your own, for example to load other valves or [stand-ins for code from git](kinds.md#code-from-git).
 
 ## Describe every test
 
-Each test starts with a docstring that a person can read without reading the code:
+Start each test with a docstring that a person can understand without the code. The docstring has two parts:
 
-1. **What it checks**, in one or two sentences, in the plugin's terms (pages, valves, chats), not the mock's.
-2. **`By hand:`** the steps to see the same thing on a live Open-WebUI: where to click, what to set, what you should see. A reviewer can repeat them before a release, and they are the source for the README's `## Test` list.
+1. **What it checks**, in one or two sentences. Use the plugin's terms (pages, valves, chats), not the mock's terms.
+2. **`By hand:`** and then the steps that show the same behaviour on a live Open-WebUI. Say where to click, what to set and what you see.
 
-When a test cannot be repeated by hand, its `By hand:` says so and why (for example, "not repeatable: Open-WebUI always loads a function under its own function id"). When it checks files rather than behaviour, it says which files to compare. The [test catalogue](../reference/test-catalogue.md) on the documentation site is built from these docstrings, so a missing one shows up there as a gap.
+A reviewer can repeat the **By hand** steps before a release. The README's `## Test` list also comes from them.
 
-Name the test as a sentence about the plugin: `test_a_message_without_an_image_stays_with_its_model`, not `test_inlet_2`. The catalogue and the [screenshots](../screenshots.md) refer to tests by name.
+Some tests do not have steps that you can repeat:
+
+- If you cannot repeat a test by hand, write this after `By hand:`, with the reason. For example: "not repeatable: Open-WebUI always loads a function under its own function id".
+- If a test examines files and not behaviour, write which files to compare.
+
+The documentation site builds its [test catalogue](../reference/test-catalogue.md) from these docstrings. The catalogue shows a missing docstring as a gap.
+
+Give each test a name that is a sentence about the plugin: `test_a_message_without_an_image_stays_with_its_model`, not `test_inlet_2`. The catalogue and the [screenshots](../screenshots.md) refer to tests by name.
 
 ## Working through a plugin
 
-1. **List the behaviours**: one per sentence of the README, one per valve, one per branch in the code (each early `return` is one): what it does, and when it leaves things alone.
-2. **Write each test first, and see it fail**: `owpp test <id> -- -k <name>`. A test that has never failed may not be testing anything.
-3. **Make it pass, through the mock**: `owui.client(...).get(...)` exercises the `routes` library's guards, `owui.disable(...)` exercises the runtime, `plugin.inlet(...)` fills in the arguments Open-WebUI would. A direct call to a helper skips all of them.
-4. **Write the README's `## Test` list** from the By hand steps: what `owpp check`, `owpp bundle` and `owpp test` cover, then the live checks.
+1. List the behaviours: one for each sentence of the README, each valve and each branch in the code. Each early `return` is a branch. For each behaviour, write what it does and when it changes nothing.
+2. Write the test for one behaviour before the code that makes it pass.
+3. Run `owpp test <id> -- -k <name>` and make sure that the test fails. A test that never failed possibly tests nothing.
+4. Make the test pass, with calls through the mock.
+5. Do steps 2 to 4 for each behaviour.
+6. Write the README's `## Test` list. First give what `owpp check`, `owpp bundle` and `owpp test` cover. Then give the live checks from the **By hand** steps.
 
-Done when every valve and every branch has a test with both paragraphs, `owpp test <id>` passes and `owpp check <id> --strict` reports nothing.
+In step 4, a direct call to a helper function skips all that these calls do:
+
+- `owui.client(...).get(...)` uses the guards of the `routes` library.
+- `owui.disable(...)` uses the runtime.
+- `plugin.inlet(...)` supplies the arguments that Open-WebUI supplies.
+
+The work is complete when all of these are true:
+
+- Every valve and every branch has a test with both docstring parts.
+- `owpp test <id>` passes.
+- `owpp check <id> --strict` reports no failure and no warning.
 
 ## Testing logic directly
 
-A helper with no Open-WebUI in it (parsing, merging, building a page) can be tested by importing the plugin's files, the way an editor reads them. `from shared import ...` and `from owpp.lib import ...` would not work with a plain import, because every plugin has its own `shared.py` and its own library data, so use `plugin_source`:
+Some helpers do not use Open-WebUI, for example code that parses, merges or builds a page. To test such a helper, import the plugin's files as an editor reads them.
+
+A plain import of `from shared import ...` or `from owpp.lib import ...` does not work. Each plugin has its own `shared.py` and its own library data. Use `plugin_source`:
 
 ```python
 from owpp.testing import plugin_source
@@ -61,10 +82,17 @@ def test_a_title_is_trimmed(plugin_dir):
     assert src.shared.clean_title("  Notes ") == "Notes"
 ```
 
-It returns `.shared`, `.function` and `.tool` as modules (`None` for a file the plugin does not have). Each file gets the plugin's own `shared.py`, and libraries built the way its bundle has them, with its templates and `config.yaml`. `shared.py` is imported once for each bundle, like in Open-WebUI: `.tool_shared` is the tool's copy. A file that imports `open_webui` at its top needs the mock installed first (take the `owui` fixture). Anything that runs inside Open-WebUI (the function's class, routes, events, the tool) still goes through `owui.load()`, which tests the bundle that is deployed.
+`plugin_source` returns the modules `.shared`, `.function` and `.tool`. A module is `None` if the plugin does not have that file.
+
+- Each file gets the plugin's own `shared.py`.
+- Each file gets the libraries as its bundle has them, with the plugin's templates and `config.yaml`.
+- As in Open-WebUI, `shared.py` is imported once for each bundle. `.shared` is the function's copy (the tool's copy if there is no function). `.tool_shared` is the tool's copy.
+- If a file imports `open_webui` at its top, install the mock first: take the `owui` fixture.
+
+Use `owui.load()` to test code that runs inside Open-WebUI (the function's class, routes, events and the tool). It tests the bundle that the deploy sends.
 
 ## Tips
 
-- To change a file such as `config.yaml` for one test, copy the folder to `tmp_path` first and load the copy.
-- `owpp test` runs pytest with `--import-mode=importlib`, so two plugins can both have a `tests/test_function.py`. A plain `pytest` run (this repository's own) needs unique test file names.
-- Valves the plugin reads with `plugin_stored_valves(..., ttl=)` are cached. Clear `plugin.module._core_valves_cache` to make the cache expire.
+- To change a file such as `config.yaml` for one test, copy the plugin folder to `tmp_path`. Then change the file and load the copy.
+- `owpp test` runs pytest with `--import-mode=importlib`, so two plugins can each have a `tests/test_function.py`. A plain `pytest` run, such as this repository's own, needs unique names for test files.
+- `plugin_stored_valves(..., ttl=)` keeps the valves in a cache. To make the next call read the valves again, clear `plugin.module._core_valves_cache`.

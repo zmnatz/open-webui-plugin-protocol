@@ -1,6 +1,6 @@
 # Creating a plugin
 
-`owpp create` is a wizard that scaffolds a plugin. It asks what the plugin is, one stage at a time, and writes a folder that uses owpp with every piece in place and ready to fill in: the manifest, stubs for the code, tests and a README.
+`owpp create` is a wizard that scaffolds a plugin. It asks what the plugin is, one stage at a time. Then it writes a plugin folder with all the parts in place for you to fill in: the manifest, stubs for the code, tests and a README.
 
 ```sh
 uvx owpp create              # asks for the id
@@ -8,22 +8,22 @@ uvx owpp create my_plugin    # starts with that id
 uvx owpp create --dir src    # into another plugins folder than ./plugins
 ```
 
-Its flags, and the default plugins folder ([`OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir)): [`owpp create`](commands/create.md).
+[`owpp create`](commands/create.md) gives its flags, and the default plugins folder ([`OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir)).
 
-- **Every question has a default.** Enter takes it. Pressing Enter all the way makes a minimal event plugin, the same as `owpp init <id>`.
-- **Nothing is written until the last stage.** It lists the files and asks before writing them. Ctrl-C, or the end of input, stops without writing anything. A folder that already exists is never overwritten.
-- **A wrong answer is asked again**, with the reason (an id with a hyphen, an event name that looks like a typo, a git URL that is a local path).
-- **It ends with `owpp check --strict`** on the new plugin, then lists what is left to write and the commands to run next.
+- **Each question has a default.** Enter accepts it. If you push Enter for each question, you get a minimal event plugin, the same as `owpp init <id>`.
+- **The wizard writes nothing until the last stage.** At that stage, it lists the files and asks before it writes them. Ctrl-C, or the end of input, stops the wizard and it writes nothing. It never overwrites a folder that exists.
+- **It asks a question again after an incorrect answer**, and gives the reason. Examples are an id with a hyphen, an event name that looks like a typo, or a git URL that is a local path.
+- **At the end, it runs `owpp check --strict`** on the new plugin. Then it lists what you must write, and the commands to run next.
 
-It is a scaffold, not a code generator. It writes the structure and the stubs: every hook, handler and tool method is a stub to fill in, and valves are left for you to add (see [what it does not ask](#what-it-does-not-ask)).
+The wizard is a scaffold, not a code generator. It writes the structure and the stubs: each hook, handler and tool method is a stub for you to fill in. You add the valves yourself (see [what it does not ask](#what-it-does-not-ask)).
 
 ## The first branch: where the code lives
 
-After the name, the wizard asks where the code lives. The answer decides the rest of the stages.
+After the name, the wizard asks where the code lives. The answer sets the stages that follow.
 
 | Answer | What it is | Stages |
 | --- | --- | --- |
-| **here** | Code you write in this repository: a function (filter, action, event or pipe), or an [installer](#installers) of a tool and skills | 9 |
+| **here** | Code that you write in this repository: a function (filter, action, event or pipe), or an [installer](#installers) of a tool and skills | 9 |
 | **git** | Code from [another git repository](#from-a-git-repository), pinned to a commit: the function itself, or a tool and skills | 6 |
 
 ## Code written here
@@ -44,50 +44,56 @@ After the name, the wizard asks where the code lives. The answer decides the res
 
 | Stage | What it asks | What it writes |
 | --- | --- | --- |
-| 1. Name the plugin | The id, which is the folder name and the function id in Open-WebUI (lowercase, digits and `_`; it cannot change once deployed), and the title | `plugins/<id>/` |
+| 1. Name the plugin | The id and the title. The id is the folder name and the function id in Open-WebUI. It has lowercase letters, digits and `_`, and it cannot change after the first deploy | `plugins/<id>/` |
 | 2. Where the code lives | here | |
-| 3. Pick the plugin type | filter, action, event, pipe or installer. With **help**, it asks the questions from the [authoring guide](authoring.md#pick-the-function-type-first) and picks one | `class Filter`, `Action`, `Event` or `Pipe` in `function.py`; no `function.py` for an installer |
-| 4. Describe it | Description, author (from `git config user.name`), version, license, oldest supported Open-WebUI (an installer skips this one) | the `function:` header in `plugin.yaml` |
-| 5. Type options | Depends on the type: see [below](#type-options) | the class's methods and attributes |
-| 6. Tool | Whether to add one, then its id, the method names, title, `access: public`, a method that shows a page in the chat, `chat_data` | `tool.py`, `tool:` in `plugin.yaml` |
-| 7. Skills | Each skill's name (lowercase, hyphens) and when it applies, `access: public` | `skills/<name>/SKILL.md` |
-| 8. Pages and libraries | A page, and who may open it; `chat_data`; a `config.yaml`; for an event, `assets/` and `live_reload` | the files, and `include:` |
+| 3. Pick the plugin type | filter, action, event, pipe or installer. With **help**, it asks the questions of the [authoring guide](authoring.md#pick-the-function-type-first) and selects the type | `class Filter`, `Action`, `Event` or `Pipe` in `function.py`. An installer has no `function.py` |
+| 4. Describe it | The description, the author (from `git config user.name`), the version, the license, and the oldest Open-WebUI it supports. An installer does not get the last question | the `function:` header in `plugin.yaml` |
+| 5. Type options | It changes with the type: see [below](#type-options) | the methods and attributes of the class |
+| 6. Tool | If you want a tool. Then its id, the method names, the title, `access: public`, a method that shows a page in the chat, and `chat_data` | `tool.py`, and `tool:` in `plugin.yaml` |
+| 7. Skills | The name of each skill (lowercase letters and hyphens), when it applies, and `access: public` | `skills/<name>/SKILL.md` |
+| 8. Pages and libraries | A page, and who can open it. `chat_data`. A `config.yaml`. For an event, `assets/` and `live_reload` | the files, and `include:` |
 | 9. Review and write | Yes or no | the folder, then `owpp check --strict` |
 
 ### Type options
 
 | Type | Asks | Writes |
 | --- | --- | --- |
-| **filter** | Which hooks: `inlet` (once per user turn), `request` (every call to the model, tool loops included), `stream` (each chunk), `outlet` (the finished reply). A user toggle. If it is not a toggle, when to make it global. `file_handler`. A `priority` valve | one stub per hook. A toggle sets `self.toggle = True` and `global: false`. `self.file_handler = True` |
-| **action** | Several buttons, each with an id and a name. Global. A page (HTML) shown above the message. A `priority` valve | `actions = [...]` and an `action()` that branches on `__id__`; status events through `__event_emitter__`; `templates/embed.html` returned as an inline `HTMLResponse` |
-| **event** | A scheduled sync, and its default interval. The events to handle, from the known list plus any others | `class Event(PluginScheduledSync)` with `sync()`, and `jobs: sync_every_minutes: ${<ID>_SYNC_MINUTES:-60}`. One `@on(...)` handler per event (`own=True` for `function.*` events), on `PluginEvents` |
-| **pipe** | Several models (a manifold), each with an id and a name. Streaming | `pipes()` and `pipe()`, and a chunk generator when it streams |
-| **installer** | Nothing: its function is generated | nothing |
+| **filter** | The hooks: `inlet` (one time for each user turn), `request` (each call to the model, tool loops included), `stream` (each chunk) and `outlet` (the finished reply). If it is a user toggle. If it is not a toggle, when to make it global. `file_handler`. A `priority` valve | One stub for each hook. A toggle sets `self.toggle = True` and `global: false`. `file_handler` sets `self.file_handler = True` |
+| **action** | If it has more than one button, and the id and name of each button. If it is global. A page (HTML) shown above the message. A `priority` valve | `actions = [...]`, and an `action()` that branches on `__id__`. Status events through `__event_emitter__`. `templates/embed.html`, returned as an inline `HTMLResponse` |
+| **event** | If it has a scheduled sync, and its default interval. The events to handle, from the known list and any others | For a sync: `class Event(PluginScheduledSync)` with `sync()`, and `jobs: sync_every_minutes: ${<ID>_SYNC_MINUTES:-60}`. One `@on(...)` handler for each event on `PluginEvents` (`own=True` for `function.*` events) |
+| **pipe** | If it has more than one model (a manifold), and the id and name of each model. If it streams | `pipes()` and `pipe()`, and a chunk generator if it streams |
+| **installer** | Nothing: owpp generates its function | nothing |
 
 ### Tools
 
-A tool written here gets a `tool.py` with one stub per method name. Each stub has a typed `query: str` parameter, a docstring with a `:param` line, and status events, so `owpp check --strict` passes before you change it. Rename the parameters and describe them for the model. The docstring and the type hints are what the model reads. A method that shows a page returns `templates/tool.html`, read with `plugin_template_text()`, as an inline `HTMLResponse`: the tool asks for the templates with `include: [templates]` under `tool:`. `access: public` lets every signed-in user use the tool. Without it, only admins can.
+A tool written here gets a `tool.py` with one stub for each method name. Each stub has a typed `query: str` parameter, a docstring with a `:param` line, and status events. Thus `owpp check --strict` passes before you change the tool.
+
+The model reads the docstring and the type hints. Rename the parameters, and describe them for the model.
+
+A method that shows a page returns `templates/tool.html` as an inline `HTMLResponse`. It reads the file with `plugin_template_text()`. For this, the tool asks for the templates with `include: [templates]` under `tool:`.
+
+With `access: public`, all signed-in users can use the tool. Without it, only admins can use it.
 
 ### Skills
 
-A skill gets `skills/<name>/SKILL.md` with Open-WebUI's front matter (`name`, `description`, and `access` when public) and the sections of its [skill authoring layout](https://docs.openwebui.com/features/workspace/skills): When to Use, Prerequisites, How to Run, Quick Reference, Procedure, Pitfalls, Verification. Put supporting files beside it. The whole folder is installed.
+A skill gets `skills/<name>/SKILL.md`. The file has Open-WebUI's front matter: `name`, `description`, and `access` when the skill is public. It also has the sections of Open-WebUI's [skill authoring layout](https://docs.openwebui.com/features/workspace/skills): When to Use, Prerequisites, How to Run, Quick Reference, Procedure, Pitfalls, Verification. Put the files that the skill uses next to it. The runtime installs the whole folder.
 
 ### Pages and libraries
 
 | Choice | Writes |
 | --- | --- |
-| A page served as it is | `static/index.html`, served at `/<id>/` to signed-in users, or with `static: {access: admin \| public}` to admins or to anyone |
-| A page the function renders | `templates/page.html`, and a route mounted with `plugin_mount` at `/<id>/`. The access is marked on the handler (`PluginUser`, `PluginAdmin`) or on the mount (`access="public"`). An event mounts it on startup, enable, update and saved valves. Other types mount it when they load |
-| `chat_data` | `include: [chat_data]` and a `CHAT_KEY` for `plugin_chat_read` and `plugin_chat_write` |
-| `config.yaml` | the file, with one setting read from `${<ID>_GREETING:-Hello}`, and `_settings()` reading it with `plugin_config()` |
+| A page served as it is | `static/index.html`, served at `/<id>/` to signed-in users. With `static: {access: admin \| public}`, it is served to admins, or to all people |
+| A page the function renders | `templates/page.html`, and a route at `/<id>/` mounted with `plugin_mount`. The handler marks the access (`PluginUser`, `PluginAdmin`), or the mount does (`access="public"`). An event mounts it on startup, enable, update and saved valves. The other types mount it when they load |
+| `chat_data` | `include: [chat_data]`, and a `CHAT_KEY` for `plugin_chat_read` and `plugin_chat_write` |
+| `config.yaml` | The file, with one setting read from `${<ID>_GREETING:-Hello}`, and a `_settings()` that reads it with `plugin_config()` |
 | `assets/` (events) | `assets/loader.js` and `assets/custom.css`, `class Event(PluginAssets)`, and `asset_vars()` |
 | `live_reload` | `include: [live_reload]` |
 
-A public page is allowed, with a warning, and `owpp check` lists it as a `note`. See [libraries](libraries.md) for each one.
+The wizard lets you make a public page, but it gives a warning. `owpp check` lists each public page as a `note`. [Libraries](libraries.md) describes each library.
 
 ## Installers
 
-An **installer** is a plugin with no code of its own: only a tool, skills, or both. It is how this protocol deploys tools and skills. There is no `function.py`. The bundler generates the parent function, a global filter that installs the tool and skills when it is enabled and removes them when it is disabled or deleted. It has three valves: `INSTALL_TOOLS` and `INSTALL_SKILLS` (off removes that part) and `TOOL_VALVES` (valves to set on the tool). See [runtime](runtime.md).
+An **installer** is a plugin with no code of its own: it has only a tool, skills, or both. This protocol uses installers to deploy tools and skills. An installer has no `function.py`. The bundler generates its parent function: a global filter that installs the tool and skills when it is enabled. The filter removes them when it is disabled or deleted. [Runtime](runtime.md#valves-on-the-parent) describes the filter's three valves (`INSTALL_TOOLS`, `INSTALL_SKILLS` and `TOOL_VALVES`).
 
 ```
 plugins/my_kit/
@@ -98,11 +104,11 @@ plugins/my_kit/
   tests/test_my_kit.py
 ```
 
-The tool stage defaults to yes for an installer. If it has no tool, the skills stage asks for at least one skill.
+For an installer, the default answer of the tool stage is yes. If the installer has no tool, the skills stage asks for at least one skill.
 
 ## From a git repository
 
-For code that is already in a repository, [`owpp import <URL>`](commands/import.md) asks nothing: it finds the function, the tool and the skills in the folder and pins them. The wizard is for choosing the parts yourself.
+For code that is already in a repository, you can also use [`owpp import <URL>`](commands/import.md). It asks nothing: it finds the function, the tool and the skills in the folder, and pins them. Use the wizard to select the parts yourself.
 
 ```text
 ▸ Stage 3/6 · The repository  (~3 min left)
@@ -117,14 +123,20 @@ For code that is already in a repository, [`owpp import <URL>`](commands/import.
 
 | Stage | What it asks |
 | --- | --- |
-| 1. Name the plugin | The id and title |
+| 1. Name the plugin | The id and the title |
 | 2. Where the code lives | git |
-| 3. The repository | The URL (https, ssh or `user@host:path`; never a local path). A branch, tag or commit: a branch or tag is looked up with `git ls-remote` and pinned to its full commit SHA, and recorded as `branch:` or `tag:` for [`owpp pull`](commands/pull.md), whichever the repository says it is (it asks you when it cannot tell); if the lookup fails (offline, a private repository, no such ref) you type the SHA. The folder in the repository the files are in |
-| 4. What it takes | The function itself (its file, taken verbatim with its header). A tool (its file and id). Skills (each one's id, and its folder or its `SKILL.md`). `access: public` for the tool and each skill |
-| 5. Describe it, or Global? | Without the function, it is an installer and asks for its header. With the function, the header comes from the file, and the only question is whether to make it global (filters and actions only) |
+| 3. The repository | The URL: https, ssh or `user@host:path`, never a local path. Then a branch, a tag or a commit, and the folder in the repository that has the files ([below](#how-it-pins-a-branch-or-tag)) |
+| 4. What it takes | The function itself (its file, taken as it is, with its header). A tool (its file and id). Skills (the id of each skill, and its folder or its `SKILL.md`). `access: public` for the tool and for each skill |
+| 5. Describe it, or Global? | Without the function, the plugin is an installer, and the wizard asks for its header. With the function, the header comes from the file. Then the only question is if the function is global (filters and actions only) |
 | 6. Review and write | Yes or no |
 
-It writes no code, only `plugin.yaml`, a README and tests:
+### How it pins a branch or tag
+
+The wizard finds the commit of a branch or tag with `git ls-remote`, and pins its full commit SHA. It records the name as `branch:` or `tag:`, as the repository shows, for [`owpp pull`](commands/pull.md). If it cannot tell which of the two the name is, it asks you. If the lookup fails, you type the SHA. The lookup fails when you are offline, when the repository is private, or when the name does not exist.
+
+### What it writes
+
+The wizard writes no code. It writes only `plugin.yaml`, a README and tests, and a `CHANGELOG.md` for an installer:
 
 ```yaml
 # plugin.yaml
@@ -148,27 +160,34 @@ skills:
     access: public
 ```
 
-The README states where the code comes from, the pinned commit and how to upgrade it: `owpp pull <id>` moves `ref` to the latest commit and lists the files that changed, and you review the diff before committing. The tests fetch the pinned files, so they need the network. The test file says how to load the plugin with stand-ins instead (`owui.load(plugin_dir, sources={...})`), as [`inline_visualizer`](../examples/plugins/inline_visualizer) does. See [bundling: git sources](bundling.md#git-sources).
+The README gives the origin of the code, the pinned commit and how to upgrade it. To upgrade, `owpp pull <id>` moves `ref` to the latest commit and lists the files that changed. You review the diff before you commit.
+
+The tests get the pinned files, so they need the network. The test file tells how to load the plugin with stand-ins: `owui.load(plugin_dir, sources={...})`. [`inline_visualizer`](../examples/plugins/inline_visualizer) does this. See [bundling: git sources](bundling.md#git-sources).
 
 ## What it writes, in every case
 
-- **`plugin.yaml`**, with comments that say where each part goes.
-- **`CHANGELOG.md`**, with an entry for the first version (not for an upstream function, whose versions are the upstream's). [`owpp version`](commands/version.md) adds the next ones.
-- **`README.md`**, with the sections the [authoring guide](authoring.md#documentation-the-readme-every-plugin-has) requires: a description, settings, `## Test` and `## Deploy`.
-- **`tests/test_<id>.py`**, with one test per part: the valves, the type's entry point (a chat through the filter, the action's button, the pipe's models, startup), the tool and each method, the skills, the page and who may open it, the config. Each test has the docstring and the `By hand:` steps that [testing](testing/writing.md#describe-every-test) asks for.
+- **`plugin.yaml`**, with comments that tell where each part goes.
+- **`CHANGELOG.md`**, with an entry for the first version. A function from another repository gets no changelog, because its versions are the upstream's. [`owpp version`](commands/version.md) adds the entries that follow.
+- **`README.md`**, with the sections that the [authoring guide](authoring.md#documentation-the-readme-every-plugin-has) requires: a description, settings, `## Test` and `## Deploy`.
+- **`tests/test_<id>.py`**, with one test for each part. The parts are the valves, the entry point of the type, the tool and each method, the skills, the page and who can open it, and the config. The entry point is a chat through the filter, the action's button, the pipe's models, or the event's startup. Each test has the docstring and the `By hand:` steps that [testing](testing/writing.md#describe-every-test) asks for.
 
-Every combination is checked in this repository's tests (`tests/test_create.py`): it bundles, compiles, has no `owpp check --strict` warnings, and passes the tests it writes.
+This repository's tests (`tests/test_create.py`) check each combination. Each one bundles and compiles, gets no warnings from `owpp check --strict`, and passes the tests that it writes.
 
 ## What it does not ask
 
-These are left to edit in the files, because they depend on what the plugin does:
+You edit these in the files, because they depend on what the plugin does:
 
-- **Valves.** `Valves` has `ENABLE` (and `priority` if you chose it), plus a comment pointing to [Open-WebUI's valve docs](https://docs.openwebui.com/features/extensibility/plugin/development/valves) for dropdowns, sliders and masked fields. Filters, actions and pipes also get an empty `UserValves`. Give each valve a description: `owpp check` warns about one without.
+- **Valves.** `Valves` has `ENABLE` (a scheduled sync adds its own), and `priority` if you selected it. A comment points to [Open-WebUI's valve docs](https://docs.openwebui.com/features/extensibility/plugin/development/valves) for dropdowns, sliders and masked fields. Filters, actions and pipes also get an empty `UserValves`. Give each valve a description: `owpp check` gives a warning for a valve without one.
 - **Header keys** such as `icon_url` (an action's button, a toggle's chip), `requirements` (pip packages installed when the function is saved) and `funding_url`. Add them under `function:` in `plugin.yaml`.
-- **Tool parameters.** Every method starts with `query: str`.
-- **`shared.py`**, `include:` libraries it did not offer (`jobs` without a sync, `routes` without a page), and `jobs: adopt_markers`.
+- **Tool parameters.** Each method starts with `query: str`.
+- **Other parts:** `shared.py`, the `include:` libraries that it did not offer (`jobs` without a sync, `routes` without a page), and `jobs: adopt_markers`.
 
 ## After it is written
+
+1. Run `owpp check my_plugin --strict`. It passes immediately. Keep it clean.
+2. Run `uvx --from 'owpp[test]' owpp test my_plugin` to run the tests that the wizard wrote.
+3. Run `owpp deploy --only my_plugin --dry-run`, then run it again without `--dry-run`.
+4. Follow the [authoring guide](authoring.md): its conventions and its checklist.
 
 ```sh
 owpp check my_plugin --strict                   # clean right away; keep it clean
@@ -176,11 +195,9 @@ uvx --from 'owpp[test]' owpp test my_plugin     # the tests it wrote
 owpp deploy --only my_plugin --dry-run          # then without --dry-run
 ```
 
-Then follow the [authoring guide](authoring.md): its conventions and its checklist.
-
 ## From a spec
 
-`owpp create --spec <file>` asks nothing: the file says what the wizard would have asked, as YAML or JSON (`-` reads it from stdin), and it writes the plugin and checks it. It is for scripts and [AI agents](ai-agents.md). An id on the command line wins over the file's.
+`owpp create --spec <file>` asks nothing. The file gives the answers to the wizard's questions, as YAML or JSON (`-` reads the file from stdin). Then the command writes the plugin and checks it. It is for scripts and for [AI agents](ai-agents.md). An id on the command line overrides the id in the file.
 
 ```yaml
 id: notes
@@ -196,11 +213,17 @@ page_access: admin
 chat_data: true
 ```
 
-The keys are those of `PluginSpec` (below), with `tool`, `skills` and `source` as mappings and `buttons` and `models` as lists of ids or `{id, name}`. `global` may be written for `global_`. A key it does not know is refused, so a typo is never a silent default. The full list, with a plugin from git, is in the [owpp skill's spec reference](../skills/owpp/references/spec.md).
+The keys are those of `PluginSpec` ([below](#from-code)):
+
+- `tool`, `skills` and `source` are mappings.
+- `buttons` and `models` are lists of ids or of `{id, name}`.
+- You can write `global` for `global_`.
+
+The command refuses a key that it does not know, so a typo never becomes a silent default. The [owpp skill's spec reference](../skills/owpp/references/spec.md) has the full list, with a plugin from git.
 
 ## From code
 
-The wizard only collects answers. `owpp.create` writes the folder from a `PluginSpec`, with no questions asked:
+The wizard only collects answers. `owpp.create` writes the folder from a `PluginSpec`, and asks no questions:
 
 ```python
 from owpp.create import PluginSpec, SkillSpec, ToolSpec, write_plugin
@@ -217,4 +240,4 @@ write_plugin(
 )
 ```
 
-`render(spec)` returns the files as `{path: text}` without writing them. Both refuse a spec that would not work, such as a hyphen in the id, `global` on an event, or `assets/` on anything but an event, with an `OwppError` that says why.
+`render(spec)` returns the files as `{path: text}` and does not write them. Both functions refuse a spec that cannot work, with an `OwppError` that gives the reason. Examples are a hyphen in the id, `global` on an event, or `assets/` on a type that is not an event.

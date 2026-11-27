@@ -4,13 +4,21 @@
 owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text] [--dir FOLDER]
 ```
 
-Shows the plugins' versions, or gives one a new version.
+`owpp version` shows the versions of the plugins, or gives a plugin a new version.
 
 ## Versions
 
-A plugin has up to three versions, each where Open-WebUI reads it: the **function's** (`version:` under `function:` in `plugin.yaml`, the plugin's version, which Open-WebUI shows), the **tool's** (`version:` under `tool:`), and each **skill's** (`version:` in its SKILL.md front matter, optional). A loose `<id>.py` has its version in its docstring header.
+A plugin has three kinds of version, each where Open-WebUI reads it:
 
-[`owpp check --since`](check.md#a-change-needs-a-new-version) fails on a change without a new version, and [`owpp deploy`](deploy.md#deploying-an-older-version) refuses to put an older version over a newer one.
+| Version | Where it is |
+| --- | --- |
+| The **function's** | `version:` under `function:` in `plugin.yaml`. It is the version of the plugin, and Open-WebUI shows it. |
+| The **tool's** | `version:` under `tool:` in `plugin.yaml`. |
+| Each **skill's** (optional) | `version:` in the front matter of its `SKILL.md`. |
+
+A loose `<id>.py` has its version in its docstring header.
+
+[`owpp check --since`](check.md#a-change-needs-a-new-version) fails on a change without a new version. [`owpp deploy`](deploy.md#deploying-an-older-version) refuses to put an older version over a newer one, unless you give `--force`.
 
 ## Showing them
 
@@ -23,28 +31,38 @@ inline_visualizer           1.0.0
   skill visualize           (the upstream's)
 ```
 
-Shown versions are read from the files, so a plugin taken from git needs no fetch: what it takes verbatim shows as the upstream's.
+The command reads the versions from the files, so it fetches nothing from git. It shows `(the upstream's)` for code that a plugin takes verbatim from a `source:`. A tool with `from: function` shows the same text, although its version is the function's.
 
 ## A new version
 
-With a new version, it rewrites the one `version:` line, keeping comments and layout (and adds it, after `title:`, when there is none; no version bumps to 0.1.0). `patch`, `minor` and `major` bump that part; `X.Y.Z` sets it. Code taken verbatim from a `source:` keeps the upstream's version, so `owpp version` refuses to change it.
+To give a plugin a new version, give its id and the version. `patch`, `minor` and `major` raise that part, and `X.Y.Z` sets the version.
+
+The command changes only the `version:` line, and keeps comments and layout. If there is no such line, it adds one, after `title:` in `plugin.yaml` or after `name:` in a `SKILL.md`. If there is no version yet, `patch`, `minor` and `major` give 0.1.0. If the current version is not `X.Y.Z`, give the new one as `X.Y.Z`.
+
+The command refuses to change these versions:
+
+- Code that a plugin takes verbatim from a `source:`, which keeps the upstream's version.
+- Any version of a plugin taken whole from git.
+- A tool with `from: function`, whose version is the function's.
 
 ### `CHANGELOG.md`
 
-A function bump adds a `## <version> (<date>)` entry to the top of the plugin's `CHANGELOG.md`, which it creates if needed: the `-m` text, or a line to replace. [`owpp create`](create.md) writes one. When a plugin has one, [`owpp check`](check.md) warns if it has no `## <version>` entry for the function's current version (so `--strict` fails on it).
+A new function version adds a `## <version> (<date>)` entry at the top of the plugin's `CHANGELOG.md`. If the file does not exist, the command makes it. The entry holds the `-m` text, or a placeholder line for you to replace. A loose `<id>.py` gets no entry.
+
+[`owpp create`](create.md) writes a `CHANGELOG.md` for each new plugin. If the file has no `## <version>` entry for the function's current version, [`owpp check`](check.md) warns. Thus `--strict` fails.
 
 ## Options
 
 | Option | Meaning |
 | --- | --- |
-| `id` | The plugin. Default: every plugin, shown. |
+| `id` | The plugin. Default: show every plugin. |
 | `patch`, `minor`, `major`, `X.Y.Z` | The new version. Default: show the versions. |
 | `--tool` | Change the tool's version instead of the function's. |
-| `--skill name` | Change that skill's version (added if it had none). |
-| `-m`, `--message` | The `CHANGELOG.md` entry, for the plugin's own version. |
+| `--skill name` | Change the version of that skill, or add one. |
+| `-m`, `--message` | The text of the `CHANGELOG.md` entry, for the function's version. |
 | `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
-`--tool`, `--skill` and `-m` go with a new version only.
+Use `--tool`, `--skill` and `-m` only with a new version.
 
 ## Examples
 
@@ -61,5 +79,5 @@ owpp version viz patch --skill draw   # that skill's (added if it had none)
 ## Related
 
 - [`owpp check --since`](check.md#a-change-needs-a-new-version): fails on a change without a new version.
-- [`owpp pull`](pull.md): bumps the version when it moves a pinned commit.
+- [`owpp pull`](pull.md): gives a new version when it moves a pinned commit.
 - [`owpp deploy`](deploy.md#deploying-an-older-version): refuses to go back a version.

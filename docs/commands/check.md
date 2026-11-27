@@ -4,7 +4,11 @@
 owpp check [id ...] [--strict] [--since ref] [--dir FOLDER]
 ```
 
-Bundles each plugin exactly as [`owpp deploy`](deploy.md) would, then, for the function and each tool it embeds, compiles it and lists names that are used but never defined or imported where Python would look for them (a typo, or a library the plugin forgot to `include`; a variable of another function does not count). With no ids it checks every plugin. It fetches remote sources, so it checks the real upstream code. The [GitHub Action](../tooling.md#github-action) runs it before every deploy.
+`owpp check` bundles each plugin exactly as [`owpp deploy`](deploy.md) does. Then it compiles the function and each tool that the function embeds. It lists each name that the code uses, but that is not defined or imported where Python looks for it. The cause can be a typo, or a library that the plugin does not `include`. A variable of a different function does not count.
+
+With no ids, the command checks every plugin. It fetches the files that a `source:` takes from git, so it checks the real upstream code.
+
+The [GitHub Action](../tooling.md#github-action) runs this check before it deploys the plugins folder. It skips the check with `check: "false"`, and when it deploys a build (`from:`).
 
 ```
 $ owpp check
@@ -17,31 +21,52 @@ env   MCPO_SYNC_MINUTES (default 60)
 1 warning(s)
 ```
 
-Each line starts with what it is:
+## What each line means
 
-- **`ok`** or **`FAIL`**: a bundle that compiles with every name defined, or what is wrong with it.
-- **`warn`**: something the people using the plugin see:
-  - a valve with no `description` (the admin UI lists each valve with it),
-  - a tool method with no docstring, a parameter with no type hint, or a parameter the docstring does not describe with `:param name:` (Open-WebUI builds the spec the model reads from those). Injected parameters such as `__user__` and `__metadata__` are ignored.
-  - a name the plugin defines that is also a library's in its bundle (bundled, the two are one module, so the plugin's replaces the library's),
-  - a `from __future__` line in `shared.py` that `function.py` or `tool.py` lacks, or the other way round (they all move to the top of the bundle, so they apply to every file in it),
-  - a deprecated `{{file:NAME}}` ([bundling](../bundling.md#filename-deprecated)),
-  - a `CHANGELOG.md` with no `## <version>` entry for the function's current version ([versions](version.md#changelogmd)),
-  - a `plugin.yaml` with no `protocol:` key ([upgrading](../upgrading.md)).
+The first word of a line gives its kind:
 
-  Warnings about code read the plugin's own source (`function.py`, `tool.py`, `shared.py`, or a loose `<id>.py`) with real file and line numbers, and skip a plugin that takes its code from a pinned `source:`, which is not yours to lint. They do not change the exit status; **`--strict` makes them fail**, for CI.
-- **`note`**: worth knowing, never a failure: a manifest on an older [protocol version](../plugin-format.md#protocol), pointing at [`owpp migrate`](migrate.md), and every place the plugin serves people who are not signed in (a `public` mount, or `static: {access: public}`).
-- **`env`**: an environment variable the plugin reads from its `jobs:` and `config.yaml`, with its default.
+| Line | Meaning |
+| --- | --- |
+| `ok` | The bundle compiles, and every name in it is defined. |
+| `FAIL` | Something is wrong with a bundle, or a change has no new version. |
+| `warn` | A problem to correct. It makes the check fail only with `--strict`. |
+| `note` | Information for you. It never makes the check fail. |
+| `env` | An environment variable that the `jobs:` or `config.yaml` of a plugin reads, with its default. |
 
-It exits 1 when a bundle fails, when `--since` finds a change without a new version, or, with `--strict`, on any warning. An id that is not in the plugins folder fails with `no plugin <id> in <folder>`.
+The check warns about these:
+
+- A valve with no `description`. The admin UI shows each valve with its description.
+- A tool method with no docstring, a parameter with no type hint, or a parameter with no `:param name:` line in the docstring. Open-WebUI builds the tool spec for the model from these. The check ignores injected parameters such as `__user__` and `__metadata__`.
+- A name that the plugin defines and that a library in its bundle also defines. The bundle is one module, so the plugin's definition replaces the library's.
+- In a plugin with a `shared.py`, a `from __future__` line that is not in all of `shared.py`, `function.py` and `tool.py`. In a bundle, these lines move to the top, so they apply to the other files too.
+- A deprecated `{{file:NAME}}` ([bundling](../bundling.md#filename-deprecated)).
+- A `CHANGELOG.md` with no entry for the current version of the function ([`CHANGELOG.md`](version.md#changelogmd)).
+- A `plugin.yaml` with no `protocol:` key ([upgrading](../upgrading.md)).
+
+The warnings about code come from the plugin's own files: `function.py`, `tool.py`, `shared.py`, or a loose `<id>.py`. They give the real file and line. A plugin with a `source:` gets no warnings about code, because upstream code is not yours to correct.
+
+The check writes a `note` for these:
+
+- A manifest with an older [protocol version](../plugin-format.md#protocol). The note names [`owpp migrate`](migrate.md).
+- A place where the plugin serves people who are not signed in: a `public` mount, or `static: {access: public}`.
+- A mount whose access the code computes, so the check cannot tell if it is public.
+
+## Exit status
+
+The command exits 1 in these cases:
+
+- A bundle fails, or the command cannot bundle a plugin.
+- `--since` finds a change without a new version.
+- You give `--strict`, and there is a warning.
+- An id is not in the plugins folder. The error is `no plugin <id> in <folder>`.
 
 ## Options
 
 | Option | Meaning |
 | --- | --- |
 | `id ...` | The plugins to check. Default: all. |
-| `--strict` | Fail on warnings too. |
-| `--since ref` | Also fail when a plugin changed since this git ref (for example `origin/main`) but its version did not. See [below](#a-change-needs-a-new-version). |
+| `--strict` | Fail on warnings too, for example in CI. |
+| `--since ref` | Also fail when a plugin changed since this git ref (for example `origin/main`), but its version did not. See [below](#a-change-needs-a-new-version). |
 | `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## A change needs a new version
@@ -52,12 +77,29 @@ FAIL  viz: changed since origin/main but its version is still 1.0.0 (run `owpp v
 FAIL  tool viz: changed since origin/main but its version is still 1.0.0 (run `owpp version viz patch --tool`)
 ```
 
-It bundles every plugin as it was at that git ref (with `git archive`) and as it is now, and fails for what changed without a new version:
+The check bundles every plugin as it was at that git ref (with `git archive`) and as it is now. It fails for each change that has no new version:
 
-- a **tool or skill that has a version** must bump its own when it changes;
-- the **plugin** (the function's version) must bump when its own code changed, when a tool or skill without a version changed, was added or was removed, or when the commit of its `source:` moved ([`owpp pull`](pull.md) bumps it for you).
+- A **tool or skill that has a version** must get a new one when it changes.
+- The **plugin** (the function's version) must get a new one in these cases:
+    - Its own code changed.
+    - A tool or skill was added or removed.
+    - A tool or skill without a version changed.
+    - The commit of its `source:` moved. [`owpp pull`](pull.md) gives the new version for you.
 
-A plugin that did not exist at that ref needs nothing. Code taken verbatim from a `source:` (an upstream function, tool or skills) is the upstream's to version: its changes count as the plugin's. It needs the `git` CLI. In CI, check out with `fetch-depth: 0` and pass the base branch, for example `since: origin/${{ github.base_ref }}` on a pull request. [`owpp version`](version.md) gives a plugin its new version.
+A plugin that did not exist at that ref needs nothing.
+
+The upstream sets the version of code that a plugin takes verbatim from a `source:`:
+
+- A change to such a tool or skill counts as a change of the plugin.
+- In a plugin with a `source:`, a change to any skill counts as a change of the plugin.
+- If the function itself is taken verbatim, the plugin needs no new version.
+
+The check needs the `git` CLI. To use it in CI:
+
+1. Check out the repository with `fetch-depth: 0`.
+2. Pass the base branch, for example `since: origin/${{ github.base_ref }}` on a pull request.
+
+To give a plugin its new version, use [`owpp version`](version.md).
 
 ## Examples
 
@@ -70,6 +112,6 @@ owpp check --strict --since origin/main
 ## Related
 
 - [`owpp version`](version.md): give a changed plugin a new version.
-- [`owpp test`](test.md): run its unit tests.
-- [`owpp bundle`](bundle.md): read the bundle it checked.
+- [`owpp test`](test.md): run the unit tests of the plugins.
+- [`owpp bundle`](bundle.md): read the bundle that the check compiled.
 - [Authoring a plugin](../authoring.md): what makes a plugin pass.

@@ -1,38 +1,59 @@
 # Contributing
 
-What a change to this repository includes, so that the person who [reviews it](reviewing.md) can follow and repeat it.
+This page says what a change to this repository includes. Then the person who [reviews it](reviewing.md) can follow and repeat it.
 
 ## Before you start
 
-- Find or open an issue on [GitHub Issues](https://github.com/zmnatz/open-webui-plugin-protocol/issues) that says what you are changing and why. The triage labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` and `wontfix`.
-- Branch from `develop`, not `main` ([branches](#branches)).
-- Install the tools: [uv](https://docs.astral.sh/uv/), then `uv sync`. For this site: `uv sync --group docs` (Python 3.11 or newer).
+1. Find or open an issue on [GitHub Issues](https://github.com/zmnatz/open-webui-plugin-protocol/issues) that says what you change and why.
+2. Create your branch from `develop`, not `main` ([branches](#branches)).
+3. Install [uv](https://docs.astral.sh/uv/).
+4. Run `uv sync`.
+5. To work on this site, also run `uv sync --group docs`. It needs Python 3.11 or newer.
+
+The triage labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` and `wontfix`.
 
 ## What a change includes
 
 | Part | Where | Why |
 | --- | --- | --- |
-| The code | `src/owpp/` (the CLI, bundler and deploy), `src/owpp/runtime/` (deployed byte for byte, never reformatted), or a plugin in `examples/plugins/` | |
-| Tests | `tests/` for owpp, `examples/plugins/<id>/tests/` for a plugin | They show it works, and keep it working. |
-| A docstring on each plugin test | the test itself: what it checks, then `By hand:` steps ([describe every test](testing/writing.md#describe-every-test)) | A reviewer repeats them on a live Open-WebUI. The [test catalogue](reference/test-catalogue.md) is built from them. |
-| The guide | `docs/*.md` | When behaviour or a command changes. |
-| A changelog entry | `CHANGELOG.md`, in the section of the version being prepared (`## Unreleased` until it is released) | What users will notice, in one sentence; the details belong in the docs. |
-| A review of the docs around it | the pages the change touches, and the ones next to them | For an issue labelled `documentation`: the same thing explained in full in two places becomes one explanation and a link, and anything that no longer matches the code is fixed. |
+| The code | `src/owpp/` (the CLI, bundler and deploy), `src/owpp/runtime/`, or a plugin in `examples/plugins/`. A deploy copies the runtime byte for byte, so never reformat it. | |
+| Tests | `tests/` for owpp, `examples/plugins/<id>/tests/` for a plugin | They show that it works, and keep it working. |
+| A docstring on each plugin test | In the test: what it checks, then `By hand:` steps ([describe every test](testing/writing.md#describe-every-test)) | A reviewer repeats the steps on a live Open-WebUI. The [test catalogue](reference/test-catalogue.md) is built from them. |
+| The guide | `docs/` | Change it when behaviour or a command changes. Write it in [Simplified Technical English](#writing-the-guide). |
+| A changelog entry | `CHANGELOG.md`, in the section of the next version (`## Unreleased` until the release) | It says in one sentence what users will notice. The details belong in the docs. |
+| A review of the docs around it | The pages that the change touches, and the ones next to them | For an issue labelled `documentation`: explain each thing in full once and link to it. Fix what no longer matches the code. |
 | A commit message that says why | git, with a [conventional-commit prefix](#commit-messages) | A reviewer reads it with the diff. |
+
+## Writing the guide
+
+Write the prose in `docs/` in Simplified Technical English. Follow ASD-STE100's writing rules, but not its restricted dictionary: technical names stay as they are (`owpp`, `plugin.yaml`, valve, commands, flags and keys).
+
+- Write one meaning in each sentence, in the active voice. Give one instruction in each sentence.
+- Keep a sentence in a description to 25 words or fewer. Keep a sentence in a procedure to 20 words or fewer.
+- Write a procedure as numbered steps. Put a caution or a warning before the step that it applies to.
+- Use one term for one thing. Use the term in `GLOSSARY.md` where the repository defines one.
+- Explain each thing in full once. Link to that explanation from the other pages.
+- Leave code blocks, examples and command output unchanged, unless they are wrong.
+- Check this site with `uv run --group docs python tools/build_docs.py`. A broken link fails the build.
 
 ## Step by step
 
-1. Write the test first, with its docstring, and see it fail: `uv run pytest -k <name>` or `uv run owpp test --dir examples/plugins <id> -- -k <name>`.
-2. Make the change, until it passes.
-3. Run everything CI runs ([reviewing, step 3](reviewing.md#3-run-it-yourself)).
-4. If you changed a plugin, deploy it to a test instance and do its **By hand** steps yourself.
-5. Update the guide and the changelog.
-6. Check this site: `uv run --group docs python tools/build_docs.py`. A broken link fails the build.
-7. Open a pull request into `develop`: say what changed, why, and which live checks you did. The [live suite](testing/live.md#this-repositorys-live-suite) runs on it; to run it before you push, `run.py --live`.
+1. Write the test first, with its docstring.
+2. Run it, and see it fail: `uv run pytest -k <name>`, or `uv run owpp test --dir examples/plugins <id> -- -k <name>`.
+3. Change the code until the test passes.
+4. Run what CI runs ([reviewing, step 3](reviewing.md#3-run-it-yourself)).
+5. If you changed a plugin, deploy it to a test instance ([reviewing, step 4](reviewing.md#4-see-it-work-on-a-live-open-webui)).
+6. Do its **By hand** steps on that instance.
+7. Update the guide and the changelog.
+8. Check this site: `uv run --group docs python tools/build_docs.py`. A broken link fails the build.
+9. To run the [live suite](testing/live.md#this-repositorys-live-suite) before you push, run `uv run python tools/screenshots/run.py --live`.
+10. Open a pull request into `develop`. Say what changed, why, and which live checks you did.
+
+The live suite also runs on the pull request.
 
 ## Commit messages
 
-A commit message starts with a conventional-commit type, chosen from the issue's labels:
+Start each commit message with a conventional-commit type. The issue's labels choose the type:
 
 | Label | Type |
 | --- | --- |
@@ -44,7 +65,7 @@ A commit message starts with a conventional-commit type, chosen from the issue's
 | `chore` | `chore`, `ci` or `build` |
 | `breaking` | `!` after the type, and a `BREAKING CHANGE:` footer |
 
-`documentation` next to another type label means the change includes the docs review above, not that the commit is `docs`: an `enhancement` with `documentation` is `feat`.
+If an issue has `documentation` and another type label, the change includes the [docs review](#what-a-change-includes). The other label still chooses the type: `enhancement` with `documentation` is `feat`.
 
 ## Branches
 
@@ -59,31 +80,66 @@ The repository follows [gitflow](https://nvie.com/posts/a-successful-git-branchi
 | `release/<version>` | `develop` | `main`, then `main` into `develop` | merge commit |
 | `hotfix/<version>` | `main` | `main`, then `main` into `develop` | merge commit |
 
-Never squash or rebase into `main`, or back from it into `develop`: `develop` would then lack commits that `main` has, and the next release would conflict. The repository's rules allow only merge commits into `main`.
+**Caution: never squash or rebase into `main`, or from `main` back into `develop`.** If you do, `develop` lacks commits that `main` has, and the next release conflicts. The repository's rules allow only merge commits into `main`.
 
 ## Releasing
 
-Releases are started from the Actions tab, and everything after the merge is automatic. The branching, tagging and merge-back are the shared workflows in [zmnatz/github-workflows](https://github.com/zmnatz/github-workflows), which this repository's `release.yml`, `tag.yml` and `merge-back.yml` call with its own commands; publishing is this repository's, on the tag:
+You start a release from the Actions tab. After you merge its pull request, workflows do the rest. Shared workflows in [zmnatz/github-workflows](https://github.com/zmnatz/github-workflows) do the branches, the tag and the merge-back. This repository's `release.yml`, `tag.yml` and `merge-back.yml` call them with its own commands. Publishing on the tag belongs to this repository.
 
-1. **Start it.** Run **Actions > release > Run workflow** with the version (`patch`, `minor`, `major`, or one such as `0.5.0`). `.github/workflows/release.yml` cuts `release/<version>` from `develop`, prepares it with `tools/release.py` (it sets `__version__` in `src/owpp/__init__.py`, turns `## Unreleased` in `CHANGELOG.md` into `## <version> (<date>)`, and moves the docs' version pins), and opens its pull request into `main`. Only fixes for the release go on that branch now. To prepare one by hand instead, run `python tools/release.py prepare <version>` on the branch.
-2. **Merge it** with a merge commit, once CI is green. CI's `release` job checks a `release/` or `hotfix/` pull request into `main` the way publishing will: `v<__version__>` is not a tag yet, and the changelog has a dated section for it with entries.
-3. **Tagging.** The merge into `main` starts `.github/workflows/tag.yml`, which tags it `v<version>`, and does nothing else. A push to `main` whose version is already tagged tags nothing.
-4. **Releasing the tag.** Everything a release does runs on the `v*` tag, whether `tag.yml` pushed it or you did by hand: `.github/workflows/publish.yml` publishes the package to PyPI and creates the GitHub release with the changelog section as its notes and the built package attached, and `.github/workflows/docs.yml` publishes the docs site.
-5. **Merge-back.** The same merge starts `.github/workflows/merge-back.yml`, which opens a pull request from `main` into `develop` and merges it with a merge commit. When it conflicts (usually `CHANGELOG.md`, when `develop` has new entries), it leaves the pull request open with the steps to resolve it on a branch cut from `main` (GitHub's **Resolve conflicts** works there, as it can't on `main` itself), and the run fails so it is not missed. **Actions > merge-back > Run workflow** tries again.
+Those three workflows need a `RELEASE_TOKEN` Actions secret, and fail at once without it. It is a fine-grained token (or a GitHub App's) for this repository, with **Contents** and **Pull requests: read and write** ([the token](https://github.com/zmnatz/github-workflows#the-token)). GitHub starts no workflows for what a workflow's own token does. So with that token, the release pull request would get no checks, and the tag would release nothing. When the token expires, renew it and update the secret.
 
-A hotfix is the same with **kind** set to `hotfix`: `hotfix/<version>` is cut from `main`, with a patch version and an empty dated changelog section, and its pull request opens as a draft. Push the fix and its changelog entry to that branch, then mark it ready and merge it.
+To make a release:
 
-`release.yml`, `tag.yml` and `merge-back.yml` need a `RELEASE_TOKEN` Actions secret, and fail at once without it: a fine-grained token (or a GitHub App's) for this repository with **Contents** and **Pull requests: read and write** ([the token](https://github.com/zmnatz/github-workflows#the-token)). GitHub starts no workflows for what a workflow's own token does, so with that token the release pull request would get no checks and the tag would release nothing. When the token expires, renew it and update the secret.
+1. Run **Actions > release > Run workflow** with the version: `patch`, `minor`, `major`, or a number such as `0.5.0`.
+2. Push only fixes for this release to the `release/<version>` branch.
+3. Wait until CI is green.
+4. Merge the pull request into `main` with a merge commit.
+
+In step 1, `.github/workflows/release.yml` creates `release/<version>` from `develop`, prepares it with `tools/release.py`, and opens its pull request into `main`. The script sets `__version__` in `src/owpp/__init__.py`. It turns `## Unreleased` in `CHANGELOG.md` into `## <version> (<date>)`. It also moves the version pins in the README, the docs and the skills. To prepare a branch by hand instead, run `python tools/release.py prepare <version>` on it.
+
+CI's `release` job checks a `release/` or `hotfix/` pull request into `main` as publishing will. `v<__version__>` must not be a tag yet, and the changelog must have a dated section for it, with entries.
+
+After the merge, these steps are automatic:
+
+- **Tag.** `.github/workflows/tag.yml` tags the merge on `main` as `v<version>`, and does nothing else. If a push to `main` has a version that already has a tag, it tags nothing.
+- **Release.** A `v*` tag starts everything a release does, whether `tag.yml` or a person pushed it. `.github/workflows/publish.yml` publishes the package to PyPI. It also creates the GitHub release, with the changelog section as its notes and the package attached. `.github/workflows/docs.yml` publishes [the docs site](#this-site).
+- **Merge-back.** `.github/workflows/merge-back.yml` opens a pull request from `main` into `develop`, and merges it with a merge commit.
+
+If the merge-back cannot merge (usually a conflict in `CHANGELOG.md`, when `develop` has new entries), the run fails. It leaves the pull request open, with the steps to resolve it on a branch cut from `main`. GitHub's **Resolve conflicts** works on that branch, but not on `main` itself. To try again, run **Actions > merge-back > Run workflow**.
+
+### A hotfix
+
+1. Run **Actions > release > Run workflow** with **kind** set to `hotfix` and the version set to `patch`.
+2. Push the fix and its changelog entry to the `hotfix/<version>` branch.
+3. Mark the pull request ready.
+4. Merge it into `main` with a merge commit.
+
+In step 1, the workflow creates the branch from `main`, adds an empty dated changelog section, and opens a draft pull request. The steps after the merge are those of a release.
 
 ## This site
 
-The site is built with [Zensical](https://zensical.org/), configured in `zensical.toml`. The pages are `docs/*.md`. Build it with `uv run --group docs python tools/build_docs.py` (or `serve` to preview), not `zensical` directly: the script puts `docs/` and the generated pages into `build/docs/`, which is what Zensical builds. Nothing generated is checked in, so none of it can go stale:
+[Zensical](https://zensical.org/) builds the site, as `zensical.toml` configures it. The pages are the Markdown files in `docs/`, except `docs/agents/`.
+
+1. Build the site with `uv run --group docs python tools/build_docs.py`. To preview it, add `serve`.
+2. If you edit `docs/` during a preview, stop `serve` and run it again, because it assembles the pages once.
+
+Do not run `zensical` directly. The script puts `docs/` and the generated pages into `build/docs/`, and Zensical builds that folder. Nothing generated is checked in, so none of it can go stale. The script adds these:
 
 - the root `CHANGELOG.md`, `SECURITY.md`, `LICENSE` and `NOTICE.md`, and each example plugin's `README.md`;
 - the examples overview, from each `plugin.yaml`;
-- each example's built function, as a `.py` file to import by URL. A button atop the example's page shows it in a popup (`docs/assets/built-function.js`);
-- the test catalogue, from the test docstrings.
+- each example's built function, as a `.py` file to import by URL, which a button at the top of its page shows in a popup (`docs/assets/built-function.js`);
+- the screenshot pages and galleries, from `docs/screenshots/screenshots.json`;
+- the test catalogue, from the test docstrings;
+- the library table in [libraries](libraries.md), from the library catalogue;
+- `llms.txt` and `llms-full.txt`, for language models.
 
-Links written for GitHub (`../SECURITY.md`, a plugin's `config.yaml`) are rewritten to the page that carries the file, or to the file on GitHub. A link to a file or heading that does not exist fails the build. `serve` assembles the pages once, so after editing `docs/`, run it again.
+The script rewrites links written for GitHub (`../SECURITY.md`, a plugin's `config.yaml`) to the page that carries the file, or to the file on GitHub. The build fails on a link to a file or heading that does not exist. It also fails if the menu in `zensical.toml` lacks an example.
 
-`.github/workflows/docs.yml` builds the site on every pull request and publishes it to GitHub Pages from each `v*` tag, so the site matches the latest release. What it publishes also gets Google Analytics, added by [the shared `google-analytics` action](https://github.com/zmnatz/github-workflows#google-analytics) with the `G-` measurement ID in the `GA_ID` Actions secret; publishing fails without it. To publish it again, run **Actions > docs > Run workflow** on the latest tag. Once per repository, **Settings > Pages > Source** must be set to **GitHub Actions**, and the `github-pages` environment (**Settings > Environments**) must allow `v*` tags.
+`.github/workflows/docs.yml` builds the site on every pull request. It publishes the site to GitHub Pages from each `v*` tag, so the site matches the latest release. To publish it again, run **Actions > docs > Run workflow** on the latest tag.
+
+The published site also gets Google Analytics, from [the shared `google-analytics` action](https://github.com/zmnatz/github-workflows#google-analytics). The action takes the `G-` measurement ID from the `GA_ID` Actions secret, and publishing fails without it.
+
+Set up GitHub Pages once per repository:
+
+1. Set **Settings > Pages > Source** to **GitHub Actions**.
+2. In **Settings > Environments**, make the `github-pages` environment allow `v*` tags.
