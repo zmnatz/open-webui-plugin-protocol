@@ -6,16 +6,16 @@ owpp copies the runtime and the libraries into each bundle, so a new owpp change
 
 Caution: move all the pins before you migrate (CI, the action, your own computer). An older owpp refuses a manifest with a newer protocol.
 
-1. **Move the pin.** Change the version in each place where you run owpp: `uvx owpp@0.7.1`, `uv tool install owpp==0.7.1`, or the action's `uses: zmnatz/open-webui-plugin-protocol@v0.7.1`.
-2. **See what the migration changes:** run `uvx owpp@0.7.1 migrate --dry-run`.
-3. **Migrate the manifests:** run `uvx owpp@0.7.1 migrate`. To migrate only some plugins, give their ids.
+1. **Move the pin.** Change the version in each place where you run owpp: `uvx owpp@0.7.2`, `uv tool install owpp==0.7.2`, or the action's `uses: zmnatz/open-webui-plugin-protocol@v0.7.2`.
+2. **See what the migration changes:** run `uvx owpp@0.7.2 migrate --dry-run`.
+3. **Migrate the manifests:** run `uvx owpp@0.7.2 migrate`. To migrate only some plugins, give their ids.
 
     ```sh
-    uvx owpp@0.7.1 migrate --dry-run
-    uvx owpp@0.7.1 migrate
+    uvx owpp@0.7.2 migrate --dry-run
+    uvx owpp@0.7.2 migrate
     ```
 
-4. **Check:** run `uvx owpp@0.7.1 check --strict`. It bundles each plugin as the deploy does.
+4. **Check:** run `uvx owpp@0.7.2 check --strict`. It bundles each plugin as the deploy does.
 5. **Do a dry run:** run `owpp deploy --dry-run` against your instance. It shows the functions, tools and skills that the new bundles will update.
 6. **Commit** the pin and the manifest changes together.
 7. **Deploy.**

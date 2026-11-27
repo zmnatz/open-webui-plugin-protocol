@@ -123,7 +123,7 @@ Dry run at the latest commits: Open-WebUI functions
 To get this report in CI on a schedule:
 
 ```yaml
-- uses: zmnatz/open-webui-plugin-protocol@v0.7.1
+- uses: zmnatz/open-webui-plugin-protocol@v0.7.2
   with:
     url: https://chat.example.com
     api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
