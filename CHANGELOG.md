@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.2 (2026-11-27)
 
 - The mock Open-WebUI stores a function as a deploy leaves it: the deploy's `meta` (`managed_by`, the description with its note, `sources`, `requires`) beside `manifest`, and the code with its imports rewritten as Open-WebUI rewrites them; its `replace_imports` rewrites them too. A test that expects `meta.description` to be the header's alone reads `meta.manifest["description"]` instead ([the mock](docs/testing/mock.md)).
 

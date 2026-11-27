@@ -84,7 +84,7 @@ Dry run at the latest commits: Open-WebUI functions
 `owpp deploy --dry-run --latest` is the same report at the commits `owpp pull` would move to: which versions an upgrade brings to the live instance, before anything is changed. Without `--dry-run`, `--latest` is refused: ``error: --latest only goes with --dry-run: to deploy the latest commits, run `owpp pull`, review and commit the change, then deploy``. The same report in CI, on a schedule:
 
 ```yaml
-- uses: zmnatz/open-webui-plugin-protocol@v0.7.1
+- uses: zmnatz/open-webui-plugin-protocol@v0.7.2
   with:
     url: https://chat.example.com
     api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}

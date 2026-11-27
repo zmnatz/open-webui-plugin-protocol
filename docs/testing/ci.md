@@ -15,9 +15,9 @@ jobs:
         with:
           fetch-depth: 0 # --since needs the branch it compares with
       - uses: astral-sh/setup-uv@v6
-      - run: uvx owpp@0.7.1 check --strict
-      - run: uvx --from 'owpp[test]==0.7.1' owpp test
-      - run: uvx owpp@0.7.1 check --since origin/${{ github.base_ref }}
+      - run: uvx owpp@0.7.2 check --strict
+      - run: uvx --from 'owpp[test]==0.7.2' owpp test
+      - run: uvx owpp@0.7.2 check --since origin/${{ github.base_ref }}
 ```
 
 | Step | Fails when |
@@ -26,7 +26,7 @@ jobs:
 | [`owpp test`](../commands/test.md) | A plugin's tests fail against the mock. A plugin with code from git fetches it, so the job needs the network (or the tests [load stand-ins](kinds.md#code-from-git)). |
 | [`owpp check --since`](../commands/check.md#a-change-needs-a-new-version) | A plugin changed but its version did not; it names the `owpp version` command to run. |
 
-Pin the same owpp version here as in the deploy (`uses: zmnatz/open-webui-plugin-protocol@v0.7.1`), so the tests bundle what the deploy will. The [GitHub Action](../tooling.md#github-action) runs `owpp check` before it deploys, but not the tests.
+Pin the same owpp version here as in the deploy (`uses: zmnatz/open-webui-plugin-protocol@v0.7.2`), so the tests bundle what the deploy will. The [GitHub Action](../tooling.md#github-action) runs `owpp check` before it deploys, but not the tests.
 
 ## A live check
 
@@ -44,8 +44,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uvx --from 'owpp[live]==0.7.1' playwright install --with-deps chromium # for tests in the browser
-      - run: uvx --from 'owpp[live]==0.7.1' owpp live
+      - run: uvx --from 'owpp[live]==0.7.2' playwright install --with-deps chromium # for tests in the browser
+      - run: uvx --from 'owpp[live]==0.7.2' owpp live
 ```
 
 Pin owpp at the same version as elsewhere. The images come to about 290 MB. This repository's [live suite](live.md#this-repositorys-live-suite) runs the same way in about the time of the unit tests, with the images cached between runs with `actions/cache`, keyed on the compose files (`.github/workflows/live.yml`).
