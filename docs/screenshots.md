@@ -1,65 +1,78 @@
 # Screenshots on a real Open-WebUI
 
-The unit tests run against a [mock](testing/mock.md#what-it-is-not). The screenshots are the other half: the example plugins deployed to a real Open-WebUI, with a browser following their **By hand** steps. They show a reviewer what each check looks like, and they catch what the mock cannot. The first run found two bugs that every unit test had passed (see [what it found](#what-it-found)).
+The screenshots show the example plugins on a real Open-WebUI, with a browser that follows their **By hand** steps. The unit tests run against a [mock](testing/mock.md#what-it-is-not), and the screenshots are the other half. They show a reviewer what each check looks like, and they catch what the mock cannot. The first run found two problems that every unit test had passed ([what it found](#what-it-found)).
 
-They are in `docs/screenshots/`, with `screenshots.json` saying which plugin tests each one illustrates. The [test catalogue](reference/test-catalogue.md) shows each one under those tests, each example's page has its own, and [all screenshots](reference/screenshots.md) lists them with the Open-WebUI version and commit they were taken from.
+The screenshots are in `docs/screenshots/`. The file `screenshots.json` there says which plugin tests each screenshot illustrates. The [test catalogue](reference/test-catalogue.md) shows each screenshot under those tests, and each example's page shows its own. [All screenshots](reference/screenshots.md) lists them with the Open-WebUI version and commit they come from.
 
 ## Taking them
 
-```sh
-uv sync --group screenshots                            # Python 3.11+
-uv run --group screenshots playwright install chromium
-uv run --group screenshots python tools/screenshots/run.py             # all of them
-uv run --group screenshots python tools/screenshots/run.py -- -k banner  # some of them
-uv run --group screenshots python tools/screenshots/run.py --keep      # leave it running
-```
+You need Docker, and internet access, because the Excalidraw editor loads from esm.sh.
 
-It needs Docker, which your user must be able to reach (in the `docker` group; without it, `sudo -u "$USER" -g docker env "PATH=$PATH" uv run ...` runs it as you), and internet access (the Excalidraw editor loads from esm.sh). A full run takes about two minutes once the images are pulled. Commit the changed PNGs and `screenshots.json` with the change they show. To check rather than photograph, run [the live suite](testing/live.md#this-repositorys-live-suite). `.github/workflows/screenshots.yml` does the same on GitHub when run by hand (**Actions > screenshots > Run workflow**) and uploads the result as an artifact.
+1. Make sure that your user can reach Docker (the `docker` group). Without the group, `sudo -u "$USER" -g docker env "PATH=$PATH" uv run ...` runs a command as you.
+2. Install the tools with the first two commands below.
+3. Take the screenshots with one of the `run.py` commands:
+
+    ```sh
+    uv sync --group screenshots                            # Python 3.11+
+    uv run --group screenshots playwright install chromium
+    uv run --group screenshots python tools/screenshots/run.py             # all of them
+    uv run --group screenshots python tools/screenshots/run.py -- -k banner  # some of them
+    uv run --group screenshots python tools/screenshots/run.py --keep      # leave it running
+    ```
+
+4. Commit the changed PNGs and `screenshots.json` with the change that they show.
+
+A full run takes about two minutes after Docker has pulled the images. To check the examples without screenshots, run [the live suite](testing/live.md#this-repositorys-live-suite).
+
+To take the screenshots on GitHub, run **Actions > screenshots > Run workflow** (`.github/workflows/screenshots.yml`). The workflow uploads the result as an artifact.
 
 ## What happens
 
-`tools/screenshots/run.py` is [`owpp live`](commands/live.md) with this repository's pieces:
+`tools/screenshots/run.py` is [`owpp live`](commands/live.md) with this repository's files. It does these things:
 
-1. Starts owpp's stack, Open-WebUI at the version the protocol targets (v0.13.5, the `-slim` image) and aimock as its models, with `tools/screenshots/compose.yaml` layered on it: [fixed files](testing/live.md#everything-else-fixed-files) standing in for a LiteLLM gateway and mcpo. **iframe Sandbox Allow Same Origin** is on by default there (`DEFAULT_INTERFACE_SETTINGS`), as the examples with pages in the Artifacts panel require. Nothing is kept between runs.
-2. Signs up the admin (the first account always is) and adds a user, both throwaway.
-3. Deploys `examples/plugins` with `owpp deploy`, exactly as a plugin repository would.
-4. Runs the scripts in `tools/screenshots/shots_*.py` with pytest and Playwright. Each signs in on Open-WebUI's own login page, does what a person would, and saves a screenshot at each step worth seeing.
-5. Removes the containers (not with `--keep`).
+1. It starts the stack of `owpp live` (Open-WebUI v0.13.5, the `-slim` image, and aimock as its models) with `tools/screenshots/compose.yaml` layered on it. That file adds [fixed files](testing/live.md#everything-else-fixed-files) in place of a LiteLLM gateway and mcpo. It also turns **iframe Sandbox Allow Same Origin** on by default (`DEFAULT_INTERFACE_SETTINGS`). The examples with pages in the Artifacts panel need it. Nothing is kept between runs.
+2. It signs up a throwaway admin (the first account is always an admin) and adds a throwaway user.
+3. It deploys `examples/plugins` with `owpp deploy`, as a plugin repository would.
+4. It runs the scripts in `tools/screenshots/shots_*.py` with pytest and Playwright. The accounts sign in on Open-WebUI's own login page. Each script does what a person would do, and saves a screenshot at each step that is worth a look.
+5. It removes the containers. With `--keep`, it leaves them running.
 
-**The model** is [aimock](https://github.com/CopilotKit/aimock), answering from fixtures in `tools/screenshots/aimock/`, the same way every run, with no API key and no real model: [how it answers](testing/live.md#the-model-aimock).
+**The model** is [aimock](testing/live.md#the-model-aimock), which answers from the fixtures in `tools/screenshots/aimock/`. It gives the same answers on every run, with no API key and no real model.
 
 ## Adding one
 
-In the right `shots_*.py` (or a new one), write a test as a person would do it, and call `shot`:
+1. In the applicable `shots_*.py` file (or a new one), write a test that does what a person would do.
+2. Call `shot` at each step that is worth a screenshot:
 
-```python
-def test_the_dashboard_lists_what_is_old(admin, shot):
-    """By hand: as an admin, open /stale-data. ..."""
-    admin.goto(f"{URL}/stale-data")
-    admin.get_by_text("Q3 roadmap draft").wait_for()
-    shot(
-        admin,
-        "stale_data",
-        "dashboard",
-        "What the caption says.",
-        illustrates=["test_it_lists_what_is_older_than_the_threshold_and_not_the_rest"],
-    )
-```
+    ```python
+    def test_the_dashboard_lists_what_is_old(admin, shot):
+        """By hand: as an admin, open /stale-data. ..."""
+        admin.goto(f"{URL}/stale-data")
+        admin.get_by_text("Q3 roadmap draft").wait_for()
+        shot(
+            admin,
+            "stale_data",
+            "dashboard",
+            "What the caption says.",
+            illustrates=["test_it_lists_what_is_older_than_the_threshold_and_not_the_rest"],
+        )
+    ```
+
+3. Restore whatever the script changes (valves, a function that it switched off). Then the order in which the scripts run does not matter.
 
 | Fixture | What it is |
 | --- | --- |
-| `admin`, `user`, `signed_out` | A browser page signed in as the admin, as the user, or not at all (owpp live's [fixtures](testing/live.md#the-fixtures), shared with the live tests). |
-| `api`, `user_api` | Open-WebUI's HTTP API as that account, for setting things up: data to show, a valve to change. What is photographed goes through the browser. |
-| `shot(page, plugin, name, caption, illustrates=[...])` | Saves `docs/screenshots/<plugin>/<name>.png` and records it. `illustrates` names plugin tests, which then show the picture in the catalogue. |
-| `send(page, text)` (imported from `conftest`) | Types a message into the chat and sends it, once the input holds all of it. Since v0.13.5 the input takes typing while the page is still loading and can lose some of it, so type a message with this rather than `page.keyboard.type`. The input also turns `'` into `’`, so leave apostrophes out. |
+| `admin`, `user`, `signed_out` | A browser page signed in as the admin, as the user, or not signed in. They are the [fixtures](testing/live.md#the-fixtures) of `owpp live`, which the live tests also use. |
+| `api`, `user_api` | Open-WebUI's HTTP API as that account, to set things up: data to show, a valve to change. Here, a call returns only the body. Take screenshots of the browser only. |
+| `shot(page, plugin, name, caption, illustrates=[...])` | Saves `docs/screenshots/<plugin>/<name>.png` and records it. `illustrates` names plugin tests, and the test catalogue shows the picture under them. |
+| `send(page, text)` (imported from `conftest`) | Types a message into the chat and sends it when the input holds all of it. |
 
-Put back whatever a script changes (valves, a function switched off), so the order the scripts run in does not matter.
+To type a chat message, use `send`, not `page.keyboard.type`. Since v0.13.5, the chat input accepts text while the page still loads, and can lose some of it. Do not put apostrophes in the message ([why](testing/live.md#tests-in-the-browser)).
 
 ## What it found
 
-The first run, on 2026-11-19, found two things wrong with Excalidraw that no unit test could see:
+The first run, on 2026-11-19, found two problems with Excalidraw that no unit test could see:
 
-- **The editor never loaded from esm.sh.** A comment in `templates/viewer.html` mentioned the `esm.sh` and `hosted` block markers by name. The code that keeps one block and drops the other matched the marker in the comment, and cut out the editor's imports with it. The page then failed with `convertToExcalidrawElements is not defined`. The unit tests only checked the page's head, and that no marker was left, which was true because too much had been removed. Fixed, with a test that the script imports everything it uses.
-- **On a default Open-WebUI, the editor answers 401.** The Artifacts panel sends no session cookie unless **iframe Sandbox Allow Same Origin** is on, and Open-WebUI has it off by default. Turning it on lets any artifact's script reach Open-WebUI's origin, so the requirement is kept and documented rather than worked around ([why, and what it costs](libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin); [issue #6](https://github.com/zmnatz/open-webui-plugin-protocol/issues/6)).
+- **The editor never loaded from esm.sh.** A comment in `templates/viewer.html` contained the names of the `esm.sh` and `hosted` block markers. The code that keeps one block and drops the other matched the marker in the comment, and also cut out the editor's imports. The page then failed with `convertToExcalidrawElements is not defined`. The unit tests checked only the page's head, and that no marker was left. That check passed because the code had removed too much. It is fixed, with a test that the script imports everything it uses.
+- **On a default Open-WebUI, the editor answers 401.** The Artifacts panel sends no session cookie unless **iframe Sandbox Allow Same Origin** is on, and it is off by default. The plugin keeps this requirement and documents it ([why, and what it costs](libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin)).
 
-The move to Open-WebUI v0.13.5 (2026-11-25) found that Theme Designer Pro's OLED mode lasted only until the next page load, which v0.13.5 then turned into a black colour of that person's own. It is fixed ([what changed for v0.13.5](../examples/plugins/theme_designer_pro/README.md#what-changed-for-open-webui-v0135)), with a screenshot.
+The move to Open-WebUI v0.13.5 (2026-11-25) found a problem with Theme Designer Pro. Its OLED mode lasted only until the next page load. v0.13.5 then turned it into a black colour of that person's own. It is fixed ([what changed for v0.13.5](../examples/plugins/theme_designer_pro/README.md#what-changed-for-open-webui-v0135)), with a screenshot.
