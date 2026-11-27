@@ -1,5 +1,5 @@
-"""`owpp live` (owpp.live) and its fixtures, without Docker. Docker and HTTP are
-stand-ins here; the live suite (`tools/screenshots/run.py --live`, and CI's `live` job) runs the
+"""`owpp live` (owpp.live) and its fixtures, without Docker. Docker is a stand-in here, and
+Open-WebUI the in-memory one (fake_open_webui.py); the live suite (`tools/screenshots/run.py --live`, and CI's `live` job) runs the
 real stack through the same command."""
 
 from __future__ import annotations
@@ -8,10 +8,10 @@ import json
 import os
 import subprocess
 import sys
-import urllib.error
 from pathlib import Path
 
 import pytest
+from fake_open_webui import FakeOpenWebUI
 
 from owpp.cli import build_parser, main
 from owpp.errors import OwppError
@@ -46,29 +46,6 @@ class Docker:
         return next((c for c in self.commands if "pytest" in c), None)
 
 
-class OpenWebUI:
-    """A stand-in for Open-WebUI's sign-up API: healthy at once, accounts on demand."""
-
-    def __init__(self, signed_up: bool = False):
-        self.calls: list[tuple[str, str]] = []
-        self.signed_up = signed_up
-
-    def __call__(self, url, method, body=None, token=None):
-        path = url.split("127.0.0.1:", 1)[1].partition("/")[2]
-        self.calls.append((method, "/" + path))
-        if path == "health":
-            return {"status": True}
-        if path == "api/v1/auths/signup":
-            if self.signed_up:
-                raise urllib.error.HTTPError(url, 400, "taken", {}, None)
-            return {"token": "admin-token"}
-        if path == "api/v1/auths/add":
-            return {}
-        if path == "api/v1/auths/signin":
-            return {"token": f"{body['email'].split('@')[0]}-token"}
-        raise AssertionError(f"unexpected call {method} {url}")
-
-
 @pytest.fixture
 def repo(tmp_path, monkeypatch):
     """A plugins repository: plugins/ and live/, as the working directory."""
@@ -92,7 +69,14 @@ def deploys(monkeypatch):
     return calls
 
 
-def live(argv: list[str], env=None, docker=None, owui=None):
+def signed_up() -> FakeOpenWebUI:
+    """An Open-WebUI that already has owpp live's accounts: a stack left running with --up."""
+    return FakeOpenWebUI(
+        accounts={"admin@example.com": "owpp-live-admin", "bob@example.com": "owpp-live-user"}
+    )
+
+
+def live(argv: list[str], env=None, docker=None, owui=None, sleeps=None):
     """Run `owpp live <argv>` with the stand-ins, as main() would."""
     parser = build_parser()
     passthrough = argv[argv.index("--") + 1 :] if "--" in argv else []
@@ -105,8 +89,8 @@ def live(argv: list[str], env=None, docker=None, owui=None):
         directory,
         env or {},
         run=docker or Docker(),
-        http=owui or OpenWebUI(),
-        sleep=lambda s: None,
+        fetch=owui or FakeOpenWebUI(),
+        sleep=(sleeps.append if sleeps is not None else lambda s: None),
     )
 
 
@@ -166,14 +150,16 @@ def test_owpps_compose_file_uses_the_variables_owpp_live_sets():
 def test_it_starts_the_stack_deploys_runs_the_tests_and_stops_it(repo, deploys):
     """Up, sign up the admin and the user, `owpp deploy` with the admin's token, pytest on the
     tests folder with the accounts in its environment, then down."""
-    docker, owui = Docker(), OpenWebUI()
+    docker, owui = Docker(), FakeOpenWebUI()
     assert live([], docker=docker, owui=owui) == 0
     assert docker.actions() == ["up", "down"]
-    assert [c for c in owui.calls if c[1] != "/health"] == [
-        ("POST", "/api/v1/auths/signup"),
-        ("POST", "/api/v1/auths/add"),
-        ("POST", "/api/v1/auths/signin"),
+    assert owui.calls == [
+        "POST /api/v1/auths/signup",
+        "POST /api/v1/auths/add",
+        "POST /api/v1/auths/signin",
     ]
+    assert owui.accounts["admin@example.com"]["role"] == "admin"
+    assert owui.accounts["bob@example.com"]["role"] == "user"
     (argv, env), *_ = deploys
     assert argv == ["deploy", "--dir", str(repo / "plugins")]
     assert env["OPEN_WEBUI_URL"] == "http://127.0.0.1:3000"
@@ -254,10 +240,33 @@ def test_up_deploys_runs_no_tests_and_prints_how_to_reach_it(repo, deploys, caps
 
 
 def test_up_again_signs_in_to_the_accounts_already_there(repo, deploys):
-    owui = OpenWebUI(signed_up=True)
+    owui = signed_up()
     live(["--up"], owui=owui)
-    assert ("POST", "/api/v1/auths/signin") in owui.calls
-    assert ("POST", "/api/v1/auths/add") not in owui.calls
+    assert owui.calls == [
+        "POST /api/v1/auths/signup",
+        "POST /api/v1/auths/signin",
+        "POST /api/v1/auths/signin",
+    ]
+    (_, env), *_ = deploys
+    assert env["OPEN_WEBUI_API_KEY"] == "admin-token"
+
+
+def test_it_waits_for_open_webui_to_answer_before_signing_up(repo, deploys):
+    """A container that has just started refuses connections for a while: /health is tried
+    every two seconds until it answers."""
+    sleeps: list[float] = []
+    owui = FakeOpenWebUI(starting=3)
+    assert live([], owui=owui, sleeps=sleeps) == 0
+    assert sleeps == [2, 2, 2]
+    assert owui.calls[0] == "POST /api/v1/auths/signup"
+
+
+def test_an_open_webui_that_never_answers_stops_the_stack(repo, deploys):
+    docker = Docker()
+    with pytest.raises(OwppError, match="did not answer"):
+        live([], docker=docker, owui=FakeOpenWebUI(starting=10_000))
+    assert docker.actions() == ["up", "down"]
+    assert not deploys
 
 
 def test_down_only_stops_it(repo, deploys):
