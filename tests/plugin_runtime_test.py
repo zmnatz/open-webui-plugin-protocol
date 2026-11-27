@@ -9,7 +9,7 @@ import sys
 import types
 import unittest
 
-from owpp.libraries import fill
+from owpp.embedding import embed_runtime
 
 RUNTIME = (
     pathlib.Path(__file__).resolve().parent.parent
@@ -184,7 +184,7 @@ class Fake:
 
 
 def load_runtime(module_name="function_demo_0123456789abcdef0123456789abcdef", data=None):
-    source = fill(RUNTIME.read_text(), "__PLUGIN_DATA__", json.dumps(json.dumps(data or DATA)))
+    source = embed_runtime("", data or DATA)
     module = types.ModuleType(module_name)
     sys.modules[module.__name__] = module
     exec(compile(source, str(RUNTIME), "exec"), module.__dict__)

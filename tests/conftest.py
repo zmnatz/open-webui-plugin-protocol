@@ -3,14 +3,13 @@
 from __future__ import annotations
 
 import contextlib
-import json
-import re
 from pathlib import Path
 
 import pytest
 from fake_open_webui import FakeOpenWebUI, serve
 
 from owpp.bundle import load_function_files
+from owpp.embedding import runtime_data, runtime_start
 from owpp.openwebui import MANAGED_BY
 from owpp.sources import Sources
 
@@ -76,10 +75,15 @@ def write_plugin(root: Path, files: dict[str, str | bytes]) -> Path:
 
 
 def embedded(code: str) -> dict:
-    """The data the runtime reads back: the JSON string literal in the bundle."""
-    m = re.search(r'_PLUGIN = _json\.loads\((".*")\)\n', code)
-    assert m, "no runtime data in the bundle"
-    return json.loads(json.loads(m.group(1)))
+    """The data of the runtime a bundle must have."""
+    assert runtime_start(code) >= 0, "no runtime in the bundle"
+    return runtime_data(code)
+
+
+def above_runtime(code: str) -> str:
+    """A bundle's code before its runtime (a tool's code is also in the runtime's data)."""
+    assert runtime_start(code) >= 0, "no runtime in the bundle"
+    return code[: runtime_start(code)]
 
 
 def fake_fetcher(overrides: dict[str, str] | None = None):
