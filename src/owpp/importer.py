@@ -20,8 +20,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from .bundle import (
     DOCSTRING,
     VALID_ID,
@@ -107,19 +105,11 @@ def _taken_out(
     notes: list[str] = []
     if own.include:
         lines.append(f"include: [{', '.join(own.include)}]")
-    templates = own.data.get("templates")
-    if templates is not None:
-        files |= {f"templates/{p}": v for p, v in files_of(templates).items()}
-    for name in ("static", "assets"):
-        if (value := own.data.get(name)) is not None:
-            got, keys = BY_NAME[name].write(plugin_id, value)
+    for lib in LIBRARIES:
+        if (value := own.data.get(lib.name)) is not None:
+            got, keys = lib.write(plugin_id, value)
             files |= got
             lines += [f"{key}: {_flow(v)}" for key, v in keys.items()]
-    jobs = own.data.get("jobs")
-    if jobs is not None and jobs != BY_NAME["jobs"].default:
-        lines.append(f"jobs: {_flow(jobs)}")
-    if (config := own.data.get("config")) is not None:
-        files["config.yaml"] = yaml.safe_dump(config, sort_keys=False, allow_unicode=True)
     left = [
         lib.name
         for lib in LIBRARIES
@@ -171,15 +161,12 @@ def _taken_out(
         ]
         if tool_include:
             lines.append(f"  include: [{', '.join(tool_include)}]")
-        theirs = code.data.get("templates")
-        if theirs is not None:
-            if templates is None or set(theirs) != set(templates):
-                lines.append(f"  templates: {_flow(sorted(theirs))}")
-            files |= {
-                f"templates/{p}": v
-                for p, v in files_of(theirs).items()
-                if f"templates/{p}" not in files
-            }
+        for lib in LIBRARIES:
+            if lib.for_tools and (value := code.data.get(lib.name)) is not None:
+                got, keys = lib.write_tool(value, own.data.get(lib.name))
+                lines += [f"  {key}: {_flow(v)}" for key, v in keys.items()]
+                for path, content in got.items():
+                    files.setdefault(path, content)  # a file the function has too is its own
         body = code.code[m.end() :] if m else code.code
         files["tool.py"] = add_lib_imports(body[1:] if body.startswith("\n") else body)
         notes.append(
