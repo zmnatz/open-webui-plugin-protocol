@@ -11,7 +11,8 @@ import pytest
 from conftest import FILTER, FakeRepo, fake_sources
 
 from owpp.bundle import load_function_files
-from owpp.cli import check_bundle, main
+from owpp.check import check_bundle
+from owpp.cli import main
 from owpp.create import (
     CODE_TYPES,
     FILTER_HOOKS,

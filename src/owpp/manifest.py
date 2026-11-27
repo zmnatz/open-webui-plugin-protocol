@@ -278,6 +278,11 @@ def files_of(entries: dict[str, dict] | list[dict]) -> dict[str, str | bytes]:
     }
 
 
+def require_plugins_folder(directory: Path) -> None:
+    if not directory.exists():
+        raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
+
+
 def plugin_folders(directory: Path | str) -> list[Path]:
     """Sub-folders of `directory` that hold a plugin.yaml, by name."""
     with os.scandir(directory) as it:

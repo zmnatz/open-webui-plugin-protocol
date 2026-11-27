@@ -19,8 +19,6 @@ Every command takes --dir <plugins folder> (default: $OWPP_PLUGINS_DIR, else ./p
 from __future__ import annotations
 
 import argparse
-import ast
-import builtins
 import os
 import sys
 from collections.abc import Mapping, Sequence
@@ -29,78 +27,20 @@ from pathlib import Path
 import yaml
 
 from . import __version__
-from .bundle import FunctionFile, env_references, load_function_files
+from .bundle import FunctionFile, load_function_files
+from .check import UnknownPlugin, check_plugins, failed, warning_count
 from .create import CLASS, PluginSpec, spec_from_data, write_plugin
 from .deploy import choices_from_env, instance_from_env, run_deploy
-from .embedding import runtime_data
 from .errors import OwppError
-from .lint import lint_notes, lint_plugin
-from .manifest import parse_yaml, plugin_folders, read_manifest, read_text
-from .protocol import report as protocol_report
+from .manifest import (
+    parse_yaml,
+    plugin_folders,
+    read_manifest,
+    read_text,
+    require_plugins_folder,
+)
 from .sources import Sources, is_plugin_source
-from .versioning import bump, changelog_problem, check_since, version_of, versions_of
-
-# ---- check --------------------------------------------------------------------
-
-
-def _globals_guard(n: ast.AST) -> bool:
-    """`"name" in globals()`: code that uses `name` only when another library defined it."""
-    return (
-        isinstance(n, ast.Compare)
-        and isinstance(n.left, ast.Constant)
-        and isinstance(n.left.value, str)
-        and len(n.ops) == 1
-        and isinstance(n.ops[0], ast.In)
-        and isinstance(n.comparators[0], ast.Call)
-        and isinstance(n.comparators[0].func, ast.Name)
-        and n.comparators[0].func.id == "globals"
-    )
-
-
-def undefined_names(tree: ast.AST) -> list[str]:
-    """Names a bundle uses without defining or importing them (a typo, or a library a
-    plugin forgot to include)."""
-    defined = set(dir(builtins))
-    loaded = set()
-    for n in ast.walk(tree):
-        if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            defined.add(n.name)
-        elif isinstance(n, ast.Name):
-            if isinstance(n.ctx, (ast.Store, ast.Del)):
-                defined.add(n.id)
-            else:
-                loaded.add(n.id)
-        elif isinstance(n, (ast.Import, ast.ImportFrom)):
-            for a in n.names:
-                defined.add((a.asname or a.name).split(".")[0])
-        elif isinstance(n, ast.arg):
-            defined.add(n.arg)
-        elif isinstance(n, ast.ExceptHandler) and n.name:
-            defined.add(n.name)
-        elif _globals_guard(n):  # `if "name" in globals(): name()`, an optional library's name
-            defined.add(n.left.value)
-    return sorted(loaded - defined)
-
-
-def check_bundle(code: str, name: str = "bundle.py") -> str | None:
-    """Compile `code` and list undefined names. None when it is fine, else the problem."""
-    try:
-        tree = ast.parse(code, filename=name)
-        compile(tree, name, "exec")
-    except (SyntaxError, ValueError) as e:
-        detail = f"{e.msg} (line {e.lineno})" if isinstance(e, SyntaxError) else str(e)
-        return f"does not compile: {type(e).__name__}: {detail}"
-    names = undefined_names(tree)
-    return f"undefined names: {', '.join(names)}" if names else None
-
-
-def bundle_parts(fn: FunctionFile) -> list[tuple[str, str]]:
-    """The function bundle, then each tool bundle the runtime embeds for it."""
-    tools = runtime_data(fn.content)["tools"]
-    return [(fn.id, fn.content)] + [
-        (f"tool {t['id']}", t["content"]) for t in tools if not t.get("self")
-    ]
-
+from .versioning import bump, versions_of
 
 # ---- init ---------------------------------------------------------------------
 
@@ -117,8 +57,7 @@ def scaffold(directory: Path | str, plugin_id: str, type: str = "event") -> Path
 
 
 def _load(args: argparse.Namespace, directory: Path) -> list[FunctionFile]:
-    if not directory.exists():
-        raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
+    require_plugins_folder(directory)
     return load_function_files(directory, args.sources)
 
 
@@ -128,58 +67,29 @@ def _cmd_list(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
     return 0
 
 
-def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
-    all_functions = _load(args, directory)
-    missing = [i for i in args.ids if not any(f.id == i for f in all_functions)]
-    if missing:
-        print(f"no plugin {', '.join(missing)} in {directory}", file=sys.stderr)
+def _check(
+    directory: Path,
+    sources: Sources,
+    ids: Sequence[str] = (),
+    strict: bool = False,
+    since: str | None = None,
+) -> int:
+    """Print what the check finds, as it is found, and return `owpp check`'s exit code."""
+    findings = []
+    try:
+        for finding in check_plugins(directory, sources, ids, since):
+            print(finding)
+            findings.append(finding)
+    except UnknownPlugin as e:
+        print(e, file=sys.stderr)
         return 1
-    bad = warnings = 0
-    for fn in all_functions:
-        if args.ids and fn.id not in args.ids:
-            continue
-        for name, code in bundle_parts(fn):
-            problem = check_bundle(code, f"{fn.id}.py")
-            print(f"FAIL  {name}: {problem}" if problem else f"ok    {name} ({len(code)} chars)")
-            bad += bool(problem)
-        for finding in lint_plugin(directory / fn.file.rstrip("/"), fn.file.rstrip("/")):
-            print(f"warn  {finding}")
-            warnings += 1
-        for finding in lint_notes(directory / fn.file.rstrip("/"), fn.file.rstrip("/")):
-            print(f"note  {finding}")
-        if fn.file.endswith("/"):  # a plugin folder
-            name = fn.file.rstrip("/")
-            root = fn.root or directory / name
-            problem = changelog_problem(root, version_of(fn.content))
-            if problem:
-                print(f"warn  {fn.id}/{problem}")
-                warnings += 1
-            warn, note = protocol_report(
-                f"{name}/plugin.yaml", read_manifest(directory / name).get("protocol")
-            )
-            if warn:
-                print(f"warn  {warn}")
-                warnings += 1
-            if note:
-                print(f"note  {note}")
-            for var, default in env_references(root):
-                shown = (
-                    "no default"
-                    if default is None
-                    else f"default {default}"
-                    if default
-                    else "default empty"
-                )
-                print(f"env   {var} ({shown})")
-    if args.since:
-        chosen = [f for f in all_functions if not args.ids or f.id in args.ids]
-        found = check_since(directory, args.since, args.ids, args.sources, new_files=chosen)
-        for finding in found:
-            print(f"FAIL  {finding}")
-            bad += 1
-    if warnings:
-        print(f"{warnings} warning(s){'; failing because of --strict' if args.strict else ''}")
-    return 1 if bad or (args.strict and warnings) else 0
+    if warnings := warning_count(findings):
+        print(f"{warnings} warning(s){'; failing because of --strict' if strict else ''}")
+    return int(failed(findings, strict))
+
+
+def _cmd_check(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    return _check(directory, args.sources, args.ids, args.strict, args.since)
 
 
 def _cmd_version(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -351,7 +261,7 @@ def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str
 
     def check(folder: Path, plugin_id: str) -> int:
         print()
-        return main(["check", plugin_id, "--strict", "--dir", str(folder)], env)
+        return _check(folder, args.sources, [plugin_id], strict=True)
 
     if args.spec:  # no questions: the plugin described in a file (for scripts and agents)
         text = sys.stdin.read() if args.spec == "-" else read_text(args.spec)
@@ -401,7 +311,7 @@ def _cmd_import(args: argparse.Namespace, directory: Path, env: Mapping[str, str
     for note in imported.notes:
         print(f"note  {note}")
     print()
-    code = main(["check", plugin_id, "--dir", str(directory)], env)
+    code = _check(directory, args.sources, [plugin_id])
     print(
         f"\nnext: write its tests in {plugin_id}/tests/ and run `owpp test {plugin_id}` "
         "(docs/testing/writing.md)"
