@@ -105,7 +105,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ## Status
 
-0.7.2, written against Open-WebUI v0.13.5 (and v0.13.4). The bundler, runtime and libraries are tested on the real Open-WebUI v0.13.5, run in the test process ([the test harness](docs/testing/harness.md)), and so is each example plugin (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.5 ([screenshots](docs/screenshots.md)), and checked there on every change by an end-to-end run with aimock as its models ([the live suite](docs/testing/live.md#this-repositorys-live-suite)). See [status and limits](docs/README.md#status-and-limits).
+0.7.2, written against Open-WebUI v0.13.5, the one version it pins and mirrors ([owpp mirrors Open-WebUI](docs/testing/harness.md#owpp-mirrors-open-webui)). The bundler, runtime and libraries are tested on the real Open-WebUI v0.13.5, run in the test process ([the test harness](docs/testing/harness.md)), and so is each example plugin (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.5 ([screenshots](docs/screenshots.md)), and checked there on every change by an end-to-end run with aimock as its models ([the live suite](docs/testing/live.md#this-repositorys-live-suite)). See [status and limits](docs/README.md#status-and-limits).
 
 ## Development
 

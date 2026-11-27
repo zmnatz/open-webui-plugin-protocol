@@ -144,7 +144,9 @@ Each aimock fixture says what to match and what to answer:
 
 aimock uses the first fixture that matches.
 
-owpp's own fixtures give one model, `owpp-live-model`. It answers every message with "Hello! I am owpp's live model: I answer the same way every time." For Open-WebUI's title and tag tasks, it answers with fixed JSON.
+owpp's own fixtures give one model, `owpp-live-model`. It answers every message with "Hello! I am owpp's live model: I answer the same way every time."
+
+owpp's stack turns off Open-WebUI's title, tag and follow-up tasks (`ENABLE_TITLE_GENERATION`, `ENABLE_TAGS_GENERATION`, `ENABLE_FOLLOW_UP_GENERATION`). So no fixture has to copy the prompts of those tasks, and aimock's journal holds only the requests of the chat. A chat keeps the title "New Chat". To test a task, turn it on again in your repository's `live/compose.yaml`.
 
 A repository's `live/aimock/` folder replaces these fixtures: the models in its fixtures are the models of the stack. aimock lists as its models (`/v1/models`) the models that its fixtures name. So name a model in every fixture, and put the more specific fixtures first:
 
@@ -223,7 +225,6 @@ The mock that the unit tests used then showed none of these:
 | `show_excalidraw` offered | a call to it, with a fixed drawing | `excalidraw`: "draw something" gives the same drawing every time. |
 | `create_theme` offered, and its result in the request | "Here is Teal Lagoon: ..." | [`theme_designer_pro`](../examples/theme_designer_pro.md): the answer under the Launcher's card. |
 | `create_theme` offered | a call to it: Teal Lagoon, hue 195 | `theme_designer_pro`: the same theme card every time. |
-| Open-WebUI's title and tag tasks | fixed JSON | stable chat titles in the screenshots |
 | all other requests for `screenshot-model` | "Hello! I am the screenshot model: ..." | all other chats |
 
 Open-WebUI has a second OpenAI connection here, `gateway`, which only describes the same models ([fixed files](#everything-else-fixed-files)). If both connections list a model, Open-WebUI keeps the entry of the first connection. So the chats go to aimock.

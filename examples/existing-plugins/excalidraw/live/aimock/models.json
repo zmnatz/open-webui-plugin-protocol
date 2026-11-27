@@ -1,9 +1,5 @@
 {
   "fixtures": [
-    { "match": { "model": "draw-model", "userMessage": "Generate a concise" },
-      "response": { "content": "{\"title\": \"Drawing\"}" } },
-    { "match": { "model": "draw-model", "userMessage": "Generate 1-3 broad tags" },
-      "response": { "content": "{\"tags\": [\"Drawing\"]}" } },
     { "match": { "model": "draw-model", "userMessage": "Draw the API and its database", "toolName": "show_excalidraw", "hasToolResult": false },
       "response": { "toolCalls": [{ "id": "call_show", "name": "show_excalidraw", "arguments": { "elements": [
         { "type": "rectangle", "id": "api", "x": 0, "y": 0, "width": 160, "height": 80, "label": { "text": "API" } },
