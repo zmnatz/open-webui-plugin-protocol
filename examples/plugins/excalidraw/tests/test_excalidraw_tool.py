@@ -1,4 +1,4 @@
-"""The Excalidraw tool and the plugin runtime that installs it, against a mock Open-WebUI.
+"""The Excalidraw tool and the plugin runtime that installs it, on the test harness.
 
 Run with `owpp test excalidraw`. The `owui` and `plugin` fixtures come with owpp
 (docs/testing.md): `plugin` is this folder, bundled as the deploy would and loaded.
@@ -7,6 +7,8 @@ Run with `owpp test excalidraw`. The `owui` and `plugin` fixtures come with owpp
 import json
 
 import pytest
+
+from owpp.testing import grants
 
 RECT = {"type": "rectangle", "id": "a", "x": 0, "y": 0, "width": 160, "height": 80}
 
@@ -19,6 +21,14 @@ def ada(owui):
 @pytest.fixture
 def tool(owui, plugin):
     return owui.tool("excalidraw")
+
+
+def share(owui, tool_id: str, access_grants: list[dict]) -> None:
+    """An admin changes who the tool is shared with (Workspace > Tools > Access)."""
+    res = owui.client(owui.admin).post(
+        f"/api/v1/tools/id/{tool_id}/access/update", json={"access_grants": access_grants}
+    )
+    assert res.status_code == 200, res.text
 
 
 # ---- installed by its function ---------------------------------------------------------
@@ -34,9 +44,7 @@ def test_loading_the_function_installs_the_tool_for_everyone(owui, plugin):
     tool = owui.tools["excalidraw"]
     assert tool.name == "Excalidraw"
     assert tool.meta.manifest["parent_function_id"] == "excalidraw"
-    assert tool.access_grants == [
-        {"principal_type": "user", "principal_id": "*", "permission": "read"}
-    ]
+    assert grants(tool) == [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
 
 
 def test_a_tool_an_earlier_runtime_shared_with_anyone_is_shared_with_every_user(owui, plugin):
@@ -48,13 +56,13 @@ def test_a_tool_an_earlier_runtime_shared_with_anyone_is_shared_with_every_user(
     admin; Excalidraw is missing from the tools. Deploy this version. The user
     now sees it, and any group an admin shared it with still has it.
     """
+    from open_webui.models.access_grants import AccessGrants
+
     group = {"principal_type": "group", "principal_id": "designers", "permission": "write"}
-    owui.tools["excalidraw"].access_grants = [
-        {"principal_type": "anyone", "principal_id": "*", "permission": "read"},
-        group,
-    ]
+    anyone = {"principal_type": "anyone", "principal_id": "*", "permission": "read"}
+    owui.run(AccessGrants.set_access_grants("tool", "excalidraw", [anyone, group]))
     owui.update("excalidraw")  # the deploy of this version
-    assert owui.tools["excalidraw"].access_grants == [
+    assert grants(owui.tools["excalidraw"]) == [
         group,
         {"principal_type": "user", "principal_id": "*", "permission": "read"},
     ]
@@ -67,9 +75,9 @@ def test_grants_an_admin_set_are_left_alone(owui, plugin):
     shared with just that group.
     """
     only = [{"principal_type": "group", "principal_id": "designers", "permission": "read"}]
-    owui.tools["excalidraw"].access_grants = list(only)
+    share(owui, "excalidraw", only)
     owui.update("excalidraw")
-    assert owui.tools["excalidraw"].access_grants == only
+    assert grants(owui.tools["excalidraw"]) == only
 
 
 def test_the_tool_goes_with_the_function_and_comes_back_with_it(owui, plugin):
@@ -95,11 +103,9 @@ def test_a_hand_made_tool_with_the_same_id_is_left_alone(owui, plugin_dir):
     Tools, then install the function. Your tool's code is unchanged. Disable the function: your
     tool is still there.
     """
-    from owpp.testing import Record
-
-    owui.tools["excalidraw"] = Record(
-        id="excalidraw", content="class Tools: pass\n", meta=Record(manifest={})
-    )
+    form = {"id": "excalidraw", "name": "Mine", "content": "class Tools: pass\n", "meta": {}}
+    res = owui.client(owui.admin).post("/api/v1/tools/create", json=form)
+    assert res.status_code == 200, res.text
     owui.load(plugin_dir)
     assert owui.tools["excalidraw"].content == "class Tools: pass\n"
     owui.disable("excalidraw")

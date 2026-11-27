@@ -29,7 +29,7 @@ def card_data(card) -> dict:
 
 
 def tool_valves(owui, **valves):
-    owui.tool_valves[TOOL] = {**owui.tool_valves.get(TOOL, {}), **valves}
+    owui.set_tool_valves(TOOL, **valves)
     return owui.tool(TOOL)
 
 

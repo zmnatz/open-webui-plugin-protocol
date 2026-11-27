@@ -21,7 +21,7 @@ Valves: `position` (`top` or `bottom`), `max_height_px`, `resync_interval_second
 
 - `owpp check page_banners` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines.
 - `owpp bundle page_banners out.py` writes the deployed code to read or diff.
-- `owpp test page_banners` runs `tests/` against a mock Open-WebUI (docs/testing.md).
+- `owpp test page_banners` runs `tests/` against the real Open-WebUI, in process (docs/testing.md).
 - On a live Open-WebUI: add a banner under Admin Panel > Settings > General, open a chat (it shows without a reload in an open tab), collapse and dismiss it, then disable the function and reload: the banners are gone and `/static/custom.css` no longer carries the `owui:page_banners` block.
 
 ## Deploy

@@ -21,7 +21,7 @@ Valves: `INFO_PATH`, `INCLUDE_CONNECTIONS`, `SET_VISION`, `TAG_VENDOR`, `TAG_FAM
 
 - `owpp check litellm_model_sync` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines.
 - `owpp bundle litellm_model_sync out.py` writes the deployed code to read or diff.
-- `owpp test litellm_model_sync` runs `tests/` against a mock Open-WebUI and a stand-in LiteLLM gateway (docs/testing.md).
+- `owpp test litellm_model_sync` runs `tests/` against the real Open-WebUI, in process and a stand-in LiteLLM gateway (docs/testing.md).
 - On a live Open-WebUI: with an OpenAI connection to a LiteLLM gateway, save the valves. The log shows `LiteLLM Model Sync: N model config(s) written, M removed`, Admin Settings > Models shows the display names and tags, and a user who is not an admin sees the models in the selector.
 
 ## Deploy

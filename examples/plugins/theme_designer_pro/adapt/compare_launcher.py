@@ -1,4 +1,4 @@
-"""The Launcher, upstream vs the adaptation, in owpp's mock. Tokens are masked (they hold a time),
+"""The Launcher, upstream vs the adaptation, on owpp's test harness. Tokens are masked (they hold a time),
 then each run's token is opened by its own designer page.
 
 usage, from the repository root:
@@ -13,7 +13,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from owpp.testing import MockOpenWebUI
+from owpp.testing import Harness
 
 repo, plugin_dir = Path(sys.argv[1]), Path(sys.argv[2])
 TOOL = "theme_designer_pro_launcher"
@@ -24,7 +24,7 @@ def run(kind):
     out = {}
     tmp = Path(tempfile.mkdtemp())
     try:
-        with MockOpenWebUI() as owui:
+        with Harness() as owui:
             if kind == "upstream":
                 d = tmp / "theme_designer_pro"
                 d.mkdir()

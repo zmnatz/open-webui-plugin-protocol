@@ -44,7 +44,8 @@ def test_over_urllib_every_functions_endpoint(served):
     api = api.as_account(api.sign_in("admin@example.com", "pw")["token"])
     meta = FunctionMeta("mine", "Ünïcode description", {"https://x.git": "a" * 40}, {"k": True})
     created = api.create_function("demo", "Demo", "class Filter:\n    pass\n", meta)
-    assert created["meta"] == {**meta.stored(), "manifest": {}}  # no header in that code
+    # no header in that code, and a filter without a toggle switch
+    assert created["meta"] == {**meta.stored(), "manifest": {}, "toggle": False}
     assert [f["id"] for f in api.functions()] == ["demo"]
     assert "content" not in api.functions()[0]
     assert FunctionMeta.of(api.function("demo")) == meta

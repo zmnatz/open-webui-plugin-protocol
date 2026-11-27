@@ -1,4 +1,4 @@
-"""LiteLLM Model Sync against a mock Open-WebUI and a stand-in LiteLLM gateway on localhost.
+"""LiteLLM Model Sync on the test harness and a stand-in LiteLLM gateway on localhost.
 Run with `owpp test litellm_model_sync`."""
 
 import copy
@@ -9,6 +9,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
+
+from owpp.testing import grants
 
 PUBLIC = {"principal_type": "user", "principal_id": "*", "permission": "read"}
 
@@ -100,6 +102,22 @@ def sync(owui, **valves):
     owui.set_valves("litellm_model_sync", SYNC_INTERVAL_MINUTES=0, **valves)
 
 
+def edit_by_hand(owui, model_id, name=None, meta=None):
+    """Save a model config as Admin Settings > Models does: a new name, or new meta."""
+    from open_webui.models.models import ModelForm, Models
+
+    row = owui.models[model_id]
+    form = ModelForm(
+        id=row.id,
+        base_model_id=row.base_model_id,
+        name=name or row.name,
+        meta=row.meta if meta is None else type(row.meta).model_validate(meta),
+        params=row.params,
+        access_grants=grants(row),
+    )
+    owui.run(Models.update_model_by_id(model_id, form))
+
+
 def tags(row):
     return [t["name"] for t in row.meta.model_dump()["tags"]]
 
@@ -121,7 +139,7 @@ def test_each_model_gets_its_display_name_tags_and_vision(owui, plugin, connecte
     assert fast.name == "GPT Fast"
     assert tags(fast) == ["openai", "gpt"]
     assert fast.meta.model_dump()["capabilities"] == {"vision": True}
-    assert fast.access_grants == [PUBLIC]
+    assert grants(fast) == [PUBLIC]
     assert fast.meta.model_dump()["managed_by"] == "litellm_model_sync"
     assert fast.user_id == owui.admin.id
 
@@ -174,10 +192,8 @@ def test_tags_a_person_added_are_kept(owui, plugin, connected):
     function's valves. Your tag is still there beside the synced ones.
     """
     sync(owui)
-    fast = owui.models["gw.gpt-fast"]
-    meta = fast.meta.model_dump()
-    meta["tags"] = meta["tags"] + [{"name": "favourite"}]
-    fast.meta = type(fast.meta).model_validate(meta)
+    meta = owui.models["gw.gpt-fast"].meta.model_dump()
+    edit_by_hand(owui, "gw.gpt-fast", meta={**meta, "tags": meta["tags"] + [{"name": "favourite"}]})
     connected["models"][0]["model_info"]["model_family"] = "gpt-5"
     sync(owui)
     assert tags(owui.models["gw.gpt-fast"]) == ["favourite", "openai", "gpt-5"]
@@ -204,8 +220,7 @@ def test_a_config_someone_named_by_hand_is_left_alone(owui, plugin, connected, c
     gets the gateway's name.
     """
     sync(owui)
-    owui.models["gw.gpt-fast"].name = "My GPT"
-    owui.models["gw.gpt-fast"].meta = type(owui.models["gw.gpt-fast"].meta)()  # not managed
+    edit_by_hand(owui, "gw.gpt-fast", name="My GPT", meta={})  # renamed, and no longer marked
     with caplog.at_level(logging.INFO):
         sync(owui)
     assert owui.models["gw.gpt-fast"].name == "My GPT"
@@ -253,7 +268,9 @@ def test_connections_that_are_not_litellm_are_skipped(owui, plugin, connected):
     owui.config["openai.api_keys"] = ["gw-key", ""]
     sync(owui)
     assert "gw.gpt-fast" in owui.models
-    owui.models.clear()
+    from open_webui.models.models import Models
+
+    owui.run(Models.delete_all_models())
     sync(owui, INCLUDE_CONNECTIONS="127.0.0.1:9")
     assert owui.models == {}
 
@@ -280,9 +297,8 @@ def test_adopted_markers_count_as_its_own(owui, tmp_path, plugin_dir, connected)
 
     load(adopt=False)
     sync(owui)
-    for row in owui.models.values():
-        meta = row.meta.model_dump()
-        row.meta = type(row.meta).model_validate({**meta, "managed_by": "litellm-model-sync"})
+    for id, row in owui.models.items():
+        edit_by_hand(owui, id, meta={**row.meta.model_dump(), "managed_by": "litellm-model-sync"})
     connected["models"] = [m for m in MODELS if m["model_name"] != "embed"]
     sync(owui)  # not adopted: the old configs are left as they are
     assert "gw.embed" in owui.models

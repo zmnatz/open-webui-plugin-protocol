@@ -240,7 +240,7 @@ def _write_llms(out: Path, pages: dict[str, tuple[str, str]]) -> None:
         "> Write, test and deploy Open-WebUI plugins (a function plus the tool and skills it "
         "installs) from a git repository, with the `owpp` CLI (`uvx owpp`). A plugin is a folder "
         "with a plugin.yaml; owpp bundles it into the single file Open-WebUI stores, tests it "
-        "against a mock Open-WebUI, versions it and deploys it.",
+        "against the real Open-WebUI in the test process, versions it and deploys it.",
         "",
         f"The whole guide as one text file: {SITE_URL}llms-full.txt. An agent skill for working "
         f"with owpp: {REPO_URL}/tree/main/skills/owpp. Every command's flags: `uvx owpp <command> "

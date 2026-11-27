@@ -1,7 +1,7 @@
 """Theme Designer Pro's AI Consultant: a description in words, a model on the instance, a palette
 back. Run with `owpp test theme_designer_pro`.
 
-The mock's model answers `owui.model_reply` and keeps what it was asked in `owui.completions`."""
+The harness's model answers `owui.model_reply` and keeps what it was asked in `owui.completions`."""
 
 import pytest
 

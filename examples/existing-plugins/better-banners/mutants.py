@@ -4,7 +4,7 @@
     owpp live --up                          # in this folder; then export what it prints
     uv run python mutants.py [names...]     # all of them, or some
 
-For each bug: the mock tests with the changed code loaded (BB_MUTANT, read by
+For each bug: the unit tests with the changed code loaded (BB_MUTANT, read by
 tests/conftest.py), then the changed code put on the running Open-WebUI through its API, the
 container restarted, and the live tests run. The results go to mutants.json here. The original
 is put back at the end.

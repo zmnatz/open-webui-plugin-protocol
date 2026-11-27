@@ -28,7 +28,7 @@ from owpp.libraries import (
     wanted,
 )
 from owpp.manifest import read_manifest
-from owpp.testing.mock import MockOpenWebUI
+from owpp.testing import Harness
 from owpp.unbundle import unbundle
 
 CODE = '"""\ntitle: T\n"""\nx = 1\n'
@@ -119,9 +119,9 @@ def test_the_docs_table_has_a_row_per_library():
 
 def test_owpp_lib_exports_every_public_library_name_from_its_library():
     """owpp.lib is what plugins import; the bundler decides what to include from exports().
-    live_reload's names load on first use, since it imports open_webui (the mock, here)."""
+    live_reload's names load on first use, since it imports open_webui (the real one, here)."""
     assert sorted(owpp.lib.__all__) == sorted(exports())
-    with MockOpenWebUI():
+    with Harness():
         for name, lib in exports().items():
             module = "plugin_runtime" if lib == FROM_RUNTIME else f"lib.{BY_NAME[lib].file}"
             source = importlib.import_module(f"owpp.runtime.{module}")

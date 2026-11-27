@@ -1,7 +1,7 @@
 """Theme Designer Pro's live updates (the stream every page keeps open) and its lifecycle: startup,
 valve changes, disabling, a new Designer Url, shutdown. Run with `owpp test theme_designer_pro`.
 
-The mock cannot hold an endless response open, so these tests open a page's stream the way the
+The harness's client cannot hold an endless response open, so these tests open a page's stream the way the
 stream route registers it (`td.stream()`) and read what is sent to it."""
 
 import json
@@ -213,9 +213,10 @@ def test_a_shutdown_ends_the_streams(owui, td):
     assert td.heard(page) == [("end", None)]
 
 
-def test_a_bootloader_an_old_version_wrote_into_index_html_is_removed(owui, plugin):
-    """Versions up to 1.6.2 wrote the bootloader into Open-WebUI's index.html; the first start
-    removes it, and leaves the rest of the file alone.
+def test_a_bootloader_an_old_version_wrote_into_index_html_is_removed(owui, plugin_dir):
+    """Versions up to 1.6.2 wrote the bootloader into Open-WebUI's index.html; the first event
+    the function gets (the deploy that switches it on, or a start) removes it, and leaves the
+    rest of the file alone.
 
     By hand: not repeatable without one of those versions' index.html.
     """
@@ -227,5 +228,5 @@ def test_a_bootloader_an_old_version_wrote_into_index_html_is_removed(owui, plug
     index.write_text(
         "<html><head><!-- OWUI Theme Pro Bootloader -->\n<script>old()</script>\n<title>x</title></head></html>"
     )
-    owui.startup()
+    owui.load(plugin_dir)
     assert index.read_text() == "<html><head><title>x</title></head></html>"

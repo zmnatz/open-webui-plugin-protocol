@@ -822,9 +822,9 @@ def _test(name: str, args: str, what: str, by_hand: str, body: list[str]) -> lis
 
 def render_tests(spec: PluginSpec) -> str:
     out = [
-        f'"""{spec.title} against a mock Open-WebUI: `owpp test {spec.id}` (docs/testing.md).',
+        f'"""{spec.title} on the test harness: `owpp test {spec.id}` (docs/testing.md).',
         "",
-        "`plugin` is this folder, bundled as the deploy would and loaded into `owui`, the mock.",
+        "`plugin` is this folder, bundled and deployed into `owui`, the real Open-WebUI in process.",
     ]
     if spec.source:
         out += [
@@ -1114,7 +1114,7 @@ def render_readme(spec: PluginSpec) -> str:
         "## Test",
         "",
         f"- `owpp check {spec.id}` bundles it exactly as the deploy does, compiles it and lists undefined names.",
-        f"- `owpp test {spec.id}` runs `tests/` against a mock Open-WebUI (docs/testing.md).",
+        f"- `owpp test {spec.id}` runs `tests/` against the real Open-WebUI, in process (docs/testing.md).",
         f"- On a live Open-WebUI: {live}",
         "",
         "## Deploy",

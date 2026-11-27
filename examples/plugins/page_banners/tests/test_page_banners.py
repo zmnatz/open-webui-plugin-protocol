@@ -1,4 +1,4 @@
-"""Page Banners against a mock Open-WebUI: its script and stylesheet are assets/ files,
+"""Page Banners on the test harness: its script and stylesheet are assets/ files,
 served through the Shared Assets Protocol. Run with `owpp test page_banners`."""
 
 import json
@@ -71,7 +71,9 @@ def test_a_valve_out_of_range_is_refused(owui, started):
 
     By hand: set max_height_px to 10 and save. Open-WebUI refuses the valves.
     """
-    with pytest.raises(ValueError):
+    from owpp.errors import OwppError
+
+    with pytest.raises(OwppError, match="HTTP 400"):
         owui.set_valves("page_banners", max_height_px=10)
 
 

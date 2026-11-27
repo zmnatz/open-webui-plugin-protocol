@@ -5,7 +5,7 @@
   owpp bundle <id> [out.py]          print (or write) the exact code that would be deployed
   owpp build [id ...] [--out dist] [--latest]   bundle the plugins into a folder to deploy elsewhere
   owpp deploy [--from dist] [--only id,id] [--dry-run [--latest]] [--force] [--no-prune | --force-prune] [--managed-by marker]
-  owpp test [id ...] [--upstream] [-- pytest args]  run each plugin's tests/ against a mock Open-WebUI
+  owpp test [id ...] [--upstream] [-- pytest args]  run each plugin's tests/ against the real Open-WebUI, in process
   owpp pull [id ...] [--dry-run] [--bump part]   move plugins taken from git to their latest commit
   owpp version [id] [patch|minor|major|X.Y.Z] [--tool | --skill name] [-m text]
   owpp migrate [id ...] [--dry-run]  bring plugin.yaml to the current protocol version
@@ -175,16 +175,31 @@ def _cmd_deploy(args: argparse.Namespace, directory: Path, env: Mapping[str, str
 
 
 def _cmd_test(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
+    if args.editor:
+        from owpp.testing.wheel import open_webui_dir
+
+        print(open_webui_dir())
+        return 0
     if not directory.exists():
         raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
+    from owpp.testing import pin
+
+    running = f"{sys.version_info.major}.{sys.version_info.minor}"
+    command = f"uvx --python {pin.PYTHON} --from 'owpp[test]' owpp test"
+    if running != pin.PYTHON:
+        print(
+            f"error: owpp test runs Open-WebUI v{pin.VERSION}, which runs on Python {pin.PYTHON}, "
+            f"not {running}: run it as `{command}`",
+            file=sys.stderr,
+        )
+        return 1
     try:
         import pytest  # noqa: F401
-
-        import owpp.testing.mock  # noqa: F401  (its imports: FastAPI, SQLAlchemy, ...)
+        import socketio  # noqa: F401  (one of Open-WebUI's packages, which the test extra adds)
     except ImportError as error:
         print(
-            f"error: owpp test needs {error.name or 'pytest'}: run it as "
-            "`uvx --from 'owpp[test]' owpp test`, or `pip install 'owpp[test]'`",
+            f"error: owpp test needs {error.name or 'pytest'}: run it as `{command}`, "
+            "or `pip install 'owpp[test]'`",
             file=sys.stderr,
         )
         return 1
@@ -455,13 +470,21 @@ def build_parser() -> argparse.ArgumentParser:
     deploy.add_argument(
         "--managed-by", metavar="marker", help="ownership marker (default $OWPP_MANAGED_BY)"
     )
-    test = add("test", _cmd_test, "run each plugin's tests/ against a mock Open-WebUI")
+    test = add(
+        "test", _cmd_test, "run each plugin's tests/ against the real Open-WebUI, in process"
+    )
     test.add_argument("ids", nargs="*", metavar="id", help="plugins to test (default: all)")
     test.add_argument(
         "--upstream",
         action="store_true",
         help="also run the tests of plugins taken whole from git, from the pinned commit "
         "(this runs their code; OPEN_WEBUI_* variables are removed first)",
+    )
+    test.add_argument(
+        "--editor",
+        action="store_true",
+        help="print the folder of the Open-WebUI code the tests run, for an editor's search "
+        "path (downloads it once), and stop",
     )
     migrate = add("migrate", _cmd_migrate, "bring plugin.yaml to the current protocol version")
     migrate.add_argument("ids", nargs="*", metavar="id", help="plugins to migrate (default: all)")

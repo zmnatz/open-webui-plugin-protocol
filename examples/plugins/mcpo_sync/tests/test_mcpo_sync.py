@@ -1,4 +1,4 @@
-"""mcpo Sync against a mock Open-WebUI and a stand-in mcpo proxy on localhost.
+"""mcpo Sync on the test harness and a stand-in mcpo proxy on localhost.
 Run with `owpp test mcpo_sync`."""
 
 import json
@@ -168,7 +168,10 @@ def test_another_functions_valves_do_not_trigger_it(owui, plugin, mcpo):
 
     By hand: save the valves of some other function. mcpo's log shows no request.
     """
-    owui.function_valves["mcpo_sync"] = {"MCPO_BASE_URL": mcpo["url"], "MCPO_API_KEY": "mcpo-key"}
+    from open_webui.models.functions import Functions
+
+    valves = {"MCPO_BASE_URL": mcpo["url"], "MCPO_API_KEY": "mcpo-key"}
+    owui.run(Functions.update_function_valves_by_id("mcpo_sync", valves))  # stored, no event
     owui.emit("function.valves_updated", "someone_else")
     assert mcpo["requests"] == 0
 

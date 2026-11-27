@@ -333,7 +333,7 @@ def _readme(plugin_id: str, title: str, kind: str, where: str) -> str:
             "## Test",
             "",
             f"- `owpp check {plugin_id} --strict` bundles it as the deploy does and compiles it.",
-            f"- `owpp test {plugin_id}` runs `tests/` against a mock Open-WebUI.",
+            f"- `owpp test {plugin_id}` runs `tests/` against the real Open-WebUI, in process.",
             f"- On a live Open-WebUI: {_LIVE[kind]}",
             "",
             "## Deploy",
@@ -350,7 +350,7 @@ def _readme(plugin_id: str, title: str, kind: str, where: str) -> str:
 def _first_test(plugin_id: str, title: str, kind: str) -> str:
     return "\n".join(
         [
-            f'"""{title} against a mock Open-WebUI: `owpp test {plugin_id}`.',
+            f'"""{title} on the test harness: `owpp test {plugin_id}`.',
             "",
             "One test per behaviour belongs here: each method Open-WebUI calls, each valve and",
             'each branch (docs/testing/writing.md)."""',

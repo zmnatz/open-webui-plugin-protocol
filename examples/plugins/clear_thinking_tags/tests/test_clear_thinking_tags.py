@@ -1,4 +1,4 @@
-"""Clear thinking tags against a mock Open-WebUI: a reply that ends in reasoning with no answer
+"""Clear thinking tags on the test harness: a reply that ends in reasoning with no answer
 after it gets that reasoning as its answer. Run with `owpp test clear_thinking_tags`."""
 
 

@@ -117,6 +117,17 @@ class TestTestCommand:
             text=True,
         )
 
+    def test_editor_prints_the_open_webui_code_the_tests_run(self, tmp_path, monkeypatch, capsys):
+        """An editor resolves `open_webui` from that folder; it needs no plugins folder."""
+        from owpp.testing import pin
+
+        cached = tmp_path / "cache" / f"open-webui-{pin.VERSION}"
+        (cached / "open_webui").mkdir(parents=True)
+        (cached / ".sha256").write_text(pin.WHEEL_SHA256)
+        monkeypatch.setenv("OWPP_CACHE_DIR", str(tmp_path / "cache"))
+        assert main(["test", "--editor", "--dir", str(tmp_path / "none")], env={}) == 0
+        assert capsys.readouterr().out.strip() == str(cached)
+
     def test_every_scaffold_passes_its_own_tests(self, tmp_path):
         for kind in ("event", "filter", "action", "pipe"):
             scaffold(tmp_path, f"demo_{kind}", kind)

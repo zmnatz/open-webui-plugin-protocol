@@ -1,5 +1,5 @@
 """The Excalidraw filter: the artifact it adds to replies, and the editor page and API it
-serves, against a mock Open-WebUI. Run with `owpp test excalidraw`."""
+serves, on the test harness. Run with `owpp test excalidraw`."""
 
 import json
 import re

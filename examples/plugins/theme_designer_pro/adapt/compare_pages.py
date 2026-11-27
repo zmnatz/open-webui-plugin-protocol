@@ -16,7 +16,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from owpp.testing import MockOpenWebUI
+from owpp.testing import Harness
 
 upstream_file = Path(sys.argv[1]) / "event-function/theme_designer_pro_event.py"
 plugin_dir = Path(sys.argv[2])
@@ -61,7 +61,7 @@ def run(kind: str) -> dict:
     out = {}
     tmp = Path(tempfile.mkdtemp())
     try:
-        with MockOpenWebUI() as owui:
+        with Harness() as owui:
             if kind == "upstream":
                 plugin = owui.load(
                     upstream_folder(tmp),

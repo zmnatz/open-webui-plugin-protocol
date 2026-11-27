@@ -1,6 +1,6 @@
 """Better Banners on a real Open-WebUI v0.13.5: what its script does on the chat page.
 
-The mock's tests (plugins/better_banners/tests) cover the server side: the script in
+The unit tests (plugins/better_banners/tests) cover the server side: the script in
 /static/loader.js and the socket signal. These cover what only a browser shows: where the
 banners go, collapsing and dismissing, live updates, rendering, and the language.
 """

@@ -85,8 +85,8 @@ def field_of(obj: Any, key: str) -> Any:
 def replace_imports(content: Any) -> str:
     """Open-WebUI rewrites these import prefixes in the code before it stores it
     (utils/plugin.py replace_imports), so the stored copy of a file that uses them never
-    equals the file. The deploy compares against the rewritten text, and the mock Open-WebUI
-    stores it."""
+    equals the file. The deploy compares against the rewritten text, and the in-memory fake
+    of the tests stores it."""
     return (
         str(content or "")
         .replace("from utils", "from open_webui.utils")

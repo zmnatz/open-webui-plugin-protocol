@@ -6,7 +6,7 @@
 
 plugins/excalidraw takes the example whole from git, so the bugs go into a local copy of
 examples/plugins/excalidraw, in mutants/ here, with this folder's tests beside it. For each bug:
-change one file, run the mock tests, `owpp deploy` it to the running Open-WebUI, restart
+change one file, run the unit tests, `owpp deploy` it to the running Open-WebUI, restart
 Open-WebUI, run the live tests. The results go to mutants.json here. The original is deployed
 again at the end.
 """

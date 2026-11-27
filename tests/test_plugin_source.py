@@ -8,7 +8,7 @@ import sys
 import pytest
 from conftest import EXAMPLES, write_tree
 
-from owpp.testing import MockOpenWebUI, plugin_source
+from owpp.testing import Harness, plugin_source
 
 
 def two_plugins(tmp_path):
@@ -63,7 +63,7 @@ def test_the_libraries_carry_the_plugins_own_data(tmp_path):
 
 def test_shared_py_is_imported_once_per_bundle_like_open_webui_does():
     """The function and the tool are separate modules there, each with a copy of shared.py."""
-    with MockOpenWebUI():
+    with Harness():
         src = plugin_source(EXAMPLES / "excalidraw" / "tests")  # any path inside the plugin
     assert src.function and src.tool and src.shared and src.tool_shared
     assert src.shared is not src.tool_shared
@@ -75,5 +75,5 @@ def test_shared_py_is_imported_once_per_bundle_like_open_webui_does():
     "name", sorted(p.name for p in EXAMPLES.iterdir() if (p / "plugin.yaml").exists())
 )
 def test_every_example_imports(name):
-    with MockOpenWebUI():
+    with Harness():
         plugin_source(EXAMPLES / name)

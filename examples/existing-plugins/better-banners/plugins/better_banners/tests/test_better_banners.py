@@ -1,6 +1,6 @@
-"""Better Banners against a mock Open-WebUI: `owpp test better_banners` (docs/testing.md).
+"""Better Banners on the test harness: `owpp test better_banners` (docs/testing.md).
 
-`plugin` is this folder, bundled as the deploy would and loaded into `owui`, the mock.
+`plugin` is this folder, bundled as the deploy would and deployed into `owui`, the real Open-WebUI in process.
 Its files are fetched from the pinned commit, so these tests need the network.
 
 The server side is all there is to test here: the script it adds to the shared

@@ -80,13 +80,30 @@ def extra(pins: list[tuple[str, str]], python: str) -> str:
     return "\n".join(lines)
 
 
-def pin_module(version: str, wheel: dict, python: str) -> str:
+def full_requirements(requires_dist: list[str]) -> dict[str, str]:
+    """{package: version} of the full package's own pins, extras left out."""
+    out = {}
+    for requirement in requires_dist:
+        if "extra ==" in requirement:
+            continue
+        match = re.match(r"([A-Za-z0-9_.-]+)(?:\[[^\]]*\])?==([^;\s]+)", requirement)
+        if match:
+            out[match.group(1).lower().replace("_", "-")] = match.group(2)
+    return dict(sorted(out.items()))
+
+
+def pin_module(version: str, wheel: dict, python: str, full: dict[str, str]) -> str:
+    pins = "".join(f'    "{name}": "{v}",\n' for name, v in full.items())
     return f'''"""The Open-WebUI that `owpp test` runs. tools/sync_open_webui.py writes this file."""
 
 VERSION = "{version}"
 WHEEL_URL = "{wheel["url"]}"
 WHEEL_SHA256 = "{wheel["digests"]["sha256"]}"
 PYTHON = "{python}"  # the Python of the slim image, which the lock is compiled for
+
+# The full package's own pins, which the harness names when a plugin needs one slim leaves out.
+FULL_REQUIREMENTS = {{
+{pins}}}
 '''
 
 
@@ -111,7 +128,9 @@ def rendered(version: str) -> dict[Path, str]:
         COMPOSE.read_text(),
     )
     return {
-        PIN: pin_module(version, wheels[0], python),
+        PIN: pin_module(
+            version, wheels[0], python, full_requirements(release["info"]["requires_dist"])
+        ),
         PYPROJECT: pyproject,
         COMPOSE: compose,
     }

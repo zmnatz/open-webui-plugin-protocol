@@ -14,8 +14,9 @@ built from what its bundle would have, as one module, and while each file runs `
 `_owpp_src_<id>_<file>`.
 
 This is for logic. The function's class, its routes, its events and its tool run through
-`owui.load()` (the mock), which tests the bundle that is deployed. A file that imports
-`open_webui` at its top needs the mock installed first (the `owui` fixture).
+`owui.load()` (the test harness), which tests the bundle that is deployed. A file that imports
+`open_webui` at its top needs a harness open first (the `owui` fixture), so that the real
+Open-WebUI is importable.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Dynamic Vision Router against a mock Open-WebUI: a message with an image is sent to the model
+"""Dynamic Vision Router on the test harness: a message with an image is sent to the model
 in the `vision_model_id` valve. Run with `owpp test vision_router`."""
 
 import pytest

@@ -1,0 +1,62 @@
+"""The pinned Open-WebUI's own code, for the test harness (ADR 0004).
+
+The pure-Python wheel is downloaded once, checked against the pinned sha256 and unpacked into
+owpp's cache. The harness puts the folder on `sys.path`: the wheel is never installed, so its full
+dependency list (torch, CUDA, chromadb) is never resolved. The `test` extra installs the packages
+of upstream's slim image instead.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import shutil
+import sys
+import tempfile
+import urllib.request
+import zipfile
+from pathlib import Path
+
+from . import pin
+
+
+def cache_dir() -> Path:
+    """`OWPP_CACHE_DIR`, else `$XDG_CACHE_HOME/owpp`, else `~/.cache/owpp`."""
+    own = os.environ.get("OWPP_CACHE_DIR")
+    if own:
+        return Path(own).expanduser()
+    xdg = os.environ.get("XDG_CACHE_HOME")
+    return (Path(xdg).expanduser() if xdg else Path.home() / ".cache") / "owpp"
+
+
+def open_webui_dir() -> Path:
+    """The folder that holds the pinned `open_webui` package, unpacked from its wheel. The first
+    call downloads it."""
+    folder = cache_dir() / f"open-webui-{pin.VERSION}"
+    if (folder / "open_webui").is_dir() and (folder / ".sha256").is_file():
+        return folder
+    folder.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=folder.parent, prefix=".open-webui-") as tmp:
+        wheel = Path(tmp) / "open_webui.whl"
+        print(f"owpp: downloading Open-WebUI v{pin.VERSION} for the tests (once)", file=sys.stderr)
+        digest = hashlib.sha256()
+        with urllib.request.urlopen(pin.WHEEL_URL, timeout=300) as response, wheel.open("wb") as f:
+            while chunk := response.read(1 << 20):
+                digest.update(chunk)
+                f.write(chunk)
+        if digest.hexdigest() != pin.WHEEL_SHA256:
+            raise RuntimeError(
+                f"the Open-WebUI v{pin.VERSION} wheel from {pin.WHEEL_URL} has sha256 "
+                f"{digest.hexdigest()}, not the pinned {pin.WHEEL_SHA256}"
+            )
+        unpacked = Path(tmp) / "unpacked"
+        with zipfile.ZipFile(wheel) as archive:
+            archive.extractall(unpacked)
+        (unpacked / ".sha256").write_text(pin.WHEEL_SHA256 + "\n")
+        shutil.rmtree(folder, ignore_errors=True)
+        try:
+            unpacked.rename(folder)
+        except OSError:  # another run unpacked it first
+            if not (folder / "open_webui").is_dir():
+                raise
+    return folder

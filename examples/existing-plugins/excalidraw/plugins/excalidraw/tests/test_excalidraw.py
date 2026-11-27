@@ -1,4 +1,4 @@
-"""Excalidraw against a mock Open-WebUI: `owpp test excalidraw` (docs/testing.md).
+"""Excalidraw on the test harness: `owpp test excalidraw` (docs/testing.md).
 
 The function is a global filter that installs the `excalidraw` tool, serves the editor page
 and its scene API under /excalidraw, and adds the editor to a reply as an artifact. What the
@@ -9,6 +9,8 @@ import json
 import re
 
 import pytest
+
+from owpp.testing import grants
 
 ID = "excalidraw"
 RECT = {"type": "rectangle", "id": "a", "x": 0, "y": 0, "width": 160, "height": 80}
@@ -61,7 +63,7 @@ def test_the_function_is_global_and_installs_a_tool_everyone_can_use(owui, plugi
     assert plugin.type == "filter"
     row = owui.functions[ID]
     assert (row.is_active, row.is_global) == (True, True)
-    assert owui.tools[ID].access_grants == [
+    assert grants(owui.tools[ID]) == [
         {"principal_type": "user", "principal_id": "*", "permission": "read"}
     ]
 
