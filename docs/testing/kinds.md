@@ -82,7 +82,7 @@ def test_show_creates_the_drawing_and_hands_the_filter_an_artifact(owui, plugin)
 
 - `.call(method, ..., user=, chat_id=)` calls a method as the model would.
 - `.specs` is what the model is told: each method's name, description and parameters. Test it when the docstrings are the instructions the model follows.
-- That the model actually calls the tool is Open-WebUI's and the model's part. This repository's [live suite](live.md#the-live-suite) checks it, with aimock as the model.
+- That the model actually calls the tool is Open-WebUI's and the model's part. This repository's [live suite](live.md#this-repositorys-live-suite) checks it, with aimock as the model.
 
 Example: [`excalidraw`](../examples/excalidraw.md) (`tests/test_excalidraw_tool.py`).
 
@@ -144,6 +144,16 @@ def test_the_tool_goes_with_the_function_and_comes_back_with_it(owui, plugin):
 ```
 
 `owui.skills` holds the skills, and the grants are on each row (`access: public` puts a read grant for every user there).
+
+## A function written elsewhere
+
+A function pasted into Open-WebUI, or written for it outside owpp, is brought in with [`owpp import`](../commands/import.md) (`--instance <id>`, a file, or its repository's URL), which writes its folder and a first test. The recipes on this page then apply as they are, for the kind of function it is. Two things come up with such code:
+
+- **`open_webui` imported at the top of the file** loads in the mock, which stands in for those modules as they are in Open-WebUI v0.13. Code written for an older Open-WebUI can fail where v0.13 would too (a model method that is a coroutine now, say): that is a finding about the function, not the test.
+- **A name the mock does not have** still imports, and raises `NotImplementedError` naming it when called: [what the mock is not](mock.md#what-it-is-not).
+- **A service it calls** is a stand-in on `127.0.0.1`, as for [any plugin that calls other services](#plugins-that-call-other-services).
+
+Two worked examples, someone else's plugin and one of this repository's, with their tests and how many planted bugs those caught: [a plugin that already works](existing-plugins.md).
 
 ## Code from git
 

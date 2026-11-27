@@ -16,7 +16,7 @@ plugins/excalidraw/
 
 ```yaml
 # plugin.yaml
-protocol: "0.5"
+protocol: "0.7"
 function:
   title: Excalidraw
   version: 3.1.0
@@ -36,6 +36,7 @@ uvx owpp check                       # bundle, compile, report undefined names
 uvx owpp version                     # every plugin's versions (and its tool's and skills')
 uvx owpp version excalidraw minor    # a new version, with a CHANGELOG.md entry
 uvx --from 'owpp[test]' owpp test    # each plugin's tests/, against a mock Open-WebUI
+uvx --from 'owpp[live]' owpp live    # live/ tests, on a throwaway Open-WebUI in Docker
 uvx owpp deploy --only excalidraw --dry-run
 uvx owpp pull                        # move plugins taken from git to their latest commit, for review
 uvx owpp deploy --dry-run --latest     # what that would change on the live instance, by version
@@ -57,6 +58,7 @@ Requires [uv](https://docs.astral.sh/uv/) (it brings its own Python) and `git` (
 
 ```sh
 uvx owpp create                      # a wizard: asks what the plugin is, writes plugins/<id>/
+uvx owpp import <git URL|file>       # or a plugin from code that exists (--instance <id>: from Open-WebUI)
 uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
 # or OPEN_WEBUI_USERNAME + OPEN_WEBUI_PASSWORD, OPEN_WEBUI_OIDC_TOKEN, or nothing: docs/commands/deploy.md#signing-in
@@ -68,7 +70,7 @@ The deploy reads the instance and the credentials from the environment: [`OPEN_W
 
 ```yaml
 - uses: actions/checkout@v5
-- uses: zmnatz/open-webui-plugin-protocol@v0.6.3
+- uses: zmnatz/open-webui-plugin-protocol@v0.7.0
   with:
     url: https://chat.example.com
     api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
@@ -103,7 +105,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ## Status
 
-0.6.3, written against Open-WebUI v0.13.5 (and v0.13.4). The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.5 ([screenshots](docs/screenshots.md)), and checked there on every change by an end-to-end run with aimock as its models ([the live suite](docs/testing/live.md#the-live-suite)). See [status and limits](docs/README.md#status-and-limits).
+0.7.0, written against Open-WebUI v0.13.5 (and v0.13.4). The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.5 ([screenshots](docs/screenshots.md)), and checked there on every change by an end-to-end run with aimock as its models ([the live suite](docs/testing/live.md#this-repositorys-live-suite)). See [status and limits](docs/README.md#status-and-limits).
 
 ## Development
 

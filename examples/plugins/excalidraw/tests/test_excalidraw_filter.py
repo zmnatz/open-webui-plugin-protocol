@@ -141,35 +141,34 @@ def test_the_page_carries_a_token_for_this_chat_and_is_never_cached(owui, ada, c
 def test_the_token_lasts_as_long_as_the_valve_says(owui, ada, chat):
     """The SESSION_TOKEN_HOURS valve sets how long the page's token is good for.
 
-    By hand: set the Excalidraw function's SESSION_TOKEN_HOURS valve to 1 and reload the editor.
-    In its source, the number after s. in the token is a Unix time about an hour from now (`date
-    -d @<number>`).
+    By hand: set the Excalidraw function's SESSION_TOKEN_HOURS valve to 2 and reload the editor.
+    In its source, the number after s. in the token is a Unix time about two hours from now (`date
+    -d @<number>`). (Not 1: code that ignored the valve for a fixed hour would pass.)
     """
     import time
 
-    owui.set_valves("excalidraw", SESSION_TOKEN_HOURS=1)
+    owui.set_valves("excalidraw", SESSION_TOKEN_HOURS=2)
     expiry = int(token_for(owui, ada, chat).split(".")[1])
-    assert 3500 < expiry - time.time() <= 3600
+    assert 7100 < expiry - time.time() <= 7200
 
 
 # ---- the editor's API (token, not session) ----------------------------------------------
 
 
 def test_the_api_serves_the_drawing_with_the_pages_token(owui, ada, chat):
-    """The editor's API serves the drawing to whoever holds the page's token, with no cookie (the
-    editor runs in a sandboxed iframe) and CORS open to any origin. Asked again with since=<that
-    version>, it answers that nothing changed.
+    """The editor's API serves the drawing to whoever holds the page's token, without a session.
+    It sends no CORS header: the editor is same-origin, since it needs iframe Sandbox Allow Same
+    Origin. Asked again with since=<that version>, it answers that nothing changed.
 
     By hand: copy the token from the editor's source and run `curl -i
-    '<host>/excalidraw/api/scenes/<chat id>?t=<token>'`: the elements, changed: true, and
-    access-control-allow-origin: *. Add `&since=<the version it returned>`: {"changed": false,
-    ...}.
+    '<host>/excalidraw/api/scenes/<chat id>?t=<token>'`: the elements and changed: true. Add
+    `&since=<the version it returned>`: {"changed": false, ...}.
     """
     token = token_for(owui, ada, chat)
-    api = owui.client()  # the sandboxed iframe sends no cookies
+    api = owui.client()  # no session: the token is the access check
     got = api.get(f"/excalidraw/api/scenes/{chat}", params={"t": token})
     assert got.status_code == 200
-    assert got.headers["access-control-allow-origin"] == "*"
+    assert "access-control-allow-origin" not in got.headers
     assert got.json()["elements"] == [RECT] and got.json()["changed"] is True
     same = api.get(f"/excalidraw/api/scenes/{chat}", params={"t": token, "since": 1})
     assert same.json() == {"changed": False, "version": 1}
@@ -205,7 +204,7 @@ def test_the_editor_saves_the_users_edits_for_the_model_to_read(owui, ada, chat)
         f"/excalidraw/api/scenes/{chat}",
         params={"t": token},
         content=json.dumps({"client": "browser-1", "elements": edited}),
-        headers={"content-type": "text/plain"},
+        headers={"content-type": "application/json"},
     )
     assert saved.json() == {"version": 2}
     stored = owui.chat(chat).meta["excalidraw"]

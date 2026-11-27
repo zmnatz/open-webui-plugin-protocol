@@ -15,17 +15,18 @@ For an editor to resolve what a plugin imports, install owpp into the repository
 
 ## Existing functions pasted into the UI
 
-1. Make a folder per function: `plugins/<id>/function.py`, with the docstring header moved into `plugin.yaml` under `function:` (or keep a flat `plugins/<id>.py` with its header).
-2. The id must equal the id the function already has in Open-WebUI, or the deploy will create a second copy. Ids cannot contain hyphens.
-3. The first deploy **updates** a same-id function and marks it as managed. Its valves and active/global state are kept.
-4. Replace copied helpers with libraries (`routes`, `jobs`, `chat_data`, `static`, `templates`) as you go; `owpp check` reports anything left undefined.
-5. Run `uvx owpp migrate` to record `protocol: "0.5"` in each manifest (or add the line yourself). A manifest with no key is treated as 0.1, which `owpp check` warns about and `owpp check --strict` fails on; see [the protocol key](plugin-format.md#protocol).
+1. **Import each one from the instance**: `uvx owpp import --instance <id>` ([owpp import](commands/import.md)). It reads the function as Open-WebUI stores it, moves its docstring header into `plugin.yaml` under `function:` and writes the rest as `plugins/<id>/function.py`, with a README, a CHANGELOG and a first test. From a `.py` file instead: `uvx owpp import shout.py`. A function an owpp repository deployed comes back as the plugin it was made from, its tool, skills and `requires:` included ([what owpp put into it](commands/import.md#what-owpp-put-into-it-taken-back-out)).
+2. The id stays the one the function has in Open-WebUI; with another, the deploy would create a second copy. (Ids cannot contain hyphens: `--id` sets one.)
+3. **Test it as it is**: write its tests in `plugins/<id>/tests/` and run `uvx --from 'owpp[test]' owpp test <id>` ([writing a test](testing/writing.md)). An agent does this with the [`test-existing-plugin` skill](ai-agents.md#the-test-existing-plugin-skill).
+4. The first deploy **updates** a same-id function and marks it as managed, with the code it had. Its valves and active/global state are kept.
+5. Replace copied helpers with libraries (`routes`, `jobs`, `chat_data`, `static`, `templates`) as you go; `owpp check` reports anything left undefined.
+6. A manifest from before `owpp import` may have no `protocol:` key: `uvx owpp migrate` records `protocol: "0.7"` (or add the line yourself). A manifest with no key is treated as 0.1, which `owpp check` warns about and `owpp check --strict` fails on; see [the protocol key](plugin-format.md#protocol).
 
 ## Third-party functions
 
-Prefer a pinned `source:` (git URL plus a full commit SHA) over copying the file in: upgrades become a reviewed change of the SHA, which `owpp pull` makes (it lists the files that changed, with a compare link). Review the upstream diff before committing it; this code runs with admin rights.
+`uvx owpp import <URL of its folder or file>` takes it from its git repository, pinned at a commit rather than copied: it finds the function, the tool and the skills in the folder and writes the `plugin.yaml` for them ([owpp import](commands/import.md)). Upgrades are then a reviewed change of the commit, which `owpp pull` makes (it lists the files that changed, with a compare link). Review the upstream diff before committing it; this code runs with admin rights.
 
-To use someone's owpp plugin (one of [the examples](../examples/plugins), say) without copying it, take the [whole plugin from git](plugin-format.md#a-whole-plugin-from-git): a `plugin.yaml` with `source: {git, path, plugin: true}`, then `owpp pull <id>` to pin it.
+Someone's owpp plugin (one of [the examples](../examples/plugins), say) is imported the same way, from the URL of its folder: it is taken [whole from git](plugin-format.md#a-whole-plugin-from-git), with its own `plugin.yaml` as the manifest.
 
 ## Keep your existing marker
 

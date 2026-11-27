@@ -17,7 +17,7 @@ Pasting a function into Open-WebUI's admin UI is the quickest way to run it. owp
 - **Version control.** The plugins live in git: each change is a commit someone can review, and an earlier version can be deployed again ([deploying an older version](commands/deploy.md#deploying-an-older-version)). An edit in the admin UI replaces the code and keeps no history.
 - **Reviewed upgrades of third-party code.** Someone else's function, tool or skill is taken from their repository at a pinned commit instead of copied in. [`owpp pull`](commands/pull.md) moves the pin and lists the files that changed, so the upgrade is a change you review before it runs with admin rights ([`owpp pull`](commands/pull.md)).
 - **Shared libraries.** Routes, scheduled jobs, per-chat data, static files and templates come from [libraries](libraries.md), not from a copy pasted into each function.
-- **Tests.** [`owpp check`](commands/check.md) finds undefined names before anything is deployed, and [`owpp test`](commands/test.md) runs each plugin's unit tests against a mock Open-WebUI ([testing](testing.md)).
+- **Tests.** [`owpp check`](commands/check.md) finds undefined names before anything is deployed, [`owpp test`](commands/test.md) runs each plugin's unit tests against a mock Open-WebUI, and [`owpp live`](commands/live.md) runs a repository's live tests on a throwaway Open-WebUI in Docker, over its API and in the browser ([testing](testing.md)). A function that already works comes in with [`owpp import`](commands/import.md), and an agent can write its tests ([a plugin that already works](testing/existing-plugins.md)).
 - **Repeatable deploys.** [`owpp deploy`](commands/deploy.md), from a laptop or the [GitHub Action](tooling.md#github-action), makes the instance match the repository, `--dry-run` shows what it would change first, and a plugin that has not changed is left alone ([what a deploy does](commands/deploy.md#what-a-deploy-does)).
 - **A function with a tool and skills.** They are installed and removed together ([runtime](runtime.md)), instead of by hand in three places.
 
@@ -33,7 +33,8 @@ It is not worth it when:
 | --- | --- |
 | Deploy a first plugin | [getting started](getting-started.md), or [with an AI agent](ai-agents.md) |
 | Write a plugin | [creating a plugin](creating.md), then [authoring](authoring.md) and [plugin format](plugin-format.md) |
-| Bring a repository or existing functions over | [adopting](adopting.md) |
+| Bring a repository or existing functions over | [adopting](adopting.md), and [`owpp import`](commands/import.md) |
+| Test a plugin, or one that already works | [testing](testing.md), [live tests](testing/live.md), [a plugin that already works](testing/existing-plugins.md) |
 | Deploy, or set up CI | [tooling](tooling.md) and its command pages |
 | Fix an error owpp printed | [troubleshooting](troubleshooting.md) |
 | Move to a new owpp version | [upgrading](upgrading.md) |
@@ -58,7 +59,7 @@ plugins/<id>/
 
 ```yaml
 # plugin.yaml
-protocol: "0.5"
+protocol: "0.7"
 function:
   title: My Plugin
   author: me
@@ -84,11 +85,11 @@ owpp deploy --only my_plugin --dry-run
 
 ## Status and limits
 
-Written against Open-WebUI **v0.13.5** (it began on v0.13.4, which it still supports). API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) were read from that source, and the libraries are tested against stubbed Open-WebUI modules. The examples are deployed to a real v0.13.5 on every change by the [live suite](testing/live.md#the-live-suite), an end-to-end run, and photographed there ([screenshots](screenshots.md)).
+Written against Open-WebUI **v0.13.5** (it began on v0.13.4, which it still supports). API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) were read from that source, and the libraries are tested against stubbed Open-WebUI modules. The examples are deployed to a real v0.13.5 on every change by the [live suite](testing/live.md#this-repositorys-live-suite), an end-to-end run, and photographed there ([screenshots](screenshots.md)).
 
 Known limits:
 
-- **The live suite runs on v0.13.5 only**, with aimock and fixed files in place of a real model and the services the examples call ([the live suite](testing/live.md#the-live-suite)). A newer Open-WebUI, or a real model's behaviour, is checked by hand.
+- **The live suite runs on v0.13.5 only**, with aimock and fixed files in place of a real model and the services the examples call ([the live suite](testing/live.md#this-repositorys-live-suite)). A newer Open-WebUI, or a real model's behaviour, is checked by hand.
 - **Sign-in fallbacks checked against source, not a live instance.** For a page opened with no session, the guard relies on Open-WebUI's `/api/v1/auths/signin` accepting empty credentials when trusted-header sign-in is configured, and on its login page honouring `?redirect=` ([routes](libraries.md#routes)). Verified in the v0.13.4 and v0.13.5 source: both hold, with no user name or password needed under a trusted header. The signin route needs `ENABLE_PASSWORD_AUTH` (on by default) and the trusted header to be present.
 - **Redis** claims in the `jobs` library are tested with stubs only.
 - **No example serves `static/` files or a public mount** (both example pages are templates the function renders). The `static` library and the `public` access level are tested, and `owpp create` writes both, but no example shows them.

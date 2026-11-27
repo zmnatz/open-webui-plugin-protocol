@@ -4,18 +4,25 @@ The runtime and libraries are copied into every bundle, so a new owpp changes th
 
 ## Steps
 
-1. **Move the pin.** Change the version wherever you run owpp: `uvx owpp@0.6.3`, `uv tool install owpp==0.6.3`, or the action's `uses: zmnatz/open-webui-plugin-protocol@v0.6.3`.
+1. **Move the pin.** Change the version wherever you run owpp: `uvx owpp@0.7.0`, `uv tool install owpp==0.7.0`, or the action's `uses: zmnatz/open-webui-plugin-protocol@v0.7.0`.
 2. **Migrate the manifests.** See what would change, then write it:
 
    ```sh
-   uvx owpp@0.6.3 migrate --dry-run
-   uvx owpp@0.6.3 migrate
+   uvx owpp@0.7.0 migrate --dry-run
+   uvx owpp@0.7.0 migrate
    ```
 
    `migrate` rewrites only what each version step changes, keeps comments and layout, and lists every file it writes. A manifest already at the current version is left alone. Pass ids to migrate only some plugins.
-3. **Check.** `uvx owpp@0.6.3 check --strict` bundles every plugin as the deploy would. `check` notes any manifest still on an older protocol and warns about one with no `protocol:` key; `--strict` makes that warning fail.
+3. **Check.** `uvx owpp@0.7.0 check --strict` bundles every plugin as the deploy would. `check` notes any manifest still on an older protocol and warns about one with no `protocol:` key; `--strict` makes that warning fail.
 4. **Dry run.** `owpp deploy --dry-run` against your instance shows which functions, tools and skills the new bundles would update.
 5. **Commit** the pin and the manifest changes together, and deploy.
+
+## 0.6 -> 0.7
+
+- **Protocol 0.7.** `owpp migrate` sets `protocol: "0.7"` and changes nothing else: 0.7 changes no key, so a manifest left at 0.5 means the same, and `owpp check --strict` only notes it. owpp 0.6 refuses a 0.7 manifest, so move every pin (CI, the action, your own machine) before you migrate.
+- **Live tests, if you want them:** [`owpp live`](commands/live.md) runs a repository's `live/` tests on a throwaway Open-WebUI in Docker. Nothing changes for a repository without a `live/` folder. Tests in the browser need the `live` extra: `uvx --from 'owpp[live]' owpp live`, after `playwright install chromium` ([live tests in your repository](testing/live.md#live-tests-in-your-repository)).
+- **The deploy records `requires:`** in each function's `meta.requires`, for [`owpp import --instance`](commands/import.md#what-owpp-put-into-it-taken-back-out). A function already deployed is not updated just for it: it gets the key on its next update.
+- **The Excalidraw example** (3.1.1) no longer sends a CORS header from its scene API. A copy taken from this repository changes only if you `owpp pull` it.
 
 ## 0.5 -> 0.6
 

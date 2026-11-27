@@ -1,0 +1,37 @@
+# The throwaway Open-WebUI `owpp live` starts (docs/commands/live.md): Open-WebUI at the version
+# the protocol targets, and aimock answering as its models. Nothing is kept between runs (no
+# volumes). A repository adds its own services, or changes these, with a compose file of its own,
+# which `owpp live` layers on top of this one (`docker compose -f this -f yours`).
+#
+# owpp live sets the variables: OWPP_LIVE_PORT (Open-WebUI on 127.0.0.1), OWPP_LIVE_AIMOCK_PORT,
+# and OWPP_LIVE_FIXTURES (the folder of aimock fixtures: the repository's, else owpp's own).
+
+services:
+  open-webui:
+    # The slim image leaves out the bundled ML models (about 4.5 GB in the full one), which a
+    # test has no use for.
+    image: ghcr.io/open-webui/open-webui:v0.13.5-slim
+    ports: ["127.0.0.1:${OWPP_LIVE_PORT:-3000}:8080"]
+    environment:
+      WEBUI_SECRET_KEY: owpp-live-only
+      # The only models are aimock's: no Ollama, no real provider, no API key.
+      ENABLE_OLLAMA_API: "false"
+      OPENAI_API_BASE_URLS: http://aimock:4010/v1
+      OPENAI_API_KEYS: unused
+      # Every user may use every model, so the user account can chat with aimock's models without
+      # a grant (Open-WebUI's default refuses a user who is not an admin: "Model not found"). A
+      # repository that tests model grants sets it to "false" in its own compose file.
+      BYPASS_MODEL_ACCESS_CONTROL: "true"
+      # Nothing downloaded at startup, no update checks: the run is the same offline or not.
+      OFFLINE_MODE: "true"
+      ENABLE_VERSION_UPDATE_CHECK: "false"
+    depends_on: [aimock]
+
+  aimock:
+    # CopilotKit's aimock (https://github.com/CopilotKit/aimock, MIT): an OpenAI-compatible
+    # server that answers from fixtures, the same way every run. Its request journal,
+    # GET /__aimock/journal, is how a test sees what Open-WebUI sent the model.
+    image: ghcr.io/copilotkit/aimock:1.48.1
+    command: ["--fixtures", "/fixtures", "--host", "0.0.0.0", "--port", "4010"]
+    ports: ["127.0.0.1:${OWPP_LIVE_AIMOCK_PORT:-4010}:4010"]
+    volumes: ["${OWPP_LIVE_FIXTURES:?owpp live sets it}:/fixtures:ro"]

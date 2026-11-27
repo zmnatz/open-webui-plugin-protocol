@@ -7,7 +7,7 @@ description: Open-WebUI plugins kept in git with owpp, the Open-WebUI plugin pro
 
 A **plugin** is a folder, `plugins/<id>/`, with a `plugin.yaml`: a function (the parent) and, optionally, a tool and skills that the function installs when it is enabled and removes when it is disabled. `owpp` bundles the folder into the single file Open-WebUI stores, tests it against a mock Open-WebUI, and deploys it.
 
-Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.6.3`). `uvx owpp <command> --help` is the reference for every flag, and each command has a page at https://zmnatz.github.io/open-webui-plugin-protocol/commands/<command>/. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
+Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.7.0`). `uvx owpp <command> --help` is the reference for every flag, and each command has a page at https://zmnatz.github.io/open-webui-plugin-protocol/commands/<command>/. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
 
 Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](https://zmnatz.github.io/open-webui-plugin-protocol/environment-variables/#owpp_plugins_dir), else `./plugins`.
 
@@ -19,8 +19,9 @@ Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](h
 | Change a plugin that exists | [Change](#change) |
 | A plugin that takes its code from another git repository, or moving it to a newer commit | [From git](#from-git) |
 | Write or fix a plugin's tests | [references/testing.md](references/testing.md) |
+| Tests on a real Open-WebUI (Docker, with aimock as its models): over its API or in the browser | `uvx --from 'owpp[live]' owpp live` runs `live/` (https://zmnatz.github.io/open-webui-plugin-protocol/testing/live/#live-tests-in-your-repository) |
 | Put plugins on an Open-WebUI instance | [Deploy](#deploy) |
-| Functions someone pasted into Open-WebUI by hand | https://zmnatz.github.io/open-webui-plugin-protocol/adopting/ |
+| A function or plugin that already exists (pasted into Open-WebUI, a `.py` file, someone else's repository) | `uvx owpp import --instance <id>`, `uvx owpp import <file>` or `uvx owpp import <git URL>` writes its folder (https://zmnatz.github.io/open-webui-plugin-protocol/commands/import/); its tests: the `test-existing-plugin` skill (`npx skills add zmnatz/open-webui-plugin-protocol@test-existing-plugin`) |
 
 ## Create
 
@@ -47,7 +48,7 @@ Done when `owpp check <id> --strict` and `owpp test <id>` pass, and `uvx owpp ch
 
 A plugin may take its function, tool or skills from another repository, pinned to a full 40-character commit SHA in `plugin.yaml`'s `source:` (with the files named by `file:` and `dir:` entries). That code runs with admin rights in Open-WebUI, so the commit only ever moves in a reviewed change.
 
-- **To add one**, write a spec with a `source:` ([references/spec.md](references/spec.md#from-git)). Resolve a branch or tag to its SHA first: `git ls-remote <url> <branch>`; put the branch in `branch:` (or the tag in `tag:`).
+- **To add one**, `uvx owpp import <URL of the folder or file>` finds the function, tool and skills there and pins them. To choose the parts yourself, write a spec with a `source:` ([references/spec.md](references/spec.md#from-git)). Resolve a branch or tag to its SHA first: `git ls-remote <url> <branch>`; put the branch in `branch:` (or the tag in `tag:`).
 - **To take a whole owpp plugin** (a folder with a `plugin.yaml`, such as this repository's examples), write `plugin.yaml` by hand with `source: {git, path, plugin: true}` and no `ref:`, then run `uvx owpp pull <id>` to pin it. The local manifest may only set `function: {valves, global}` and `tool: {id, access, valves}`; skills are the upstream's.
 - **To move it to the latest commit**: `uvx owpp pull <id>`. It rewrites `ref:`, bumps the plugin's version and adds a changelog entry, and lists the upstream files that changed, with a compare link. Show the user that list and link: they review the upstream diff before the change is committed. `uvx owpp deploy --dry-run --latest` shows what the upgrade would change on the instance first, writing nothing.
 
@@ -75,4 +76,4 @@ Done when the deploy's report lists every plugin as the user expected, and the R
 - **Event handlers** use `@on("event.name", own=True)` on a `class Event(PluginEvents)`.
 - **HTML lives in files**: `static/` for files served as they are, `templates/` for pages the function fills in (`plugin_template_text("page.html")`).
 - **Tests** live in the plugin's `tests/` and use the `owui` and `plugin` fixtures. Each test's docstring says what it checks, then `By hand:` the steps to see the same on a live Open-WebUI ([references/testing.md](references/testing.md)).
-- **Vendored code** (the libraries owpp inserts, and code from a `source:`) is used as it is: changes go in the plugin's own files.
+- **Code that is not the plugin's own** is used as it is: the libraries owpp inserts (vendored, byte for byte) and code taken from git at a pinned commit (`source:`). Changes go in the plugin's own files.

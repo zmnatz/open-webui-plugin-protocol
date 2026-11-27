@@ -683,6 +683,11 @@ class MockOpenWebUI:
         folder's files, plugin.yaml included, and the upstream folder is what is bundled.
         Loading the same id again is an update."""
         folder = Path(folder)
+        if folder.is_file():
+            raise ValueError(
+                f"{folder}: load() takes a plugin folder (one with a plugin.yaml). "
+                f"`owpp import {folder.as_posix()}` makes one of this file, header and all"
+            )
         id = id or folder.name
         # From git at the pinned commit (once per session), or from the stand-ins.
         reader = session_sources() if sources is None else _stand_ins(folder, sources)
@@ -1241,8 +1246,15 @@ class MockOpenWebUI:
             return _tool_specs(module)
 
         class JSONCodec:
-            dumps = staticmethod(json.dumps)
-            loads = staticmethod(json.loads)
+            # Wrappers, not json's own functions: their signature changes between Python
+            # versions (3.15 adds array_hook), and the stubs are written from this one.
+            @staticmethod
+            def dumps(obj: Any, **kwargs: Any) -> str:
+                return json.dumps(obj, **kwargs)
+
+            @staticmethod
+            def loads(s: Any, **kwargs: Any) -> Any:
+                return json.loads(s, **kwargs)
 
         async def emit(event, data=None, room=None, to=None, **kwargs):
             mock.emitted.append((event, data))

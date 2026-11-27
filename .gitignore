@@ -7,3 +7,7 @@ dist/
 site/
 build/
 tools/screenshots/failures/
+tools/live/failures/
+examples/existing-plugins/*/mutants/
+examples/existing-plugins/*/mutants.json
+examples/existing-plugins/*/live/failures/

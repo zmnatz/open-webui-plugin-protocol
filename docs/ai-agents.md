@@ -15,6 +15,18 @@ npx skills add zmnatz/open-webui-plugin-protocol@owpp -g       # every project
 
 or copy the folder into your agent's skills folder (for Claude Code, `.claude/skills/owpp/` in the repository, or `~/.claude/skills/owpp/`).
 
+## The test-existing-plugin skill
+
+[`skills/test-existing-plugin/`](../skills/test-existing-plugin/SKILL.md) writes the tests for a function or plugin that already works: one pasted into Open-WebUI, a `.py` file, someone else's repository, or a plugin with no tests yet. It brings the code in with [`owpp import`](commands/import.md), lists every method, valve and branch, and writes a test for each against [the mock](testing/mock.md) that pins what the code does now. Where the code does something its author would not want, it reports a finding rather than changing the code. It also writes [live tests](testing/live.md#live-tests-in-your-repository) for what only a real Open-WebUI does, over its API or in the browser with Playwright, run by [`owpp live`](commands/live.md) on a throwaway Open-WebUI with aimock as its models. In this repository it also takes the example's [screenshots](screenshots.md).
+
+```sh
+npx skills add zmnatz/open-webui-plugin-protocol@test-existing-plugin
+```
+
+### How well it works
+
+It was tried on two plugins: Classic298's Better Banners, imported from git, and this repository's Excalidraw. Then bugs were planted in each, one at a time, and run against every test the skill wrote: the tests caught 14 of 16 in Better Banners and 16 of 19 in Excalidraw, the mock's tests the bugs on the server and the live tests the bugs on the page. What they missed, what they found in owpp, and what the tests that already existed caught: [testing a plugin that already works](testing/existing-plugins.md).
+
 ## A plugin spec instead of the wizard
 
 `owpp create` asks questions at a terminal, which an agent cannot answer. `owpp create --spec <file>` takes the same answers as a YAML or JSON file (`-` reads stdin), writes the plugin and checks it:

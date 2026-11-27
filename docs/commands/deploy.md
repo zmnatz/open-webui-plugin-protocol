@@ -47,7 +47,7 @@ The session it gets is used for that run only, and the account must be an admin:
 
 ## The ownership marker
 
-Every function the deploy writes gets `meta.managed_by = <marker>` (`--managed-by`, else [`OWPP_MANAGED_BY`](../environment-variables.md#owpp_managed_by)) and a note in its description. The marker is the **only** thing pruning acts on: a function with this marker whose plugin folder is gone is deleted, and a function without it (made by hand in the UI, or by another deployment with a different marker) is never touched.
+Every function the deploy writes gets `meta.managed_by = <marker>` (`--managed-by`, else [`OWPP_MANAGED_BY`](../environment-variables.md#owpp_managed_by)) and a note in its description. Beside the marker, `meta.sources` holds the commit each git source was deployed from (for the [report](#the-report-what-changes-in-versions)), and `meta.requires` the plugin's [`requires:`](../plugin-format.md#requires) (`{}` for none), which [`owpp import --instance`](import.md#what-owpp-put-into-it-taken-back-out) writes back into `plugin.yaml`; a function stored without it is not updated just to add it. The marker is the **only** thing pruning acts on: a function with this marker whose plugin folder is gone is deleted, and a function without it (made by hand in the UI, or by another deployment with a different marker) is never touched.
 
 - Use one marker per source of truth. Two repositories deploying to one instance need different markers, or each will prune the other's functions.
 - **Never change the marker of a deployment that already has functions.** They would look hand-made: not updated cleanly, and never pruned. See [adopting](../adopting.md#keep-your-existing-marker).
@@ -84,7 +84,7 @@ Dry run at the latest commits: Open-WebUI functions
 `owpp deploy --dry-run --latest` is the same report at the commits `owpp pull` would move to: which versions an upgrade brings to the live instance, before anything is changed. Without `--dry-run`, `--latest` is refused: ``error: --latest only goes with --dry-run: to deploy the latest commits, run `owpp pull`, review and commit the change, then deploy``. The same report in CI, on a schedule:
 
 ```yaml
-- uses: zmnatz/open-webui-plugin-protocol@v0.6.3
+- uses: zmnatz/open-webui-plugin-protocol@v0.7.0
   with:
     url: https://chat.example.com
     api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}

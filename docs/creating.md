@@ -102,6 +102,8 @@ The tool stage defaults to yes for an installer. If it has no tool, the skills s
 
 ## From a git repository
 
+For code that is already in a repository, [`owpp import <URL>`](commands/import.md) asks nothing: it finds the function, the tool and the skills in the folder and pins them. The wizard is for choosing the parts yourself.
+
 ```text
 ▸ Stage 3/6 · The repository  (~3 min left)
 
@@ -126,7 +128,7 @@ It writes no code, only `plugin.yaml`, a README and tests:
 
 ```yaml
 # plugin.yaml
-protocol: "0.5"
+protocol: "0.7"
 source:
   git: "https://github.com/Classic298/open-webui-plugins.git"
   ref: 917c88f3029c0c6500139ba7b7b061f358d8aaea

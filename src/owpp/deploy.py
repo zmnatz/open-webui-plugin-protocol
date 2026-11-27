@@ -428,6 +428,7 @@ def plan_deploy(
                 and meta.get("managed_by") == managed_by
                 and (meta.get("description") or "") == f.description
                 and (meta.get("sources") or {}) == f.sources
+                and (meta.get("requires") or {}) == f.requires
             )
             plan.append(PlanItem(f, "unchanged" if same else "update", existing))
     return plan
@@ -636,6 +637,9 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
         meta: dict = {"description": f.description, "managed_by": managed_by}
         if f.sources:  # the commit it was deployed from, for the next report
             meta["sources"] = f.sources
+        # What plugin.yaml requires of the instance ({} for nothing), for `owpp import --instance`.
+        # A function stored without it is not updated for it: a missing one counts as {} above.
+        meta["requires"] = f.requires
         form = {"id": f.id, "name": f.name, "content": f.content, "meta": meta}
         if p.action == "update":
             updated = _call(instance, "POST", f"{API}/id/{f.id}/update", form)

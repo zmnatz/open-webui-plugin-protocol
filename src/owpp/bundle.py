@@ -72,7 +72,7 @@ NOTE = "Git-controlled: edits made here are overwritten on the next deploy."
 VALID_ID = re.compile(r"[a-z_][a-z0-9_]*")
 VALID_SKILL_ID = re.compile(r"[a-z0-9_-]+")
 
-_DOCSTRING = re.compile(r'\s*"""\n?([\s\S]*?)"""')
+DOCSTRING = re.compile(r'\s*"""\n?([\s\S]*?)"""')
 
 
 # ---- header -----------------------------------------------------------------
@@ -81,7 +81,7 @@ _DOCSTRING = re.compile(r'\s*"""\n?([\s\S]*?)"""')
 def parse_frontmatter(content: str) -> dict:
     """The module docstring as Open-WebUI reads it: one `key: value` per line, split at
     the first colon. (Not YAML: a value such as `author: @G30` is fine here and invalid there.)"""
-    m = _DOCSTRING.match(content)
+    m = DOCSTRING.match(content)
     if not m:
         return {}
     doc: dict[str, Any] = {}
@@ -97,7 +97,7 @@ def parse_frontmatter(content: str) -> dict:
 def check_frontmatter(file: str, content: str) -> None:
     """Open-WebUI reads the header line by line, so a YAML block value such as
     `description: >` is stored as ">" and the lines under it are lost."""
-    m = _DOCSTRING.match(content)
+    m = DOCSTRING.match(content)
     if not m:
         return
     for line in m.group(1).split("\n"):

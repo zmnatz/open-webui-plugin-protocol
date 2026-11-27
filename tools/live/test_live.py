@@ -3,20 +3,18 @@ from tools/screenshots/aimock/ (docs/testing/live.md)."""
 
 from __future__ import annotations
 
-import json
 import urllib.error
 import urllib.request
 
+from owpp.live import Aimock, url
+
 MODEL = "screenshot-model"
 PLAIN = "Hello! I am the screenshot model"
-AIMOCK = "http://127.0.0.1:4010"
 
 
 def _requests() -> list[dict]:
     """Every chat request aimock has received, from its journal: what Open-WebUI sent."""
-    url = AIMOCK + "/__aimock/journal?path=/v1/chat/completions"
-    with urllib.request.urlopen(url, timeout=10) as response:
-        return [entry["body"] for entry in json.loads(response.read()) if entry.get("body")]
+    return Aimock().requests()
 
 
 def test_the_deployed_functions_are_installed_and_active(api):
@@ -153,10 +151,8 @@ TDP = "/api/v1/theme-designer"
 
 def _get(path: str, token: str | None = None) -> tuple[int, str, str]:
     """A plain GET, as a page makes it: (status, content type, text)."""
-    from conftest import URL
-
     request = urllib.request.Request(
-        URL + path, headers={"Authorization": f"Bearer {token}"} if token else {}
+        url() + path, headers={"Authorization": f"Bearer {token}"} if token else {}
     )
     try:
         with urllib.request.urlopen(request, timeout=30) as response:

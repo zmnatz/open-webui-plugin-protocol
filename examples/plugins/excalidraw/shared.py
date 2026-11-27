@@ -19,8 +19,6 @@ MARKER = "excalidraw_artifact"
 META_KEY = "excalidraw"
 EXCALIDRAW_VERSION = "0.18.0"
 NO_STORE = {"Cache-Control": "no-store"}
-# The Artifacts iframe has an opaque origin, so API calls are cross-origin and cookie-free.
-CORS = {**NO_STORE, "Access-Control-Allow-Origin": "*"}
 _ID = re.compile(r"[A-Za-z0-9_:-]{1,128}")  # chat UUIDs, plus "local:..." temporary chats
 
 

@@ -28,6 +28,10 @@ _Avoid_: lib, mixin, include
 What the bundler does to a plugin's files, written as ordinary Python: it inlines `shared.py` and the libraries above `function.py` (or `tool.py`) and removes the imports of them, so they become the one module Open-WebUI stores.
 _Avoid_: concatenation, inlining
 
+**Unbundling**:
+What `owpp import` does to a function's code: owpp's libraries, the data they carry and the runtime come back out as `include:`, files and the tool and skills, and the Shared Assets Protocol's byte-identical blocks as `include:`, leaving the plugin's own code. Bundling the result gives the same function again.
+_Avoid_: decompiling, extracting
+
 **Library catalogue**:
 The list of every library with what it pulls in, what turns it on and what data it carries.
 _Avoid_: LIBS, library table

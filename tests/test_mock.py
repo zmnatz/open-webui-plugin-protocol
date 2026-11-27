@@ -53,6 +53,15 @@ def test_a_missing_name_used_as_a_path_says_what_is_missing():
             Path(NOT_A_REAL_DIR)
 
 
+def test_a_loose_file_is_refused_with_the_command_that_makes_it_a_plugin(tmp_path):
+    """owui.load() takes a plugin folder; a single .py says how to make one of it."""
+    loose = tmp_path / "plugins" / "shout.py"
+    loose.parent.mkdir()
+    loose.write_text('"""\ntitle: Shout\n"""\nclass Filter:\n    pass\n')
+    with MockOpenWebUI() as owui, pytest.raises(ValueError, match=r"owpp import .*shout\.py"):
+        owui.load(loose)
+
+
 def test_open_webuis_directories_exist():
     """DATA_DIR, UPLOAD_DIR, CACHE_DIR and FRONTEND_BUILD_DIR point at real (temporary) folders,
     removed again when the mock closes."""

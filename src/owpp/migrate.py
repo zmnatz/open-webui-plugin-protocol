@@ -57,6 +57,11 @@ def _to_0_5(text: str, manifest: dict, kind_of: KindOf) -> str:
     return set_key(text, "protocol", '"0.5"')
 
 
+def _to_0_7(text: str, manifest: dict, kind_of: KindOf) -> str:
+    """0.5 -> 0.7: record the version. 0.7 matches owpp 0.7 and changes no key."""
+    return set_key(text, "protocol", '"0.7"')
+
+
 def _code_to_0_5(folder: Path, manifest: dict) -> Upgrade:
     """Each file imports what it used to find already in scope. Only the files in the folder are
     read: one the bundler takes from git instead (`function: {file}`, `tool: {file}`) is the
@@ -84,6 +89,7 @@ STEPS = (
     Step("0.1", "0.2", _to_0_2),
     Step("0.2", "0.3", _to_0_3),
     Step("0.3", "0.5", _to_0_5, _code_to_0_5),
+    Step("0.5", "0.7", _to_0_7),
 )
 
 

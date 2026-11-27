@@ -13,6 +13,8 @@
 | [`owpp pull`](commands/pull.md) | Move plugins taken from git to the latest commit they follow. |
 | [`owpp version`](commands/version.md) | Show the plugins' versions, or give one a new version. |
 | [`owpp migrate`](commands/migrate.md) | Bring `plugin.yaml` to the current protocol version. |
+| [`owpp import`](commands/import.md) | Make a plugin folder from code that exists: a git repository (pinned), a `.py` file, or a function on Open-WebUI. |
+| [`owpp live`](commands/live.md) | Deploy the plugins to a throwaway Open-WebUI in Docker, with aimock as its models, and run the repository's live tests. |
 | [`owpp create`](commands/create.md) | A wizard: asks what the plugin is, then writes it. |
 | [`owpp init`](commands/init.md) | Scaffold the smallest plugin of a type. |
 
@@ -33,7 +35,7 @@ jobs:
     concurrency: deploy-plugins
     steps:
       - uses: actions/checkout@v5
-      - uses: zmnatz/open-webui-plugin-protocol@v0.6.3
+      - uses: zmnatz/open-webui-plugin-protocol@v0.7.0
         with:
           url: https://chat.example.com
           api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
@@ -70,6 +72,8 @@ More CI: [building in one job and deploying in another](commands/build.md#exampl
 | Every command has a page in `docs/commands/` that documents each of its flags | `tests/test_command_docs.py` |
 | Every environment variable owpp reads has an entry in `docs/environment-variables.md` | `tests/test_env_docs.py` |
 | `owpp pull`: moving a pinned commit, the files it lists, refusing what it cannot check | `tests/test_pull.py` |
+| `owpp import`: git URLs taken apart, what is found in a folder, a header moved into `plugin.yaml` and bundled back to the same code | `tests/test_import.py` |
+| `owpp live`: the stack's files and options, up, deploy, the tests and down, with Docker and Open-WebUI as stand-ins; that it loads without Playwright, and its fixtures only where asked for | `tests/test_owpp_live.py` |
 | `owpp create`: every combination it writes bundles, passes `check --strict` and its own tests; the wizard, driven by scripted answers | `tests/test_create.py` |
 | Every example plugin bundles, compiles, has unit tests and documents Test and Deploy | `tests/test_bundle.py`, "TestExamples" |
 | Each example plugin's behaviour, against the mock Open-WebUI | `examples/plugins/<id>/tests/` |
