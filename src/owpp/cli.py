@@ -335,7 +335,7 @@ def _cmd_migrate(args: argparse.Namespace, directory: Path, env: Mapping[str, st
 
     if not directory.exists():
         raise OwppError(f"no plugins folder at {directory} (pass --dir, or set OWPP_PLUGINS_DIR)")
-    return migrate(directory, args.ids, dry_run=args.dry_run)
+    return migrate(directory, args.ids, dry_run=args.dry_run, sources=args.sources)
 
 
 def _cmd_pull(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -362,7 +362,7 @@ def _cmd_create(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         folder = write_plugin(directory, spec_from_data(data, args.id or ""))
         print(f"created {folder}")
         return check(directory, folder.name)
-    return run_wizard(directory, args.id or "", check=check)
+    return run_wizard(directory, args.id or "", check=check, sources=args.sources)
 
 
 def _cmd_import(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -390,6 +390,7 @@ def _cmd_import(args: argparse.Namespace, directory: Path, env: Mapping[str, str
         imported = import_git(
             directory,
             args.what,
+            sources=args.sources,
             plugin_id=args.id or "",
             path=args.path or "",
             name=args.ref or "",

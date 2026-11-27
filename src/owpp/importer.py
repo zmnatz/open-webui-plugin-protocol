@@ -37,7 +37,7 @@ from .libraries import BY_NAME, LIBRARIES, VENDORED
 from .manifest import Value, files_of, read_text
 from .openwebui import FunctionMeta, field_of
 from .protocol import VERSION as PROTOCOL_VERSION
-from .sources._git import GIT_URL, Fetcher, git_fetcher, ref_kind, refname, resolve_ref
+from .sources import GIT_URL, Sources, refname
 from .unbundle import Unbundled, unbundle
 from .versioning import changelog_text
 
@@ -478,13 +478,11 @@ def import_git(
     directory: Path | str,
     url: str,
     *,
+    sources: Sources,
     plugin_id: str = "",
     path: str = "",
     name: str = "",
     public: bool = False,
-    fetcher: Fetcher = git_fetcher,
-    lookup=resolve_ref,
-    kind_of=ref_kind,
     today: str | None = None,
 ) -> Imported:
     """Write a plugin that takes what a folder of a git repository holds, pinned at the commit
@@ -495,17 +493,15 @@ def import_git(
     git, where = target.git, target.path or "the repository's root"
     kind = ""
     if target.name:
-        kind = kind_of(git, target.name) or ""
+        kind = sources.kind(git, target.name) or ""
         if not kind:
             raise OwppError(f"no branch or tag {target.name} in {git}")
-        sha = lookup(git, refname(kind, target.name))
+        sha = sources.latest(git, refname(kind, target.name))
     else:
-        sha = lookup(git, "HEAD")
+        sha = sources.latest(git, "HEAD")
     if not sha:
         raise OwppError(f"could not look up the commit of {target.name or 'HEAD'} in {git}")
-    prefix = f"{target.path}/" if target.path else ""
-    fetched = fetcher(git, sha, [prefix or "./"])
-    files = {k[len(prefix) :]: v for k, v in fetched.items() if k.startswith(prefix)}
+    files = sources.files(git, sha, target.path)
     src = SourceSpec(
         git,
         sha,

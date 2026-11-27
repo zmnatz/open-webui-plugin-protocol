@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
-from conftest import write_tree
+from conftest import FakeRepo, write_tree
 
 from owpp.bundle import bundle_function, load_function_files
 from owpp.cli import main
@@ -136,39 +136,20 @@ REPO = {
 }
 
 
-class Git:
-    """A repository with REPO's files at SHA, on branch main and tag v1."""
+def their_repo(files=None) -> FakeRepo:
+    """A repository with REPO's files at SHA, which is branch main, tag v1 and HEAD."""
+    return FakeRepo(
+        GIT,
+        REPO if files is None else files,
+        sha=SHA,
+        branches={"main": SHA},
+        tags={"v1": SHA},
+        head=SHA,
+    )
 
-    def __init__(self, files=None):
-        self.files = REPO if files is None else files
-        self.asked: list[tuple[str, str, list[str]]] = []
 
-    def fetcher(self, git, ref, paths):
-        self.asked.append((git, ref, paths))
-        assert (git, ref) == (GIT, SHA)
-        out = {}
-        for path in paths:
-            base = "" if path == "./" else path
-            out |= {k: v for k, v in self.files.items() if k.startswith(base)}
-        return out
-
-    @staticmethod
-    def lookup(git, ref):
-        return SHA if ref in ("refs/heads/main", "refs/tags/v1", "HEAD") else None
-
-    @staticmethod
-    def kind_of(git, name):
-        return {"main": "branch", "v1": "tag"}.get(name)
-
-    def run(self, directory, url, **kw):
-        return import_git(
-            directory,
-            url,
-            fetcher=self.fetcher,
-            lookup=self.lookup,
-            kind_of=self.kind_of,
-            **kw,
-        )
+def run_import(directory, url, files=None, **kw):
+    return import_git(directory, url, sources=their_repo(files).sources(), **kw)
 
 
 class TestGitUrls:
@@ -211,9 +192,8 @@ class TestGitUrls:
 
 class TestFromGit:
     def test_finds_the_function_the_tool_and_the_skill_and_pins_them(self, tmp_path):
-        git = Git()
         plugins = tmp_path / "plugins"
-        imported = git.run(plugins, "https://github.com/someone/their-plugins/tree/main/viz")
+        imported = run_import(plugins, "https://github.com/someone/their-plugins/tree/main/viz")
         assert imported.folder == plugins / "viz"
         manifest = read_manifest(imported.folder)
         assert manifest["source"] == {"git": GIT, "ref": SHA, "branch": "main", "path": "viz"}
@@ -225,17 +205,17 @@ class TestFromGit:
         assert any("private" in n for n in imported.notes)
 
     def test_what_it_writes_bundles_with_everything_it_found(self, tmp_path):
-        git = Git()
+        repo = their_repo()
         plugins = tmp_path / "plugins"
-        git.run(plugins, "https://github.com/someone/their-plugins/tree/main/viz")
-        with Sources(git.fetcher) as sources:
+        url = "https://github.com/someone/their-plugins/tree/main/viz"
+        import_git(plugins, url, sources=repo.sources())
+        with repo.sources() as sources:
             (fn,) = load_function_files(plugins, sources)
         assert fn.type == "filter" and SHOUT_CODE.strip() in fn.content
         assert "class Tools" in fn.content and "visualize" in fn.content
 
     def test_public_makes_the_tool_and_skills_public(self, tmp_path):
-        git = Git()
-        imported = git.run(
+        imported = run_import(
             tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/viz", public=True
         )
         manifest = read_manifest(imported.folder)
@@ -244,9 +224,10 @@ class TestFromGit:
         assert not any("private" in n for n in imported.notes)
 
     def test_a_file_url_takes_that_function_and_whatever_is_beside_it(self, tmp_path):
-        git = Git({**REPO, "viz/older.py": SHOUT})
-        imported = git.run(
-            tmp_path / "p", "https://github.com/someone/their-plugins/blob/v1/viz/shout.py"
+        imported = run_import(
+            tmp_path / "p",
+            "https://github.com/someone/their-plugins/blob/v1/viz/shout.py",
+            {**REPO, "viz/older.py": SHOUT},
         )
         manifest = read_manifest(imported.folder)
         assert imported.folder.name == "shout"
@@ -255,24 +236,22 @@ class TestFromGit:
         assert manifest["tool"]["file"] == "tool.py"
 
     def test_two_functions_in_one_folder_are_refused_by_name(self, tmp_path):
-        git = Git({**REPO, "viz/older.py": SHOUT})
+        url = "https://github.com/someone/their-plugins/tree/main/viz"
         with pytest.raises(OwppError, match=r"two functions in viz: older\.py, shout\.py"):
-            git.run(tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/viz")
+            run_import(tmp_path / "p", url, {**REPO, "viz/older.py": SHOUT})
 
     def test_only_a_tool_and_skills_is_an_installer(self, tmp_path):
         files = {k: v for k, v in REPO.items() if k != "viz/shout.py"}
-        imported = Git(files).run(
-            tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/viz"
-        )
+        url = "https://github.com/someone/their-plugins/tree/main/viz"
+        imported = run_import(tmp_path / "p", url, files)
         manifest = read_manifest(imported.folder)
         assert "file" not in manifest["function"] and manifest["function"]["global"] is True
         assert manifest["tool"]["file"] == "tool.py"
 
     def test_a_whole_owpp_plugin_is_taken_whole(self, tmp_path):
         files = {"viz/plugin.yaml": 'protocol: "0.5"\nfunction: {title: Viz}\n', **REPO}
-        imported = Git(files).run(
-            tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/viz"
-        )
+        url = "https://github.com/someone/their-plugins/tree/main/viz"
+        imported = run_import(tmp_path / "p", url, files)
         manifest = read_manifest(imported.folder)
         assert manifest["source"] == {
             "git": GIT,
@@ -285,17 +264,18 @@ class TestFromGit:
 
     def test_a_folder_with_nothing_to_take_is_refused(self, tmp_path):
         with pytest.raises(OwppError, match="no function, tool or skill in other"):
-            Git().run(tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/other")
+            run_import(tmp_path / "p", "https://github.com/someone/their-plugins/tree/main/other")
 
     def test_a_branch_that_is_not_there_is_refused(self, tmp_path):
         with pytest.raises(OwppError, match="no branch or tag nope"):
-            Git().run(tmp_path / "p", "https://github.com/someone/their-plugins/tree/nope/viz")
+            run_import(tmp_path / "p", "https://github.com/someone/their-plugins/tree/nope/viz")
 
     def test_the_repository_root_is_read_whole(self, tmp_path):
         files = {"shout.py": SHOUT, "README.md": "hi\n"}
-        git = Git(files)
-        imported = git.run(tmp_path / "p", "https://github.com/someone/their-plugins")
-        assert git.asked[-1][2] == ["./"]
+        repo = their_repo(files)
+        url = "https://github.com/someone/their-plugins"
+        imported = import_git(tmp_path / "p", url, sources=repo.sources())
+        assert repo.fetched[-1][2] == ["./"]
         assert imported.folder.name == "their_plugins"
         manifest = read_manifest(imported.folder)
         assert "branch" not in manifest["source"] and manifest["source"]["path"] == ""
@@ -512,6 +492,13 @@ class TestTheCommand:
         plugins = tmp_path / "plugins"
         assert main(["import", "--instance", "shout", "--dir", str(plugins)], env=env) == 0
         assert (plugins / "shout" / "function.py").read_text() == SHOUT_CODE
+
+    def test_imports_from_git_through_the_commands_sources(self, tmp_path, monkeypatch):
+        repo = their_repo()
+        monkeypatch.setattr("owpp.cli.Sources", repo.sources)
+        plugins = tmp_path / "plugins"
+        assert main(["import", GIT, "--path", "viz", "--dir", str(plugins)], env={}) == 0
+        assert read_manifest(plugins / "viz")["source"]["ref"] == SHA
 
     def test_takes_one_thing_to_import(self, tmp_path, capsys):
         assert main(["import", "--dir", str(tmp_path)], env={}) == 1

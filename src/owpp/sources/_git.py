@@ -18,6 +18,8 @@ from ..manifest import TRACK, Value, file_value
 Fetcher = Callable[[str, str, "list[str]"], "dict[str, Value]"]
 # (git URL, branch, tag or HEAD) -> the commit SHA it points at, or None.
 Lookup = Callable[[str, str], "str | None"]
+# (git URL, name) -> "branch" or "tag", or None.
+KindOf = Callable[[str, str], "str | None"]
 
 SHA40 = re.compile(r"[0-9a-f]{40}")
 MAX_SOURCE_BYTES = 2_000_000
