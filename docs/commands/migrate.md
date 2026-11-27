@@ -35,9 +35,9 @@ For when to run the command, and for the other steps of an upgrade, see [upgradi
 ## Examples
 
 ```sh
-uvx owpp@0.7.1 migrate --dry-run
-uvx owpp@0.7.1 migrate
-uvx owpp@0.7.1 migrate hello
+uvx owpp@0.7.2 migrate --dry-run
+uvx owpp@0.7.2 migrate
+uvx owpp@0.7.2 migrate hello
 ```
 
 ## Related

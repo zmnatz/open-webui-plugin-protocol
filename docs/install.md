@@ -12,12 +12,12 @@
 
 ```sh
 uvx owpp --version         # runs the latest release, nothing installed
-uvx owpp@0.7.1 list        # a pinned release (recommended: see below)
+uvx owpp@0.7.2 list        # a pinned release (recommended: see below)
 ```
 
 `uvx owpp <command>` works from all folders. Each command finds the plugins folder in `--dir`. If there is no `--dir`, it uses [`$OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir), then `./plugins`.
 
-**Pin the version.** The runtime and the libraries are copied into the code that you deploy, so a new `owpp` changes your deployed code. In scripts and CI, use `uvx owpp@0.7.1 ...`. Move the pin as a reviewed change, as you do for other dependencies. [Upgrading](upgrading.md) gives the steps.
+**Pin the version.** The runtime and the libraries are copied into the code that you deploy, so a new `owpp` changes your deployed code. In scripts and CI, use `uvx owpp@0.7.2 ...`. Move the pin as a reviewed change, as you do for other dependencies. [Upgrading](upgrading.md) gives the steps.
 
 ## The test extra
 
@@ -34,9 +34,9 @@ uvx --from 'owpp[test]' owpp test
 To put `owpp` on your `PATH`, use one of these commands:
 
 ```sh
-uv tool install owpp==0.7.1          # or: uv tool install 'owpp[test]==0.7.1'
-pipx install owpp==0.7.1             # or with pipx
-pip install owpp==0.7.1              # or into a virtual environment
+uv tool install owpp==0.7.2          # or: uv tool install 'owpp[test]==0.7.2'
+pipx install owpp==0.7.2             # or with pipx
+pip install owpp==0.7.2              # or into a virtual environment
 ```
 
 `python -m owpp` is the same command as `owpp`.
@@ -54,7 +54,7 @@ uvx --from git+https://github.com/zmnatz/open-webui-plugin-protocol@<sha or bran
 You do not install anything. The [action](tooling.md#github-action) sets up uv and runs `owpp` from its own checkout. Thus the version is the tag that you pin in `uses:`.
 
 ```yaml
-- uses: zmnatz/open-webui-plugin-protocol@v0.7.1
+- uses: zmnatz/open-webui-plugin-protocol@v0.7.2
 ```
 
 Next: [getting started](getting-started.md).
