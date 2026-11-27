@@ -43,6 +43,7 @@ from .flatten import FILE_TOKEN, flatten
 from .libraries import (
     BY_NAME,
     FROM_RUNTIME,
+    LIBRARIES,
     exports,
     hoist_future,
     link,
@@ -207,52 +208,27 @@ def parse_skill(file: str, text: str) -> tuple[dict, str]:
 # ---- reading files and folders ------------------------------------------------
 
 
-def _tool_templates(folder: Path, tool: dict) -> dict | None:
-    """The templates a tool embeds: every file in templates/, or only those `tool.templates`
-    lists (a file, or a folder written with a trailing /), so a function's large page is not
-    copied into its tool. An entry that matches nothing is refused: it is a typo."""
-    files = _read_templates(folder)
-    listed = tool.get("templates")
-    if listed is None or files is None:
-        return files
-    where = f"{folder.name}/plugin.yaml: tool.templates"
-    if not isinstance(listed, list) or not all(isinstance(e, str) and e.strip() for e in listed):
-        raise OwppError(f"{where} must be a list of paths in templates/ (a folder ends in /)")
-    chosen: dict = {}
-    for entry in (e.strip() for e in listed):
-        found = {
-            path: f
-            for path, f in files.items()
-            if (path.startswith(entry) if entry.endswith("/") else path == entry)
-        }
-        if not found:
-            folder_hint = any(p.startswith(entry + "/") for p in files)
-            hint = f" (a folder is written `{entry}/`)" if folder_hint else ""
-            raise OwppError(f"{where}: `{entry}` is not in templates/{hint}")
-        chosen.update(found)
-    return dict(sorted(chosen.items()))
-
-
-# How to read the data of each library a tool may ask for (Library.for_tools).
-TOOL_DATA_READERS = {"templates": _tool_templates}
-
-
 def _tool_data(folder: Path, tool: dict) -> dict:
-    """What the tool's libraries embed: only the templates, and only when it asks for them
-    (`tool.include: [templates]`), so a function's templates are not copied into its tool;
-    `tool.templates` narrows them to the files it lists."""
+    """What the tool's libraries embed: only the data of those it asks for (`tool.include:`), so
+    a function's templates are not copied into its tool. A library's key under `tool:` (such as
+    `tool.templates`, which narrows them) needs the library there."""
     include = tool.get("include")
     asked = (
         [n for n in include if n in BY_NAME and BY_NAME[n].for_tools]
         if isinstance(include, list)
         else []
     )
-    if "templates" in tool and "templates" not in asked:
-        raise OwppError(
-            f"{folder.name}/plugin.yaml: tool.templates needs `templates` in tool.include"
-        )
-    readers = TOOL_DATA_READERS
-    return {name: readers[name](folder, tool) for name in asked}
+    for name in _tool_library_keys():
+        if name in tool and name not in asked:
+            raise OwppError(
+                f"{folder.name}/plugin.yaml: tool.{name} needs `{name}` in tool.include"
+            )
+    return {name: BY_NAME[name].read_tool(folder, tool) for name in asked}
+
+
+def _tool_library_keys() -> list[str]:
+    """The keys under `tool:` that belong to a library a tool may ask for."""
+    return [lib.name for lib in LIBRARIES if lib.for_tools]
 
 
 def _tool_valves(folder: Path, valves: Any) -> dict:
@@ -281,7 +257,10 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
             code, from_lib = _bundle_code(
                 folder,
                 "tool",
-                omit(tool, ["id", "from", "access", "file", "valves", "include", "templates"]),
+                omit(
+                    tool,
+                    ["id", "from", "access", "file", "valves", "include", *_tool_library_keys()],
+                ),
             )
             # A tool bundle carries the runtime too (below), with just the ids to remove.
             libs = wanted(tool.get("include"), set(), f"{folder.name}/plugin.yaml")
@@ -363,68 +342,13 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
     return {"tools": tools, "skills": skills}
 
 
-def _read_templates(folder: Path) -> dict | None:
-    """The plugin's templates/ folder: files embedded in the function bundle (and the tool's, when
-    it includes templates) and read back with plugin_template_text(). They are never served."""
-    if not (folder / "templates").exists():
-        return None
-    files = {f["path"]: omit(f, ["path"]) for f in folder_files(folder / "templates")}
-    if not files:
-        raise OwppError(f"{folder.name}: templates/ has no files")
-    return files
-
-
-def _read_jobs(folder: Path, manifest: dict) -> dict:
-    """`jobs: {sync_every_minutes: N, adopt_markers: [...]}`: the default of the
-    SYNC_INTERVAL_MINUTES valve that the sync mixin adds to the function (0 = only on startup,
-    enable and valve changes), and the markers of an earlier sync to treat as its own."""
-    jobs = _read_jobs_interval(folder, manifest)
-    cfg = manifest.get("jobs")
-    markers = cfg.get("adopt_markers") if isinstance(cfg, dict) else None
-    if markers is not None:
-        where = f"{folder.name}/plugin.yaml: jobs.adopt_markers"
-        if not isinstance(markers, list) or not all(
-            isinstance(m, str) and m.strip() and m == m.strip() for m in markers
-        ):
-            raise OwppError(f"{where} must be a list of markers (non-empty text, no spaces around)")
-        if markers:
-            jobs["adopt_markers"] = list(dict.fromkeys(markers))
-    return jobs
-
-
-def _read_jobs_interval(folder: Path, manifest: dict) -> dict:
-    where = f"{folder.name}/plugin.yaml: jobs"
-    cfg = manifest.get("jobs")
-    if cfg is None:
-        return dict(BY_NAME["jobs"].default)
-    if not isinstance(cfg, dict):
-        raise OwppError(f"{where} must be a mapping (sync_every_minutes, adopt_markers)")
-    unknown = [str(k) for k in cfg if k not in ("sync_every_minutes", "adopt_markers")]
-    if unknown:
-        raise OwppError(
-            f"{where}: unknown key {', '.join(unknown)} (known: sync_every_minutes, adopt_markers)"
-        )
-    minutes = coalesce(cfg.get("sync_every_minutes"), BY_NAME["jobs"].default["sync_every_minutes"])
-    if isinstance(minutes, str):  # ${NAME} or ${NAME:-minutes}, resolved in the container
-        template = envtemplate.TEMPLATE.fullmatch(minutes)
-        default = template.group(2) if template else None
-        if not template or (default is not None and not re.fullmatch(r"[0-9]+", default)):
-            raise OwppError(
-                f"{where}.sync_every_minutes must be a whole number of minutes, or a template "
-                f"like ${{NAME:-60}} whose default is one (got {minutes!r})"
-            )
-        return {"sync_every_minutes": minutes}
-    if isinstance(minutes, bool) or not isinstance(minutes, int) or minutes < 0:
-        raise OwppError(f"{where}.sync_every_minutes must be a whole number of minutes, 0 or more")
-    return {"sync_every_minutes": minutes}
-
-
 def env_references(folder: Path | str) -> list[tuple[str, str | None]]:
     """The environment variables a plugin's `jobs:` and config.yaml refer to, with their defaults:
     what the Open-WebUI container may set. Nothing here reads the environment."""
     folder = Path(folder)
     manifest = read_manifest(folder)
-    return envtemplate.references([manifest.get("jobs"), _read_config(folder)])
+    config = BY_NAME["config"].read(folder, manifest)
+    return envtemplate.references([manifest.get("jobs"), config])
 
 
 # The library mixins that are PluginEvents classes themselves.
@@ -587,25 +511,6 @@ def _check_events(folder: Path, code: str) -> None:
             )
 
 
-def _read_config(folder: Path) -> dict | None:
-    """The plugin's config.yaml, parsed now and embedded as data; the function reads it with
-    plugin_config(). It is in git, so secrets do not belong in it."""
-    path = folder / "config.yaml"
-    if not path.exists():
-        return None
-    try:
-        config = parse_yaml(read_text(path))
-    except yaml.YAMLError as e:
-        raise OwppError(f"{folder.name}/config.yaml: not valid YAML ({e})") from e
-    if config is None:
-        return {}
-    if not isinstance(config, dict):
-        raise OwppError(f"{folder.name}/config.yaml: must be a mapping (key: value)")
-    if bad := envtemplate.problems(config):
-        raise OwppError(f"{folder.name}/config.yaml: {bad[0]}")
-    return config
-
-
 _ASSETS_ONLY_EVENT = '''
 class Event(PluginAssets):
     """Does nothing itself: this function publishes the plugin's assets/ files."""
@@ -688,7 +593,8 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
             )
         return None
     keys = omit(fn, ["valves"])
-    assets = BY_NAME["assets"].read(folder, manifest)
+    held, data = _library_data(folder, manifest)
+    assets = data.get("assets")
     if "file" in fn:
         # The function itself comes from `source`, verbatim (its own header and all).
         extra = list(omit(fn, ["file", "global", "valves"]))
@@ -720,7 +626,6 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
             f"{folder}: with an assets/ folder the function must define `class Event(PluginAssets)`, "
             "which publishes the files (or delete function.py to have it generated)"
         )
-    held, data = _library_data(folder, manifest, assets)
     if from_lib:
         libs = wanted(manifest.get("include"), held, f"{folder.name}/plugin.yaml")
         _check_lib_imports(folder, from_lib, libs, runtime=has_resources, include="include")
@@ -730,38 +635,21 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
     return code
 
 
-def _library_data(folder: Path, manifest: dict, assets: Any) -> tuple[set[str], dict]:
-    """What the plugin holds that turns libraries on, and the data each library embeds."""
-    static = BY_NAME["static"].read(folder, manifest)
-    templates = _read_templates(folder)
-    config = _read_config(folder)
-    jobs = _read_jobs(folder, manifest)
-    held = {
-        name
-        for name, present in (
-            ("jobs:", manifest.get("jobs") is not None),
-            ("static/", bool(static)),
-            ("templates/", templates is not None),
-            ("assets/", assets is not None),
-            ("config.yaml", config is not None),
-        )
-        if present
-    }
-    data = {
-        "static": static,
-        "templates": templates,
-        "assets": assets,
-        "config": config,
-        "jobs": jobs,
-    }
-    return held, data
+def _library_data(folder: Path, manifest: dict) -> tuple[set[str], dict]:
+    """The data each library reads from the plugin's folder ({library name: data}), and what the
+    plugin holds that turns libraries on: whatever there is data for."""
+    data = {}
+    for lib in LIBRARIES:
+        if lib.read and (value := lib.read(folder, manifest)) is not None:
+            data[lib.name] = value
+    return {BY_NAME[name].on_when for name in data}, data
 
 
 def file_libraries(folder: Path) -> dict[str, set[str]]:
     """The libraries each source file is bundled with: the function's, the tool's, and both
     for shared.py, which goes into each."""
     manifest = read_manifest(folder)
-    held, _ = _library_data(folder, manifest, BY_NAME["assets"].read(folder, manifest))
+    held, _ = _library_data(folder, manifest)
     tool = manifest.get("tool") if isinstance(manifest.get("tool"), dict) else {}
     where = f"{folder.name}/plugin.yaml"
     function = set(wanted(manifest.get("include"), held, where))
@@ -788,7 +676,7 @@ def library_code(folder: Path | str, name: str = "function") -> str:
             "skills": [{"id": k["id"]} for k in res["skills"]],
         }
         return embed_runtime(code, ids)
-    held, data = _library_data(folder, manifest, BY_NAME["assets"].read(folder, manifest))
+    held, data = _library_data(folder, manifest)
     code = link(header, manifest.get("include"), folder.name, held, data)
     if res["tools"] or res["skills"]:
         code = embed_runtime(code, res)

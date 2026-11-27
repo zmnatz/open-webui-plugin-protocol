@@ -7,7 +7,7 @@ it pulls in, to the code after its docstring header, in catalogue order.
 
 An entry that carries data owns it both ways, with its settings' defaults: `read` takes it from
 the plugin's folder for bundling, and `write` turns it back into files and plugin.yaml keys for
-`owpp import` (static and assets so far).
+`owpp import`. One a tool can ask for does the same for the tool: `read_tool` and `write_tool`.
 """
 
 from __future__ import annotations
@@ -21,9 +21,21 @@ from functools import cache
 from pathlib import Path
 from typing import Any
 
+import yaml
+
+from . import envtemplate
 from .errors import OwppError
 from .flatten import defined, strip_relative_imports
-from .manifest import coalesce, files_of, folder_files, get, omit, read_text, text_of
+from .manifest import (
+    coalesce,
+    files_of,
+    folder_files,
+    get,
+    omit,
+    parse_yaml,
+    read_text,
+    text_of,
+)
 
 LIB_DIR = Path(__file__).resolve().parent / "runtime" / "lib"
 
@@ -54,10 +66,6 @@ class Library:
     placeholder: str | None = None
     # What the plugin must hold for its data, when it cannot be had without it (a HELD key).
     data_needs: str | None = None
-    # The data when the bundle has none (a tool bundle).
-    default: Any = None
-    # A tool can ask for it, data included (`tool.include:`); otherwise its data is the function's.
-    for_tools: bool = False
     # Its plugin.yaml key's settings, with their defaults; `{plugin}` stands for the plugin's id.
     settings: dict[str, Any] = field(default_factory=dict, compare=False)
     # Its data both ways: read(folder, manifest) is the data from the plugin's folder (None when
@@ -66,6 +74,27 @@ class Library:
     write: Callable[[str, Any], tuple[dict[str, str | bytes], dict[str, Any]]] | None = field(
         default=None, compare=False
     )
+    # The same for a tool that asks for it (`tool.include:`): read_tool(folder, tool section) is
+    # the data the tool embeds, and write_tool(data, the function's data) is that data as files
+    # and keys under `tool:`. Without them its data is the function's alone.
+    read_tool: Callable[[Path, dict], Any] | None = field(default=None, compare=False)
+    write_tool: Callable[[Any, Any], tuple[dict[str, str | bytes], dict[str, Any]]] | None = field(
+        default=None, compare=False
+    )
+
+    @property
+    def for_tools(self) -> bool:
+        """A tool can ask for it, data included."""
+        return self.read_tool is not None
+
+    @property
+    def default(self) -> dict[str, Any] | None:
+        """The data of a bundle that was given none (a tool's, or a plugin without its
+        plugin.yaml key): the settings' defaults, without the empty ones. None for a library
+        whose data needs something the plugin holds."""
+        if self.data_needs or not self.settings:
+            return None
+        return {k: v for k, v in self.settings.items() if v != []}
 
     def defaults(self, plugin: str) -> dict[str, Any]:
         """Its settings' defaults for the plugin with id `plugin`."""
@@ -96,7 +125,43 @@ class Library:
         return {k: coalesce(get(cfg, k), v) for k, v in self.defaults(folder.name).items()}
 
 
-# ---- the data of static and assets, both ways -------------------------------------
+# ---- each library's data, both ways -----------------------------------------------
+
+
+def _read_jobs(folder: Path, manifest: dict) -> dict | None:
+    """`jobs: {sync_every_minutes: N, adopt_markers: [...]}`: the default of the
+    SYNC_INTERVAL_MINUTES valve that the sync mixin adds to the function (0 = only on startup,
+    enable and valve changes), and the markers of an earlier sync to treat as its own."""
+    if manifest.get("jobs") is None:
+        return None
+    where = f"{folder.name}/plugin.yaml: jobs"
+    cfg = BY_NAME["jobs"].settings_of(folder, manifest)
+    minutes, markers = cfg["sync_every_minutes"], cfg["adopt_markers"]
+    if isinstance(minutes, str):  # ${NAME} or ${NAME:-minutes}, resolved in the container
+        template = envtemplate.TEMPLATE.fullmatch(minutes)
+        default = template.group(2) if template else None
+        if not template or (default is not None and not re.fullmatch(r"[0-9]+", default)):
+            raise OwppError(
+                f"{where}.sync_every_minutes must be a whole number of minutes, or a template "
+                f"like ${{NAME:-60}} whose default is one (got {minutes!r})"
+            )
+    elif isinstance(minutes, bool) or not isinstance(minutes, int) or minutes < 0:
+        raise OwppError(f"{where}.sync_every_minutes must be a whole number of minutes, 0 or more")
+    if not isinstance(markers, list) or not all(
+        isinstance(m, str) and m.strip() and m == m.strip() for m in markers
+    ):
+        raise OwppError(
+            f"{where}.adopt_markers must be a list of markers (non-empty text, no spaces around)"
+        )
+    data = {"sync_every_minutes": minutes}
+    if markers:
+        data["adopt_markers"] = list(dict.fromkeys(markers))
+    return data
+
+
+def _write_jobs(plugin: str, data: dict) -> tuple[dict[str, str | bytes], dict[str, Any]]:
+    return {}, BY_NAME["jobs"].changed(plugin, data)
+
 
 # Who may fetch static/ files: signed-in is the default; "public" must be spelled out.
 ACCESS_LEVELS = ("user", "admin", "public")
@@ -139,6 +204,56 @@ def _write_static(plugin: str, data: dict) -> tuple[dict[str, str | bytes], dict
     return files, BY_NAME["static"].changed(plugin, data)
 
 
+def _read_templates(folder: Path, manifest: dict) -> dict | None:
+    """The plugin's templates/ folder: files embedded in the function bundle (and the tool's, when
+    it includes templates) and read back with plugin_template_text(). They are never served."""
+    if not (folder / "templates").exists():
+        return None
+    files = {f["path"]: omit(f, ["path"]) for f in folder_files(folder / "templates")}
+    if not files:
+        raise OwppError(f"{folder.name}: templates/ has no files")
+    return files
+
+
+def _write_templates(plugin: str, data: dict) -> tuple[dict[str, str | bytes], dict[str, Any]]:
+    return {f"templates/{p}": v for p, v in files_of(data).items()}, {}
+
+
+def _read_tool_templates(folder: Path, tool: dict) -> dict | None:
+    """The templates a tool embeds: every file in templates/, or only those `tool.templates`
+    lists (a file, or a folder written with a trailing /), so a function's large page is not
+    copied into its tool. An entry that matches nothing is refused: it is a typo."""
+    files = _read_templates(folder, {})  # no plugin.yaml key of its own
+    listed = tool.get("templates")
+    if listed is None or files is None:
+        return files
+    where = f"{folder.name}/plugin.yaml: tool.templates"
+    if not isinstance(listed, list) or not all(isinstance(e, str) and e.strip() for e in listed):
+        raise OwppError(f"{where} must be a list of paths in templates/ (a folder ends in /)")
+    chosen: dict = {}
+    for entry in (e.strip() for e in listed):
+        found = {
+            path: f
+            for path, f in files.items()
+            if (path.startswith(entry) if entry.endswith("/") else path == entry)
+        }
+        if not found:
+            folder_hint = any(p.startswith(entry + "/") for p in files)
+            hint = f" (a folder is written `{entry}/`)" if folder_hint else ""
+            raise OwppError(f"{where}: `{entry}` is not in templates/{hint}")
+        chosen.update(found)
+    return dict(sorted(chosen.items()))
+
+
+def _write_tool_templates(
+    data: dict, function_data: dict | None
+) -> tuple[dict[str, str | bytes], dict[str, Any]]:
+    """The tool's templates as files, and `tool.templates` when they are not the function's."""
+    files, _ = _write_templates("", data)
+    narrowed = function_data is None or set(data) != set(function_data)
+    return files, {"templates": sorted(data)} if narrowed else {}
+
+
 ASSET_FILES = ("loader.js", "custom.css")
 
 
@@ -176,6 +291,29 @@ def _write_assets(plugin: str, data: dict) -> tuple[dict[str, str | bytes], dict
     return files, BY_NAME["assets"].changed(plugin, data)
 
 
+def _read_config(folder: Path, manifest: dict) -> dict | None:
+    """The plugin's config.yaml, parsed now and embedded as data; the function reads it with
+    plugin_config(). It is in git, so secrets do not belong in it."""
+    path = folder / "config.yaml"
+    if not path.exists():
+        return None
+    try:
+        config = parse_yaml(read_text(path))
+    except yaml.YAMLError as e:
+        raise OwppError(f"{folder.name}/config.yaml: not valid YAML ({e})") from e
+    if config is None:
+        return {}
+    if not isinstance(config, dict):
+        raise OwppError(f"{folder.name}/config.yaml: must be a mapping (key: value)")
+    if bad := envtemplate.problems(config):
+        raise OwppError(f"{folder.name}/config.yaml: {bad[0]}")
+    return config
+
+
+def _write_config(plugin: str, data: dict) -> tuple[dict[str, str | bytes], dict[str, Any]]:
+    return {"config.yaml": yaml.safe_dump(data, sort_keys=False, allow_unicode=True)}, {}
+
+
 # In the order they are added to a bundle: each is a vendored, byte-identical copy put right after
 # the docstring header, so plugin code can call it without carrying a copy. live_reload goes
 # first because the Shared Assets Protocol wants it above the shared asset block.
@@ -193,7 +331,9 @@ LIBRARIES: tuple[Library, ...] = (
         ("events",),  # its mixin is a PluginEvents class
         on_when="jobs:",
         placeholder="__JOBS_DATA__",
-        default={"sync_every_minutes": 60},
+        settings={"sync_every_minutes": 60, "adopt_markers": []},
+        read=_read_jobs,
+        write=_write_jobs,
     ),
     Library("chat_data", "plugin_chat_data", "end plugin chat data library"),
     Library(
@@ -215,7 +355,10 @@ LIBRARIES: tuple[Library, ...] = (
         on_when="templates/",
         placeholder="__TEMPLATES_DATA__",
         data_needs="templates/",
-        for_tools=True,
+        read=_read_templates,
+        write=_write_templates,
+        read_tool=_read_tool_templates,
+        write_tool=_write_tool_templates,
     ),
     Library(
         "assets",
@@ -238,6 +381,8 @@ LIBRARIES: tuple[Library, ...] = (
         on_when="config.yaml",
         placeholder="__CONFIG_DATA__",
         data_needs="config.yaml",
+        read=_read_config,
+        write=_write_config,
     ),
 )
 BY_NAME = {lib.name: lib for lib in LIBRARIES}
@@ -290,6 +435,16 @@ def wanted(include: Any, held: set[str], where: str) -> list[str]:
         raise OwppError(f"{where}: unknown include {', '.join(bad)} (known: {', '.join(BY_NAME)})")
     on = [lib.name for lib in LIBRARIES if lib.on_when in held]
     return closure(list(dict.fromkeys([*asked, *on])))
+
+
+def held_by(data: dict[str, Any]) -> set[str]:
+    """What a plugin with this data ({library name: data}) holds, as HELD names it. Data that
+    is a library's default needs nothing held."""
+    return {
+        lib.on_when
+        for lib in LIBRARIES
+        if lib.on_when and lib.name in data and data[lib.name] != lib.default
+    }
 
 
 def fill(text: str, placeholder: str, literal: str) -> str:

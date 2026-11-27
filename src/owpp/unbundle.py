@@ -23,19 +23,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from .embedding import runtime_data, runtime_start
-from .libraries import BY_NAME, LIBRARIES, LITERAL, VENDORED, Library, _text, closure
+from .libraries import BY_NAME, LIBRARIES, LITERAL, VENDORED, Library, _text, closure, held_by
 
 _HEADER = re.compile(r'\s*"""[\s\S]*?"""\n')
 _FUTURE = re.compile(r"(?:from __future__ import [^\n]+\n)+")
 # What the protocol says to copy: its blocks from their first banner line to their end line.
 _BANNER = re.compile(r"^# =+\n", re.M)
-# Where a library carries data, the folder or key it came from.
-_DATA_FROM = {
-    "static": "static/",
-    "templates": "templates/",
-    "assets": "assets/",
-    "config": "config.yaml",
-}
 
 
 @dataclass
@@ -44,7 +37,7 @@ class Unbundled:
 
     code: str
     include: list[str] = field(default_factory=list)
-    # Each library's data: {library name: data} (static, templates, assets, config, jobs).
+    # Each library's data: {library name: data}, for those that carry some.
     data: dict[str, Any] = field(default_factory=dict)
     tools: list[dict] = field(default_factory=list)
     skills: list[dict] = field(default_factory=list)
@@ -147,9 +140,7 @@ def unbundle(content: str) -> Unbundled:
 def _include(found: list[str], data: dict[str, Any]) -> list[str]:
     """The `include:` that gives a bundle the libraries `found` again: without the ones the
     plugin's files turn on, or that another one pulls in."""
-    held = {_DATA_FROM[name] for name in data if name in _DATA_FROM}
-    if "jobs" in data and data["jobs"] != BY_NAME["jobs"].default:
-        held.add("jobs:")
+    held = held_by(data)
     on = {lib.name for lib in LIBRARIES if lib.on_when in held}
     pulled = set(closure([p for name in [*found, *on] for p in BY_NAME[name].pulls_in]))
     return [name for name in found if name not in on and name not in pulled]

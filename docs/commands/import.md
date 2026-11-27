@@ -46,7 +46,7 @@ A function owpp deployed is its bundle: owpp's [libraries](../libraries.md), the
 | In the bundle | In the folder it writes |
 | --- | --- |
 | a library (`# end plugin ... library`) | a name in `include:` (one that `templates/`, `static/`, `config.yaml` or another library turns on is left out) |
-| its data | `templates/`, `static/`, `assets/`, `config.yaml`, `jobs:`, and `static:` or `assets:` settings that are not the defaults |
+| its data | `templates/`, `static/`, `assets/`, `config.yaml`, and the `jobs:`, `static:` and `assets:` settings that are not the defaults |
 | the runtime's tool | `tool.py` and `tool:` (its header keys, `include:`, `access:`, `valves:`) |
 | the runtime's skills | `skills/<id>/`, with `access: public` in a public skill's `SKILL.md` |
 | `meta.requires` (with `--instance`) | `requires:` |
