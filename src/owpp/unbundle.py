@@ -17,7 +17,6 @@ What is left is the plugin's own code. Nothing else is changed.
 
 from __future__ import annotations
 
-import base64
 import json
 import re
 from dataclasses import dataclass, field
@@ -162,13 +161,3 @@ def _include(found: list[str], data: dict[str, Any]) -> list[str]:
     on = {lib.name for lib in LIBRARIES if lib.on_when in held}
     pulled = set(closure([p for name in [*found, *on] for p in BY_NAME[name].pulls_in]))
     return [name for name in found if name not in on and name not in pulled]
-
-
-def files_of(entries: dict[str, dict] | list[dict]) -> dict[str, str | bytes]:
-    """{path: text or bytes} from the runtime's file entries ({path: {content, encoding?}} or
-    [{path, content, encoding?}])."""
-    items = entries.items() if isinstance(entries, dict) else ((e["path"], e) for e in entries)
-    return {
-        path: base64.b64decode(e["content"]) if e.get("encoding") == "base64" else e["content"]
-        for path, e in items
-    }

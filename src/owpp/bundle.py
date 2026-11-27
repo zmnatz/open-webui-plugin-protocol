@@ -372,44 +372,6 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
     return {"tools": tools, "skills": skills}
 
 
-_MOVED_PUBLIC = (
-    "public/ is now two folders: static/ for files that are served as they are, and templates/ for "
-    "files the function renders itself and never serves (what `dynamic:` used to list). Move the files "
-    "and rename the manifest key `public:` to `static:` (its `dynamic:` list is gone)"
-)
-
-
-def _read_static(folder: Path, manifest: dict) -> dict | None:
-    """The plugin's static/ folder: every file is served as it is at <prefix>/<path>, to signed-in users
-    unless `static: {access: admin | public}`, by the static library (included with routes)."""
-    if (folder / "public").exists():
-        raise OwppError(f"{folder}: {_MOVED_PUBLIC}")
-    if not (folder / "static").exists():
-        if manifest.get("static") is not None:
-            raise OwppError(f"{folder.name}/plugin.yaml: static: needs a static/ folder")
-        return None
-    where = f"{folder.name}/plugin.yaml: static"
-    cfg = coalesce(manifest.get("static"), {})
-    if not isinstance(cfg, dict):
-        raise OwppError(f"{where} must be a mapping (prefix, access)")
-    unknown = [str(k) for k in cfg if k not in ("prefix", "access")]
-    if unknown:
-        raise OwppError(f"{where}: unknown key {', '.join(unknown)} (known: prefix, access)")
-    access = coalesce(cfg.get("access"), "user")
-    if access not in ACCESS_LEVELS:
-        raise OwppError(
-            f"{where}.access must be user, admin or public (exactly one of those words), "
-            f"not {access!r}: files need a signed-in user unless it says public in so many words"
-        )
-    prefix = text_of(coalesce(get(cfg, "prefix"), f"/{folder.name}"))
-    if not re.fullmatch(r"/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*", prefix):
-        raise OwppError(f"{where}.prefix must be a path such as /name (letters, digits, _ and -)")
-    files = {f["path"]: omit(f, ["path"]) for f in folder_files(folder / "static")}
-    if not files:
-        raise OwppError(f"{folder.name}: static/ has no files")
-    return {"prefix": prefix, "access": access, "files": files}
-
-
 def _read_templates(folder: Path) -> dict | None:
     """The plugin's templates/ folder: files embedded in the function bundle (and the tool's, when
     it includes templates) and read back with plugin_template_text(). They are never served."""
@@ -419,45 +381,6 @@ def _read_templates(folder: Path) -> dict | None:
     if not files:
         raise OwppError(f"{folder.name}: templates/ has no files")
     return files
-
-
-ASSET_FILES = ("loader.js", "custom.css")
-
-
-def _read_assets(folder: Path, manifest: dict) -> dict | None:
-    """assets/loader.js and assets/custom.css: this plugin's fragments of the Shared Assets
-    Protocol's two files, embedded as text and published by the assets library."""
-    where = f"{folder.name}/plugin.yaml: assets"
-    cfg = manifest.get("assets")
-    if not (folder / "assets").exists():
-        if cfg is not None:
-            raise OwppError(f"{where} needs an assets/ folder")
-        return None
-    cfg = coalesce(cfg, {})
-    if not isinstance(cfg, dict):
-        raise OwppError(f"{where} must be a mapping (order, wrap)")
-    unknown = [str(k) for k in cfg if k not in ("order", "wrap")]
-    if unknown:
-        raise OwppError(f"{where}: unknown key {', '.join(unknown)} (known: order, wrap)")
-    order = coalesce(cfg.get("order"), 0)
-    if isinstance(order, bool) or not isinstance(order, int):
-        raise OwppError(f"{where}.order must be a whole number (lower composes first)")
-    wrap = coalesce(cfg.get("wrap"), True)
-    if not isinstance(wrap, bool):
-        raise OwppError(f"{where}.wrap must be true or false")
-    files = {}
-    for f in folder_files(folder / "assets"):
-        if f["path"] not in ASSET_FILES:
-            raise OwppError(
-                f"{folder.name}: assets/{f['path']}: the protocol has two shared files, "
-                f"so assets/ may hold only {' and '.join(ASSET_FILES)}"
-            )
-        if "encoding" in f:
-            raise OwppError(f"{folder.name}: assets/{f['path']} must be UTF-8 text")
-        files[f["path"]] = f["content"]
-    if not files:
-        raise OwppError(f"{folder.name}: assets/ has neither loader.js nor custom.css")
-    return {"id": folder.name.lower(), "order": order, "wrap": wrap, "files": files}
 
 
 def _read_jobs(folder: Path, manifest: dict) -> dict:
@@ -742,13 +665,6 @@ class Filter:
 '''
 
 
-ACCESS_LEVELS = (
-    "user",
-    "admin",
-    "public",
-)  # signed-in is the default; "public" must be spelled out
-
-
 # ---- the function bundle --------------------------------------------------------
 
 
@@ -781,7 +697,7 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
             )
         return None
     keys = omit(fn, ["valves"])
-    assets = _read_assets(folder, manifest)
+    assets = BY_NAME["assets"].read(folder, manifest)
     if "file" in fn:
         # The function itself comes from `source`, verbatim (its own header and all).
         extra = list(omit(fn, ["file", "global", "valves"]))
@@ -825,7 +741,7 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
 
 def _library_data(folder: Path, manifest: dict, assets: Any) -> tuple[set[str], dict]:
     """What the plugin holds that turns libraries on, and the data each library embeds."""
-    static = _read_static(folder, manifest)
+    static = BY_NAME["static"].read(folder, manifest)
     templates = _read_templates(folder)
     config = _read_config(folder)
     jobs = _read_jobs(folder, manifest)
@@ -854,7 +770,7 @@ def file_libraries(folder: Path) -> dict[str, set[str]]:
     """The libraries each source file is bundled with: the function's, the tool's, and both
     for shared.py, which goes into each."""
     manifest = read_manifest(folder)
-    held, _ = _library_data(folder, manifest, _read_assets(folder, manifest))
+    held, _ = _library_data(folder, manifest, BY_NAME["assets"].read(folder, manifest))
     tool = manifest.get("tool") if isinstance(manifest.get("tool"), dict) else {}
     where = f"{folder.name}/plugin.yaml"
     function = set(wanted(manifest.get("include"), held, where))
@@ -881,7 +797,7 @@ def library_code(folder: Path | str, name: str = "function") -> str:
             "skills": [{"id": k["id"]} for k in res["skills"]],
         }
         return code + _runtime_source(ids)
-    held, data = _library_data(folder, manifest, _read_assets(folder, manifest))
+    held, data = _library_data(folder, manifest, BY_NAME["assets"].read(folder, manifest))
     code = link(header, manifest.get("include"), folder.name, held, data)
     if res["tools"] or res["skills"]:
         code += _runtime_source(res)

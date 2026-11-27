@@ -4,6 +4,10 @@ what turns it on and what data it carries (see GLOSSARY.md and docs/libraries.md
 A plugin asks for libraries with `include:`, and some are turned on by what the plugin holds
 (a `static/` folder turns on routes and static). `link()` adds each wanted library, and the ones
 it pulls in, to the code after its docstring header, in catalogue order.
+
+An entry that carries data owns it both ways, with its settings' defaults: `read` takes it from
+the plugin's folder for bundling, and `write` turns it back into files and plugin.yaml keys for
+`owpp import` (static and assets so far).
 """
 
 from __future__ import annotations
@@ -11,14 +15,15 @@ from __future__ import annotations
 import ast
 import json
 import re
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
 from typing import Any
 
 from .errors import OwppError
 from .flatten import defined, strip_relative_imports
-from .manifest import read_text
+from .manifest import coalesce, files_of, folder_files, get, omit, read_text, text_of
 
 LIB_DIR = Path(__file__).resolve().parent / "runtime" / "lib"
 
@@ -53,6 +58,122 @@ class Library:
     default: Any = None
     # A tool can ask for it, data included (`tool.include:`); otherwise its data is the function's.
     for_tools: bool = False
+    # Its plugin.yaml key's settings, with their defaults; `{plugin}` stands for the plugin's id.
+    settings: dict[str, Any] = field(default_factory=dict, compare=False)
+    # Its data both ways: read(folder, manifest) is the data from the plugin's folder (None when
+    # it holds none), and write(plugin id, data) is that data as files and plugin.yaml keys.
+    read: Callable[[Path, dict], Any] | None = field(default=None, compare=False)
+    write: Callable[[str, Any], tuple[dict[str, str | bytes], dict[str, Any]]] | None = field(
+        default=None, compare=False
+    )
+
+    def defaults(self, plugin: str) -> dict[str, Any]:
+        """Its settings' defaults for the plugin with id `plugin`."""
+        return {
+            k: v.format(plugin=plugin) if isinstance(v, str) else v
+            for k, v in self.settings.items()
+        }
+
+    def changed(self, plugin: str, data: dict) -> dict[str, Any]:
+        """The plugin.yaml key that gives `data`'s settings: only those that are not defaults."""
+        keys = {
+            k: data[k]
+            for k, default in self.defaults(plugin).items()
+            if data.get(k) not in (None, default)
+        }
+        return {self.name: keys} if keys else {}
+
+    def settings_of(self, folder: Path, manifest: dict) -> dict[str, Any]:
+        """Its plugin.yaml key's settings, each one the plugin leaves out at its default."""
+        where = f"{folder.name}/plugin.yaml: {self.name}"
+        known = ", ".join(self.settings)
+        cfg = coalesce(manifest.get(self.name), {})
+        if not isinstance(cfg, dict):
+            raise OwppError(f"{where} must be a mapping ({known})")
+        unknown = [str(k) for k in cfg if k not in self.settings]
+        if unknown:
+            raise OwppError(f"{where}: unknown key {', '.join(unknown)} (known: {known})")
+        return {k: coalesce(get(cfg, k), v) for k, v in self.defaults(folder.name).items()}
+
+
+# ---- the data of static and assets, both ways -------------------------------------
+
+# Who may fetch static/ files: signed-in is the default; "public" must be spelled out.
+ACCESS_LEVELS = ("user", "admin", "public")
+
+_MOVED_PUBLIC = (
+    "public/ is now two folders: static/ for files that are served as they are, and templates/ for "
+    "files the function renders itself and never serves (what `dynamic:` used to list). Move the files "
+    "and rename the manifest key `public:` to `static:` (its `dynamic:` list is gone)"
+)
+
+
+def _read_static(folder: Path, manifest: dict) -> dict | None:
+    """The plugin's static/ folder: every file is served as it is at <prefix>/<path>, to signed-in users
+    unless `static: {access: admin | public}`, by the static library (included with routes)."""
+    if (folder / "public").exists():
+        raise OwppError(f"{folder}: {_MOVED_PUBLIC}")
+    if not (folder / "static").exists():
+        if manifest.get("static") is not None:
+            raise OwppError(f"{folder.name}/plugin.yaml: static: needs a static/ folder")
+        return None
+    where = f"{folder.name}/plugin.yaml: static"
+    cfg = BY_NAME["static"].settings_of(folder, manifest)
+    access = cfg["access"]
+    if access not in ACCESS_LEVELS:
+        raise OwppError(
+            f"{where}.access must be user, admin or public (exactly one of those words), "
+            f"not {access!r}: files need a signed-in user unless it says public in so many words"
+        )
+    prefix = text_of(cfg["prefix"])
+    if not re.fullmatch(r"/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*", prefix):
+        raise OwppError(f"{where}.prefix must be a path such as /name (letters, digits, _ and -)")
+    files = {f["path"]: omit(f, ["path"]) for f in folder_files(folder / "static")}
+    if not files:
+        raise OwppError(f"{folder.name}: static/ has no files")
+    return {"prefix": prefix, "access": access, "files": files}
+
+
+def _write_static(plugin: str, data: dict) -> tuple[dict[str, str | bytes], dict[str, Any]]:
+    files = {f"static/{p}": v for p, v in files_of(data.get("files") or {}).items()}
+    return files, BY_NAME["static"].changed(plugin, data)
+
+
+ASSET_FILES = ("loader.js", "custom.css")
+
+
+def _read_assets(folder: Path, manifest: dict) -> dict | None:
+    """assets/loader.js and assets/custom.css: this plugin's fragments of the Shared Assets
+    Protocol's two files, embedded as text and published by the assets library."""
+    where = f"{folder.name}/plugin.yaml: assets"
+    if not (folder / "assets").exists():
+        if manifest.get("assets") is not None:
+            raise OwppError(f"{where} needs an assets/ folder")
+        return None
+    cfg = BY_NAME["assets"].settings_of(folder, manifest)
+    order, wrap = cfg["order"], cfg["wrap"]
+    if isinstance(order, bool) or not isinstance(order, int):
+        raise OwppError(f"{where}.order must be a whole number (lower composes first)")
+    if not isinstance(wrap, bool):
+        raise OwppError(f"{where}.wrap must be true or false")
+    files = {}
+    for f in folder_files(folder / "assets"):
+        if f["path"] not in ASSET_FILES:
+            raise OwppError(
+                f"{folder.name}: assets/{f['path']}: the protocol has two shared files, "
+                f"so assets/ may hold only {' and '.join(ASSET_FILES)}"
+            )
+        if "encoding" in f:
+            raise OwppError(f"{folder.name}: assets/{f['path']} must be UTF-8 text")
+        files[f["path"]] = f["content"]
+    if not files:
+        raise OwppError(f"{folder.name}: assets/ has neither loader.js nor custom.css")
+    return {"id": folder.name.lower(), "order": order, "wrap": wrap, "files": files}
+
+
+def _write_assets(plugin: str, data: dict) -> tuple[dict[str, str | bytes], dict[str, Any]]:
+    files = {f"assets/{p}": v for p, v in (data.get("files") or {}).items()}
+    return files, BY_NAME["assets"].changed(plugin, data)
 
 
 # In the order they are added to a bundle: each is a vendored, byte-identical copy put right after
@@ -83,6 +204,9 @@ LIBRARIES: tuple[Library, ...] = (
         on_when="static/",
         placeholder="__STATIC_DATA__",
         data_needs="static/",
+        settings={"prefix": "/{plugin}", "access": "user"},
+        read=_read_static,
+        write=_write_static,
     ),
     Library(
         "templates",
@@ -102,6 +226,9 @@ LIBRARIES: tuple[Library, ...] = (
         on_when="assets/",
         placeholder="__ASSETS_DATA__",
         data_needs="assets/",
+        settings={"order": 0, "wrap": True},
+        read=_read_assets,
+        write=_write_assets,
     ),
     Library(
         "config",
