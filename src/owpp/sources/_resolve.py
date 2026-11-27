@@ -151,7 +151,7 @@ class Sources:
         lookup: Lookup | None = None,
         kind_of: KindOf | None = None,
     ):
-        self._fetcher = fetcher if fetcher is not None else _git.git_fetcher
+        self.fetcher = fetcher if fetcher is not None else _git.git_fetcher
         self._lookup = lookup if lookup is not None else _git.resolve_ref
         self._kind_of = kind_of if kind_of is not None else _git.ref_kind
         self._cache: dict[str, dict[str, Value]] = {}
@@ -186,7 +186,7 @@ class Sources:
         """Every file in the folder `path` of `git` ("": the whole repository) at the commit
         `sha`, by path inside it: for looking at a folder no `source:` names yet."""
         prefix = f"{path}/" if path else ""
-        got = self._fetcher(git, sha, [prefix or "./"])
+        got = self.fetcher(git, sha, [prefix or "./"])
         return {k[len(prefix) :]: v for k, v in got.items() if k.startswith(prefix)}
 
     def resolve(self, folder: Path | str, ref: str | None = None) -> ResolvedPlugin:
@@ -236,7 +236,7 @@ class Sources:
             git, ref, path = re.fullmatch(r"(.*)#([0-9a-f]{40}):(.*)", key, re.DOTALL).groups()
             groups.setdefault(f"{git}#{ref}", (git, ref, []))[2].append(path)
         for git, ref, paths in groups.values():
-            got = self._fetcher(git, ref, paths)
+            got = self.fetcher(git, ref, paths)
             for path in paths:
                 if path.endswith("/"):
                     under = {k: v for k, v in got.items() if k.startswith(path)}
