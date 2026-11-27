@@ -128,28 +128,26 @@ class TestTestCommand:
         assert main(["test", "--editor", "--dir", str(tmp_path / "none")], env={}) == 0
         assert capsys.readouterr().out.strip() == str(cached)
 
-    def test_every_scaffold_passes_its_own_tests(self, tmp_path):
-        for kind in ("event", "filter", "action", "pipe"):
-            scaffold(tmp_path, f"demo_{kind}", kind)
-        done = self.owpp_test(tmp_path, "--", "-p", "no:cacheprovider")
-        assert done.returncode == 0, done.stdout + done.stderr
-        assert "8 passed" in done.stdout
+    # That every scaffold passes its own tests is test_create's: `owpp init` writes what
+    # `owpp create` writes with every answer the default.
 
-    def test_a_failing_plugin_test_fails_the_command(self, tmp_path):
+    def test_it_runs_the_plugins_named_fails_on_a_failing_test_and_notes_those_without(
+        self, tmp_path
+    ):
+        """One pytest run (each starts Open-WebUI): a failing test fails the command, a plugin
+        not named is not run, and a plugin with no tests/ folder is noted."""
         scaffold(tmp_path, "demo", "event")
         (tmp_path / "demo" / "tests" / "test_more.py").write_text(
             "def test_valves(plugin):\n    assert plugin.valves.ENABLE is False\n"
         )
-        done = self.owpp_test(tmp_path, "demo", "--", "-p", "no:cacheprovider")
-        assert done.returncode == 1 and "1 failed, 2 passed" in done.stdout
-
-    def test_it_runs_only_the_plugins_named_and_notes_those_without_tests(self, tmp_path):
-        scaffold(tmp_path, "a", "event")
+        scaffold(tmp_path, "skipped", "event")
         scaffold(tmp_path, "b", "event")
         (tmp_path / "b" / "tests" / "test_b.py").unlink()
         (tmp_path / "b" / "tests").rmdir()
-        done = self.owpp_test(tmp_path, "--", "-p", "no:cacheprovider")
-        assert done.returncode == 0 and "note  no tests/ folder: b" in done.stdout
+        done = self.owpp_test(tmp_path, "demo", "b", "--", "-p", "no:cacheprovider")
+        assert done.returncode == 1, done.stdout + done.stderr
+        assert "1 failed, 2 passed" in done.stdout and "note  no tests/ folder: b" in done.stdout
+        assert "skipped" not in done.stdout
         assert self.owpp_test(tmp_path, "b").returncode == 1
         assert "no plugin nope" in self.owpp_test(tmp_path, "nope").stderr
 

@@ -20,9 +20,9 @@ jobs:
         run: python3 tools/sync_open_webui.py --check
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run pytest
+      - run: uv run pytest -n auto
       - name: Run the example plugins' tests the way a plugin repository would
-        run: uv run owpp test --dir examples/plugins
+        run: uv run owpp test --dir examples/plugins -- -n auto
       - name: Check the examples against their real upstream sources
         run: uv run owpp check --strict --dir examples/plugins
   package:

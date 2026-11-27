@@ -96,12 +96,10 @@ class Designer:
 
 @pytest.fixture
 def tdp(owui, plugin):
-    """The plugin, started: its routes are mounted and its fragments published, and the
-    background work its load starts (reading its valves back, as on a worker no event
-    reached) is done, so it does not land in the middle of a test."""
+    """The plugin, started: its routes are mounted and its fragments published. The harness
+    lets the background work its load starts (reading its valves back, as on a worker no
+    event reached) finish first, so it does not land in the middle of a test."""
     owui.startup()
-    for _ in range(5):
-        owui.run(asyncio.sleep(0.01))
     return plugin
 
 

@@ -34,8 +34,8 @@ Run these commands:
 ```sh
 uv sync
 uv run ruff check . && uv run ruff format --check .
-uv run pytest
-uv run owpp test --dir examples/plugins
+uv run pytest -n auto
+uv run owpp test --dir examples/plugins -- -n auto
 uv run owpp check --strict --dir examples/plugins
 uv run --group docs python tools/build_docs.py serve   # preview this site (Python 3.11+)
 ```

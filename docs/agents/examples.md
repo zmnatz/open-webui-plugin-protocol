@@ -50,4 +50,4 @@ Done when the live suite passes and the new PNGs and `docs/screenshots/screensho
 - Add the example to the Examples menu in `zensical.toml` (`{ "Title" = "examples/<id>.md" }`): its page is built either way, but only the menu leads to it.
 - `uv run --group docs python tools/build_docs.py` builds the docs site with the new page and its screenshots; a broken link, or an example the menu leaves out, fails it. The button to the example's built function is added by the same build; nothing to write.
 
-Done when the docs build passes, and `uv run pytest` passes.
+Done when the docs build passes, and `uv run pytest -n auto` and `uv run owpp test --dir examples/plugins -- -n auto` pass.

@@ -224,6 +224,7 @@ owpp = "owpp.testing.pytest_plugin"
 [dependency-groups]
 dev = [
     "owpp[test]",  # the pinned Open-WebUI's packages, at its versions (ADR 0004)
+    "pytest-xdist>=3.6",  # -n auto: each worker starts its own Open-WebUI
     "ruff>=0.8",
     "playwright>=1.50",  # owpp live's browser fixtures, for this repository's live suite
 ]
@@ -244,7 +245,9 @@ packages = ["src/owpp"]
 include = ["src/owpp", "docs", "examples", "skills", "tests", "README.md", "LICENSE", "NOTICE.md", "CHANGELOG.md", "SECURITY.md"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "examples/plugins"]
+# The example plugins' tests run through `owpp test --dir examples/plugins` (as a plugin
+# repository runs them), not here as well.
+testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
 filterwarnings = ["ignore:Using `httpx` with `starlette.testclient` is deprecated"]
 

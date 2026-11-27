@@ -111,8 +111,8 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ```sh
 uv sync
-uv run pytest                        # owpp's tests and every example plugin's tests/
-uv run owpp test --dir examples/plugins
+uv run pytest -n auto                              # owpp's tests, in parallel
+uv run owpp test --dir examples/plugins -- -n auto  # every example plugin's tests/
 uv run ruff check . && uv run ruff format --check .
 uv run owpp check --dir examples/plugins
 ```

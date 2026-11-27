@@ -68,7 +68,7 @@ More CI examples:
 
 ## Tests (this repository)
 
-`uv run pytest` runs all the tests: those of owpp in `tests/`, and those of each example plugin in `examples/plugins/<id>/tests/`. The [test catalogue](reference/test-catalogue.md#the-librarys-own-tests) says what each file in `tests/` covers.
+`uv run pytest -n auto` runs the tests of owpp, in `tests/`. `uv run owpp test --dir examples/plugins -- -n auto` runs the tests of each example plugin, in `examples/plugins/<id>/tests/`, as a plugin repository runs them. `-n auto` runs the tests in parallel: each worker starts its own Open-WebUI. The [test catalogue](reference/test-catalogue.md#the-librarys-own-tests) says what each file in `tests/` covers.
 
 In these tests, stand-ins take the place of git sources, so they need no network. `owpp check` compiles the real code that it fetches.
 
