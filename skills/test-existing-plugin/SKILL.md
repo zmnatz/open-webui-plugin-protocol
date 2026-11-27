@@ -1,6 +1,6 @@
 ---
 name: test-existing-plugin
-description: Tests for an Open-WebUI function or owpp plugin that already works, against owpp's mock Open-WebUI (and live tests, over the API and in the browser with Playwright, on a real Open-WebUI with aimock, run by owpp live). Use when asked for tests, coverage, live or browser tests, or screenshots of a function pasted into Open-WebUI, a .py file, someone else's repository, or a plugin folder without tests.
+description: Tests for an Open-WebUI function or owpp plugin that already works, on owpp's test harness, the real Open-WebUI in the test process (and live tests, over the API and in the browser with Playwright, on a real Open-WebUI with aimock, run by owpp live). Use when asked for tests, coverage, live or browser tests, or screenshots of a function pasted into Open-WebUI, a .py file, someone else's repository, or a plugin folder without tests.
 ---
 
 # Tests for a plugin that already works
@@ -69,7 +69,7 @@ Done when each By hand step is in the list.
 
 ## 5. Live tests, on a real Open-WebUI
 
-For each By hand step that depends on what only Open-WebUI does, write a live test that asserts it on a throwaway Open-WebUI v0.13.5 in Docker, with aimock answering as its models. `owpp live` starts it, deploys the plugins and runs the tests: https://zmnatz.github.io/open-webui-plugin-protocol/testing/live/#live-tests-in-your-repository
+The unit tests already run the real Open-WebUI: routes, sign-in, grants, valves, events, what is installed, and what Open-WebUI sends the model. Write a live test only for a By hand step that the harness cannot reach: the page in a browser (a script, a button, the Artifacts panel), the chat pipeline choosing the filters and tools of a chat, a deploy to a running Open-WebUI that then restarts, or several workers. For each such step, write a live test that asserts it on a throwaway Open-WebUI v0.13.5 in Docker, with aimock answering as its models. `owpp live` starts it, deploys the plugins and runs the tests: https://zmnatz.github.io/open-webui-plugin-protocol/testing/live/#live-tests-in-your-repository
 
 - **Where**: in a plugins repository, `live/test_<id>.py` beside `plugins/`. In the owpp repository, for one of its examples, `tools/live/` (and follow `docs/agents/examples.md`, steps 3 to 5).
 - **Over the API** (which model a request goes to, what reaches the model, a grant): the `api` and `user_api` fixtures (each call returns `(status, body)`), and `aimock.requests()` for what Open-WebUI sent the model.
