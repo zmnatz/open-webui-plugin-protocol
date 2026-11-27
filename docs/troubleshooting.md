@@ -168,7 +168,7 @@ error: <folder>/function.py:<line>: <name> is from the <library> library, which 
 
 The file imports a library name, but the bundle does not have that library. Add the library to [`include:`](plugin-format.md#include). For `tool.py`, the message names `tool.include`.
 
-If a file uses a library name without an import, the message says `<name> is used without importing it`, and gives the import line to add.
+If a file uses a library name without an import, the message says `<name> is used without importing it`. It also gives the import line to add.
 
 ### A version that was not bumped
 
@@ -177,12 +177,12 @@ FAIL  <id>: changed since origin/main but its version is still 1.0.0 (run `owpp 
 FAIL  tool <id>: changed since origin/main but its version is still 1.0.0 (run `owpp version <id> patch --tool`)
 ```
 
-[`owpp check --since <ref>`](commands/check.md) (the action's `since:` input) found a change in a plugin, tool or skill since that ref, but its version is the same. For the version that each change needs, see [a change needs a new version](commands/check.md#a-change-needs-a-new-version).
+[`owpp check --since <ref>`](commands/check.md) (the action's `since:` input) found a change since that ref. The change is in a plugin, tool or skill, but its version is the same. For the version that each change needs, see [a change needs a new version](commands/check.md#a-change-needs-a-new-version).
 
 1. Run the command in brackets.
 2. If the command added a `CHANGELOG.md` entry, write what changed in it.
 
-If a plugin has a `CHANGELOG.md` with no entry for its current version, `check` warns `` warn  <id>/CHANGELOG.md has no `## <version>` entry for the current version ``. With `--strict`, this warning fails the check.
+If a plugin's `CHANGELOG.md` has no entry for its current version, `check` warns about it. The warning is `` warn  <id>/CHANGELOG.md has no `## <version>` entry for the current version ``. With `--strict`, the warning fails the check.
 
 A deploy report shows a changed function that has the same version as `code changed, still 1.0.0`.
 

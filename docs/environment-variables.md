@@ -99,7 +99,7 @@ The [ownership marker](commands/deploy.md#the-ownership-marker) that the deploy 
 
 Each of these variables holds a path to a PEM file (owpp expands `~`), or the PEM text itself, as a CI secret holds it. [`owpp deploy`](commands/deploy.md) and [`owpp import --instance`](commands/import.md) read them.
 
-If a value is not PEM text and not a file, the command stops with `<variable>: no file <path> (give a path to a PEM file, or the PEM itself)`. If none of the variables is set, both commands use Python's defaults: the system's CAs, and no client certificate.
+The value must be PEM text, or a path to a PEM file. If it is neither, the command stops with `<variable>: no file <path> (give a path to a PEM file, or the PEM itself)`. If none of the variables is set, both commands use Python's defaults: the system's CAs, and no client certificate.
 
 ### `OPEN_WEBUI_CA_CERT`
 

@@ -19,10 +19,22 @@ The triage labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-fo
 | The code | `src/owpp/` (the CLI, bundler and deploy), `src/owpp/runtime/`, or a plugin in `examples/plugins/`. A deploy copies the runtime byte for byte, so never reformat it. | |
 | Tests | `tests/` for owpp, `examples/plugins/<id>/tests/` for a plugin | They show that it works, and keep it working. |
 | A docstring on each plugin test | In the test: what it checks, then `By hand:` steps ([describe every test](testing/writing.md#describe-every-test)) | A reviewer repeats the steps on a live Open-WebUI. The [test catalogue](reference/test-catalogue.md) is built from them. |
-| The guide | `docs/` | Change it when behaviour or a command changes. |
+| The guide | `docs/` | Change it when behaviour or a command changes. Write it in [Simplified Technical English](#writing-the-guide). |
 | A changelog entry | `CHANGELOG.md`, in the section of the next version (`## Unreleased` until the release) | It says in one sentence what users will notice. The details belong in the docs. |
 | A review of the docs around it | The pages that the change touches, and the ones next to them | For an issue labelled `documentation`: explain each thing in full once and link to it. Fix what no longer matches the code. |
 | A commit message that says why | git, with a [conventional-commit prefix](#commit-messages) | A reviewer reads it with the diff. |
+
+## Writing the guide
+
+Write the prose in `docs/` in Simplified Technical English. Follow ASD-STE100's writing rules, but not its restricted dictionary: technical names stay as they are (`owpp`, `plugin.yaml`, valve, commands, flags and keys).
+
+- Write one meaning in each sentence, in the active voice. Give one instruction in each sentence.
+- Keep a sentence in a description to 25 words or fewer. Keep a sentence in a procedure to 20 words or fewer.
+- Write a procedure as numbered steps. Put a caution or a warning before the step that it applies to.
+- Use one term for one thing. Use the term in `GLOSSARY.md` where the repository defines one.
+- Explain each thing in full once. Link to that explanation from the other pages.
+- Leave code blocks, examples and command output unchanged, unless they are wrong.
+- Check this site with `uv run --group docs python tools/build_docs.py`. A broken link fails the build.
 
 ## Step by step
 
