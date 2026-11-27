@@ -14,8 +14,10 @@ in a deploy. A plugin is deployed through owpp's Open-WebUI adapter, over Open-W
 API, as `owpp deploy` does. Each Harness starts from the database and app state Open-WebUI had
 just after its startup.
 
+Open-WebUI's model is aimock (owpp.testing.aimock), as on `owpp live`'s stack: it answers
+`model_reply` as `mock-model` and each `serve_model` id, and `completions` is its journal.
+
 What the harness fakes, so a test can control and see it:
-  - the model: `generate_chat_completion` answers `model_reply` and records `completions`;
   - the socket: `sio.emit` records to `emitted` (there are no browsers to send to);
   - `__event_emitter__`, for calls the test makes: records to `chat_events`;
   - a plugin's `requirements:` are recorded in `requirements`, not installed with pip.
@@ -88,7 +90,20 @@ class _Runtime:
         self.static_dir.mkdir()
         self._index = (open_webui_dir() / "open_webui" / "frontend" / "index.html").read_bytes()
         (frontend / "index.html").write_bytes(self._index)
+        # Open-WebUI's model is aimock (owpp.testing.aimock), as on `owpp live`'s stack: its
+        # connection is Open-WebUI's default, read from the environment, and every user may use
+        # its models. aimock starts when a test first uses the model.
+        from .aimock import Aimock, free_port
+
+        self.loop = asyncio.new_event_loop()
+        self._tasks: set = set()
+        self.recorder: Harness | None = None
+        self.model = Aimock(free_port())
         os.environ.update(
+            OPENAI_API_BASE_URLS=f"{self.model.url}/v1",
+            OPENAI_API_KEYS="owpp-test-harness",
+            ENABLE_OLLAMA_API="false",
+            BYPASS_MODEL_ACCESS_CONTROL="true",
             DATA_DIR=str(self.data_dir),
             STATIC_DIR=str(self.static_dir),
             FRONTEND_BUILD_DIR=str(frontend),
@@ -102,22 +117,36 @@ class _Runtime:
         with contextlib.redirect_stdout(sys.stderr):  # the banner and the migrations' prints
             from open_webui.main import app
 
-        import open_webui.utils.chat as chat
         import open_webui.utils.plugin as plugin
         from open_webui.socket.main import sio
 
         self.app = app
-        self.recorder: Harness | None = None
-        self._fake(sio, chat, plugin)
+        self._fake(sio, plugin)
 
-        self.loop = asyncio.new_event_loop()
-        self._tasks: set = set()
         self._lifespan = app.router.lifespan_context(app)
         self.loop.run_until_complete(self._lifespan.__aenter__())
         self.loop.run_until_complete(self.settle())
         self._snapshot()
 
-    def _fake(self, sio, chat, plugin) -> None:
+    async def refresh_models(self) -> None:
+        """Open-WebUI reads its connections' model lists again, as when the model list is
+        opened (`app.state.MODELS`)."""
+        from open_webui.utils.models import get_all_models
+        from starlette.requests import Request
+
+        request = Request(
+            {
+                "type": "http",
+                "app": self.app,
+                "method": "GET",
+                "path": "/internal",
+                "headers": [],
+                "query_string": b"",
+            }
+        )
+        await get_all_models(request, refresh=True)
+
+    def _fake(self, sio, plugin) -> None:
         runtime = self
 
         async def emit(event, data=None, room=None, to=None, **kwargs):
@@ -125,20 +154,6 @@ class _Runtime:
                 runtime.recorder.emitted.append((event, data))
 
         sio.emit = emit
-
-        async def generate_chat_completion(request, form_data, user=None, **kwargs):
-            owui = runtime.recorder
-            if owui is None:
-                raise RuntimeError("no Harness is open")
-            owui.completions.append(form_data)
-            return {
-                "model": form_data.get("model"),
-                "choices": [
-                    {"index": 0, "message": {"role": "assistant", "content": owui.model_reply}}
-                ],
-            }
-
-        chat.generate_chat_completion = generate_chat_completion
 
         def install_frontmatter_requirements(requirements: str):
             if requirements and runtime.recorder is not None:
@@ -514,9 +529,9 @@ class Harness:
         self.static_dir = self._rt.static_dir
         self.emitted: list[tuple[str, Any]] = []
         self.chat_events: list[tuple[str | None, dict]] = []
-        self.completions: list[dict] = []
-        self.model_reply: str = ""
+        self._model_reply: str = ""
         self.requirements: list[str] = []
+        self.served_models: list[str] = []
         self.plugins: dict[str, LoadedPlugin] = {}
         self._missing: ModuleNotFoundError | None = None
         self._open = False
@@ -535,6 +550,8 @@ class Harness:
             if self._rt.recorder is not None and self._rt.recorder is not self:
                 raise RuntimeError("another Harness is open in this process; close it first")
             self._rt.reset()
+            if self._rt.model.running:
+                self._rt.model.set_fixtures([])
             self._rt.recorder = self
             self._open = True
         return self
@@ -910,6 +927,39 @@ class Harness:
         """An admin saved the function's valves."""
         current = self.run(_function_valves(function_id)) or {}
         self.api.update_valves(function_id, {**current, **valves})
+
+    # ---- the model (aimock) ----------------------------------------------------------------
+
+    @property
+    def model_reply(self) -> str:
+        """What the model answers, as every model it serves (`mock-model`, and `serve_model`'s)."""
+        return self._model_reply
+
+    @model_reply.setter
+    def model_reply(self, text: str) -> None:
+        self._model_reply = text
+        self._serve()
+
+    def serve_model(self, model_id: str) -> None:
+        """The model also answers as `model_id`, and Open-WebUI lists it, as after an admin adds
+        a connection that serves it. `mock-model` is always served."""
+        if model_id not in self.served_models:
+            self.served_models.append(model_id)
+        self._serve()
+
+    @property
+    def completions(self) -> list[dict]:
+        """Each chat request the model got, as Open-WebUI sent it (aimock's journal)."""
+        return self._rt.model.requests() if self._rt.model.running else []
+
+    def _serve(self) -> None:
+        """aimock answers `model_reply` as each served model; Open-WebUI reads the list again."""
+        self._rt.model.start()
+        models = ["mock-model", *(m for m in self.served_models if m != "mock-model")]
+        self._rt.model.set_fixtures(
+            [{"match": {"model": m}, "response": {"content": self._model_reply}} for m in models]
+        )
+        self.run(self._rt.refresh_models())
 
     def set_tool_valves(self, tool_id: str, **valves) -> None:
         """An admin saved the tool's valves (Workspace > Tools > Valves)."""

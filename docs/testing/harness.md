@@ -83,7 +83,7 @@ Open-WebUI catches an error in an Event function and logs it. So a test sees the
 | `owui.config` | The config table, by key. A change is saved with Open-WebUI's `Config.upsert`. |
 | `owui.emitted` | `[(event, data)]` sent on the socket (`sio.emit`). |
 | `owui.chat_events` | `[(chat_id, event)]` sent through `__event_emitter__` in a call that the test made. |
-| `owui.model_reply`, `owui.completions` | For a plugin that calls a model (`generate_chat_completion`): the answer of the model, and every request that the model got. |
+| `owui.model_reply`, `owui.serve_model(id)`, `owui.completions` | For a plugin that asks a model: the answer of [the model](#the-model-aimock), another model id that it answers as, and every request that Open-WebUI sent it. |
 | `owui.requirements` | The `requirements:` of each plugin that Open-WebUI loaded. The harness does not install them. |
 | `owui.data_dir`, `owui.static_dir`, `owui.app` | Open-WebUI's `DATA_DIR` and `STATIC_DIR`, and its FastAPI app. |
 
@@ -100,11 +100,26 @@ owui.client(owui.admin).post(
 )
 ```
 
+## The model: aimock
+
+Open-WebUI's model is [aimock](live.md#the-model-aimock), as on the stack of `owpp live`, at the same version. Open-WebUI reaches it over the OpenAI API, through its own chat completion code. Every user may use its models, as on that stack.
+
+- **`owui.model_reply = "..."`** is the answer. aimock gives it as `mock-model`, streamed or not.
+- **`owui.serve_model("theme-model")`** makes aimock also answer as `theme-model`. Open-WebUI then lists that model.
+- **`owui.completions`** is aimock's journal: each request as Open-WebUI sent it to the model. Open-WebUI removes `metadata` before it sends a request, so the journal does not have it.
+
+aimock starts the first time a test sets `model_reply` or calls `serve_model`. A test run that does neither does not start it. To run aimock, the harness uses the first of these that is installed:
+
+1. Bun (`bunx`).
+2. Node 20 or newer (`npx`).
+3. Docker.
+
+The first start downloads aimock.
+
 ## What the harness fakes
 
 The harness changes these parts of Open-WebUI, so that a test can control them and see what they did:
 
-- **The model.** `generate_chat_completion` answers `owui.model_reply` and records each request in `owui.completions`.
 - **The socket.** `sio.emit` records to `owui.emitted`. No browser is connected.
 - **`__event_emitter__`.** In a call that the test makes, it records to `owui.chat_events`.
 - **Requirements.** Open-WebUI does not install a plugin's `requirements:` with pip. The harness records them in `owui.requirements`.
@@ -112,7 +127,7 @@ The harness changes these parts of Open-WebUI, so that a test can control them a
 These parts of a real instance are not in the harness:
 
 - the chat pipeline that decides which filters and tools run for a chat;
-- a real model;
+- a real model (aimock answers from fixtures);
 - OIDC, LDAP and trusted-header sign-in;
 - Redis, multiple workers, and `live_reload` across containers;
 - the web app in a browser. The harness serves only Open-WebUI's `index.html`.

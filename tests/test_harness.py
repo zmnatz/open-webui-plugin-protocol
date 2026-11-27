@@ -4,6 +4,7 @@ behaviour (the deploy adapter's fake, replace_imports) are checked against the r
 
 from __future__ import annotations
 
+import json
 import textwrap
 from pathlib import Path
 
@@ -239,17 +240,43 @@ def test_a_session_token_decodes_to_its_user():
         assert owui.client(ada).get("/api/v1/auths/").json()["id"] == ada.id
 
 
-def test_a_plugin_can_ask_a_model():
-    """A plugin that asks a model itself (Theme Designer Pro's AI Consultant) gets
-    `owui.model_reply`; what it asked is in `owui.completions`."""
+def test_open_webuis_model_is_aimock():
+    """Open-WebUI's own chat completion reaches the harness's model, aimock, over the OpenAI
+    API: it answers `owui.model_reply`, streamed or not, and `owui.completions` holds each
+    request as Open-WebUI sent it. `mock-model` is served, and `serve_model` adds another."""
     with Harness() as owui:
         from open_webui.utils.chat import generate_chat_completion  # noqa: PLC0415
 
         owui.model_reply = "blue"
-        asked = {"model": "m", "messages": [{"role": "user", "content": "a colour?"}]}
-        reply = owui.run(generate_chat_completion(None, form_data=asked, user=None))
+        user = owui.admin.model
+        asked = {"model": "mock-model", "messages": [{"role": "user", "content": "a colour?"}]}
+        reply = owui.run(generate_chat_completion(owui.request(owui.admin), asked, user))
         assert reply["choices"][0]["message"]["content"] == "blue"
-        assert owui.completions == [asked]
+        (sent,) = owui.completions
+        assert sent["model"] == "mock-model" and sent["messages"][-1]["content"] == "a colour?"
+        with pytest.raises(Exception, match="Model not found"):
+            owui.run(
+                generate_chat_completion(owui.request(owui.admin), {**asked, "model": "x"}, user)
+            )
+        owui.serve_model("x")
+        reply = owui.run(
+            generate_chat_completion(owui.request(owui.admin), {**asked, "model": "x"}, user)
+        )
+        assert reply["choices"][0]["message"]["content"] == "blue"
+
+        async def streamed():
+            response = await generate_chat_completion(
+                owui.request(owui.admin), {**asked, "stream": True}, user
+            )
+            return b"".join([chunk async for chunk in response.body_iterator]).decode()
+
+        events = [line[6:] for line in owui.run(streamed()).splitlines() if line[6:7] == "{"]
+        text = "".join(
+            choice["delta"].get("content") or ""
+            for event in map(json.loads, events)
+            for choice in event.get("choices", [])
+        )
+        assert text == "blue"
 
 
 def test_a_plugins_requirements_are_recorded_not_installed(tmp_path):

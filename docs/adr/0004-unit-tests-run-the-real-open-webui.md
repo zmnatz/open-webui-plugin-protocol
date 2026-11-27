@@ -1,6 +1,6 @@
 # Unit tests run the real Open-WebUI, with upstream's slim dependencies
 
-`owpp test` runs a plugin's unit tests against the real Open-WebUI code. Until now, they ran against a mock Open-WebUI: about 1,370 lines in `owpp/testing/mock.py` that wrote again each `open_webui` name a plugin used. Each new call that a plugin needed was new mock code, and the mock could drift from the real Open-WebUI. The `owui` fixture stays, as the **test harness** (see the glossary). It now holds only the parts that a test must control: a fake model, a record of what was sent, and a fresh database for each test.
+`owpp test` runs a plugin's unit tests against the real Open-WebUI code. Until now, they ran against a mock Open-WebUI: about 1,370 lines in `owpp/testing/mock.py` that wrote again each `open_webui` name a plugin used. Each new call that a plugin needed was new mock code, and the mock could drift from the real Open-WebUI. The `owui` fixture stays, as the **test harness** (see the glossary). It now holds only the parts that a test must control: a record of what was sent, and a fresh database for each test.
 
 What this means:
 
@@ -9,6 +9,7 @@ What this means:
 - **Open-WebUI's code is a cached wheel, not an installed package.** The harness downloads the pinned pure-Python wheel once and checks its hash. Then it adds the wheel to `sys.path`. pip never resolves the 111 dependencies of the full package, so torch, CUDA and chromadb are never installed. The install is still `owpp[test]`, on the image's Python: `uvx --python 3.12 --from 'owpp[test]' owpp test`.
 - **A plugin is deployed over Open-WebUI's API**, through owpp's own adapter, as `owpp deploy` does. Open-WebUI's routers then send the events and load the code. So the unit tests also check the deploy adapter, and `tests/test_harness.py` checks the adapter's in-memory fake against the real Open-WebUI.
 - **One Open-WebUI for each test run.** Open-WebUI reads its settings and opens its database when it is imported. So the harness sets up `DATA_DIR` once for each run. Before each test, it puts the tables, the app's routes and state, and the data folder back as they were after the startup.
+- **The model is aimock, as on `owpp live`'s stack.** owpp does not write its own copy of the OpenAI API, for the same reason that it does not write its own Open-WebUI. aimock runs with Bun, Node or Docker, the first one installed, and only when a test asks the model.
 - **The same pin as `owpp live`.** The unit tests and the live stack use one Open-WebUI version, and an owpp release changes both.
 - **A package outside slim belongs to the plugin's repository.** If a plugin imports a part of Open-WebUI that slim does not install, the harness gives the name of the package and Open-WebUI's pin for it. The repository adds the package to its own test dependencies.
 - **This replaces part of [ADR 0002](0002-plugin-source-is-python.md).** "Open-WebUI is not installed for development" is no longer true for tests. An editor finds `open_webui` through the cached wheel. `owpp test --editor` gives its path.
@@ -20,3 +21,4 @@ What this means:
 - **The full `open-webui` package as the dependency**: completely standard, but it pins 111 packages, which resolve to 262 on Linux, among them torch, triton and 14 CUDA packages. That is several GB on each CI run.
 - **A list of dependencies that owpp generates** from the modules the tests load: small, but owpp keeps the list itself. Upstream already keeps the slim list for its slim image.
 - **Run the unit tests inside the slim Docker image**: the exact environment of a slim deploy, but unit tests need Docker. Each run installs pytest and the repository's test packages into the container. IDE test runners, debuggers and coverage also need remote setup. The live suite already tests what the image adds.
+- **A model written in owpp** (a patched `generate_chat_completion`, or a small OpenAI API served by the harness): no Bun, Node or Docker, but it is a second fake to keep in step, now of the OpenAI API. fakellm, a Python mock server, has no `/v1/models`, no way to add answers while it runs and no request journal, which the harness needs.

@@ -1,7 +1,8 @@
 """Theme Designer Pro's AI Consultant: a description in words, a model on the instance, a palette
 back. Run with `owpp test theme_designer_pro`.
 
-The harness's model answers `owui.model_reply` and keeps what it was asked in `owui.completions`."""
+The harness's model, an OpenAI API, answers `owui.model_reply`; `owui.completions` keeps what
+Open-WebUI sent it."""
 
 import pytest
 
@@ -14,7 +15,7 @@ def model(owui):
     owui.model_reply = (
         '{"hue": 210, "chroma": 18, "lightness": 14, "gradient": true, "name": "Deep  Harbour"}'
     )
-    owui.app.state.MODELS = {"theme-model": {"id": "theme-model"}}
+    owui.serve_model("theme-model")
     return owui
 
 
@@ -35,10 +36,8 @@ def test_the_consultant_turns_a_description_into_a_palette(td, model):
         "name": "Deep Harbour",
         "model": "theme-model",
     }
-    (asked,) = model.completions
-    assert asked["model"] == "theme-model" and asked["metadata"] == {
-        "task": "theme_designer_pro_consultant"
-    }
+    (asked,) = model.completions  # as the model got it: Open-WebUI keeps `metadata` itself
+    assert asked["model"] == "theme-model" and "metadata" not in asked
     assert asked["messages"][1] == {"role": "user", "content": "a calm harbour at night"}
     assert asked["messages"][0]["content"].startswith("You design color themes for Open WebUI.")
 
