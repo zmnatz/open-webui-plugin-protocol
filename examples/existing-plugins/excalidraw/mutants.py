@@ -218,7 +218,7 @@ def main(names: list[str]) -> None:
         for name in names or list(MUTANTS):
             what, file, old, new = MUTANTS[name]
             (plugin / file).write_text(mutate(originals[file], old, new))
-            mock = subprocess.run(
+            unit = subprocess.run(
                 [
                     "uv",
                     "run",
@@ -231,7 +231,7 @@ def main(names: list[str]) -> None:
                     "-q",
                     "-p",
                     "no:cacheprovider",
-                    f"--junitxml={repo / 'mock.xml'}",
+                    f"--junitxml={repo / 'unit.xml'}",
                 ],
                 cwd=repo,
                 env=env,
@@ -259,14 +259,14 @@ def main(names: list[str]) -> None:
             )
             results[name] = {
                 "what": what,
-                "mock": failed(repo / "mock.xml"),
+                "unit": failed(repo / "unit.xml"),
                 "live": failed(repo / "live.xml"),
-                "mock_summary": mock.stdout.strip().splitlines()[-1],
+                "unit_summary": unit.stdout.strip().splitlines()[-1],
                 "live_summary": live.stdout.strip().splitlines()[-1],
             }
             (plugin / file).write_text(originals[file])
             print(
-                name, "| mock:", results[name]["mock"], "| live:", results[name]["live"], flush=True
+                name, "| unit:", results[name]["unit"], "| live:", results[name]["live"], flush=True
             )
             results_file.write_text(json.dumps(results, indent=2))
     finally:

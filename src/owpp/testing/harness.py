@@ -109,6 +109,9 @@ class _Runtime:
             STATIC_DIR=str(self.static_dir),
             FRONTEND_BUILD_DIR=str(frontend),
             USE_SLIM_DOCKER="true",
+            # As `open-webui serve` (the pip install) sets it: its version comes from the
+            # wheel's metadata, not 0.0.0.
+            FROM_INIT_PY="true",
             WEBUI_SECRET_KEY=SECRET_KEY,
             OFFLINE_MODE="true",
             ENABLE_VERSION_UPDATE_CHECK="false",

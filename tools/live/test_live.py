@@ -1,4 +1,4 @@
-"""What the mock cannot promise, asserted on a real Open-WebUI whose model is aimock, answering
+"""What the test harness cannot reach, asserted on a real Open-WebUI whose model is aimock, answering
 from tools/screenshots/aimock/ (docs/testing/live.md)."""
 
 from __future__ import annotations

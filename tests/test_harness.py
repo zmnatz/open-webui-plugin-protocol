@@ -44,6 +44,16 @@ def test_open_webuis_directories_are_the_harnesss():
             assert Path(path).is_dir() and Path(path).is_relative_to(owui.data_dir)
 
 
+def test_open_webui_is_the_pinned_version():
+    """A plugin that reads Open-WebUI's version gets the pinned one."""
+    from owpp.testing import pin
+
+    with Harness():
+        from open_webui.env import VERSION  # noqa: PLC0415
+
+        assert VERSION == pin.VERSION
+
+
 def test_each_harness_starts_from_open_webui_just_after_its_startup(tmp_path):
     """What one harness changed (a function, a user, config, a file in the data folder, a route)
     is gone in the next."""

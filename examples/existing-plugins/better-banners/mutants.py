@@ -178,7 +178,7 @@ def main(exp: Path, names: list[str]) -> None:
             mutant = HERE / "mutants" / f"{name}.py"  # git-ignored
             mutant.parent.mkdir(exist_ok=True)
             mutant.write_text(mutate(upstream, old, new))
-            mock = subprocess.run(
+            unit = subprocess.run(
                 [
                     "uv",
                     "run",
@@ -191,7 +191,7 @@ def main(exp: Path, names: list[str]) -> None:
                     "-q",
                     "-p",
                     "no:cacheprovider",
-                    f"--junitxml={HERE / 'mutants' / 'mock.xml'}",
+                    f"--junitxml={HERE / 'mutants' / 'unit.xml'}",
                 ],
                 cwd=exp,
                 env=env | {"BB_MUTANT": str(mutant)},
@@ -219,13 +219,13 @@ def main(exp: Path, names: list[str]) -> None:
             )
             results[name] = {
                 "what": what,
-                "mock": failed_tests(HERE / "mutants" / "mock.xml"),
+                "unit": failed_tests(HERE / "mutants" / "unit.xml"),
                 "live": failed_tests(HERE / "mutants" / "live.xml"),
-                "mock_summary": mock.stdout.strip().splitlines()[-1],
+                "unit_summary": unit.stdout.strip().splitlines()[-1],
                 "live_summary": live.stdout.strip().splitlines()[-1],
             }
             print(
-                name, "| mock:", results[name]["mock"], "| live:", results[name]["live"], flush=True
+                name, "| unit:", results[name]["unit"], "| live:", results[name]["live"], flush=True
             )
             results_file.write_text(json.dumps(results, indent=2))
     finally:

@@ -36,7 +36,7 @@ Done when every method, valve and branch in the code has a line.
 
 ## 3. Write a test for each line
 
-Tests go in `plugins/<id>/tests/test_<id>.py`, using the `owui` and `plugin` fixtures (the plugin loaded into a fresh mock, enabled, with its default valves). Call it the way Open-WebUI does, so its real code runs:
+Tests go in `plugins/<id>/tests/test_<id>.py`, using the `owui` and `plugin` fixtures (the plugin deployed into the test harness, the real Open-WebUI as it was after its startup, switched on, with its default valves). Call it the way Open-WebUI does, so its real code runs:
 
 | It is | Call it with |
 | --- | --- |

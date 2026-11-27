@@ -104,6 +104,7 @@ def test_saving_the_valves_syncs_every_mcpo_server_as_a_tool_server(owui, plugin
 | Event | Sent by |
 | --- | --- |
 | `system.startup.completed` | `owui.startup()` |
+| `function.enable_started`, `function.enabled` | `owui.load(folder)` for a new function, as a deploy switches it on |
 | `function.valves_updated` | `owui.set_valves(id, ...)`, as when the admin saves the valves |
 | `function.enabled`, `function.disabled` and their `*_started` events | `owui.enable(id)`, `owui.disable(id)` |
 | `function.updated`, `function.deleted` | `owui.update(id)`, `owui.delete(id)` |
@@ -122,7 +123,6 @@ The app serves a page, so request it through `owui.client(user)`. The request go
 ```python
 def test_only_admins_see_it(owui, plugin):
     """By hand: open /stale-data in a private window, as a user (403), and as an admin."""
-    owui.startup()
     assert owui.client().get("/stale-data").status_code == 401
     assert owui.client(owui.add_user("Ada")).get("/stale-data").status_code == 403
     assert owui.client(owui.admin).get("/stale-data").status_code == 200
@@ -176,6 +176,27 @@ def plugin(owui, plugin_dir):
 ```
 
 For a [plugin taken whole from git](../plugin-format.md#a-whole-plugin-from-git), `owpp test --upstream` also runs the tests of the upstream plugin. Example: [`inline_visualizer`](../examples/inline_visualizer.md).
+
+## Plugins that ask a model
+
+A plugin can ask a model itself, through Open-WebUI's `generate_chat_completion`. In the harness, the model is [aimock](harness.md#the-model-aimock):
+
+1. Set the answer: `owui.model_reply = "..."`.
+2. If the plugin asks a model other than `mock-model`, serve that model too: `owui.serve_model("theme-model")`.
+3. Call the plugin.
+4. Assert on what it did with the answer, and on `owui.completions`: each request as Open-WebUI sent it to the model.
+
+```python
+def test_the_consultant_turns_a_description_into_a_palette(owui, td):
+    owui.model_reply = '{"hue": 210, "chroma": 18, "lightness": 14}'
+    owui.serve_model("theme-model")
+    td.valves(ai_consultant_model="theme-model")
+    assert td.admin.post(URL, json={"description": "a calm harbour"}).json()["hue"] == 210
+    (asked,) = owui.completions
+    assert asked["model"] == "theme-model"
+```
+
+A test that sets `model_reply` needs Bun, Node or Docker to run aimock. Example: [`theme_designer_pro`](../examples/theme_designer_pro.md) (its AI Consultant).
 
 ## Plugins that call other services
 

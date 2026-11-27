@@ -11,7 +11,7 @@ def test_only_admins_see_it(owui, plugin):
     By hand: open /stale-data in a private window (the sign-in page), as a user (403), and as
     an admin (the dashboard).
     """
-    owui.startup()  # system.startup.completed: it mounts its page
+    # `plugin` is deployed and switched on: function.enable_started mounted its page
     ada = owui.add_user("Ada")
     assert owui.client().get("/stale-data").status_code == 401
     assert owui.client(ada).get("/stale-data").status_code == 403

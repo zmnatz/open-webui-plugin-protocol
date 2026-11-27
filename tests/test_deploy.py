@@ -28,7 +28,7 @@ LIST = "GET /api/v1/functions/list"
 CREATE = "POST /api/v1/functions/create"
 
 
-class TestDeployAgainstMock:
+class TestDeployAgainstTheFake:
     def test_creates_a_missing_filter_activates_it_and_makes_it_global(
         self, open_webui, functions_dir
     ):

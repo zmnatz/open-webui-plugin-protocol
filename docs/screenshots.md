@@ -13,7 +13,7 @@ You need Docker, and internet access, because the Excalidraw editor loads from e
 3. Take the screenshots with one of the `run.py` commands:
 
     ```sh
-    uv sync --group screenshots                            # Python 3.11+
+    uv sync --group screenshots
     uv run --group screenshots playwright install chromium
     uv run --group screenshots python tools/screenshots/run.py             # all of them
     uv run --group screenshots python tools/screenshots/run.py -- -k banner  # some of them

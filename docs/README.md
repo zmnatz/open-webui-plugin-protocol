@@ -85,7 +85,7 @@ owpp deploy --only my_plugin --dry-run
 
 ## Status and limits
 
-owpp is written against Open-WebUI **v0.13.5**. It started on v0.13.4, and it continues to support that version. The API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) come from that source. The libraries are tested against stubbed Open-WebUI modules. On each change, the [live suite](testing/live.md#this-repositorys-live-suite) deploys the examples to a real v0.13.5 and runs them end to end. It also takes their [screenshots](screenshots.md) there.
+owpp is written against Open-WebUI **v0.13.5**. It started on v0.13.4, and it continues to support that version. The API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) come from that source. The libraries and the examples are tested on the real Open-WebUI v0.13.5, in the test process ([the test harness](testing/harness.md)). On each change, the [live suite](testing/live.md#this-repositorys-live-suite) deploys the examples to a real v0.13.5 and runs them end to end. It also takes their [screenshots](screenshots.md) there.
 
 Known limits:
 
