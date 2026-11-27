@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.0 (2026-11-27)
 
 The headline is **live tests**: a plugins repository tests its plugins on a real, throwaway Open-WebUI, over its API and in the browser, with one command, and an agent can write those tests for a plugin that already works.
 

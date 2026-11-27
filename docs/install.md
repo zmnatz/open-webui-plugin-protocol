@@ -12,12 +12,12 @@
 
 ```sh
 uvx owpp --version         # runs the latest release, nothing installed
-uvx owpp@0.6.3 list        # a pinned release (recommended: see below)
+uvx owpp@0.7.0 list        # a pinned release (recommended: see below)
 ```
 
 `uvx owpp <command>` works from any folder. Every command reads the plugins folder from `--dir`, else [`$OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir), else `./plugins`.
 
-**Pin the version.** The runtime and the libraries are copied into what you deploy, so a new `owpp` changes your deployed code. Use `uvx owpp@0.6.3 ...` in scripts and CI, and move the pin as a reviewed change, the same way you would move any other dependency.
+**Pin the version.** The runtime and the libraries are copied into what you deploy, so a new `owpp` changes your deployed code. Use `uvx owpp@0.7.0 ...` in scripts and CI, and move the pin as a reviewed change, the same way you would move any other dependency.
 
 ## The test extra
 
@@ -34,9 +34,9 @@ uvx --from 'owpp[test]' owpp test
 To have `owpp` on your `PATH`:
 
 ```sh
-uv tool install owpp==0.6.3          # or: uv tool install 'owpp[test]==0.6.3'
-pipx install owpp==0.6.3             # or with pipx
-pip install owpp==0.6.3              # or into a virtual environment
+uv tool install owpp==0.7.0          # or: uv tool install 'owpp[test]==0.7.0'
+pipx install owpp==0.7.0             # or with pipx
+pip install owpp==0.7.0              # or into a virtual environment
 ```
 
 `python -m owpp` is the same command as `owpp`.
@@ -52,7 +52,7 @@ uvx --from git+https://github.com/zmnatz/open-webui-plugin-protocol@<sha or bran
 Nothing to install: the [action](tooling.md#github-action) sets up uv and runs `owpp` from its own checkout, so the version is the tag you pin in `uses:`.
 
 ```yaml
-- uses: zmnatz/open-webui-plugin-protocol@v0.6.3
+- uses: zmnatz/open-webui-plugin-protocol@v0.7.0
 ```
 
 Next: [getting started](getting-started.md).
