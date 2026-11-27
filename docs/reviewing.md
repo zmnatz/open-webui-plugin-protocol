@@ -1,30 +1,35 @@
 # Reviewing a change
 
-How a person checks a pull request or a release before it reaches an Open-WebUI instance. Everything a plugin does runs inside Open-WebUI with admin rights, so a change is not done until someone has read it and seen it work.
+This page tells you how to check a pull request or a release before it reaches an Open-WebUI instance. Everything a plugin does runs inside Open-WebUI with admin rights. So a change is not done until a person has read it and seen it work.
 
 ## 1. Know what changed and why
 
 | Look at | It tells you |
 | --- | --- |
 | The pull request's description and commits | What the author meant to do. Each commit message says why. |
-| The [changelog](project/changelog.md), the version being prepared | What users will notice. A change they would notice needs an entry here. |
+| The [changelog](project/changelog.md) section of the next version | What users will notice ([what a change includes](contributing.md#what-a-change-includes)). |
 
-A change of behaviour with no changelog entry is a review comment.
+If users will notice a change of behaviour and it has no changelog entry, ask for one in a review comment.
 
 ## 2. Let CI run
 
-The pull request's checks run `.github/workflows/ci.yml` and `docs.yml`:
+The pull request's checks run `.github/workflows/ci.yml`, `docs.yml` and `live.yml`:
 
 | Check | What it proves |
 | --- | --- |
-| `ruff check`, `ruff format --check` | Lint and formatting, on Python 3.10 and 3.14. |
-| `pytest` | owpp itself: bundler, runtime, libraries, deploy, CLI. |
-| `owpp test --dir examples/plugins` | Each example plugin's own tests, against the mock Open-WebUI ([testing](testing.md)). |
-| `owpp check --strict --dir examples/plugins` | Every example bundles and compiles against its real, pinned upstream sources, with no undefined names. |
-| `uv build`, then the wheel runs `owpp check` | The package that goes to PyPI carries the runtime and works. |
-| `tools/build_docs.py` | This site builds, and no link or heading it points to is missing. |
+| `ruff check`, `ruff format --check` | The code passes lint and formatting. |
+| `pytest` | owpp itself works: bundler, runtime, libraries, deploy, CLI. |
+| `owpp test --dir examples/plugins` | Each example plugin passes its own tests against the mock Open-WebUI ([testing](testing.md)). |
+| `owpp check --strict --dir examples/plugins` | Every example bundles and compiles with its pinned upstream sources, with no undefined names and no warnings. |
+| `uv build`, then the wheel runs `owpp check` | The package for PyPI carries the runtime and the files of `owpp live`, and works. |
+| `tools/build_docs.py` | This site builds. No link or heading that it points to is missing, and the menu lists every example. |
+| `tools/screenshots/run.py --live` | The [live suite](testing/live.md#this-repositorys-live-suite) passes on a real Open-WebUI. |
+
+`ci.yml` runs the first four checks on Python 3.10 and 3.14.
 
 ## 3. Run it yourself
+
+Run these commands:
 
 ```sh
 uv sync
@@ -35,23 +40,38 @@ uv run owpp check --strict --dir examples/plugins
 uv run --group docs python tools/build_docs.py serve   # preview this site (Python 3.11+)
 ```
 
+To run the live suite too, see [this repository's live suite](testing/live.md#this-repositorys-live-suite).
+
 ## 4. See it work on a live Open-WebUI
 
-The unit tests run against a mock. It covers what plugins call, not Open-WebUI's chat pipeline, sign-in providers, Redis or permission groups ([what it is not](testing/mock.md#what-it-is-not)). So for a change to a plugin:
+The unit tests run against a mock, which does not do all that Open-WebUI does ([what it is not](testing/mock.md#what-it-is-not)). So for a change to a plugin, do these steps. For a throwaway instance, see [trying things out](testing/live.md#trying-things-out).
 
-1. Deploy to a test instance, never production: `owpp deploy --only <id> --dry-run` lists what would change, then run it without `--dry-run` ([`owpp deploy`](commands/deploy.md)).
-2. Open the [test catalogue](reference/test-catalogue.md) at that plugin and work through the **By hand** boxes for the tests the change touches. Before a release, work through all of them.
-3. Work through the `## Test` list in the plugin's README.
-4. Disable the function and check that what it installed (tools, skills, routes, files) is gone.
-5. If the change alters what users see, retake the [screenshots](screenshots.md) and compare them with the committed ones. The diff of `docs/screenshots/` is part of the review.
+**Caution: use a test instance, never production.** A deploy changes the functions on the instance.
+
+1. List what a deploy would change: `uv run owpp deploy --dir examples/plugins --only <id> --dry-run`.
+2. Run the same command without `--dry-run` ([`owpp deploy`](commands/deploy.md)).
+3. Open the [test catalogue](reference/test-catalogue.md) at that plugin.
+4. Do the **By hand** steps of the tests that the change touches. Before a release, do all of them.
+5. Do the steps in the `## Test` list of the plugin's README.
+6. Disable the function.
+7. Make sure that its tools and skills are gone, and that its routes and static files answer 404.
+8. If the change alters what users see, take the [screenshots](screenshots.md) again.
+9. Compare the new screenshots with the committed ones. The diff of `docs/screenshots/` is part of the review.
 
 ## 5. Check what you are trusting
 
-- **Remote code is pinned** by full commit SHA in `plugin.yaml` (`source:`). A changed SHA means new upstream code: read the upstream diff between the two commits.
-- **Only its own objects.** The deploy updates and deletes only what carries its `managed_by` marker. A change to that logic needs a test showing hand-made objects are left alone.
-- **Routes say who may use them.** A route without a signed-in user must be marked `public` in so many words ([libraries](libraries.md)).
-- Anything else in [security](project/security.md).
+- **Remote code is pinned** by full commit SHA in `plugin.yaml` (`source:`). A changed SHA means new upstream code. Read the upstream diff between the two commits.
+- **The deploy deletes only its own functions**: those that carry its `managed_by` marker. It does update, and mark, any function whose id matches a plugin ([adopting](adopting.md)). A change to this logic needs a test that shows that hand-made objects are left alone.
+- **Routes say who may use them.** A mount serves people who are not signed in only with `access="public"` or `static: {access: public}` ([routes](libraries.md#routes)). `owpp check` lists each one as a `note`.
+- **A `guard=` mount replaces the sign-in check.** `owpp check` does not list it, so search the code for it, and read [what it must verify](libraries.md#the-one-exception-guard).
+- Check everything else in [security](project/security.md).
 
 ## 6. Approve
 
-Approve when CI is green, the live checks for the change pass, and the changelog is up to date. A change merges into `develop`; a release goes from `develop` to `main` on a release branch ([releasing](contributing.md#releasing)).
+Approve when all of these are true:
+
+- CI is green.
+- The live checks for the change pass.
+- The changelog is up to date.
+
+A change merges into `develop`. A release goes from `develop` to `main` on a release branch ([releasing](contributing.md#releasing)).

@@ -46,6 +46,7 @@ from .openwebui import (
     OpenWebUI,
     SignInRefused,
     field_of,
+    replace_imports,
     urllib_fetch,
 )
 from .sources import Sources
@@ -291,19 +292,6 @@ class PlanItem:
     file: FunctionFile
     action: str  # create | update | unchanged | invalid
     existing: dict | None = None
-
-
-def replace_imports(content: Any) -> str:
-    """Open-WebUI rewrites these import prefixes in the code before it stores it
-    (utils/plugin.py replace_imports), so the stored copy of a file that uses them never
-    equals the file. Compare against the rewritten text."""
-    return (
-        str(content or "")
-        .replace("from utils", "from open_webui.utils")
-        .replace("from apps", "from open_webui.apps")
-        .replace("from main", "from open_webui.main")
-        .replace("from config", "from open_webui.config")
-    )
 
 
 def plan_deploy(

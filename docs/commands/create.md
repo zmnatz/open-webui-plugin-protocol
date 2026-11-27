@@ -4,18 +4,27 @@
 owpp create [id] [--spec FILE] [--dir FOLDER]
 ```
 
-A wizard that scaffolds a plugin in the plugins folder. It asks what the plugin is: written here (a filter, action, event or pipe with that type's options, a tool, skills, a page and libraries), an *installer* of a tool and skills with no code of its own, or taken from a git repository pinned to a commit (a branch or tag is resolved to its SHA). It shows the files and writes them only when you say yes, then runs [`owpp check --strict`](check.md) on the result. Pressing Enter all the way makes what [`owpp init`](init.md) makes.
+`owpp create` is a wizard that writes a new plugin in the plugins folder. It asks where the code of the plugin is:
 
-Every question and what it writes: [creating a plugin](../creating.md).
+- **Written here**: a filter, action, event or pipe with the options of that type. It can have a tool, skills, a page and libraries.
+- **In a git repository**: the plugin takes a function, a tool or skills from it, pinned to a commit. For a branch or tag, the wizard looks up the commit SHA.
 
-With `--spec`, it asks nothing: the file says what the wizard would have asked, as YAML or JSON (`-` reads it from stdin). It is for scripts and [AI agents](../ai-agents.md); the format is in [creating a plugin](../creating.md#from-a-spec).
+In both cases, the plugin can be an *installer* of a tool and skills, with no code of its own.
+
+The wizard shows the files, and writes them only if you accept them. Then it runs [`owpp check --strict`](check.md) on the new plugin.
+
+If you accept each default, the result is almost the same as the plugin that [`owpp init`](init.md) writes. Only two lines in `plugin.yaml` differ: `author` comes from `git config user.name`, and the wizard adds `required_open_webui_version`.
+
+For every question and what it writes, see [creating a plugin](../creating.md).
+
+With `--spec`, the command asks nothing. A YAML or JSON file gives the answers (`-` reads them from stdin). Use this in scripts and with [AI agents](../ai-agents.md). For the format, see [from a spec](../creating.md#from-a-spec).
 
 ## Options
 
 | Option | Meaning |
 | --- | --- |
-| `id` | The plugin id. Asked if left out; on the command line it wins over the spec's. |
-| `--spec FILE` | Ask nothing: create the plugin a YAML or JSON file describes (`-` reads stdin). |
+| `id` | The plugin id. If you do not give it, the wizard asks. With `--spec`, this id replaces the id in the file. |
+| `--spec FILE` | Ask nothing: create the plugin that a YAML or JSON file describes (`-` reads stdin). |
 | `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## Examples
@@ -29,6 +38,6 @@ cat notes.yaml | uvx owpp create --spec -
 
 ## Related
 
-- [Creating a plugin](../creating.md): every option the wizard has.
+- [Creating a plugin](../creating.md): every option of the wizard.
 - [`owpp init`](init.md): the smallest plugin of a type, with no questions.
 - [With an AI agent](../ai-agents.md): `--spec` from an agent.

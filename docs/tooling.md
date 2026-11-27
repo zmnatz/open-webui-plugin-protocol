@@ -1,26 +1,30 @@
 # Tooling and CI
 
-`owpp` is the command-line tool: it checks, bundles, tests, versions and deploys the plugins in a repository. [Install](install.md) says how to run it (`uvx owpp <command>`, pinned in scripts and CI). `owpp <command> --help` lists a command's flags; each command has its own page:
+`owpp` is the command-line tool. It checks, bundles, tests, versions and deploys the plugins in a repository. [Install](install.md) says how to run it (`uvx owpp <command>`, with a pinned version in scripts and CI). `owpp <command> --help` lists the flags of a command. Each command also has its own page:
 
 | Command | What it does |
 | --- | --- |
-| [`owpp list`](commands/list.md) | Plugins with their function type. |
-| [`owpp check`](commands/check.md) | Bundle and compile every plugin, report undefined names, warn about valves and tools; `--since` fails on a change without a new version. |
-| [`owpp bundle`](commands/bundle.md) | Print (or write) the code that would be deployed. |
-| [`owpp build`](commands/build.md) | Bundle the plugins into a folder that `owpp deploy --from` deploys elsewhere. |
-| [`owpp deploy`](commands/deploy.md) | Deploy the plugins to an Open-WebUI instance: settings, signing in, the ownership marker, the report. |
-| [`owpp test`](commands/test.md) | Run each plugin's `tests/` against a mock Open-WebUI. |
-| [`owpp pull`](commands/pull.md) | Move plugins taken from git to the latest commit they follow. |
-| [`owpp version`](commands/version.md) | Show the plugins' versions, or give one a new version. |
-| [`owpp migrate`](commands/migrate.md) | Bring `plugin.yaml` to the current protocol version. |
-| [`owpp import`](commands/import.md) | Make a plugin folder from code that exists: a git repository (pinned), a `.py` file, or a function on Open-WebUI. |
-| [`owpp live`](commands/live.md) | Deploy the plugins to a throwaway Open-WebUI in Docker, with aimock as its models, and run the repository's live tests. |
-| [`owpp create`](commands/create.md) | A wizard: asks what the plugin is, then writes it. |
-| [`owpp init`](commands/init.md) | Scaffold the smallest plugin of a type. |
+| [`owpp list`](commands/list.md) | Lists the plugins with their function type. |
+| [`owpp check`](commands/check.md) | Bundles and compiles every plugin, reports undefined names, and warns about valves and tools. `--since` fails on a change without a new version. |
+| [`owpp bundle`](commands/bundle.md) | Prints (or writes) the code that a deploy stores. |
+| [`owpp build`](commands/build.md) | Bundles the plugins into a folder that `owpp deploy --from` deploys elsewhere. |
+| [`owpp deploy`](commands/deploy.md) | Deploys the plugins to an Open-WebUI instance. Its page covers the settings, sign-in, the ownership marker and the report. |
+| [`owpp test`](commands/test.md) | Runs each plugin's `tests/` against a mock Open-WebUI. |
+| [`owpp pull`](commands/pull.md) | Moves plugins taken from git to the latest commit that they follow. |
+| [`owpp version`](commands/version.md) | Shows the plugins' versions, or gives one a new version. |
+| [`owpp migrate`](commands/migrate.md) | Brings plugins to the current protocol version. |
+| [`owpp import`](commands/import.md) | Makes a plugin folder from code that exists: a git repository (pinned), a `.py` file, or a function on Open-WebUI. |
+| [`owpp live`](commands/live.md) | Deploys the plugins to a throwaway Open-WebUI in Docker, with aimock as its models, and runs the repository's live tests. |
+| [`owpp create`](commands/create.md) | A wizard: it asks what the plugin is, then writes it. |
+| [`owpp init`](commands/init.md) | Writes the smallest plugin of a type. |
 
-Every command takes `--dir <folder>`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir), else `./plugins`. The variables each command reads: [environment variables](environment-variables.md). `owpp --version` prints the version.
+Every command takes `--dir <folder>`, the plugins folder. The default is [`$OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir), else `./plugins`. For the variables that the commands read, see [environment variables](environment-variables.md). `owpp --version` prints the version.
 
 ## GitHub Action
+
+The action checks every plugin (`owpp check`), then deploys. A failure makes the job fail. The action sets up uv itself. It runs `owpp` from its own checkout, so the ref that you pin in `uses:` is the version that you deploy with.
+
+Keep a `concurrency` group in the workflow, so that two deploys never run at the same time.
 
 ```yaml
 # .github/workflows/deploy-plugins.yml in your repository
@@ -35,7 +39,7 @@ jobs:
     concurrency: deploy-plugins
     steps:
       - uses: actions/checkout@v5
-      - uses: zmnatz/open-webui-plugin-protocol@v0.7.1
+      - uses: zmnatz/open-webui-plugin-protocol@v0.7.2
         with:
           url: https://chat.example.com
           api-key: ${{ secrets.OPEN_WEBUI_API_KEY }}
@@ -44,45 +48,30 @@ jobs:
           # dry-run: "true"
 ```
 
-The action runs `owpp` from its own checkout, so the version you deploy with is the ref you pin in `uses:`. It sets up uv itself. It checks every plugin (`owpp check`), then deploys. A failure turns the job red. Keep a `concurrency` group so two deploys never overlap.
-
 | Input | What it sets |
 | --- | --- |
 | `url` | Required. [`OPEN_WEBUI_URL`](environment-variables.md#open_webui_url). |
-| `api-key`, `username`, `password`, `oidc-token`, `oauth-provider` | How the deploy [signs in](commands/deploy.md#signing-in): the [sign-in variables](environment-variables.md#signing-in) (store them as secrets). |
+| `api-key`, `username`, `password`, `oidc-token`, `oauth-provider` | How the deploy [signs in](commands/deploy.md#signing-in): the [sign-in variables](environment-variables.md#signing-in). Store credentials as secrets. |
 | `plugins-dir` | The plugins folder, relative to the repository root (default `plugins`): [`OWPP_PLUGINS_DIR`](environment-variables.md#owpp_plugins_dir). |
 | `managed-by` | The [ownership marker](commands/deploy.md#the-ownership-marker) (default `open-webui-plugin-protocol`): [`OWPP_MANAGED_BY`](environment-variables.md#owpp_managed_by). |
-| `only`, `dry-run`, `latest`, `force`, `no-prune` | [`owpp deploy`](commands/deploy.md)'s `--only`, `--dry-run`, `--latest`, `--force` and `--no-prune` (`"true"` to turn one on). |
-| `from` | A folder [`owpp build`](commands/build.md) wrote, to deploy instead of the plugins folder ([deploying a build](commands/deploy.md#deploying-a-build)); it skips `owpp check`, which runs where the build is made. |
-| `check` | `"false"` skips `owpp check` before deploying (default `"true"`). |
-| `since` | [`owpp check --since`](commands/check.md#a-change-needs-a-new-version) this git ref. Needs that ref fetched (`actions/checkout` with `fetch-depth: 0`). |
+| `only` | [`owpp deploy --only`](commands/deploy.md): plugin ids, separated by commas. |
+| `dry-run`, `latest`, `force`, `no-prune` | [`owpp deploy`](commands/deploy.md)'s `--dry-run`, `--latest`, `--force` and `--no-prune`. Set `"true"` to turn one on. `latest` works only with `dry-run`. |
+| `from` | A folder that [`owpp build`](commands/build.md) wrote. The action deploys it instead of the plugins folder ([deploying a build](commands/deploy.md#deploying-a-build)). It skips `owpp check`: run that where you make the build. |
+| `check` | `"false"` skips `owpp check` before the deploy (default `"true"`). |
+| `since` | A git ref for [`owpp check --since`](commands/check.md#a-change-needs-a-new-version). The checkout must have that ref (`actions/checkout` with `fetch-depth: 0`). |
 
-More CI: [building in one job and deploying in another](commands/build.md#examples), a scheduled [dry run at the latest commits](commands/deploy.md#the-report-what-changes-in-versions), and a [pull request for each upgrade](commands/pull.md#a-pull-request-for-each-upgrade).
+More CI examples:
+
+- [Build in one job and deploy in another](commands/build.md#examples).
+- [Run a scheduled dry run at the latest commits](commands/deploy.md#the-report-what-changes-in-versions).
+- [Open a pull request for each upgrade](commands/pull.md#a-pull-request-for-each-upgrade).
 
 ## Tests (this repository)
 
-`uv run pytest` runs everything:
+`uv run pytest` runs all the tests: those of owpp in `tests/`, and those of each example plugin in `examples/plugins/<id>/tests/`. The [test catalogue](reference/test-catalogue.md#the-librarys-own-tests) says what each file in `tests/` covers.
 
-| What | Where |
-| --- | --- |
-| Bundler, manifest rules, function types, libraries included | `tests/test_bundle.py` |
-| Git sources (pinned commits, fetching, refusing unsafe URLs) | `tests/test_sources.py` |
-| Deploy against a stand-in Open-WebUI API: create, update, global, prune, valves, `--only` | `tests/test_deploy.py` |
-| CLI commands, `init` scaffolds | `tests/test_cli.py` |
-| `owpp check`: undefined names, the findings, what fails a check | `tests/test_check.py` |
-| Every command has a page in `docs/commands/` that documents each of its flags | `tests/test_command_docs.py` |
-| Every environment variable owpp reads has an entry in `docs/environment-variables.md` | `tests/test_env_docs.py` |
-| `owpp pull`: moving a pinned commit, the files it lists, refusing what it cannot check | `tests/test_pull.py` |
-| `owpp import`: git URLs taken apart, what is found in a folder, a header moved into `plugin.yaml` and bundled back to the same code | `tests/test_import.py` |
-| `owpp live`: the stack's files and options, up, deploy, the tests and down, with Docker and Open-WebUI as stand-ins; that it loads without Playwright, and its fixtures only where asked for | `tests/test_owpp_live.py` |
-| `owpp create`: every combination it writes bundles, passes `check --strict` and its own tests; the wizard, driven by scripted answers | `tests/test_create.py` |
-| Every example plugin bundles, compiles, has unit tests and documents Test and Deploy | `tests/test_bundle.py`, "TestExamples" |
-| Each example plugin's behaviour, against the mock Open-WebUI | `examples/plugins/<id>/tests/` |
-| Runtime install/update/remove, valves, markers | `tests/plugin_runtime_test.py` |
-| Libraries (core, routes, jobs, chat_data, public) against stubbed Open-WebUI modules | `tests/plugin_libs_test.py` |
-
-Git sources are faked in the tests (no network); `owpp check` compiles the real fetched code.
+In these tests, stand-ins take the place of git sources, so they need no network. `owpp check` compiles the real code that it fetches.
 
 ### Testing your own plugins
 
-See [testing plugins](testing.md): writing tests, the mock, live checks, and [a CI workflow](testing/ci.md).
+See [testing plugins](testing.md): how to write tests, the mock, live checks, and [a CI workflow](testing/ci.md).

@@ -4,11 +4,17 @@
 owpp test [id ...] [--upstream] [--dir FOLDER] [-- pytest args]
 ```
 
-Runs each plugin's `tests/` folder with pytest, against a mock Open-WebUI. With no ids it runs every plugin that has one. Arguments after `--` go to pytest. Each plugin is bundled exactly as [`owpp deploy`](deploy.md) would bundle it, then loaded the way Open-WebUI loads a function. How to write the tests, the fixtures and what the mock does: [testing plugins](../testing.md).
+`owpp test` runs the `tests/` folder of each plugin with pytest, against a mock Open-WebUI. With no ids, it tests every plugin that has such a folder. Arguments after `--` go to pytest.
 
-It needs the `test` extra (pytest, and the packages Open-WebUI ships that plugins import): `uvx --from 'owpp[test]' owpp test`. Without it, it stops with ``error: owpp test needs pytest: run it as `uvx --from 'owpp[test]' owpp test`, or `pip install 'owpp[test]'` ``.
+The test fixtures bundle a plugin exactly as [`owpp deploy`](deploy.md) does. Then they load it as Open-WebUI loads a function. For the tests, the fixtures and the mock, see [testing plugins](../testing.md).
 
-A plugin [taken whole from git](../plugin-format.md#a-whole-plugin-from-git) has the upstream's tests, which are not run by default. With `--upstream` it also runs them, from the pinned commit, against the plugin as built with your overrides. That runs the other repository's code, so it is opt-in and the `OPEN_WEBUI_*` [variables](../environment-variables.md#signing-in) are removed from the environment first.
+The command needs the `test` extra: pytest, and the packages that Open-WebUI ships and that plugins import. Run it as `uvx --from 'owpp[test]' owpp test`. If a package is missing, the command stops and names it, for example ``error: owpp test needs pytest: run it as `uvx --from 'owpp[test]' owpp test`, or `pip install 'owpp[test]'` ``.
+
+## Upstream tests
+
+A plugin [taken whole from git](../plugin-format.md#a-whole-plugin-from-git) has the upstream's tests. By default, `owpp test` does not run them. With `--upstream`, it also runs them from the pinned commit, against your bundle of the plugin, with your overrides.
+
+**Caution:** Read the upstream tests before you use `--upstream`. They run code from a different repository on your machine. The command first removes the `OPEN_WEBUI_*` [variables](../environment-variables.md#signing-in) from their environment.
 
 ## Options
 
@@ -30,6 +36,6 @@ owpp test --upstream                            # the upstream's tests too
 
 ## Related
 
-- [Testing plugins](../testing.md): writing tests, the fixtures, the mock.
-- [`owpp check`](check.md): bundle and compile, without running anything.
+- [Testing plugins](../testing.md): how to write tests, the fixtures, the mock.
+- [`owpp check`](check.md): bundle and compile, and run nothing.
 - [`owpp init`](init.md) and [`owpp create`](create.md): both write a first test that passes.
