@@ -1,10 +1,10 @@
 # Testing each kind of plugin
 
-Recipes for what each kind of plugin does, with the calls that test it. Each is taken from a test that runs: the scaffolds [`owpp create`](../commands/create.md) writes, or the [examples](../examples/index.md). Every call is in [the mock](mock.md)'s reference.
+This page gives a recipe for what each kind of plugin does, with the calls that test it. Each recipe comes from a test that runs: in the scaffolds that [`owpp create`](../commands/create.md) writes, or in the [examples](../examples/index.md). The [mock](mock.md) page lists every call.
 
 ## Filters
 
-A filter is called with a chat request (`inlet`, `request`) or a reply (`outlet`), or a chunk of one (`stream`). Call it as Open-WebUI would, and assert on what it returns:
+Open-WebUI calls a filter with a chat request (`inlet`, `request`), a reply (`outlet`) or a chunk of a reply (`stream`). Call the filter as Open-WebUI does, and assert on the value that it returns:
 
 ```python
 def test_a_message_with_an_image_goes_to_the_vision_model(owui, plugin):
@@ -19,10 +19,11 @@ def test_a_message_with_an_image_goes_to_the_vision_model(owui, plugin):
     assert body["model"] == "vision-model"
 ```
 
-- `plugin.inlet(body, user=, chat_id=, model=)` and `plugin.outlet(...)` fill in `__user__`, `__metadata__`, `__event_emitter__`, `__model__` and the rest, for the arguments the method takes. `plugin.call("request", body, ...)` and `plugin.call("stream", chunk)` reach the other two.
-- **A reply** is what Open-WebUI 0.12+ hands an outlet: the last message has `content` and an `output` list, which the chat renders from. Change both. [`clear_thinking_tags`'s tests](https://github.com/zmnatz/open-webui-plugin-protocol/tree/main/examples/plugins/clear_thinking_tags/tests) build one.
-- **Status lines and other events** the filter sends through `__event_emitter__` land in `owui.chat_events`, as `(chat_id, event)`.
-- **Who it applies to** is the filter's business only once it is called: which filters run for a chat (global, per model, toggled by the user) is Open-WebUI's chat pipeline, which the mock does not have. Check that [by hand](live.md).
+- `plugin.inlet(body, user=, chat_id=, model=)` and `plugin.outlet(...)` supply the arguments that the method accepts: `__user__`, `__metadata__`, `__event_emitter__`, `__model__` and the others.
+- To call the other two methods, use `plugin.call("request", body, ...)` and `plugin.call("stream", chunk)`.
+- **A reply:** Open-WebUI 0.12 and later give an outlet a last message with `content` and an `output` list. The chat shows the reply from the list. Make your filter change both. The [`clear_thinking_tags` tests](https://github.com/zmnatz/open-webui-plugin-protocol/tree/main/examples/plugins/clear_thinking_tags/tests) build such a reply.
+- **Events:** `owui.chat_events` records the status lines and other events that the filter sends through `__event_emitter__`, as `(chat_id, event)`.
+- **Which chats use the filter:** Open-WebUI's chat pipeline decides which filters run for a chat. A filter can be global, set for a model or turned on by the user. The mock does not have this pipeline. Test it [on a real Open-WebUI](live.md).
 
 Examples: [`vision_router`](../examples/vision_router.md) (inlet), [`clear_thinking_tags`](../examples/clear_thinking_tags.md) (outlet), [`excalidraw`](../examples/excalidraw.md) (an outlet that adds to the reply).
 
@@ -38,7 +39,9 @@ def test_the_action_runs(owui, plugin):
     assert plugin.call("action", {"messages": []}, user=user) is None
 ```
 
-With several buttons, `plugin.instance.actions` lists them, and the button pressed reaches the action as `__id__`: pass it, `plugin.call("action", body, user=user, __id__="summarise")`. An action that returns a page (an `HTMLResponse` with `content-disposition: inline`) is shown above the message: assert on `page.headers` and `page.body`.
+If the action has several buttons, `plugin.instance.actions` lists them. The action gets the id of the button as `__id__`, so pass it: `plugin.call("action", body, user=user, __id__="summarise")`.
+
+An action can return a page: an `HTMLResponse` with `content-disposition: inline`. Open-WebUI shows this page above the message. Assert on `page.headers` and `page.body`.
 
 ## Pipes
 
@@ -50,7 +53,7 @@ def test_it_answers_as_a_model(owui, plugin):
     assert plugin.call("pipe", {"messages": []}, user=user) == "Hello from Hello"
 ```
 
-A pipe that streams returns an async generator; read it inside `owui.run(...)`, which runs code on the mock's event loop:
+A pipe that streams returns an async generator. Read it inside `owui.run(...)`, which runs code on the mock's event loop:
 
 ```python
 chunks = plugin.call("pipe", {"messages": [], "stream": True}, user=user)
@@ -65,7 +68,7 @@ assert owui.run(read()) == "Hello from Hello"
 
 ## Tools
 
-A tool is installed by its function, so it is reached through `owui.tool(id)`, loaded from the stored code with its stored valves, as Open-WebUI would load it:
+A function installs its tool, so get the tool with `owui.tool(id)`. As Open-WebUI does, the mock loads the tool from its stored code, with its stored valves:
 
 ```python
 def test_show_creates_the_drawing_and_hands_the_filter_an_artifact(owui, plugin):
@@ -80,15 +83,15 @@ def test_show_creates_the_drawing_and_hands_the_filter_an_artifact(owui, plugin)
     assert owui.chat(chat).meta["excalidraw"]["elements"] == [RECT]
 ```
 
-- `.call(method, ..., user=, chat_id=)` calls a method as the model would.
-- `.specs` is what the model is told: each method's name, description and parameters. Test it when the docstrings are the instructions the model follows.
-- That the model actually calls the tool is Open-WebUI's and the model's part. This repository's [live suite](live.md#this-repositorys-live-suite) checks it, with aimock as the model.
+- `.call(method, ..., user=, chat_id=)` calls a method as the model does.
+- `.specs` is the information that the model gets: the name, description and parameters of each method. If the model follows the docstrings as instructions, test `.specs`.
+- Open-WebUI and the model decide if the model calls the tool. This repository's [live suite](live.md#this-repositorys-live-suite) tests this, with aimock as the model.
 
 Example: [`excalidraw`](../examples/excalidraw.md) (`tests/test_excalidraw_tool.py`).
 
 ## Events and scheduled jobs
 
-An event function reacts to Open-WebUI. Send the event, then assert on what it changed:
+An event function reacts to events from Open-WebUI. Send the event, then assert on what the function changed:
 
 ```python
 def test_saving_the_valves_syncs_every_mcpo_server_as_a_tool_server(owui, plugin, mcpo):
@@ -101,18 +104,20 @@ def test_saving_the_valves_syncs_every_mcpo_server_as_a_tool_server(owui, plugin
 | Event | Sent by |
 | --- | --- |
 | `system.startup.completed` | `owui.startup()` |
-| `function.valves_updated` | `owui.set_valves(id, ...)`, the admin saving the valves |
-| `function.enabled`, `function.disabled` and their `*_started` | `owui.enable(id)`, `owui.disable(id)` |
+| `function.valves_updated` | `owui.set_valves(id, ...)`, as when the admin saves the valves |
+| `function.enabled`, `function.disabled` and their `*_started` events | `owui.enable(id)`, `owui.disable(id)` |
 | `function.updated`, `function.deleted` | `owui.update(id)`, `owui.delete(id)` |
-| anything else (`config.banners.updated`, ...) | `owui.emit(name, subject=None, data=None)` |
+| All other events (`config.banners.updated`, ...) | `owui.emit(name, subject=None, data=None)` |
 
-What it sends on the socket is in `owui.emitted`. Background work it starts runs until it finishes or waits before the call returns. A **scheduled sync** (the `jobs` library's `PluginScheduledSync`) runs at startup and when its valves are saved, so those two calls test it; its repeat on a timer is the library's, tested in this repository.
+`owui.emitted` records what the function sends on the socket. Before a call returns, the background work that the function starts runs until it finishes or waits.
 
-Examples: [`mcpo_sync`](../examples/mcpo_sync.md), [`litellm_model_sync`](../examples/litellm_model_sync.md), [`page_banners`](../examples/page_banners.md), [`theme_designer_pro`](../examples/theme_designer_pro.md) (handlers for users' and models' events, and shutdown).
+A **scheduled sync** (`PluginScheduledSync` from the `jobs` library) runs at startup, when an admin enables the function, and when an admin saves its valves. To test it, use `owui.startup()`, `owui.enable(id)` or `owui.set_valves(id, ...)`. The library repeats the sync on a timer, and this repository tests that timer.
+
+Examples: [`mcpo_sync`](../examples/mcpo_sync.md), [`litellm_model_sync`](../examples/litellm_model_sync.md), [`page_banners`](../examples/page_banners.md), [`theme_designer_pro`](../examples/theme_designer_pro.md) (handlers for user events, model events and shutdown).
 
 ## Pages and routes
 
-A page is served by the app, so it is requested through `owui.client(user)`, which goes through the `routes` library's sign-in guard:
+The app serves a page, so request it through `owui.client(user)`. The request goes through the sign-in guard of the `routes` library:
 
 ```python
 def test_only_admins_see_it(owui, plugin):
@@ -123,13 +128,16 @@ def test_only_admins_see_it(owui, plugin):
     assert owui.client(owui.admin).get("/stale-data").status_code == 200
 ```
 
-Test each level a route allows and the one just below it: signed out, a user, an admin, and the owner of a chat against someone else (`owui.add_chat`, `owui.grant_chat`). Disable the function (`owui.disable(id)`) and the page answers 404. `follow_redirects=False` shows a sign-in redirect.
+- For each route, test each access level that it allows and the level below it: signed out, user, admin.
+- If a route belongs to a chat, test the owner of the chat and a different user (`owui.add_chat`, `owui.grant_chat`).
+- Disable the function (`owui.disable(id)`), and make sure that the page answers 404.
+- To see a redirect to the sign-in page, use `owui.client(user, follow_redirects=False)`.
 
 Example: [`stale_data`](../examples/stale_data.md).
 
 ## Installers and skills
 
-What a function installs is in the tables once it is loaded. Test that it is there, that it goes with the function, and that it comes back:
+After the function loads, the mock's tables contain what it installed. Test that each item is there, that it goes when the function goes, and that it comes back:
 
 ```python
 def test_the_tool_goes_with_the_function_and_comes_back_with_it(owui, plugin):
@@ -143,21 +151,23 @@ def test_the_tool_goes_with_the_function_and_comes_back_with_it(owui, plugin):
     assert "excalidraw" not in owui.tools
 ```
 
-`owui.skills` holds the skills, and the grants are on each row (`access: public` puts a read grant for every user there).
+`owui.skills` contains the skills. The rows in `owui.tools` and `owui.skills` hold their grants: `access: public` puts a read grant for every user there.
 
 ## A function written elsewhere
 
-A function pasted into Open-WebUI, or written for it outside owpp, is brought in with [`owpp import`](../commands/import.md) (`--instance <id>`, a file, or its repository's URL), which writes its folder and a first test. The recipes on this page then apply as they are, for the kind of function it is. Two things come up with such code:
+Some functions come from outside owpp: pasted into Open-WebUI, or written for it by other people. To bring one in, use [`owpp import`](../commands/import.md) (`--instance <id>`, a file, or the URL of its repository). The command writes the plugin folder and a first test. Then use the recipes on this page for the kind of function that you have.
 
-- **`open_webui` imported at the top of the file** loads in the mock, which stands in for those modules as they are in Open-WebUI v0.13. Code written for an older Open-WebUI can fail where v0.13 would too (a model method that is a coroutine now, say): that is a finding about the function, not the test.
-- **A name the mock does not have** still imports, and raises `NotImplementedError` naming it when called: [what the mock is not](mock.md#what-it-is-not).
-- **A service it calls** is a stand-in on `127.0.0.1`, as for [any plugin that calls other services](#plugins-that-call-other-services).
+With such code, note these points:
 
-Two worked examples, someone else's plugin and one of this repository's, with their tests and how many planted bugs those caught: [a plugin that already works](existing-plugins.md).
+- **An `open_webui` import at the top of the file** loads in the mock. The mock stands in for those modules as they are in Open-WebUI v0.13. Code written for an older Open-WebUI can fail where v0.13 also fails (for example, a model method that is now a coroutine). Report this as a finding about the function, not about the test.
+- **A name that the mock does not have** imports, but raises an error when the code uses it: [what the mock is not](mock.md#what-it-is-not).
+- **A service that the function calls** needs a stand-in, as for [any plugin that calls other services](#plugins-that-call-other-services).
+
+For two examples with their tests, see [a plugin that already works](existing-plugins.md).
 
 ## Code from git
 
-A plugin whose tool, function or skills come from a `source:` is loaded with the files fetched from the pinned commit, which needs the network. To test offline, and to test only this folder's part, load it with stand-ins:
+A plugin can take its tool, function or skills from a `source:`. A load then fetches the files from the pinned commit, which needs the network. To test offline, and to test only the files in your folder, load the plugin with stand-ins:
 
 ```python
 @pytest.fixture
@@ -165,8 +175,12 @@ def plugin(owui, plugin_dir):
     return owui.load(plugin_dir, sources={"tool.py": TOOL, "SKILL.md": SKILL})
 ```
 
-The upstream's own tests, for a [plugin taken whole from git](../plugin-format.md#a-whole-plugin-from-git), run with `owpp test --upstream`. Example: [`inline_visualizer`](../examples/inline_visualizer.md).
+For a [plugin taken whole from git](../plugin-format.md#a-whole-plugin-from-git), `owpp test --upstream` also runs the tests of the upstream plugin. Example: [`inline_visualizer`](../examples/inline_visualizer.md).
 
 ## Plugins that call other services
 
-Point the plugin at a small HTTP server on `127.0.0.1`, started by a fixture, and clear the proxy variables so the request is not proxied. [`mcpo_sync`'s tests](https://github.com/zmnatz/open-webui-plugin-protocol/tree/main/examples/plugins/mcpo_sync/tests) run a stand-in mcpo proxy this way, and [`litellm_model_sync`'s](https://github.com/zmnatz/open-webui-plugin-protocol/tree/main/examples/plugins/litellm_model_sync/tests) a stand-in LiteLLM gateway.
+1. Write a fixture that starts a small HTTP server on `127.0.0.1`.
+2. In the fixture, clear the proxy variables, so that requests to the server do not go through a proxy.
+3. Set the plugin to use the address of that server.
+
+The [`mcpo_sync` tests](https://github.com/zmnatz/open-webui-plugin-protocol/tree/main/examples/plugins/mcpo_sync/tests) use this method for an mcpo proxy. The [`litellm_model_sync` tests](https://github.com/zmnatz/open-webui-plugin-protocol/tree/main/examples/plugins/litellm_model_sync/tests) use it for a LiteLLM gateway.
