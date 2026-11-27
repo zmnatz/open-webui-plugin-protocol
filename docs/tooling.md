@@ -9,7 +9,7 @@
 | [`owpp bundle`](commands/bundle.md) | Prints (or writes) the code that a deploy stores. |
 | [`owpp build`](commands/build.md) | Bundles the plugins into a folder that `owpp deploy --from` deploys elsewhere. |
 | [`owpp deploy`](commands/deploy.md) | Deploys the plugins to an Open-WebUI instance. Its page covers the settings, sign-in, the ownership marker and the report. |
-| [`owpp test`](commands/test.md) | Runs each plugin's `tests/` against a mock Open-WebUI. |
+| [`owpp test`](commands/test.md) | Runs each plugin's `tests/` against the real Open-WebUI, in the test process. |
 | [`owpp pull`](commands/pull.md) | Moves plugins taken from git to the latest commit that they follow. |
 | [`owpp version`](commands/version.md) | Shows the plugins' versions, or gives one a new version. |
 | [`owpp migrate`](commands/migrate.md) | Brings plugins to the current protocol version. |
@@ -74,4 +74,4 @@ In these tests, stand-ins take the place of git sources, so they need no network
 
 ### Testing your own plugins
 
-See [testing plugins](testing.md): how to write tests, the mock, live checks, and [a CI workflow](testing/ci.md).
+See [testing plugins](testing.md): how to write tests, the test harness, live checks, and [a CI workflow](testing/ci.md).

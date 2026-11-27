@@ -57,7 +57,7 @@ For each line:
 
 Each test is named as a sentence about the plugin and has the docstring owpp's tests carry (what it checks, then `By hand:`): https://zmnatz.github.io/open-webui-plugin-protocol/testing/writing/#describe-every-test
 
-Code written outside owpp meets the mock's limits (an older Open-WebUI's API, a name the mock lacks, a service it calls): https://zmnatz.github.io/open-webui-plugin-protocol/testing/kinds/#a-function-written-elsewhere. A failure from the older API is a finding; behaviour out of the mock's reach goes in By hand.
+Code written outside owpp meets the harness's limits (an older Open-WebUI's API, a package the slim image lacks, a service it calls): https://zmnatz.github.io/open-webui-plugin-protocol/testing/kinds/#a-function-written-elsewhere. A failure from the older API is a finding; behaviour out of the harness's reach (the chat pipeline, the page in a browser) goes in By hand.
 
 Done when every line of the list has a test with both docstring paragraphs, `owpp test <id>` passes, and every finding is in your report.
 
@@ -77,7 +77,7 @@ For each By hand step that depends on what only Open-WebUI does, write a live te
 - **The model's answers**: `live/aimock/models.json` (in the owpp repository, `tools/screenshots/aimock/models.json`), more specific fixtures first. Without one, the model is `owpp-live-model`, which answers every message the same way.
 - **A service the plugin calls**: a stand-in in `live/compose.yaml`, layered on owpp's stack: https://zmnatz.github.io/open-webui-plugin-protocol/commands/live/#your-own-services-and-settings
 
-Run them with `uvx --from 'owpp[live]' owpp live` (in the owpp repository, `uv run python tools/screenshots/run.py --live`), with `-- -k <name>` for some. It needs Docker, reachable by the user running you: when `docker ps` says "permission denied", give the user the command to run, and work from the output they paste back. Install Chromium once, for the browser: `uvx --from 'owpp[live]' playwright install chromium`. See each test bite, as in step 3. A failure that the mock's tests did not show is a finding.
+Run them with `uvx --from 'owpp[live]' owpp live` (in the owpp repository, `uv run python tools/screenshots/run.py --live`), with `-- -k <name>` for some. It needs Docker, reachable by the user running you: when `docker ps` says "permission denied", give the user the command to run, and work from the output they paste back. Install Chromium once, for the browser: `uvx --from 'owpp[live]' playwright install chromium`. See each test bite, as in step 3. A failure that the unit tests did not show is a finding.
 
 **Screenshots**, in the owpp repository only (`docs/screenshots.md#adding-one`): each script follows one test's By hand steps in the browser, and its `shot(..., illustrates=[...])` names the tests from step 3 that it shows.
 

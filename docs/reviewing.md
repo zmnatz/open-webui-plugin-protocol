@@ -19,7 +19,7 @@ The pull request's checks run `.github/workflows/ci.yml`, `docs.yml` and `live.y
 | --- | --- |
 | `ruff check`, `ruff format --check` | The code passes lint and formatting. |
 | `pytest` | owpp itself works: bundler, runtime, libraries, deploy, CLI. |
-| `owpp test --dir examples/plugins` | Each example plugin passes its own tests against the mock Open-WebUI ([testing](testing.md)). |
+| `owpp test --dir examples/plugins` | Each example plugin passes its own tests on the test harness ([testing](testing.md)). |
 | `owpp check --strict --dir examples/plugins` | Every example bundles and compiles with its pinned upstream sources, with no undefined names and no warnings. |
 | `uv build`, then the wheel runs `owpp check` | The package for PyPI carries the runtime and the files of `owpp live`, and works. |
 | `tools/build_docs.py` | This site builds. No link or heading that it points to is missing, and the menu lists every example. |
@@ -44,7 +44,7 @@ To run the live suite too, see [this repository's live suite](testing/live.md#th
 
 ## 4. See it work on a live Open-WebUI
 
-The unit tests run against a mock, which does not do all that Open-WebUI does ([what it is not](testing/mock.md#what-it-is-not)). So for a change to a plugin, do these steps. For a throwaway instance, see [trying things out](testing/live.md#trying-things-out).
+The unit tests run on the test harness, which fakes some parts of Open-WebUI ([what the harness fakes](testing/harness.md#what-the-harness-fakes)). So for a change to a plugin, do these steps. For a throwaway instance, see [trying things out](testing/live.md#trying-things-out).
 
 **Caution: use a test instance, never production.** A deploy changes the functions on the instance.
 

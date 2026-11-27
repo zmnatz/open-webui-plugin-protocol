@@ -22,17 +22,17 @@ The pytest fixtures come with owpp. They are in a pytest plugin that is active w
 
 | Fixture | What it is |
 | --- | --- |
-| `owui` | A new `MockOpenWebUI` for this test. It goes into `sys.modules`. After the test, owpp removes it, with everything that the plugin left there. |
+| `owui` | The [test harness](harness.md) for this test: the real Open-WebUI, as it was after its startup. Before the next test, owpp puts it back as it was. |
 | `plugin_dir` | The folder of the plugin that contains the test file (the nearest folder above the file with a `plugin.yaml`). |
-| `plugin` | That plugin, bundled and loaded into `owui`: enabled, with the valves from the manifest. Startup has not run yet. |
+| `plugin` | That plugin, bundled and deployed into `owui`: switched on, with the valves from the manifest. `system.startup.completed` has not been sent yet. |
 
-Outside pytest, use `with MockOpenWebUI() as owui:` from `owpp.testing`. You can replace `plugin` with a fixture of your own, for example to load other valves or [stand-ins for code from git](kinds.md#code-from-git).
+Outside pytest, use `with Harness() as owui:` from `owpp.testing`. You can replace `plugin` with a fixture of your own, for example to load other valves or [stand-ins for code from git](kinds.md#code-from-git).
 
 ## Describe every test
 
 Start each test with a docstring that a person can understand without the code. The docstring has two parts:
 
-1. **What it checks**, in one or two sentences. Use the plugin's terms (pages, valves, chats), not the mock's terms.
+1. **What it checks**, in one or two sentences. Use the plugin's terms (pages, valves, chats), not the terms of the harness.
 2. **`By hand:`** and then the steps that show the same behaviour on a live Open-WebUI. Say where to click, what to set and what you see.
 
 A reviewer can repeat the **By hand** steps before a release. The README's `## Test` list also comes from them.
@@ -51,7 +51,7 @@ Give each test a name that is a sentence about the plugin: `test_a_message_witho
 1. List the behaviours: one for each sentence of the README, each valve and each branch in the code. Each early `return` is a branch. For each behaviour, write what it does and when it changes nothing.
 2. Write the test for one behaviour before the code that makes it pass.
 3. Run `owpp test <id> -- -k <name>` and make sure that the test fails. A test that never failed possibly tests nothing.
-4. Make the test pass, with calls through the mock.
+4. Make the test pass, with calls through the harness.
 5. Do steps 2 to 4 for each behaviour.
 6. Write the README's `## Test` list. First give what `owpp check`, `owpp bundle` and `owpp test` cover. Then give the live checks from the **By hand** steps.
 
@@ -87,7 +87,7 @@ def test_a_title_is_trimmed(plugin_dir):
 - Each file gets the plugin's own `shared.py`.
 - Each file gets the libraries as its bundle has them, with the plugin's templates and `config.yaml`.
 - As in Open-WebUI, `shared.py` is imported once for each bundle. `.shared` is the function's copy (the tool's copy if there is no function). `.tool_shared` is the tool's copy.
-- If a file imports `open_webui` at its top, install the mock first: take the `owui` fixture.
+- If a file imports `open_webui` at its top, open a harness first: take the `owui` fixture.
 
 Use `owui.load()` to test code that runs inside Open-WebUI (the function's class, routes, events and the tool). It tests the bundle that the deploy sends.
 

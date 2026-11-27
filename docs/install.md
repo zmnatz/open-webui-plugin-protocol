@@ -21,11 +21,13 @@ uvx owpp@0.7.2 list        # a pinned release (recommended: see below)
 
 ## The test extra
 
-`owpp test` runs each plugin's tests against a mock Open-WebUI. It needs pytest and the packages that Open-WebUI ships (FastAPI, httpx, SQLAlchemy, aiohttp). The `test` extra adds them:
+`owpp test` runs each plugin's tests against the real Open-WebUI, in the test process ([the test harness](testing/harness.md)). It needs pytest and the packages of Open-WebUI's slim image, at Open-WebUI's versions. The `test` extra adds them. They need Open-WebUI's Python, which is 3.12 for Open-WebUI v0.13.5:
 
 ```sh
-uvx --from 'owpp[test]' owpp test
+uvx --python 3.12 --from 'owpp[test]' owpp test
 ```
+
+The first run downloads Open-WebUI's own code (about 110 MB) to a cache: [`OWPP_CACHE_DIR`](environment-variables.md#owpp_cache_dir).
 
 [`owpp live`](commands/live.md) runs the live tests on a throwaway Open-WebUI in Docker. Its tests in the browser need Playwright, which the `live` extra adds: `uvx --from 'owpp[live]' owpp live`.
 

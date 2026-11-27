@@ -17,7 +17,7 @@ The quickest way to run a function is to paste it into Open-WebUI's admin UI. ow
 - **Version control.** The plugins are in git. Each change is a commit that someone can review, and you can deploy an earlier version again ([deploying an older version](commands/deploy.md#deploying-an-older-version)). An edit in the admin UI replaces the code and keeps no history.
 - **Reviewed upgrades of third-party code.** owpp takes someone else's function, tool or skill from their repository at a pinned commit, and does not copy it. [`owpp pull`](commands/pull.md) moves the pin and lists the files that changed. You review that change before the code runs with admin rights.
 - **Shared libraries.** Routes, scheduled jobs, per-chat data, static files and templates come from [libraries](libraries.md), not from a copy in each function.
-- **Tests.** [`owpp check`](commands/check.md) finds undefined names before you deploy. [`owpp test`](commands/test.md) runs each plugin's unit tests against a mock Open-WebUI. [`owpp live`](commands/live.md) runs a repository's live tests on a throwaway Open-WebUI in Docker, over its API and in the browser ([testing](testing.md)). [`owpp import`](commands/import.md) brings in a function that already works, and an agent can write its tests ([a plugin that already works](testing/existing-plugins.md)).
+- **Tests.** [`owpp check`](commands/check.md) finds undefined names before you deploy. [`owpp test`](commands/test.md) runs each plugin's unit tests against the real Open-WebUI, in the test process. [`owpp live`](commands/live.md) runs a repository's live tests on a throwaway Open-WebUI in Docker, over its API and in the browser ([testing](testing.md)). [`owpp import`](commands/import.md) brings in a function that already works, and an agent can write its tests ([a plugin that already works](testing/existing-plugins.md)).
 - **Repeatable deploys.** [`owpp deploy`](commands/deploy.md) makes the instance match the repository, from a laptop or from the [GitHub Action](tooling.md#github-action). `--dry-run` shows what it will change first. A plugin that did not change stays as it is ([what a deploy does](commands/deploy.md#what-a-deploy-does)).
 - **A function with a tool and skills.** The runtime installs and removes them together ([runtime](runtime.md)). You do not do it by hand in three places.
 
@@ -72,7 +72,7 @@ tool: { id: my_plugin, access: public }
 ```
 owpp list                            # plugins and their function type
 owpp check my_plugin                 # bundle, compile, find undefined names
-owpp test my_plugin                  # its tests/, against a mock Open-WebUI
+owpp test my_plugin                  # its tests/, on the real Open-WebUI
 owpp deploy --only my_plugin --dry-run
 ```
 

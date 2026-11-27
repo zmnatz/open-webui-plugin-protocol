@@ -1,6 +1,8 @@
 # Testing a plugin that already works
 
-A function that someone pasted into Open-WebUI, or a plugin from another person, already works. Its tests record what it does now. The [`test-existing-plugin` skill](../ai-agents.md#the-test-existing-plugin-skill) tells an agent how to write these tests, against [the mock](mock.md) and as [live tests](live.md). This page gives the results for two plugins, and the number of bugs that the tests then caught.
+A function that someone pasted into Open-WebUI, or a plugin from another person, already works. Its tests record what it does now. The [`test-existing-plugin` skill](../ai-agents.md#the-test-existing-plugin-skill) tells an agent how to write these tests, on the [test harness](harness.md) and as [live tests](live.md). This page gives the results for two plugins, and the number of bugs that the tests then caught.
+
+The experiments ran with owpp 0.7. At that time, the unit tests ran against a mock Open-WebUI, so the results below say "against the mock". From owpp 0.8, the same tests run on the test harness, and they all pass there.
 
 Both plugins are in the repository, as plugins repositories with their tests and a script that plants the bugs: [`examples/existing-plugins/`](https://github.com/zmnatz/open-webui-plugin-protocol/tree/develop/examples/existing-plugins).
 

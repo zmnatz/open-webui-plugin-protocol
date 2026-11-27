@@ -24,6 +24,21 @@ Caution: move all the pins before you migrate (CI, the action, your own computer
 
 `check` gives a note for each manifest that is still on an older protocol. It gives a warning for a manifest with no `protocol:` key, and `--strict` makes that warning a failure.
 
+## 0.7 -> 0.8
+
+- **Nothing to migrate.** The protocol does not change, and the bundles that a deploy writes are the same.
+- **The tests run the real Open-WebUI.** `owpp test` runs each plugin on the [test harness](testing/harness.md): Open-WebUI v0.13.5 in the test process, in place of the mock ([why](adr/0004-unit-tests-run-the-real-open-webui.md)). The `owui` fixture keeps its calls.
+- **Run the tests on Python 3.12**, the Python of Open-WebUI v0.13.5: `uvx --python 3.12 --from 'owpp[test]' owpp test`. On a different Python, `owpp test` stops and gives this command. The `test` extra now installs the packages of Open-WebUI's slim image, at Open-WebUI's versions. Your own test dependencies must agree with those versions.
+- **The first run downloads Open-WebUI** (about 110 MB) to [`OWPP_CACHE_DIR`](environment-variables.md#owpp_cache_dir). Later runs use the cache. In CI, cache that folder.
+- **Some tests need a change**, because Open-WebUI does what the mock did not:
+    - The rows in `owui.tools`, `owui.models` and the other tables are copies. A change to a row, or `owui.tool_valves[...] = ...`, does not go into the database. Use `owui.set_tool_valves()`, Open-WebUI's models in `owui.run(...)`, or its API through `owui.client(owui.admin)` ([the rows are copies](testing/harness.md#state-to-set-up-and-assert-on)).
+    - Access grants are Open-WebUI's `AccessGrantModel`s. Compare them with `grants(row)` from `owpp.testing`.
+    - `owui.load()` switches the function on through Open-WebUI's API, so the function gets `function.enable_started` when it loads, as on a deploy.
+    - Valves that Open-WebUI refuses raise `OwppError` with `HTTP 400`, not a `ValueError`.
+    - `owui.client()` is an `httpx.Client`, not a Starlette `TestClient`.
+    - `MockOpenWebUI` and `Record` are gone. Outside pytest, use `with Harness() as owui:` from `owpp.testing`.
+- **The `open_webui` type stubs are gone.** An editor finds `open_webui` in the cached wheel: `owpp test --editor` gives its folder ([in an editor](testing/harness.md#in-an-editor)).
+
 ## 0.6 -> 0.7
 
 - **Protocol 0.7.** `owpp migrate` sets `protocol: "0.7"` and changes nothing else. 0.7 changes no key, so a manifest that stays at 0.5 has the same meaning. `owpp check --strict` only gives a note for it. owpp 0.6 refuses a 0.7 manifest (see the caution in [steps](#steps)).
@@ -37,7 +52,7 @@ Caution: move all the pins before you migrate (CI, the action, your own computer
 - **`tool: templates:`** lists the files of `templates/` that a tool embeds (`[launcher/]`). Without it, a tool that includes templates embeds all of them ([plugin format](plugin-format.md#tool)).
 - **From 0.6.1, owpp refuses a plugin that edits `app.routes`** (`app.routes.insert(...)`, `app.routes[:] = ...`, `del app.routes[0]`, ...). Such a plugin added routes that the sign-in guard did not protect. `owpp check` gives the line. Mount those routes with `plugin_mount` ([libraries](libraries.md#routes)).
 - **`asset_vars()` values are filled in one pass.** Thus a value that holds the text of another placeholder is served as it is written.
-- **Plugin tests:** `owui.emit` also takes the subject itself, for events about users and models. The mock has `decode_token`, and the chat pipeline that a plugin calls to ask a model (`owui.model_reply`, `owui.completions`). A test that patched those stand-ins continues to work. It can use the stand-ins of the mock ([the mock](testing/mock.md)).
+- **Plugin tests:** `owui.emit` also takes the subject itself, for events about users and models. The mock has `decode_token`, and the chat pipeline that a plugin calls to ask a model (`owui.model_reply`, `owui.completions`). A test that patched those stand-ins continues to work. It can use the stand-ins of the mock. (owpp 0.8 replaced the mock with the [test harness](testing/harness.md).)
 
 ## 0.4 -> 0.5
 

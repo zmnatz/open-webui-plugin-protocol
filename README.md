@@ -35,7 +35,7 @@ uvx owpp list
 uvx owpp check                       # bundle, compile, report undefined names
 uvx owpp version                     # every plugin's versions (and its tool's and skills')
 uvx owpp version excalidraw minor    # a new version, with a CHANGELOG.md entry
-uvx --from 'owpp[test]' owpp test    # each plugin's tests/, against a mock Open-WebUI
+uvx --python 3.12 --from 'owpp[test]' owpp test    # each plugin's tests/, on the real Open-WebUI
 uvx --from 'owpp[live]' owpp live    # live/ tests, on a throwaway Open-WebUI in Docker
 uvx owpp deploy --only excalidraw --dry-run
 uvx owpp pull                        # move plugins taken from git to their latest commit, for review
@@ -93,7 +93,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 | [Bundling](docs/bundling.md) | exactly what gets deployed; git sources |
 | [Runtime](docs/runtime.md) | install/remove of tools and skills, parent valves |
 | [Libraries](docs/libraries.md) | `core`, `routes`, `jobs`, `events`, `chat_data`, `static`, `templates`, `assets`, Shared Assets |
-| [Testing](docs/testing.md) | unit tests per plugin, the mock Open-WebUI, `owpp test` |
+| [Testing](docs/testing.md) | unit tests per plugin, the test harness, `owpp test` |
 | [Tooling](docs/tooling.md) | the CLI, a page per command (deploy settings, signing in, `pull`, versions), GitHub Action, tests |
 | [Adopting](docs/adopting.md) | new repositories, migrating existing functions |
 | [Upgrading](docs/upgrading.md) | moving to a new owpp, `owpp migrate`, what changed in 0.2 |

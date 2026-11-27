@@ -1,6 +1,6 @@
 # On a real Open-WebUI
 
-The mock runs the plugin's code, but [it is not Open-WebUI](mock.md#what-it-is-not). Test what only Open-WebUI does on a real one. Examples are the chat pipeline, grants, sign-in providers and the browser. You can do this by hand, or with live tests that [`owpp live`](../commands/live.md) runs on a throwaway Open-WebUI.
+The [test harness](harness.md) runs Open-WebUI's code, but [it fakes some parts](harness.md#what-the-harness-fakes). Test those parts on a real Open-WebUI. Examples are the chat pipeline, a real model, sign-in providers and the browser. You can do this by hand, or with live tests that [`owpp live`](../commands/live.md) runs on a throwaway Open-WebUI.
 
 ## By hand
 
@@ -72,7 +72,7 @@ def test_a_user_sees_the_reply_in_the_chat(user):
     user.get_by_text("I answer the same way every time").first.wait_for(timeout=60_000)
 ```
 
-Give each test the same docstring as every owpp test, with its **By hand** steps. A test can pass against the mock but fail here. That is a finding about Open-WebUI, the mock, or both.
+Give each test the same docstring as every owpp test, with its **By hand** steps. A test can pass on the harness but fail here. That is a finding about the plugin, the harness, or both.
 
 ### The fixtures
 
@@ -183,7 +183,7 @@ uv run python tools/screenshots/run.py --live
 | Test | What it shows on a real Open-WebUI |
 | --- | --- |
 | `test_the_deployed_functions_are_installed_and_active` | `owpp deploy` leaves the examples installed and active. |
-| `test_a_public_tool_is_readable_by_a_user_who_is_not_the_owner` | `access: public` shares a tool. The mock once accepted a grant that Open-WebUI ignores. |
+| `test_a_public_tool_is_readable_by_a_user_who_is_not_the_owner` | `access: public` shares a tool. The old mock once accepted a grant that Open-WebUI ignores. |
 | `test_the_scripted_model_answers_a_chat` | A chat reaches the model, and the reply comes back. |
 | `test_a_deployed_tool_is_offered_to_the_model_and_the_model_calls_it` | With `tool_ids`, the model gets the functions of the deployed tool, and the model's call comes back. |
 | `test_an_outlet_turns_unfinished_reasoning_into_the_answer` | The outlet of `clear_thinking_tags` runs through `/api/chat/completed` and changes the reply. |
@@ -204,7 +204,7 @@ A test and a screenshot script often follow the same **By hand** steps. The test
 
 ### What the first runs found
 
-The mock showed none of these:
+The mock that the unit tests used then showed none of these:
 
 - **A user needs a read grant to use a model.** Without the grant, a user who is not an admin gets "Model not found". This is also true for a model that a filter sends the request to. This repository's stack keeps this rule (`BYPASS_MODEL_ACCESS_CONTROL: "false"`), but owpp's stack lets every user use every model.
 - **The API returns a tool call to the caller.** With no saved chat, Open-WebUI returns the model's tool call (`finish_reason: "tool_calls"`) and does not run the tool. The chat page in the browser runs it.

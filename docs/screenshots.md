@@ -1,6 +1,6 @@
 # Screenshots on a real Open-WebUI
 
-The screenshots show the example plugins on a real Open-WebUI, with a browser that follows their **By hand** steps. The unit tests run against a [mock](testing/mock.md#what-it-is-not), and the screenshots are the other half. They show a reviewer what each check looks like, and they catch what the mock cannot. The first run found two problems that every unit test had passed ([what it found](#what-it-found)).
+The screenshots show the example plugins on a real Open-WebUI, with a browser that follows their **By hand** steps. The unit tests run on the [test harness](testing/harness.md#what-the-harness-fakes), and the screenshots are the other half. They show a reviewer what each check looks like, and they catch what the harness cannot see, such as the page in a browser. The first run found two problems that every unit test had passed ([what it found](#what-it-found)).
 
 The screenshots are in `docs/screenshots/`. The file `screenshots.json` there says which plugin tests each screenshot illustrates. The [test catalogue](reference/test-catalogue.md) shows each screenshot under those tests, and each example's page shows its own. [All screenshots](reference/screenshots.md) lists them with the Open-WebUI version and commit they come from.
 

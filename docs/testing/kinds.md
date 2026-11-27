@@ -1,6 +1,6 @@
 # Testing each kind of plugin
 
-This page gives a recipe for what each kind of plugin does, with the calls that test it. Each recipe comes from a test that runs: in the scaffolds that [`owpp create`](../commands/create.md) writes, or in the [examples](../examples/index.md). The [mock](mock.md) page lists every call.
+This page gives a recipe for what each kind of plugin does, with the calls that test it. Each recipe comes from a test that runs: in the scaffolds that [`owpp create`](../commands/create.md) writes, or in the [examples](../examples/index.md). The [test harness](harness.md) page lists every call.
 
 ## Filters
 
@@ -23,7 +23,7 @@ def test_a_message_with_an_image_goes_to_the_vision_model(owui, plugin):
 - To call the other two methods, use `plugin.call("request", body, ...)` and `plugin.call("stream", chunk)`.
 - **A reply:** Open-WebUI 0.12 and later give an outlet a last message with `content` and an `output` list. The chat shows the reply from the list. Make your filter change both. The [`clear_thinking_tags` tests](https://github.com/zmnatz/open-webui-plugin-protocol/tree/main/examples/plugins/clear_thinking_tags/tests) build such a reply.
 - **Events:** `owui.chat_events` records the status lines and other events that the filter sends through `__event_emitter__`, as `(chat_id, event)`.
-- **Which chats use the filter:** Open-WebUI's chat pipeline decides which filters run for a chat. A filter can be global, set for a model or turned on by the user. The mock does not have this pipeline. Test it [on a real Open-WebUI](live.md).
+- **Which chats use the filter:** Open-WebUI's chat pipeline decides which filters run for a chat. A filter can be global, set for a model or turned on by the user. The harness calls the filter directly, not through this pipeline. Test it [on a real Open-WebUI](live.md).
 
 Examples: [`vision_router`](../examples/vision_router.md) (inlet), [`clear_thinking_tags`](../examples/clear_thinking_tags.md) (outlet), [`excalidraw`](../examples/excalidraw.md) (an outlet that adds to the reply).
 
@@ -53,7 +53,7 @@ def test_it_answers_as_a_model(owui, plugin):
     assert plugin.call("pipe", {"messages": []}, user=user) == "Hello from Hello"
 ```
 
-A pipe that streams returns an async generator. Read it inside `owui.run(...)`, which runs code on the mock's event loop:
+A pipe that streams returns an async generator. Read it inside `owui.run(...)`, which runs code on Open-WebUI's event loop:
 
 ```python
 chunks = plugin.call("pipe", {"messages": [], "stream": True}, user=user)
@@ -68,7 +68,7 @@ assert owui.run(read()) == "Hello from Hello"
 
 ## Tools
 
-A function installs its tool, so get the tool with `owui.tool(id)`. As Open-WebUI does, the mock loads the tool from its stored code, with its stored valves:
+A function installs its tool, so get the tool with `owui.tool(id)`. Open-WebUI's loader loads the tool from its stored code, with its stored valves:
 
 ```python
 def test_show_creates_the_drawing_and_hands_the_filter_an_artifact(owui, plugin):
@@ -137,7 +137,7 @@ Example: [`stale_data`](../examples/stale_data.md).
 
 ## Installers and skills
 
-After the function loads, the mock's tables contain what it installed. Test that each item is there, that it goes when the function goes, and that it comes back:
+After the function loads, the tables contain what it installed. Test that each item is there, that it goes when the function goes, and that it comes back:
 
 ```python
 def test_the_tool_goes_with_the_function_and_comes_back_with_it(owui, plugin):
@@ -151,7 +151,7 @@ def test_the_tool_goes_with_the_function_and_comes_back_with_it(owui, plugin):
     assert "excalidraw" not in owui.tools
 ```
 
-`owui.skills` contains the skills. The rows in `owui.tools` and `owui.skills` hold their grants: `access: public` puts a read grant for every user there.
+`owui.skills` contains the skills. The rows in `owui.tools` and `owui.skills` hold their grants. `grants(row)`, from `owpp.testing`, lists them: `access: public` puts a read grant for every user there.
 
 ## A function written elsewhere
 
@@ -159,8 +159,8 @@ Some functions come from outside owpp: pasted into Open-WebUI, or written for it
 
 With such code, note these points:
 
-- **An `open_webui` import at the top of the file** loads in the mock. The mock stands in for those modules as they are in Open-WebUI v0.13. Code written for an older Open-WebUI can fail where v0.13 also fails (for example, a model method that is now a coroutine). Report this as a finding about the function, not about the test.
-- **A name that the mock does not have** imports, but raises an error when the code uses it: [what the mock is not](mock.md#what-it-is-not).
+- **An `open_webui` import** loads Open-WebUI's own module, at the pinned version. Code written for an older Open-WebUI can fail there, as it fails on an instance of that version (for example, a model method that is now a coroutine). Report this as a finding about the function, not about the test.
+- **A package that Open-WebUI's slim image does not have** stops the load with its name and its version: [a package that the slim image does not have](harness.md#a-package-that-the-slim-image-does-not-have).
 - **A service that the function calls** needs a stand-in, as for [any plugin that calls other services](#plugins-that-call-other-services).
 
 For two examples with their tests, see [a plugin that already works](existing-plugins.md).

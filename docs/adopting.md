@@ -14,7 +14,7 @@ uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
 ```
 
-To let an editor find what a plugin imports, install owpp as a development dependency of the repository: `uv add --dev 'owpp[test]'`. The plugin's tests need it too. It gives the editor `owpp.lib` (the [libraries](libraries.md)). It also gives type stubs for the parts of `open_webui` that the [mock](testing/mock.md#in-an-editor) has.
+To let an editor find what a plugin imports, install owpp as a development dependency of the repository: `uv add --dev 'owpp[test]'`. The plugin's tests need it too. It gives the editor `owpp.lib` (the [libraries](libraries.md)). For `open_webui`, add the folder that `owpp test --editor` gives to the search path of the editor ([in an editor](testing/harness.md#in-an-editor)).
 
 ## Existing functions pasted into the UI
 

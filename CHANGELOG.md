@@ -1,15 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- **Breaking:** `owpp test` runs each plugin against the real Open-WebUI v0.13.5, in the test process, in place of the mock ([the test harness](docs/testing/harness.md), [ADR 0004](docs/adr/0004-unit-tests-run-the-real-open-webui.md), [#126](https://github.com/zmnatz/open-webui-plugin-protocol/issues/126)). Run it on Python 3.12: `uvx --python 3.12 --from 'owpp[test]' owpp test`. The `test` extra installs Open-WebUI's slim packages at its versions, and the first run downloads Open-WebUI's code to `OWPP_CACHE_DIR`. `MockOpenWebUI`, `Record` and the `open_webui` type stubs are gone: `Harness` takes their place, `grants(row)` reads access grants, `owui.set_tool_valves()` saves a tool's valves, and `owpp test --editor` gives the folder an editor needs. The rows of `owui.tools`, `owui.models` and the other tables are copies now. [Upgrading](docs/upgrading.md#07-08) lists what a test may need to change.
+
 ## 0.7.2 (2026-11-27)
 
 - The documentation site now uses Simplified Technical English: short active sentences, numbered steps, and one full explanation of each thing ([#123](https://github.com/zmnatz/open-webui-plugin-protocol/pull/123)).
 - `AGENTS.md` and the contributing guide now give the same writing rules for new docs ([#122](https://github.com/zmnatz/open-webui-plugin-protocol/pull/122)).
-- The mock Open-WebUI stores a function as a deploy leaves it: the deploy's `meta` (`managed_by`, the description with its note, `sources`, `requires`) beside `manifest`, and the code with its imports rewritten as Open-WebUI rewrites them; its `replace_imports` rewrites them too. A test that expects `meta.description` to be the header's alone reads `meta.manifest["description"]` instead ([the mock](docs/testing/mock.md)).
+- The mock Open-WebUI stores a function as a deploy leaves it: the deploy's `meta` (`managed_by`, the description with its note, `sources`, `requires`) beside `manifest`, and the code with its imports rewritten as Open-WebUI rewrites them; its `replace_imports` rewrites them too. A test that expects `meta.description` to be the header's alone reads `meta.manifest["description"]` instead ([the mock](docs/testing/harness.md)).
 
 ## 0.7.1 (2026-11-27)
 
 - `owpp check` finds undefined names scope by scope, as Python does: a name defined only inside another function or class is now reported, and names bound by `match` patterns no longer are.
-- `MockOpenWebUI(sources=...)` takes the `Sources` it reads a `source:` plugin's files through. The `owui` fixture still fetches each file once per test run; a mock you make yourself without one now fetches for itself rather than sharing with the run ([the mock](docs/testing/mock.md)).
+- `MockOpenWebUI(sources=...)` takes the `Sources` it reads a `source:` plugin's files through. The `owui` fixture still fetches each file once per test run; a mock you make yourself without one now fetches for itself rather than sharing with the run ([the mock](docs/testing/harness.md)).
 - `owpp import` writes only the `jobs:` settings that differ from their defaults, as it already did for `static:` and `assets:` ([owpp import](docs/commands/import.md), [#97](https://github.com/zmnatz/open-webui-plugin-protocol/issues/97)).
 - `owpp import --instance` takes `--ca-cert`, `--client-cert` and `--client-key`, as `owpp deploy` does ([owpp import](docs/commands/import.md), [#96](https://github.com/zmnatz/open-webui-plugin-protocol/issues/96)).
 
@@ -46,7 +50,7 @@ The headline is **live tests**: a plugins repository tests its plugins on a real
 ## 0.6.0 (2026-11-22)
 
 - A tool embeds only the templates it lists, with `tool: templates: [launcher/]`, so a function's large page is not copied into its tool ([plugin format](docs/plugin-format.md#tool)).
-- The mock sends events about users and models (`owui.emit("user.deleted", {"type": "user", "id": ...})`), has `decode_token`, and answers a plugin that asks a model itself: `owui.model_reply`, with what it was asked in `owui.completions` ([the mock](docs/testing/mock.md)).
+- The mock sends events about users and models (`owui.emit("user.deleted", {"type": "user", "id": ...})`), has `decode_token`, and answers a plugin that asks a model itself: `owui.model_reply`, with what it was asked in `owui.completions` ([the mock](docs/testing/harness.md)).
 - A new example, [`theme_designer_pro`](examples/plugins/theme_designer_pro), adapted from G30's Theme Designer Pro: a 1.3 MB event function broken into templates, routes behind the sign-in guard, `@on` handlers, a tool and a skill, with what changed explained for its author.
 
 ## 0.5.0 (2026-11-22)
@@ -55,7 +59,7 @@ The headline is **live tests**: a plugins repository tests its plugins on a real
 - A plugin's files are ordinary Python: each imports what it uses, including its shared code (`from shared import NAME`) and the libraries (`from owpp.lib import PluginAdmin, plugin_mount`), so it reads, lints and type-checks on its own. The bundler removes those imports, says which library a name needs in `include:`, and refuses the forms that would break once bundled ([bundling](docs/bundling.md#imports-between-the-files)).
 - `owpp create` writes plugins that import the library names they use.
 - `{{file:NAME}}` is deprecated, and `owpp check` warns about it: use `templates/` and `plugin_template_text()`. A tool can now read the templates too, with `include: [templates]` under `tool:`; `owpp create` writes a rich-UI tool that way.
-- owpp ships type stubs for `open_webui`, written from the mock, so an editor resolves what a plugin imports from Open-WebUI ([the mock](docs/testing/mock.md#in-an-editor)).
+- owpp ships type stubs for `open_webui`, written from the mock, so an editor resolves what a plugin imports from Open-WebUI ([the mock](docs/testing/harness.md)).
 - `owpp.testing.plugin_source(path)` imports a plugin's files as modules for tests of their logic, each plugin with its own `shared.py` and libraries ([writing a test](docs/testing/writing.md#testing-logic-directly)).
 - `owpp check` warns about a plugin name that replaces a library name in its bundle, and about `from __future__` lines that differ between `shared.py` and the files it goes in front of.
 - The runtime's `_plugin_ensure()` is now `plugin_ensure()`, imported from `owpp.lib`.
@@ -69,7 +73,7 @@ The headline is **live tests**: a plugins repository tests its plugins on a real
 
 - The live suite deploys the examples to a real Open-WebUI v0.13.4 (`-slim`), with [aimock](https://github.com/CopilotKit/aimock) as its models, and checks what the mock cannot, on every pull request ([the live suite](docs/testing/live.md#this-repositorys-live-suite)).
 - `tools/screenshots/run.py --up` starts the same Open-WebUI and leaves it running, to try a plugin by hand with no real model and nothing leaving the machine ([trying things out in isolation](docs/testing/live.md#trying-things-out)).
-- The mock passes filters `__model__` (`plugin.inlet(..., model=)`, default `"mock-model"`) and has `open_webui.utils.misc.get_last_user_message_item` ([the mock](docs/testing/mock.md)).
+- The mock passes filters `__model__` (`plugin.inlet(..., model=)`, default `"mock-model"`) and has `open_webui.utils.misc.get_last_user_message_item` ([the mock](docs/testing/harness.md)).
 - Two filter examples: [`clear_thinking_tags`](examples/plugins/clear_thinking_tags), an outlet adapted from Haervwe's Clear thinking tags, and [`vision_router`](examples/plugins/vision_router), an inlet adapted from open-webui's Dynamic Vision Router.
 - Docs: a Testing section (writing a test, recipes for each kind of plugin, the mock, a real Open-WebUI, CI), and the owpp agent skill's [testing steps](skills/owpp/references/testing.md).
 - Manifests stay `protocol: "0.3"`, and bundles are the same as 0.3.1's: nothing to migrate ([upgrading](docs/upgrading.md#03-04)).
