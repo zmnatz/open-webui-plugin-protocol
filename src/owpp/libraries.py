@@ -249,6 +249,10 @@ def json_literal(data: Any) -> str:
     return json.dumps(inner, ensure_ascii=False)
 
 
+# A string literal as json_literal writes it (one line), as a regex group.
+LITERAL = r'("(?:[^"\\\n]|\\.)*")'
+
+
 def hoist_future(code: str) -> tuple[str, str]:
     """`from __future__ import ...` must be the first statement after the docstring, so
     when code is put in front of a file that has one, the line moves to the top."""

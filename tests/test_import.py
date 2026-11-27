@@ -12,6 +12,7 @@ from conftest import write_tree
 
 from owpp.bundle import bundle_function, load_function_files
 from owpp.cli import main
+from owpp.embedding import runtime_start
 from owpp.errors import OwppError
 from owpp.importer import import_code, import_file, import_git, import_instance, parse_git_url
 from owpp.libraries import BY_NAME
@@ -375,7 +376,7 @@ class TestWhatOwppPutIn:
         assert "assets_url" in (folder / "config.yaml").read_text()
         for name in ("function.py", "tool.py"):
             code = (folder / name).read_text()
-            assert "# end plugin" not in code and "plugin runtime" not in code
+            assert "# end plugin" not in code and runtime_start(code) < 0
             assert "from owpp.lib import" in code
         lint = subprocess.run(
             [sys.executable, "-m", "owpp", "check", "--dir", str(tmp_path / "plugins"), "--strict"],

@@ -22,17 +22,11 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .libraries import BY_NAME, LIBRARIES, VENDORED, Library, _text, closure
+from .embedding import runtime_data, runtime_start
+from .libraries import BY_NAME, LIBRARIES, LITERAL, VENDORED, Library, _text, closure
 
-# The runtime's first line, as the bundler appends it (src/owpp/runtime/plugin_runtime.py).
-_RUNTIME_START = (
-    "\n\n# =============================================================== plugin runtime\n"
-)
-_RUNTIME_DATA = re.compile(r'^_PLUGIN = _json\.loads\(("(?:[^"\\\n]|\\.)*")\)$', re.M)
 _HEADER = re.compile(r'\s*"""[\s\S]*?"""\n')
 _FUTURE = re.compile(r"(?:from __future__ import [^\n]+\n)+")
-# A JSON string literal, as json_literal writes it.
-_LITERAL = r'("(?:[^"\\\n]|\\.)*")'
 # What the protocol says to copy: its blocks from their first banner line to their end line.
 _BANNER = re.compile(r"^# =+\n", re.M)
 # Where a library carries data, the folder or key it came from.
@@ -76,7 +70,7 @@ def _data(lib: Library, block: str) -> Any:
     if use is None:
         return None
     before, _, after = use.partition(lib.placeholder)
-    m = re.search(f"^{re.escape(before)}{_LITERAL}{re.escape(after)}$", block, re.M)
+    m = re.search(f"^{re.escape(before)}{LITERAL}{re.escape(after)}$", block, re.M)
     return json.loads(json.loads(m.group(1))) if m else None
 
 
@@ -123,12 +117,10 @@ def unbundle(content: str) -> Unbundled:
     """`content` without owpp's libraries and runtime, and the protocol's byte-identical blocks
     (see the module's docstring)."""
     code, tools, skills = content, [], []
-    at = code.find(_RUNTIME_START)
+    at = runtime_start(code)
     if at >= 0:
-        m = _RUNTIME_DATA.search(code, at)
-        if m:
-            data = json.loads(json.loads(m.group(1)))
-            tools, skills = data.get("tools", []), data.get("skills", [])
+        data = runtime_data(code[at:])
+        tools, skills = data["tools"], data["skills"]
         code = code[:at]
     header = _HEADER.match(code)
     found: list[str] = []
