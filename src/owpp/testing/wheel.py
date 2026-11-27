@@ -8,6 +8,7 @@ of upstream's slim image instead.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import shutil
@@ -33,9 +34,36 @@ def open_webui_dir() -> Path:
     """The folder that holds the pinned `open_webui` package, unpacked from its wheel. The first
     call downloads it."""
     folder = cache_dir() / f"open-webui-{pin.VERSION}"
-    if (folder / "open_webui").is_dir() and (folder / ".sha256").is_file():
+    if _ready(folder):
         return folder
     folder.parent.mkdir(parents=True, exist_ok=True)
+    # One download for every process that starts at once (pytest -n auto): the others wait.
+    with _locked(folder.parent / f".open-webui-{pin.VERSION}.lock"):
+        if not _ready(folder):
+            _download(folder)
+    return folder
+
+
+def _ready(folder: Path) -> bool:
+    return (folder / "open_webui").is_dir() and (folder / ".sha256").is_file()
+
+
+@contextlib.contextmanager
+def _locked(path: Path):
+    with path.open("w") as handle:
+        try:
+            import fcntl
+        except ImportError:  # Windows: no lock; a second download is only slower
+            yield
+            return
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
+
+
+def _download(folder: Path) -> None:
     with tempfile.TemporaryDirectory(dir=folder.parent, prefix=".open-webui-") as tmp:
         wheel = Path(tmp) / "open_webui.whl"
         print(f"owpp: downloading Open-WebUI v{pin.VERSION} for the tests (once)", file=sys.stderr)
@@ -54,9 +82,4 @@ def open_webui_dir() -> Path:
             archive.extractall(unpacked)
         (unpacked / ".sha256").write_text(pin.WHEEL_SHA256 + "\n")
         shutil.rmtree(folder, ignore_errors=True)
-        try:
-            unpacked.rename(folder)
-        except OSError:  # another run unpacked it first
-            if not (folder / "open_webui").is_dir():
-                raise
-    return folder
+        unpacked.rename(folder)

@@ -27,14 +27,14 @@ jobs:
 | Step | Fails when |
 | --- | --- |
 | [`owpp check --strict`](../commands/check.md) | A bundle fails or does not compile, a name is undefined, a manifest is wrong, or there is a warning. |
-| [`owpp test`](../commands/test.md) | The tests of a plugin fail on the [test harness](harness.md). A plugin with code from git fetches the code, so the job needs the network (unless the tests [load stand-ins](kinds.md#code-from-git)). |
+| [`owpp test`](../commands/test.md) | The tests of a plugin fail on the [test harness](harness.md). A test that asks a model runs [aimock](harness.md#the-model-aimock) with Node or Docker, which GitHub's runners have. A plugin with code from git fetches the code, so the job needs the network (unless the tests [load stand-ins](kinds.md#code-from-git)). |
 | [`owpp check --since`](../commands/check.md#a-change-needs-a-new-version) | A plugin changed, but its version did not. The message names the `owpp version` command to run. |
 
 Pin the same owpp version here as in the deploy (`uses: zmnatz/open-webui-plugin-protocol@v0.7.2`). Then the tests use the same bundle as the deploy. The [GitHub Action](../tooling.md#github-action) runs `owpp check` before it deploys, but it does not run the tests.
 
 ## A live check
 
-The test harness runs Open-WebUI's code, but not a chat pipeline, a model or a browser ([what the harness fakes](harness.md#what-the-harness-fakes)). A second workflow can run your [live tests](live.md#live-tests-in-your-repository) with [`owpp live`](../commands/live.md), which finds the problems that only these show. GitHub's runners have Docker:
+The test harness runs Open-WebUI's code, with aimock as its model, but not a chat pipeline, a real model or a browser ([what the harness fakes](harness.md#what-the-harness-fakes)). A second workflow can run your [live tests](live.md#live-tests-in-your-repository) with [`owpp live`](../commands/live.md), which finds the problems that only these show. GitHub's runners have Docker:
 
 ```yaml
 # .github/workflows/live.yml in your repository

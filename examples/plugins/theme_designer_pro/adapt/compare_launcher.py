@@ -55,7 +55,6 @@ def run(kind):
             owui.startup()
             owui.set_valves("theme_designer_pro", allow_personal_themes=True)
             admin, ada = owui.admin, owui.add_user("Ada")
-            admin.token, ada.token = "session-admin-0123456789", "session-ada-0123456789"
             tool = owui.tool(TOOL)
             specs = {s["name"]: s for s in tool.specs}
             out["specs: names"] = sorted(specs)
@@ -150,7 +149,8 @@ def run(kind):
                     if m
                     else r.status_code
                 )
-            out["skills"] = (
+            # On purpose: the adaptation also installs the theme-designer-pro skill (README).
+            out["x: skills"] = (
                 sorted(
                     (k, getattr(v, "access_grants", None) is not None)
                     for k, v in owui.skills.items()
