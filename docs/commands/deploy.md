@@ -99,6 +99,22 @@ A function differs if its code, marker, description, source commits or `requires
 - It applies Open-WebUI's import rewrite to the two copies. Open-WebUI changes some import prefixes, such as `from utils` to `from open_webui.utils`.
 - It ignores line endings and space at the end of the file.
 
+The comparison then examines the function, each tool and each skill apart, because each one has its own version. [`owpp check --since`](check.md#a-change-needs-a-new-version) uses the same comparison for two bundles from git.
+
+```mermaid
+flowchart TD
+    old["Live code (or the old bundle)"] --> rewrite
+    new["New bundle"] --> rewrite
+    rewrite["Apply the import rewrite to the two copies"] --> norm
+    norm["Ignore line endings and space at the end of the file"] --> same{"Is the code the same?"}
+    same -- Yes --> unchanged["The function is unchanged"]
+    same -- No --> parts["Examine each part: the function's own code, each tool and each skill, by id"]
+    parts --> status["Give each part a status: new, removed, changed or unchanged"]
+    status --> older{"Does the version of a part go back?"}
+    older -- Yes --> downgrade["The part is a downgrade (see step 7)"]
+    older -- No --> report["The report shows each part that is not unchanged"]
+```
+
 A plugin with `global: true` is active and global after every deploy. A plugin with `global: false` is never global. In all other cases, an existing function keeps its active and global state.
 
 The report names each function with its type, for example ``- event function `mcpo_sync` (mcpo_sync/): unchanged (0.3.0)``. In GitHub Actions, the deploy also writes the report to the job summary.
