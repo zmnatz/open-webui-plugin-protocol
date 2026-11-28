@@ -67,7 +67,8 @@ Its arguments:
 Without `sources`, the files of a `source:` plugin come from git at the pinned commit, as in a deploy:
 
 - With the `owui` fixture, owpp reads each file once in each test run, and keeps it in [`.owpp/`](../bundling.md#the-owpp-folder).
-- The fixture uses the `.owpp/` of the folder in [`OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir). If the variable is not set, it uses the folder that holds the plugin.
+- Under `owpp test`, the fixture uses the `.owpp/` of the folder that you test.
+- Under pytest alone, it uses [`OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir). If the variable is not set, it uses the folder that holds the plugin.
 - A `Harness` that you make yourself fetches its own copies, and keeps nothing.
 - To share the copies between harnesses, give each one the same `owpp.sources.Sources`: `Harness(sources=...)`. Then close that `Sources` yourself.
 

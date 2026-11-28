@@ -1,8 +1,9 @@
 """A whole plugin folder taken from git: `source: {git, ref, path, plugin: true}`.
 
 The folder at `path` is an owpp plugin itself (it has a plugin.yaml). Its files are written to a
-folder named after the local plugin (in `.owpp/modules/`, else a scratch folder), with the local manifest's few overrides applied to
-its plugin.yaml and a local config.yaml put in place of the upstream's. That folder is then
+folder named after the local plugin (in `.owpp/modules/`, else a scratch folder), with the local
+manifest's few overrides applied to its plugin.yaml and a local config.yaml put in place of the
+upstream's. That folder is then
 bundled, checked and tested like any local plugin, by the owpp that reads it. Nothing in it is
 run while bundling: only its files are read.
 """
@@ -15,7 +16,7 @@ import yaml
 
 from ..errors import OwppError
 from ..manifest import SOURCED_OVERRIDES as OVERRIDES
-from ..manifest import Value, get, read_manifest, read_text, value_bytes
+from ..manifest import Value, get, is_plain_path, read_manifest, read_text, value_bytes
 
 
 def is_plugin_source(manifest: dict) -> bool:
@@ -59,10 +60,9 @@ def write_upstream(root: Path, folder: Path, manifest: dict, files: dict[str, Va
             "take its files with `function: {file}`, `tool: {file}` or `skills:` instead"
         )
     for rel, value in files.items():
-        parts = rel.split("/")
-        if any(p in ("", ".", "..") for p in parts):
+        if not is_plain_path(rel):
             raise OwppError(f"{folder.name}: {where}{rel} is not a plain path")
-        path = root.joinpath(*parts)
+        path = root.joinpath(*rel.split("/"))
         path.parent.mkdir(parents=True, exist_ok=True)
         data = value_bytes(value)
         path.write_bytes(data)

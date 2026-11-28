@@ -90,16 +90,16 @@ owpp keeps what it takes from git in `.owpp/`, as Node keeps `node_modules`. The
 | `.owpp/store/` | The upstream files, unchanged, for each repository and commit. |
 | `.owpp/modules/<id>/` | A [whole plugin from git](plugin-format.md#a-whole-plugin-from-git), with your overrides. owpp bundles this folder. |
 
-- owpp fetches files only if the store does not hold them. When it holds every pinned file, `check`, `build`, `deploy` and `test` need no network for git sources.
-- owpp writes a module again when the pin, your `plugin.yaml`, your `config.yaml` or the owpp version changes.
-- A build at the latest commits and `check --since` add to the store, but they use scratch copies of whole plugins. The same applies to the new commit in `owpp pull`. Thus the modules keep the pinned code.
+- owpp fetches files only if the store does not hold them. When it holds every pinned file, `check`, `build`, `deploy` and `test` need no network for git sources. A [test harness](testing/harness.md) that you make yourself does not use the store.
+- owpp writes a folder in `modules/` again when the pin, your `plugin.yaml`, your `config.yaml` or the owpp version changes.
+- A build at the latest commits and `check --since` add to the store, but they use scratch copies of whole plugins. The same applies to the new commit in `owpp pull`. Thus `modules/` keeps the pinned code.
 - [Upstream tests](commands/test.md#upstream-tests) also run in a scratch copy.
 - You can delete `.owpp/` between two commands. owpp fetches the files again when it needs them.
 - Do not change a file in `.owpp/`. owpp [refuses a changed file](troubleshooting.md#a-file-in-owpp-was-changed), because this code runs with admin rights.
 - owpp also [refuses a `.owpp/` that git tracks](troubleshooting.md#git-tracks-owpp).
+- If git cannot say whether it tracks the folder, owpp prints a note and does not use it. An example is a repository that another user owns.
 - When owpp creates `.owpp/` in a repository that does not ignore it, it prints a note. owpp never changes your `.gitignore`.
 - If owpp cannot write the folder, it prints a note, keeps nothing, and continues.
-- A [test harness](testing/harness.md) that you make yourself keeps nothing, unless you give it a `Sources` that does.
 
 ## Skills
 

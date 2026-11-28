@@ -8,7 +8,7 @@ The store never changes once written: a commit holds the same files for ever. A 
 again when what it is made from changes. What owpp wrote is bundled only as owpp wrote it: a
 changed file is refused, since this code runs with admin rights and the same pins must give the
 same bundle. A `.owpp/` that git tracks is refused for the same reason: its records would arrive
-with the files they vouch for.
+with the files they vouch for. When git cannot say what it tracks, `.owpp/` is left alone.
 """
 
 from __future__ import annotations
@@ -17,7 +17,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
 import tempfile
@@ -27,14 +26,13 @@ from pathlib import Path
 
 from ..errors import OwppError
 from ..locking import locked
-from ..manifest import Value, file_value, value_bytes
+from ..manifest import Value, file_value, is_plain_path, value_bytes
 from ._git import SHA40, Fetcher
 
 FOLDER = ".owpp"
 # A module's record: what it was made from, and the hash of everything in it.
 RECORD = ".owpp-record.json"
-# What running Python or opening a folder leaves behind. __pycache__ is deleted, so that nothing
-# in it can be bundled; the bundler itself skips .DS_Store.
+# What running Python or opening a folder leaves behind (the bundler itself skips .DS_Store).
 _CACHE = "__pycache__"
 _IGNORED = ".DS_Store"
 
@@ -48,7 +46,7 @@ class ProjectFolder:
         own_repository = (self.plugins / ".git").exists()
         self.project = self.plugins if own_repository else self.plugins.parent
         self.path = self.project / FOLDER
-        self._checked = False
+        self._trusted: bool | None = None
         self._unwritable = False
 
     def holds(self, folder: Path) -> bool:
@@ -59,9 +57,8 @@ class ProjectFolder:
         """`fetch`, reading each entry the store holds and keeping each one it has to fetch."""
 
         def kept(git: str, sha: str, paths: list[str]) -> dict[str, Value]:
-            if not SHA40.fullmatch(sha):
+            if not (SHA40.fullmatch(sha) and self._usable()):
                 return fetch(git, sha, paths)
-            self._refuse_tracked()
             commit = self.path / "store" / _repository(git) / sha
             found: dict[str, Value] = {}
             missing = []
@@ -80,10 +77,11 @@ class ProjectFolder:
 
         return kept
 
-    def module(self, name: str, inputs: str, write: Callable[[Path], None]) -> Path | None:
+    def plugin_copy(self, name: str, inputs: str, write: Callable[[Path], None]) -> Path | None:
         """`modules/<name>`: as it is when it was made from `inputs`, else made by `write`.
-        None when the project cannot be written."""
-        self._refuse_tracked()
+        None when `.owpp/` cannot be used or written."""
+        if not self._usable():
+            return None
         try:
             self._create()
             modules = self.path / "modules"
@@ -91,7 +89,7 @@ class ProjectFolder:
             # Processes that start at once (owpp test -- -n auto) take turns.
             with locked(modules / f".{name}.lock"):
                 target = modules / name
-                if target.exists() and _verified(target) == inputs:
+                if target.exists() and _made_from(target) == inputs:
                     return target
                 with tempfile.TemporaryDirectory(dir=modules, prefix=".new-") as work:
                     new = Path(work) / name
@@ -112,14 +110,21 @@ class ProjectFolder:
         if not files:
             return  # not found: nothing to remember
         data = {path: value_bytes(value) for path, value in files.items()}
-        targets = {path: commit / "tree" / _plain(path) for path in data}
+        tree = commit / "tree"
         try:
             self._create()
-            for path, target in targets.items():
-                _replace(target, data[path])
-            # A file system that ignores case can give two paths one file: do not record that.
-            if any(target.read_bytes() != data[path] for path, target in targets.items()):
-                return
+            for path, content in data.items():
+                if not is_plain_path(path):
+                    raise OwppError(f"{path!r} from git is not a plain path")
+                # A file system that ignores case can give two paths one file: such an entry
+                # is not kept, and is fetched each time.
+                if not _spelled(tree, path):
+                    return
+                target = tree / path
+                if not target.exists():
+                    _replace(target, content)
+                elif target.read_bytes() != content:  # a commit's file never changes
+                    raise _changed(target, commit)
             record = {"entry": entry, "files": {p: _hash(b) for p, b in data.items()}}
             _replace(_record(commit, entry), (json.dumps(record, indent=1) + "\n").encode())
         except OSError as e:
@@ -128,6 +133,7 @@ class ProjectFolder:
     def _create(self) -> None:
         try:
             self.path.mkdir()
+            self._trusted = True  # new, and owpp's own
         except FileExistsError:
             if not self.path.is_dir():
                 raise
@@ -141,17 +147,37 @@ class ProjectFolder:
                 file=sys.stderr,
             )
 
-    def _refuse_tracked(self) -> None:
-        if self._checked or not os.path.lexists(self.path):
-            return
-        tracked = _git(self.project, "ls-files", "--", FOLDER)
-        if tracked.returncode == 0 and tracked.stdout.strip():
-            raise OwppError(
-                f"git tracks files in {self.path}, so owpp cannot trust them: run "
-                f"`git rm -r --cached {FOLDER}` there, add `{FOLDER}/` to .gitignore, and delete "
-                "the folder"
-            )
-        self._checked = True
+    def _usable(self) -> bool:
+        """Whether what `.owpp/` holds can be trusted. Refused when git tracks any of it."""
+        if self._trusted is None:
+            if not os.path.lexists(self.path):
+                return True  # nothing in it yet
+            self._trusted = self._untracked()
+        return self._trusted
+
+    def _untracked(self) -> bool:
+        """True when git tracks nothing in `.owpp/`; False, with a note, when the project is in
+        a repository and git cannot say."""
+        prefix = _git(self.project, "rev-parse", "--show-prefix")
+        if prefix.returncode == 0:
+            # In any case of its letters: some file systems open .OWPP/ as .owpp/.
+            folder = f"{prefix.stdout.decode().strip()}{FOLDER}"
+            tracked = _git(self.project, "ls-files", "--", f":(top,icase,literal){folder}")
+            if tracked.returncode == 0:
+                if tracked.stdout.strip():
+                    raise OwppError(
+                        f"git tracks files in {self.path}, so owpp cannot trust them: run "
+                        f"`git rm -r --cached {FOLDER}` there, add `{FOLDER}/` to .gitignore, "
+                        "and delete the folder"
+                    )
+                return True
+        elif not any((p / ".git").exists() for p in (self.project, *self.project.parents)):
+            return True  # no repository, so nothing is tracked
+        print(
+            f"note  git cannot say whether it tracks {self.path}, so it is not used",
+            file=sys.stderr,
+        )
+        return False
 
     def _cannot_write(self, error: OSError) -> None:
         if not self._unwritable:
@@ -176,14 +202,6 @@ def _repository(git: str) -> str:
     return f"{readable}-{_hash(git.encode())[:8]}"
 
 
-def _plain(path: str) -> str:
-    """`path` of a file in a repository, refused when it could lead outside the folder."""
-    parts = path.split("/")
-    if "\\" in path or any(p in ("", ".", "..") or Path(p).anchor for p in parts):
-        raise OwppError(f"{path!r} from git is not a plain path")
-    return path
-
-
 def _under(files: dict[str, Value], entry: str) -> dict[str, Value]:
     """What a fetch returned for one entry: a file, a folder ("dir/") or everything ("./")."""
     if entry == "./":
@@ -195,6 +213,18 @@ def _under(files: dict[str, Value], entry: str) -> dict[str, Value]:
 
 def _hash(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def _spelled(tree: Path, path: str) -> bool:
+    """Whether each part of `path` that exists under `tree` is written exactly as in `path`."""
+    here = tree
+    for part in path.split("/"):
+        if not os.path.lexists(here / part):
+            return True
+        if part not in os.listdir(here):
+            return False
+        here = here / part
+    return True
 
 
 def _record(commit: Path, entry: str) -> Path:
@@ -219,7 +249,9 @@ def _read(commit: Path, entry: str) -> dict[str, Value] | None:
         raise _changed(record, commit) from e
     out: dict[str, Value] = {}
     for path, digest in recorded.items():
-        file = commit / "tree" / _plain(path)
+        if not is_plain_path(path):
+            raise _changed(record, commit)
+        file = commit / "tree" / path
         data = file.read_bytes() if file.is_file() else None
         if data is None or _hash(data) != digest:
             raise _changed(file, commit)
@@ -250,9 +282,6 @@ def _hashes(folder: Path) -> dict[str, str]:
                 if e.is_symlink():
                     found[path] = "link"
                 elif e.is_dir():
-                    if e.name == _CACHE:
-                        shutil.rmtree(e.path, ignore_errors=True)
-                        continue
                     found[f"{path}/"] = ""
                     walk(Path(e.path), f"{path}/")
                 elif e.name != _IGNORED and path != RECORD:
@@ -262,14 +291,21 @@ def _hashes(folder: Path) -> dict[str, str]:
     return found
 
 
-def _verified(module: Path) -> str:
-    """What a module was made from, once everything in it is as it was written."""
+def _made_from(module: Path) -> str:
+    """What a module was made from, once everything in it is as it was written. What Python
+    added in a __pycache__ is deleted first, so that none of it can be bundled."""
     try:
         record = json.loads((module / RECORD).read_text())
         recorded, inputs = dict(record["files"]), str(record["inputs"])
     except (OSError, ValueError, KeyError, TypeError) as e:
         raise _changed(module / RECORD, module) from e
     found = _hashes(module)
+    # Deepest first, so that a folder is empty when its turn comes.
+    for path in sorted(found.keys() - recorded.keys(), key=len, reverse=True):
+        if _CACHE in path.split("/") and found[path] != "link":
+            added = module / path
+            added.rmdir() if path.endswith("/") else added.unlink()
+            del found[path]
     if found != recorded:
         different = sorted(
             p for p in found.keys() | recorded.keys() if found.get(p) != recorded.get(p)

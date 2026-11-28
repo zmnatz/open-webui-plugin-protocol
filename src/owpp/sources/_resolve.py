@@ -159,12 +159,10 @@ class Sources:
         kind_of: KindOf | None = None,
         plugins: Path | str | None = None,
     ):
-        self._read_git = fetcher if fetcher is not None else _git.git_fetcher
+        fetcher = fetcher if fetcher is not None else _git.git_fetcher
         self._project = None if plugins is None else ProjectFolder(Path(plugins))
-        # What reads the pinned files of a `source:`.
-        self.fetcher = (
-            self._read_git if self._project is None else self._project.fetcher(self._read_git)
-        )
+        # What reads files at a commit: through the project's .owpp/ when there is one.
+        self.fetcher = fetcher if self._project is None else self._project.fetcher(fetcher)
         self._lookup = lookup if lookup is not None else _git.resolve_ref
         self._kind_of = kind_of if kind_of is not None else _git.ref_kind
         self._cache: dict[str, dict[str, Value]] = {}
@@ -199,7 +197,7 @@ class Sources:
         """Every file in the folder `path` of `git` ("": the whole repository) at the commit
         `sha`, by path inside it: for looking at a folder no `source:` names yet."""
         prefix = f"{path}/" if path else ""
-        got = self._read_git(git, sha, [prefix or "./"])
+        got = self.fetcher(git, sha, [prefix or "./"])
         return {k[len(prefix) :]: v for k, v in got.items() if k.startswith(prefix)}
 
     def resolve(
@@ -295,9 +293,9 @@ class Sources:
             write_upstream(root, folder, manifest, files, where)
 
         if keep and self._project is not None and self._project.holds(folder):
-            module = self._project.module(folder.name, inputs, write)
-            if module is not None:
-                return module, False
+            kept = self._project.plugin_copy(folder.name, inputs, write)
+            if kept is not None:
+                return kept, False
         key = (str(folder.resolve()), inputs)
         if key in self._made:
             return self._made[key], True

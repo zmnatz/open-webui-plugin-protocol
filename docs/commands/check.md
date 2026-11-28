@@ -6,7 +6,7 @@ owpp check [id ...] [--strict] [--since ref] [--dir FOLDER]
 
 `owpp check` bundles each plugin exactly as [`owpp deploy`](deploy.md) does. Then it compiles the function and each tool that the function embeds. It lists each name that the code uses, but that is not defined or imported where Python looks for it. The cause can be a typo, or a library that the plugin does not `include`. A variable of a different function does not count.
 
-With no ids, the command checks every plugin. It fetches the files that a `source:` takes from git, so it checks the real upstream code.
+With no ids, the command checks every plugin. It reads the files that a `source:` takes from git, so it checks the real upstream code. [`.owpp/`](../bundling.md#the-owpp-folder) keeps those files.
 
 The [GitHub Action](../tooling.md#github-action) runs this check before it deploys the plugins folder. It skips the check with `check: "false"`, and when it deploys a build (`from:`).
 

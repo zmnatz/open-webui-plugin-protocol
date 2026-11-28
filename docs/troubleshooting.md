@@ -151,7 +151,7 @@ If a file that the plugin takes is gone at a new commit, [`owpp pull`](commands/
 error: <file> is not as owpp wrote it, so it is not the pinned code. Delete <folder> and run again
 ```
 
-A file or a folder in [`.owpp/`](bundling.md#the-owpp-folder) was changed, added or deleted after owpp wrote it.
+After owpp wrote [`.owpp/`](bundling.md#the-owpp-folder), something changed, added or deleted a file or folder in it.
 
 1. If you want to keep your change, copy it to a different folder.
 2. Delete the folder that the message names.

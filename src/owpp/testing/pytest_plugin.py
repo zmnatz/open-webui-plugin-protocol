@@ -19,13 +19,13 @@ from pathlib import Path
 import pytest
 
 
-def plugins_folder(test: Path) -> Path | None:
-    """The plugins folder whose project keeps what a test reads from git: OWPP_PLUGINS_DIR
-    (which `owpp test` sets), else the folder that holds the test's plugin. None when there is
-    neither, or the plugin is a whole repository, whose parent is not its project."""
+def plugins_folder(test: Path, passed: str = "") -> Path | None:
+    """The plugins folder whose project keeps what a test reads from git: the one `owpp test`
+    passed, else OWPP_PLUGINS_DIR, else the folder that holds the test's plugin. None when
+    there is none, or the plugin is a whole repository, whose parent is not its project."""
     from owpp.testing import plugin_folder
 
-    declared = os.environ.get("OWPP_PLUGINS_DIR")
+    declared = passed or os.environ.get("OWPP_PLUGINS_DIR")
     if declared:
         folder = Path(declared).resolve()
         return folder if folder.is_dir() else None
@@ -34,6 +34,12 @@ def plugins_folder(test: Path) -> Path | None:
     except LookupError:
         return None
     return None if (plugin / ".git").exists() else plugin.parent
+
+
+def pytest_addoption(parser):
+    parser.addini(
+        "owpp_plugins_dir", "the plugins folder whose .owpp/ the owui fixture uses", default=""
+    )
 
 
 def pytest_configure(config):
@@ -78,7 +84,8 @@ def owui(request, _owpp_session_sources):
     fresh = bool(os.environ.get("OWPP_FRESH_OPEN_WEBUI")) or (
         request.node.get_closest_marker("fresh_open_webui") is not None
     )
-    sources = _owpp_session_sources(plugins_folder(request.path))
+    passed = request.config.getini("owpp_plugins_dir")
+    sources = _owpp_session_sources(plugins_folder(request.path, passed))
     with Harness(sources=sources, fresh=fresh) as harness:
         yield harness
 

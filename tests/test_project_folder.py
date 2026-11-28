@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
@@ -14,7 +15,7 @@ from owpp.cli import main
 from owpp.deploy import build_plugins
 from owpp.errors import OwppError
 from owpp.pull import pull
-from owpp.sources import Sources, _git
+from owpp.sources import Sources, _git, _project
 from owpp.testing import pytest_plugin
 from owpp.versioning import check_since
 
@@ -106,6 +107,37 @@ class TestTheStore:
         with pytest.raises(OwppError, match="not a plain path"):
             load(project, escaping)
         assert not list(project.parent.rglob("escaped"))
+
+    def read(self, project, fetcher, *entries):
+        with Sources(fetcher, plugins=project / "plugins") as sources:
+            return sources.fetcher(URL, SHA, list(entries))
+
+    def test_a_changed_file_is_not_replaced_by_a_later_fetch_of_it(self, project):
+        repo = repository()
+        self.read(project, repo.fetch, "tool.py")
+        (file,) = (project / ".owpp" / "store").glob(f"*/{SHA}/tree/tool.py")
+        file.write_text("import os  # added\n")
+        with pytest.raises(OwppError, match="is not as owpp wrote it"):
+            self.read(project, repo.fetch, "./")
+        assert file.read_text() == "import os  # added\n"
+
+    def test_paths_that_differ_only_in_case_both_come_back(self, project):
+        repo = FakeRepo(URL, {"d/Notes.md": "upper\n", "d/notes.md": "lower\n"})
+        for _ in range(2):
+            assert self.read(project, repo.fetch, "d/Notes.md") == {"d/Notes.md": "upper\n"}
+            assert self.read(project, repo.fetch, "d/notes.md") == {"d/notes.md": "lower\n"}
+
+    @pytest.mark.skipif(os.sep == "\\", reason="a backslash separates folders on Windows")
+    def test_a_name_with_a_backslash_is_a_name(self, project):
+        repo = FakeRepo(URL, {"d/a\\b.md": "x\n"})
+        for _ in range(2):
+            assert self.read(project, repo.fetch, "d/") == {"d/a\\b.md": "x\n"}
+
+    def test_a_folder_import_looks_at_is_kept_too(self, project):
+        with Sources(repository().fetch, plugins=project / "plugins") as sources:
+            first = sources.files(URL, SHA, "up")
+        with Sources(unreachable, plugins=project / "plugins") as sources:
+            assert sources.files(URL, SHA, "up") == first
 
     def test_deleting_the_folder_is_safe(self, project):
         repo = repository()
@@ -208,6 +240,16 @@ class TestModules:
         load(project, unreachable)
         assert not (module / "__pycache__").exists()
 
+    def test_a_cache_folder_of_the_upstream_stays(self, project):
+        files = {**UPSTREAM, "up/notes/__pycache__/kept.txt": "upstream\n"}
+        repo = FakeRepo(URL, files)
+        load(project, repo.fetch)
+        kept = project / ".owpp" / "modules" / "whole" / "notes" / "__pycache__"
+        assert (kept / "kept.txt").read_text() == "upstream\n"
+        write_tree(kept, {"added.pyc": b"x"})
+        load(project, unreachable)
+        assert sorted(p.name for p in kept.iterdir()) == ["kept.txt"]
+
     def test_many_at_once_all_get_it(self, project):
         repo = repository()
         with ThreadPoolExecutor(8) as pool:
@@ -288,6 +330,33 @@ class TestGit:
         with pytest.raises(OwppError, match="git tracks files in .*\\.owpp"):
             load(project, unreachable)
 
+    def test_a_folder_that_git_tracks_in_another_case_is_refused(self, project):
+        """A file system that ignores case opens a committed .OWPP/ as .owpp/."""
+        git(project, "init", "-q")
+        load(project, repository().fetch)
+        (project / "x").write_text("x\n")
+        blob = subprocess.run(
+            ["git", "hash-object", "-w", "x"], cwd=project, check=True, capture_output=True
+        ).stdout.decode()
+        git(project, "update-index", "--add", "--cacheinfo", f"100644,{blob.strip()},.OWPP/x")
+        with pytest.raises(OwppError, match="git tracks files in"):
+            load(project, unreachable)
+
+    def test_a_folder_git_cannot_vouch_for_is_not_used(self, project, monkeypatch, capsys):
+        """As in a container where git refuses a repository of another owner."""
+        git(project, "init", "-q")
+        load(project, repository().fetch)
+        capsys.readouterr()
+        before = snapshot(project / ".owpp")
+        monkeypatch.setattr(
+            _project, "_git", lambda *a: subprocess.CompletedProcess(a, 128, b"", b"dubious")
+        )
+        repo = repository()
+        assert load(project, repo.fetch)["whole"].root is None
+        assert repo.fetched
+        assert snapshot(project / ".owpp") == before
+        assert capsys.readouterr().err.count("is not used") == 1
+
 
 class TestCommands:
     def test_a_command_keeps_what_it_fetches_and_the_next_needs_no_git(
@@ -306,8 +375,8 @@ class TestCommands:
         ran = {}
 
         def run(args, **kwargs):
-            ran["paths"] = args
-            ran["plugins"] = pytest_plugin.plugins_folder(project / "elsewhere")
+            ran["args"] = args
+            ran["variable"] = os.environ.get("OWPP_PLUGINS_DIR")
             return 0
 
         monkeypatch.setattr(pytest, "main", run)
@@ -315,10 +384,10 @@ class TestCommands:
         monkeypatch.setattr(_git, "git_fetcher", repository().fetch)
         argv = ["test", "--upstream", "--dir", str(project / "plugins")]
         assert main(argv, env={}) == 0
-        (tests,) = [p for p in ran["paths"] if p.endswith("tests")]
+        (tests,) = [p for p in ran["args"] if p.endswith("tests")]
         assert ".owpp" not in tests
-        assert ran["plugins"] == (project / "plugins").resolve()
-        assert pytest_plugin.plugins_folder(project / "elsewhere") is None  # put back
+        assert f"owpp_plugins_dir={(project / 'plugins').resolve()}" in ran["args"]
+        assert ran["variable"] is None  # what a test itself runs is left as it was
 
 
 class TestWhereTheTestFixturesKeepIt:
@@ -329,6 +398,12 @@ class TestWhereTheTestFixturesKeepIt:
     def test_beside_the_plugins_folder_of_the_test(self, project):
         test = project / "plugins" / "takes" / "tests" / "test_takes.py"
         assert pytest_plugin.plugins_folder(test) == (project / "plugins").resolve()
+
+    def test_or_the_one_owpp_test_passes(self, project, monkeypatch):
+        monkeypatch.setenv("OWPP_PLUGINS_DIR", str(project))
+        test = project / "elsewhere" / "test_x.py"
+        passed = str(project / "plugins")
+        assert pytest_plugin.plugins_folder(test, passed) == (project / "plugins").resolve()
 
     def test_or_the_folder_the_variable_names(self, project, monkeypatch):
         monkeypatch.setenv("OWPP_PLUGINS_DIR", str(project / "plugins"))

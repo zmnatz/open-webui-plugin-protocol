@@ -19,11 +19,10 @@ Every command takes --dir <plugins folder> (default: $OWPP_PLUGINS_DIR, else ./p
 from __future__ import annotations
 
 import argparse
-import contextlib
 import functools
 import os
 import sys
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 
 import yaml
@@ -251,27 +250,14 @@ def _cmd_test(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
         "--import-mode=importlib",
         "-W",
         "ignore::pytest.PytestAssertRewriteWarning",
+        # Where the test fixtures keep what they read from git: this folder's project.
+        "-o",
+        f"owpp_plugins_dir={directory}",
         *args.pytest_args,
     ]
     if env.get("PYTEST_DISABLE_PLUGIN_AUTOLOAD"):
         pytest_args += ["-p", "owpp.testing.pytest_plugin"]
-    # The test fixtures keep what they read from git in this plugins folder's project.
-    with _environment("OWPP_PLUGINS_DIR", str(directory)):
-        return int(pytest.main(pytest_args))
-
-
-@contextlib.contextmanager
-def _environment(name: str, value: str) -> Iterator[None]:
-    """The environment variable `name` set to `value` until the block ends."""
-    before = os.environ.get(name)
-    os.environ[name] = value
-    try:
-        yield
-    finally:
-        if before is None:
-            del os.environ[name]
-        else:
-            os.environ[name] = before
+    return int(pytest.main(pytest_args))
 
 
 def _cmd_init(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
