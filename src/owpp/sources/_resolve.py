@@ -81,7 +81,11 @@ class UpstreamParts:
         return self.whole or bool(self.tool_file) or (self.tool_is_function and self.function)
 
     def skill(self, skill_id: str) -> bool:
-        return self.whole or str(skill_id).lower() in self.skill_paths
+        return self.whole or self.skill_path(skill_id) is not None
+
+    def skill_path(self, skill_id: str) -> tuple[str, bool] | None:
+        """The (path, is_dir) that `skills.<skill_id>` names, or None when it names none."""
+        return self.skill_paths.get(str(skill_id).lower())
 
     @property
     def files(self) -> list[tuple[str, bool]]:

@@ -310,7 +310,7 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
     declared = manifest.get("skills")
     for skill_id, sk in declared.items() if isinstance(declared, dict) else []:
         label = f"{folder.name}/skills.{skill_id}"
-        path, is_dir = parts.skill_paths.get(str(skill_id).lower(), ("", False))
+        path, is_dir = parts.skill_path(skill_id) or ("", False)
         if is_dir:
             add_skill(label, str(skill_id), plugin.read_dir(path), sk.get("access"))
         elif path:
@@ -598,8 +598,8 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
     keys = omit(fn, ["valves"])
     held, data = _library_data(folder, manifest)
     assets = data.get("assets")
-    taken = upstream_parts(manifest)
-    if taken.function:
+    parts = upstream_parts(manifest)
+    if parts.function:
         # The function itself comes from `source`, verbatim (its own header and all).
         extra = list(omit(fn, ["file", "global", "valves"]))
         if not manifest.get("source"):
@@ -609,7 +609,7 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
                 f"{folder}/plugin.yaml: with function.file the header comes from the file; "
                 f"remove {', '.join(extra)}"
             )
-        code = plugin.read(taken.function_file)
+        code = plugin.read(parts.function_file)
     elif not _has_code(folder, "function") and assets is not None:
         if has_resources:
             raise OwppError(
