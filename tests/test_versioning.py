@@ -5,6 +5,7 @@ from __future__ import annotations
 import subprocess
 
 import pytest
+from conftest import FakeRepo, write_tree
 
 from owpp.check import check_plugins, failed
 from owpp.cli import main
@@ -15,6 +16,7 @@ from owpp.manifest import read_manifest
 from owpp.versioning import (
     bump,
     changelog_problem,
+    check_since,
     is_older,
     next_version,
     set_block_version,
@@ -182,12 +184,17 @@ def git(repo, *args):
     )
 
 
+def commit_all(folder):
+    """Make `folder` a git repository, with everything in it committed to main."""
+    git(folder, "init", "-q", "-b", "main")
+    git(folder, "add", "-A")
+    git(folder, "commit", "-qm", "first")
+
+
 @pytest.fixture
 def repo(plugin):
     """The plugins folder `plugin` made, inside a git repository, committed."""
-    git(plugin, "init", "-q", "-b", "main")
-    git(plugin, "add", "-A")
-    git(plugin, "commit", "-qm", "first")
+    commit_all(plugin)
     return plugin
 
 
@@ -239,6 +246,97 @@ class TestCheckSince:
     def test_a_ref_that_is_not_one_is_an_error(self, repo):
         with pytest.raises(OwppError):
             list(check_plugins(repo, since="nope"))
+
+
+REPO = "https://example.com/owner/repo.git"
+OLD, NEW = "a" * 40, "b" * 40
+
+SOURCED = f"""source:
+  git: {REPO}
+  ref: {OLD}
+function:
+  title: Viz
+  version: 1.0.0
+tool:
+  id: viz
+  file: tool.py
+"""
+
+FUNCTION = "class Filter:\n    pass\n"
+TOOL = "class Tools:\n    pass\n"
+
+
+def skill_md(body):
+    return f"---\nname: draw\nversion: 1.0.0\n---\n{body}\n"
+
+
+@pytest.fixture
+def commit_plugin(tmp_path):
+    """Commit a plugin `viz` with these files to a new plugins folder in git."""
+
+    def make(files):
+        write_tree(tmp_path / "viz", files)
+        commit_all(tmp_path)
+        return tmp_path
+
+    return make
+
+
+def move_pin(folder):
+    manifest = folder / "viz" / "plugin.yaml"
+    manifest.write_text(manifest.read_text().replace(OLD, NEW))
+
+
+def findings(folder, upstream):
+    """What a check since main finds, with `upstream` ({sha: files}) as the git repository."""
+    sources = FakeRepo(REPO, commits=upstream).sources()
+    return [str(f) for f in check_since(folder, "main", sources=sources)]
+
+
+class TestCheckSinceWithASource:
+    def test_a_local_skill_needs_its_own_bump_when_the_tool_is_from_git(self, commit_plugin):
+        folder = commit_plugin(
+            {
+                "plugin.yaml": SOURCED,
+                "function.py": FUNCTION,
+                "skills/draw/SKILL.md": skill_md("Draw."),
+            }
+        )
+        (folder / "viz" / "skills" / "draw" / "SKILL.md").write_text(skill_md("Draw more."))
+        assert findings(folder, {OLD: {"tool.py": TOOL}}) == [
+            "skill draw: changed since main but its version is still 1.0.0 "
+            "(run `owpp version viz patch --skill draw`)"
+        ]
+
+    @pytest.mark.parametrize(
+        "entry, path", [("file: SKILL.md", "SKILL.md"), ("dir: draw", "draw/SKILL.md")]
+    )
+    def test_a_skill_from_git_is_the_plugins_change(self, commit_plugin, entry, path):
+        """Its id in the manifest may be in upper case: the bundle's is in lower case."""
+        manifest = SOURCED + f"skills:\n  Draw:\n    {entry}\n"
+        folder = commit_plugin({"plugin.yaml": manifest, "function.py": FUNCTION})
+        move_pin(folder)
+        upstream = {
+            sha: {"tool.py": TOOL, path: skill_md(body)}
+            for sha, body in ((OLD, "Draw."), (NEW, "Draw more."))
+        }
+        assert findings(folder, upstream) == [
+            "viz: changed since main but its version is still 1.0.0 (run `owpp version viz patch`)"
+        ]
+
+    def test_every_part_of_a_whole_plugin_from_git_is_the_upstreams(self, commit_plugin):
+        manifest = f"source:\n  git: {REPO}\n  ref: {OLD}\n  path: viz\n  plugin: true\n"
+        folder = commit_plugin({"plugin.yaml": manifest})
+        move_pin(folder)
+        upstream = {
+            sha: {
+                "viz/plugin.yaml": "function:\n  title: Viz\n  version: 1.0.0\n",
+                "viz/function.py": FUNCTION,
+                "viz/skills/draw/SKILL.md": skill_md(body),
+            }
+            for sha, body in ((OLD, "Draw."), (NEW, "Draw more."))
+        }
+        assert findings(folder, upstream) == []
 
 
 # ---- deploy: never back a version without --force ------------------------------------

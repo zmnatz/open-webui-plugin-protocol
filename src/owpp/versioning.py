@@ -326,12 +326,21 @@ class Finding:
         return f"{self.id}: {self.message}" + (f" (run `{self.fix}`)" if self.fix else "")
 
 
-def _from_source(manifest: dict, kind: str) -> bool:
-    """Whether the plugin's function or tool is taken verbatim, so it keeps the upstream's version."""
+def _from_source(manifest: dict, kind: str, item_id: str = "") -> bool:
+    """Whether the plugin's function, tool or skill is taken verbatim, so it keeps the upstream's
+    version. `item_id` says which skill."""
     if is_plugin_source(manifest):  # a whole plugin from git: every version is the upstream's
         return True
-    section = manifest.get(kind)
-    return isinstance(section, dict) and bool(section.get("file") or section.get("from"))
+    if kind == "skill":
+        declared = manifest.get("skills")
+        entries = declared.items() if isinstance(declared, dict) else []
+        # a bundle holds a skill's id in lower case
+        section = next((v for k, v in entries if str(k).lower() == item_id), None)
+        keys = ("file", "dir")
+    else:
+        section = manifest.get(kind)
+        keys = ("file", "from")
+    return isinstance(section, dict) and any(section.get(k) for k in keys)
 
 
 def unbumped(old: FunctionFile, new: FunctionFile, manifest: dict, since: str) -> list[Finding]:
@@ -349,7 +358,7 @@ def unbumped(old: FunctionFile, new: FunctionFile, manifest: dict, since: str) -
     for part in items:
         if part.status == "unchanged":
             continue
-        upstream = sourced and (part.kind == "skill" or _from_source(manifest, "tool"))
+        upstream = sourced and _from_source(manifest, part.kind, part.id)
         if part.status != "changed" or upstream or not (part.old_version or part.new_version):
             plugin_changed = True  # added, removed, upstream's or unversioned: the plugin's change
         elif part.old_version == part.new_version:
