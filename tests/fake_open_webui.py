@@ -47,8 +47,6 @@ class FakeOpenWebUI:
         self,
         live=(),
         key="sk-good",  # an admin's API key
-        created_type="filter",
-        created_active=False,
         fail_delete=False,
         accounts=None,  # {email: password}: /auths/signin, with `role`
         ldap=None,  # {user: password}: /auths/ldap
@@ -57,7 +55,6 @@ class FakeOpenWebUI:
         role="admin",  # of whoever signs in to an account given above
         interface_settings=None,  # DEFAULT_INTERFACE_SETTINGS in the admin config
         admin_config_status=200,  # 403: a signed-in account that cannot read the admin config
-        valves=None,  # {function id: its valves}
         starting=0,  # how many /health checks fail (connection refused) before it is up
     ):
         self.calls: list[str] = []
@@ -67,16 +64,11 @@ class FakeOpenWebUI:
             for email, pw in (accounts or {}).items()
         }
         self.tokens: dict[str, str] = {key: "admin"}  # token: role
-        self.key, self.role = key, role
-        self.created_type, self.created_active, self.fail_delete = (
-            created_type,
-            created_active,
-            fail_delete,
-        )
+        self.key, self.role, self.fail_delete = key, role, fail_delete
         self.ldap, self.oidc, self.open_signin = ldap or {}, oidc or {}, open_signin
         self.interface_settings = interface_settings or {}
         self.admin_config_status = admin_config_status
-        self.valves: dict[str, dict] = dict(valves or {})
+        self.valves: dict[str, dict] = {}
         self.starting = starting
 
     # ---- as deploy and import are given it
@@ -171,8 +163,9 @@ class FakeOpenWebUI:
                 "id": body["id"],
                 "name": body["name"],
                 **_saved(body),
-                "type": self.created_type,
-                "is_active": self.created_active,
+                # As Open-WebUI does: the type from the code, and switched off.
+                "type": (function_type(body["content"]) or ["filter"])[0],
+                "is_active": False,
                 "is_global": False,
             }
             state[body["id"]] = f

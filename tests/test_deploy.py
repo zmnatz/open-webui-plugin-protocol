@@ -46,12 +46,17 @@ class TestDeploy:
         assert m.state["demo"]["is_active"] is True
         assert m.state["demo"]["is_global"] is True
 
-    def test_only_activates_a_non_filter_and_does_not_double_toggle(
-        self, open_webui, functions_dir
+    def test_activates_a_created_event_function_once_and_does_not_make_it_global(
+        self, real_open_webui, functions_dir
     ):
-        m = open_webui(created_type="event", created_active=True)
-        deploy(*m.options(functions_dir({"demo.py": FILTER})))
-        assert m.calls == [LIST, CREATE]
+        """Open-WebUI creates a function switched off and says what type it is: an event
+        function is switched on once, and never made global (only a filter is)."""
+        m = real_open_webui()
+        code = '"""\ntitle: Demo\n"""\nclass Event:\n    async def event(self, *a, **k):\n        pass\n'
+        res = deploy(*m.options(functions_dir({"demo.py": code})))
+        assert m.calls == [LIST, CREATE, "POST /api/v1/functions/id/demo/toggle"]
+        assert res[0].action == "created, activated"
+        assert m.state["demo"]["type"] == "event" and m.state["demo"]["is_active"] is True
 
     def test_updates_changed_code_without_touching_active_global_state(
         self, real_open_webui, functions_dir
@@ -215,11 +220,11 @@ class TestDeclaredGlobal:
         assert res[0].action == "updated, made global"
         assert m.state["demo"]["is_global"] is True
 
-    def test_makes_a_created_non_filter_global_when_declared(self, open_webui, run):
-        m = open_webui(created_type="event", created_active=True)
-        res = run(m)
-        assert res[0].action == "created, made global"
-        assert m.state["demo"]["is_global"] is True
+    def test_makes_a_created_function_global_when_declared(self, real_open_webui, run):
+        m = real_open_webui()
+        res = run(m)  # Open-WebUI creates it switched off
+        assert res[0].action == "created, activated, made global"
+        assert m.state["demo"]["is_active"] is True and m.state["demo"]["is_global"] is True
 
     def test_dry_run_reports_the_toggle_and_changes_nothing(self, real_open_webui, git_fn, run):
         m = real_open_webui(
@@ -345,31 +350,42 @@ class TestPruning:
 
 
 class TestValves:
+    """Against the real Open-WebUI, which checks the valves against the function's Valves."""
+
     PLUGIN = "function:\n  title: T\n  valves: {LEVEL: strict, N: 2}\n"
+    CODE = (
+        "from pydantic import BaseModel\n\n\nclass Event:\n    class Valves(BaseModel):\n"
+        "        LEVEL: str = 'loose'\n        N: int = 0\n        OTHER: str = ''\n"
+    )
 
     def make(self, functions_dir):
-        return functions_dir(
-            {"p/plugin.yaml": self.PLUGIN, "p/function.py": "class Event:\n    pass\n"}
-        )
+        return functions_dir({"p/plugin.yaml": self.PLUGIN, "p/function.py": self.CODE})
 
-    def test_sets_only_the_declared_valves_and_keeps_the_rest(self, open_webui, functions_dir):
-        m = open_webui(
-            created_type="event",
-            created_active=True,
-            valves={"p": {"LEVEL": "loose", "OTHER": "keep"}},
-        )
-        res = deploy(*m.options(self.make(functions_dir)))
+    def admin_saves(self, m, valves):
+        from open_webui.models.functions import Functions
+
+        m.owui.run(Functions.update_function_valves_by_id("p", valves))
+
+    def test_sets_only_the_declared_valves_and_keeps_the_rest(self, real_open_webui, functions_dir):
+        m = real_open_webui()
+        folder = self.make(functions_dir)
+        first = deploy(*m.options(folder))
+        assert "set valves" in first[0].action
+        self.admin_saves(m, {"LEVEL": "loose", "OTHER": "keep"})
+        m.calls.clear()
+        res = deploy(*m.options(folder))
         assert m.valves["p"] == {"LEVEL": "strict", "OTHER": "keep", "N": 2}
         assert "POST /api/v1/functions/id/p/valves/update" in m.calls
-        assert res[0].action == "created, set valves"
+        assert res[0].action == "set valves"
 
-    def test_makes_no_call_when_the_valves_already_match(self, open_webui, functions_dir):
-        m = open_webui(
-            created_type="event", created_active=True, valves={"p": {"LEVEL": "strict", "N": 2}}
-        )
-        res = deploy(*m.options(self.make(functions_dir)))
+    def test_makes_no_call_when_the_valves_already_match(self, real_open_webui, functions_dir):
+        m = real_open_webui()
+        folder = self.make(functions_dir)
+        deploy(*m.options(folder))
+        m.calls.clear()
+        res = deploy(*m.options(folder))
         assert not any(c.endswith("/valves/update") for c in m.calls)
-        assert res[0].action == "created"
+        assert res[0].action == "unchanged"
 
 
 class TestOnly:
@@ -671,9 +687,9 @@ class TestIframeRequirementWarning:
         assert m.calls == []
 
     def test_missing_setting_warns_but_the_deploy_still_writes(
-        self, open_webui, functions_dir, capsys
+        self, real_open_webui, functions_dir, capsys
     ):
-        m = open_webui(created_type="event", created_active=True)
+        m = real_open_webui()  # Open-WebUI's own defaults: the setting is off
         opts = m.options(self.make(functions_dir))
         assert run_deploy(*opts, env={}) == 0
         out = capsys.readouterr().out
@@ -685,7 +701,7 @@ class TestIframeRequirementWarning:
     def test_unreadable_admin_config_warns_without_stopping_the_deploy(
         self, open_webui, functions_dir
     ):
-        m = open_webui(admin_config_status=403, created_type="event", created_active=True)
+        m = open_webui(admin_config_status=403)
         opts = m.options(self.make(functions_dir))
         warning = warning_for(opts)
         assert warning and "could not be read" in warning

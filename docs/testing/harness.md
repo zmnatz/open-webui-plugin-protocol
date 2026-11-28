@@ -11,6 +11,9 @@ owpp follows the Open-WebUI version that it pins, and does not keep a copy of it
 - **The same Python.** owpp runs on the Python of Open-WebUI's image: Python 3.12 for v0.13.5. uv picks it for you.
 - **The same packages.** The `test` extra installs the packages of Open-WebUI's slim image, at Open-WebUI's versions.
 - **The same code.** The harness runs Open-WebUI's own code, and its model is aimock, as on the stack of `owpp live`.
+- **The same settings.** The harness reads Open-WebUI's settings from the compose file of `owpp live`, so the unit tests and the live tests run the same Open-WebUI. For example, every user may use the models, and Open-WebUI makes no titles, tags or follow-up suggestions.
+
+Where the harness still does part of Open-WebUI's work itself, a test checks it against Open-WebUI: the arguments of a direct `plugin.call`, and the session token of a user. A new Open-WebUI that changes them fails those tests.
 
 When owpp moves to a new Open-WebUI, all three move with it. A test can then fail because Open-WebUI changed. That is the purpose: the test shows what the new Open-WebUI does. Change the plugin or the test to agree with it.
 
@@ -126,7 +129,7 @@ owui.client(owui.admin).post(
 
 Open-WebUI's model is [aimock](live.md#the-model-aimock), as on the stack of `owpp live`, at the same version. Open-WebUI reaches it over the OpenAI API, through its own chat completion code. Every user may use its models, as on that stack.
 
-- **`owui.model_reply = "..."`** is the answer. aimock gives it as `mock-model`, streamed or not.
+- **`owui.model_reply = "..."`** is the answer. aimock gives it as `mock-model`, streamed or not. Default: "Hello! I am the harness's model."
 - **`owui.serve_model("theme-model")`** makes aimock also answer as `theme-model`. Open-WebUI then lists that model.
 - **`owui.completions`** is aimock's journal: each request as Open-WebUI sent it to the model. Open-WebUI removes `metadata` before it sends a request, so the journal does not have it.
 

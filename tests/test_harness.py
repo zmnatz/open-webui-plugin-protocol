@@ -4,6 +4,7 @@ behaviour (the deploy adapter's fake, replace_imports) are checked against the r
 
 from __future__ import annotations
 
+import inspect
 import json
 import textwrap
 from pathlib import Path
@@ -384,6 +385,54 @@ def test_a_filter_gets_the_users_own_valves(tmp_path):
         assert plugin.inlet({"messages": []}, user=ada)["shout"] is False
         owui.run(Functions.update_user_valves_by_id_and_user_id("demo", ada.id, {"shout": True}))
         assert plugin.inlet({"messages": []}, user=ada)["shout"] is True
+
+
+def test_a_direct_call_gets_the_arguments_open_webuis_chat_middleware_gives(tmp_path):
+    """Drift guard: `plugin.call` builds the `__name__` arguments itself, from the list that
+    Open-WebUI's chat middleware gives filters. If a new Open-WebUI adds or drops one, this
+    fails: update `Harness._chat_params`."""
+    folder = plugin_folder(tmp_path, SHOUT, manifest="function:\n  title: Shout\n  global: true\n")
+    with Harness() as owui:
+        import open_webui.utils.filter as filters  # noqa: PLC0415
+
+        owui.load(folder)
+        seen = {}
+        real = filters.process_filter_functions
+
+        async def capture(*args, **kwargs):
+            bound = inspect.signature(real).bind(*args, **kwargs)
+            seen.setdefault(bound.arguments["filter_type"], set(bound.arguments["extra_params"]))
+            return await real(*args, **kwargs)
+
+        filters.process_filter_functions = capture
+        import open_webui.utils.middleware as middleware  # noqa: PLC0415
+
+        before = middleware.process_filter_functions
+        middleware.process_filter_functions = capture
+        try:
+            owui.send(owui.add_user("Ada"), "hello")
+        finally:
+            filters.process_filter_functions = real
+            middleware.process_filter_functions = before
+        assert set(owui._chat_params(None, None, "mock-model")) == seen["inlet"]
+
+
+def test_a_users_token_has_the_claims_of_open_webuis_own_sign_in():
+    """Drift guard: `add_user` makes a session token itself, with the claims Open-WebUI's sign-in
+    puts in one. If a new Open-WebUI changes them, this fails: update `Harness.add_user`."""
+    from owpp.testing.harness import PASSWORD
+
+    with Harness() as owui:
+        from open_webui.utils.auth import decode_token  # noqa: PLC0415
+
+        ada = owui.add_user("Ada")
+        signed_in = owui.client().post(
+            "/api/v1/auths/signin", json={"email": ada.email, "password": PASSWORD}
+        )
+        assert signed_in.status_code == 200, signed_in.text
+        varying = {"exp", "iat", "jti"}
+        real = set(decode_token(signed_in.json()["token"])) - varying
+        assert set(decode_token(ada.token)) - varying == real
 
 
 def test_a_plugins_requirements_are_recorded_not_installed(tmp_path):

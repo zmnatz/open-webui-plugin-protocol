@@ -48,6 +48,7 @@ from . import pin
 # Open-WebUI makes for the functions and tools it loads: removed between tests.
 _PLUGIN_MODULE_PREFIXES = ("function_", "tool_", "_plugin", "_owpp_src_")
 PASSWORD = "owpp-test-harness"
+DEFAULT_REPLY = "Hello! I am the harness's model."
 BASE_URL = "http://testserver"
 SECRET_KEY = "owpp-test-harness-secret-key-not-for-production"
 
@@ -100,11 +101,12 @@ class _Runtime:
         self.recorder: Harness | None = None
         self.model = Aimock(free_port())
         self._environ = dict(os.environ)  # put back by shut_down(): Open-WebUI writes to it too
+        # The settings of owpp live's Open-WebUI (its compose file), so the unit tests and the
+        # live tests run the same Open-WebUI; then what only this process has.
+        os.environ.update(_live_settings())
         os.environ.update(
             OPENAI_API_BASE_URLS=f"{self.model.url}/v1",
             OPENAI_API_KEYS="owpp-test-harness",
-            ENABLE_OLLAMA_API="false",
-            BYPASS_MODEL_ACCESS_CONTROL="true",
             DATA_DIR=str(self.data_dir),
             STATIC_DIR=str(self.static_dir),
             FRONTEND_BUILD_DIR=str(frontend),
@@ -113,8 +115,6 @@ class _Runtime:
             # wheel's metadata, not 0.0.0.
             FROM_INIT_PY="true",
             WEBUI_SECRET_KEY=SECRET_KEY,
-            OFFLINE_MODE="true",
-            ENABLE_VERSION_UPDATE_CHECK="false",
         )
         os.environ.setdefault("GLOBAL_LOG_LEVEL", "WARNING")  # Open-WebUI's, unless set
         if str(open_webui_dir()) not in sys.path:
@@ -313,6 +313,18 @@ def _awaiting(task: asyncio.Task):
         if inner is None:
             return id(at)
         at = inner
+
+
+def _live_settings() -> dict[str, str]:
+    """The environment of the `open-webui` service in owpp live's compose file, but for what
+    names that stack's own addresses and secret."""
+    import yaml
+
+    from ..live.stack import COMPOSE
+
+    service = yaml.safe_load(COMPOSE.read_text())["services"]["open-webui"]
+    own = {"OPENAI_API_BASE_URLS", "OPENAI_API_KEYS", "WEBUI_SECRET_KEY"}
+    return {k: str(v) for k, v in (service.get("environment") or {}).items() if k not in own}
 
 
 def _replace(original, new) -> None:
@@ -589,10 +601,12 @@ class Harness:
         self.static_dir = self._rt.static_dir
         self.emitted: list[tuple[str, Any]] = []
         self.chat_events: list[tuple[str | None, dict]] = []
-        self._model_reply: str = ""
+        # aimock needs some answer: a test sets its own with `model_reply`.
+        self._model_reply: str = DEFAULT_REPLY
         self.requirements: list[str] = []
         self.served_models: list[str] = []
         self.event_call_reply: Any = None
+        self._serving = False  # aimock has this harness's fixtures
         self.plugins: dict[str, LoadedPlugin] = {}
         self._missing: ModuleNotFoundError | None = None
         self._open = False
@@ -628,12 +642,6 @@ class Harness:
         self._rt.recorder = None
         if self._own_sources:
             self.sources.close()
-
-    @property
-    def event_sinks(self) -> list:
-        from open_webui.events import EVENT_SINKS
-
-        return EVENT_SINKS
 
     @property
     def loop(self):
@@ -684,22 +692,16 @@ class Harness:
     # ---- users and data --------------------------------------------------------------------
 
     def add_user(self, name: str = "User", role: str = "user", email: str | None = None) -> User:
-        """A user with a sign-in record, and a session `token` for them."""
+        """A user with a sign-in record (password PASSWORD), and the session `token` that
+        Open-WebUI's own sign-in issues them (`create_session_response`)."""
         from open_webui.models.auths import Auths
-        from open_webui.utils.auth import create_token
+        from open_webui.utils.auth import create_session_response
 
         email = email or f"{name.lower().replace(' ', '.')}.{uuid.uuid4().hex[:6]}@example.com"
         model = self.run(Auths.insert_new_auth(email, _password_hash(self), name, role=role))
         auth = self.run(Auths.get_auth_by_id(model.id))
-        token = create_token(
-            data={"id": model.id, "typ": "session", "session_stamp": auth.session_stamp}
-        )
-        return User(**dict(model), token=token, model=model)
-
-    def user_dict(self, user: User) -> dict:
-        """The `__user__` a function or tool is given (Open-WebUI adds a filter's user valves
-        to it as `valves`)."""
-        return user.model.model_dump()
+        session = self.run(create_session_response(self.request(), model, auth=auth))
+        return User(**dict(model), token=session["token"], model=model)
 
     def add_chat(
         self,
@@ -1017,7 +1019,7 @@ class Harness:
         model's, those in `filter_ids`), the tools in `tool_ids`, the model (aimock), and the
         outlets. `message` is the user's message, or the whole `messages` list. Other keys of
         the request go in `body` (`chat_id`, `tool_ids`, `stream`, ...). Returns the response."""
-        if not self._rt.model.running:
+        if not self._serving:
             self._serve()
         messages = [{"role": "user", "content": message}] if isinstance(message, str) else message
         request = {"model": model, "messages": messages, "stream": False, **body}
@@ -1036,6 +1038,7 @@ class Harness:
 
     def _serve(self) -> None:
         """aimock answers `model_reply` as each served model; Open-WebUI reads the list again."""
+        self._serving = True
         self._rt.model.start()
         models = ["mock-model", *(m for m in self.served_models if m != "mock-model")]
         self._rt.model.set_fixtures(
