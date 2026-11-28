@@ -8,7 +8,9 @@ What this means:
 - **No install step.** A command fetches what the store does not hold.
 - **owpp checks what it reads.** It records a hash of each file that it writes, and refuses a changed file. The records catch an accidental change, not a person who can also change the records.
 - **owpp refuses a tracked `.owpp/`.** A commit could add files and records together, and change the bundle without a change to a pin.
+- **The folder ignores itself.** owpp writes a `.gitignore` inside it, so that no project commits it by accident.
 - **The project's `.gitignore` stays the project's.** owpp suggests the line and does not write it.
+- **CI can cache the store.** The GitHub Action does so only when asked. Other workflows of a repository can write that cache, and the records in it cannot show where its files came from.
 - **A `Sources` without a plugins folder keeps nothing.** The test stand-ins and library callers write nothing in a project.
 
 ## Considered Options
@@ -17,4 +19,3 @@ What this means:
 - **A cache in `OWPP_CACHE_DIR`**: speed and offline builds, shared between projects, but the code stays hard to find.
 - **A visible `owpp_modules/`**: easy to find, but pytest and search tools can read its third-party tests.
 - **A bare git repository as the store**: git names each object by its hash. But owpp would run git in a folder where a project can put git settings.
-- **A `.gitignore` inside `.owpp/`**: git ignores the folder with no work for you, but your own files do not say so.

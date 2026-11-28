@@ -21,6 +21,11 @@ jobs:
         with:
           enable-cache: true
       - run: uv sync --group screenshots
+      # What owpp reads from git for the examples' pinned `source:`, keyed on the pins.
+      - uses: actions/cache@v4
+        with:
+          path: examples/.owpp/store
+          key: owpp-store-${{ hashFiles('examples/plugins/**/plugin.yaml') }}
       # The tests that drive the chat page (tools/live/test_in_the_browser.py) need Chromium.
       - run: uv run playwright install --with-deps chromium
       # The stack's images, kept between runs. compose.yaml pins every one, so its hash is the key:

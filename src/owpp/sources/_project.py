@@ -3,6 +3,7 @@
     .owpp/store/<repository>/<sha>/tree/<path>          the upstream files, as fetched
     .owpp/store/<repository>/<sha>/records/<key>.json   one fetched entry: its files and hashes
     .owpp/modules/<plugin id>/                          a whole plugin from git, as bundled
+    .owpp/.gitignore                                    "*": git leaves the folder out
 
 The store never changes once written: a commit holds the same files for ever. A module is written
 again when what it is made from changes. What owpp wrote is bundled only as owpp wrote it: a
@@ -13,6 +14,7 @@ with the files they vouch for. When git cannot say what it tracks, `.owpp/` is l
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -131,21 +133,32 @@ class ProjectFolder:
             self._cannot_write(e)
 
     def _create(self) -> None:
+        if self.path.is_dir():
+            return self._ignore_itself()
+        # Asked before the folder exists, so that only the project's own rules answer.
+        # Exit code 1: in a repository that does not ignore it.
+        ignored = _git(self.project, "check-ignore", "-q", f"{FOLDER}/").returncode
         try:
             self.path.mkdir()
             self._trusted = True  # new, and owpp's own
         except FileExistsError:
             if not self.path.is_dir():
                 raise
-            return
-        # Only the process that made the folder says this. Exit code 1: in a repository that
-        # does not ignore it.
-        if _git(self.project, "check-ignore", "-q", f"{FOLDER}/").returncode == 1:
-            print(
-                f"note  {self.path} holds what owpp takes from git: add `{FOLDER}/` to your "
-                ".gitignore",
-                file=sys.stderr,
-            )
+        else:
+            if ignored == 1:  # only the process that made the folder says this
+                print(
+                    f"note  {self.path} holds what owpp takes from git: add `{FOLDER}/` to your "
+                    ".gitignore",
+                    file=sys.stderr,
+                )
+        self._ignore_itself()
+
+    def _ignore_itself(self) -> None:
+        """A .gitignore inside, so that git leaves the folder out even when the project's does
+        not name it."""
+        ignore = self.path / ".gitignore"
+        if not ignore.exists():
+            _replace(ignore, b"*\n")
 
     def _usable(self) -> bool:
         """Whether what `.owpp/` holds can be trusted. Refused when git tracks any of it."""
@@ -153,6 +166,10 @@ class ProjectFolder:
             if not os.path.lexists(self.path):
                 return True  # nothing in it yet
             self._trusted = self._untracked()
+            if self._trusted:
+                # A folder a CI cache restored has no .gitignore of its own.
+                with contextlib.suppress(OSError):
+                    self._ignore_itself()
         return self._trusted
 
     def _untracked(self) -> bool:

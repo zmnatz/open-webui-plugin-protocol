@@ -8,7 +8,8 @@ import subprocess
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from conftest import FakeRepo, write_tree
+import yaml
+from conftest import EXAMPLES, FakeRepo, write_tree
 
 from owpp.bundle import load_function_files
 from owpp.cli import main
@@ -16,6 +17,7 @@ from owpp.deploy import build_plugins
 from owpp.errors import OwppError
 from owpp.pull import pull
 from owpp.sources import Sources, _git, _project
+from owpp.sources._project import ProjectFolder
 from owpp.testing import pytest_plugin
 from owpp.versioning import check_since
 
@@ -312,6 +314,30 @@ class TestGit:
         assert self.NOTE not in capsys.readouterr().err
         assert not (project / ".gitignore").exists()
 
+    def test_the_folder_ignores_itself(self, project):
+        git(project, "init", "-q")
+        load(project, repository().fetch)
+        assert (project / ".owpp" / ".gitignore").read_text() == "*\n"
+        status = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=all"],
+            cwd=project,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+        assert "plugins/" in status and ".owpp" not in status
+
+    @pytest.mark.parametrize("plugin", ["takes", "whole"])
+    def test_a_folder_restored_without_that_file_gets_it_again(self, project, plugin):
+        """A CI cache restores .owpp/store/ alone."""
+        other = {"takes": "whole", "whole": "takes"}[plugin]
+        shutil.rmtree(project / "plugins" / other)
+        load(project, repository().fetch)
+        (project / ".owpp" / ".gitignore").unlink()
+        shutil.rmtree(project / ".owpp" / "modules", ignore_errors=True)
+        load(project, unreachable)
+        assert (project / ".owpp" / ".gitignore").read_text() == "*\n"
+
     def test_an_ignored_folder_needs_no_note(self, project, capsys):
         git(project, "init", "-q")
         (project / ".gitignore").write_text(".owpp/\n")
@@ -388,6 +414,44 @@ class TestCommands:
         assert ".owpp" not in tests
         assert f"owpp_plugins_dir={(project / 'plugins').resolve()}" in ran["args"]
         assert ran["variable"] is None  # what a test itself runs is left as it was
+
+
+class TestTheAction:
+    """action.yml keeps .owpp/store between runs, when asked."""
+
+    ACTION = yaml.safe_load((EXAMPLES.parent.parent / "action.yml").read_text())
+
+    def step(self, **wanted):
+        (found,) = [
+            s
+            for s in self.ACTION["runs"]["steps"]
+            if all(str(s.get(k, "")).startswith(v) for k, v in wanted.items())
+        ]
+        return found
+
+    def test_only_when_asked(self):
+        assert self.ACTION["inputs"]["cache"]["default"] == "false"
+        for step in (self.step(id="sources"), self.step(uses="actions/cache@")):
+            assert step["if"] == "inputs.cache == 'true' && inputs.from == ''"
+
+    @pytest.mark.parametrize(
+        ("folder", "own_repository"),
+        [("project/plugins", False), ("project/plugins", True), ("plugins", False)],
+    )
+    def test_it_caches_the_store_owpp_keeps(self, tmp_path, folder, own_repository):
+        plugins = tmp_path / folder
+        plugins.mkdir(parents=True)
+        if own_repository:
+            (plugins / ".git").mkdir()
+        output = tmp_path / "output"
+        env = {**os.environ, "PLUGINS": folder, "GITHUB_OUTPUT": str(output)}
+        run = self.step(id="sources")["run"]
+        subprocess.run(["bash", "-e", "-c", run], cwd=tmp_path, env=env, check=True)
+        store = output.read_text().strip().removeprefix("store=")
+        assert (tmp_path / store).resolve() == ProjectFolder(plugins).path / "store"
+        assert self.step(uses="actions/cache@")["with"]["path"] == (
+            "${{ steps.sources.outputs.store }}"
+        )
 
 
 class TestWhereTheTestFixturesKeepIt:

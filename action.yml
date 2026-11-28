@@ -49,6 +49,9 @@ inputs:
   no-prune:
     description: '"true" creates and updates but deletes nothing; the report lists what a full deploy would delete.'
     default: "false"
+  cache:
+    description: '"true" keeps .owpp/store (the pinned files from git) between runs, in the GitHub Actions cache. Other workflows of the repository can write that cache, so turn it on only when you trust each of them (https://zmnatz.github.io/open-webui-plugin-protocol/testing/ci/#caching-the-git-sources).'
+    default: "false"
   from:
     description: 'A folder `owpp build` wrote, to deploy instead of plugins-dir (no checkout or git sources needed). Skips `owpp check`, which belongs where the build is made.'
     default: ""
@@ -56,6 +59,23 @@ runs:
   using: composite
   steps:
     - uses: astral-sh/setup-uv@v6
+    # Where owpp keeps what it takes from git: .owpp/ beside the plugins folder, or inside a
+    # plugins folder that is its own repository.
+    - name: Find the git sources
+      id: sources
+      if: inputs.cache == 'true' && inputs.from == ''
+      shell: bash
+      env:
+        PLUGINS: ${{ inputs.plugins-dir }}
+      run: |
+        project=$(dirname -- "$PLUGINS")
+        if [ -e "$PLUGINS/.git" ]; then project="$PLUGINS"; fi
+        echo "store=$project/.owpp/store" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@v4
+      if: inputs.cache == 'true' && inputs.from == ''
+      with:
+        path: ${{ steps.sources.outputs.store }}
+        key: owpp-store-${{ hashFiles(format('{0}/**/plugin.yaml', inputs.plugins-dir)) }}
     - name: Check plugins
       if: inputs.check == 'true' && inputs.from == ''
       shell: bash

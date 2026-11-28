@@ -79,7 +79,7 @@ Plugins can pin different commits of the same repository. The **Sources** of a r
 
 owpp keeps what it takes from git in `.owpp/`, as Node keeps `node_modules`. The folder is beside the plugins folder. If the plugins folder is itself a git repository, `.owpp/` is inside it. The pins in `plugin.yaml` say what goes into the folder.
 
-**Caution: do not commit `.owpp/`.** Add this line to the `.gitignore` of your repository:
+**Caution: do not commit `.owpp/`.** owpp writes a `.gitignore` inside the folder, so git ignores it. Also add this line to the `.gitignore` of your repository, so that your project says so:
 
 ```gitignore
 .owpp/
@@ -98,7 +98,8 @@ owpp keeps what it takes from git in `.owpp/`, as Node keeps `node_modules`. The
 - Do not change a file in `.owpp/`. owpp [refuses a changed file](troubleshooting.md#a-file-in-owpp-was-changed), because this code runs with admin rights.
 - owpp also [refuses a `.owpp/` that git tracks](troubleshooting.md#git-tracks-owpp).
 - If git cannot say whether it tracks the folder, owpp prints a note and does not use it. An example is a repository that another user owns.
-- When owpp creates `.owpp/` in a repository that does not ignore it, it prints a note. owpp never changes your `.gitignore`.
+- When owpp creates `.owpp/` in a repository that does not name it, owpp prints a note. owpp never changes your `.gitignore`.
+- A CI job can [keep `store/` between runs](testing/ci.md#caching-the-git-sources).
 - If owpp cannot write the folder, it prints a note, keeps nothing, and continues.
 
 ## Skills
