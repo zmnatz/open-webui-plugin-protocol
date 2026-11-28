@@ -23,7 +23,7 @@ from pathlib import Path
 from .errors import OwppError
 from .manifest import follows, plugin_folders, read_manifest, read_text, set_key, text_of
 from .protocol import parse
-from .sources import SHA40, Sources, refname, source_label
+from .sources import SHA40, Sources, refname, source_label, upstream_parts
 from .versioning import add_changelog_entry, next_version, set_block_version
 
 
@@ -102,13 +102,12 @@ def pull_plugin(
     move.compare = compare_url(git, old, new) if old else tree_url(git, new, source)
     fn = manifest.get("function") if isinstance(manifest.get("function"), dict) else {}
     # The upstream files changed: a new version of the plugin, unless its function is the
-    # upstream's own (whose header, and version, come from its file).
-    whole = source.get("plugin") is True  # a whole plugin: its versions are the upstream's
+    # upstream's own (whose header, and version, come from its file, or for a whole plugin
+    # from its plugin.yaml).
     if (
         (move.changed or move.added or move.removed)
         and bump_by != "none"
-        and not fn.get("file")
-        and not whole
+        and not upstream_parts(manifest).function
         and old
     ):
         current = text_of(fn.get("version"))
