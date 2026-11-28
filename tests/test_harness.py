@@ -251,7 +251,7 @@ def test_a_filter_is_told_the_model_and_can_find_the_last_user_message(tmp_path)
 def test_an_event_can_be_about_something_other_than_a_function(tmp_path):
     """Open-WebUI sends events about users and models too (`user.deleted`, `model.updated`), with
     that thing as the subject. `emit` takes the subject itself for those; a plain id is still a
-    function, and a `*_started` event about a function still reaches it before it is enabled."""
+    function. A function switched off gets no events, but for its own `enable_started`."""
     folder = plugin_folder(
         tmp_path,
         """
@@ -264,13 +264,13 @@ def test_an_event_can_be_about_something_other_than_a_function(tmp_path):
         """,
     )
     with Harness() as owui:
-        plugin = owui.load(folder, active=False)
+        plugin = owui.load(folder, active=False)  # deployed (switched on), then switched off
         seen = plugin.module.SEEN
-        owui.emit("user.deleted", {"type": "user", "id": "u1"})
-        owui.emit("function.enable_started", "demo")
-        owui.emit("function.updated", "demo")  # not enabled, not starting: not sent
-        assert seen == [("function.enable_started", {"type": "function", "id": "demo"})]
-        owui.enable("demo")
+        seen.clear()
+        owui.emit("user.deleted", {"type": "user", "id": "u1"})  # switched off: not sent
+        assert seen == []
+        owui.enable("demo")  # Open-WebUI sends it function.enable_started first
+        assert seen[0] == ("function.enable_started", {"type": "function", "id": "demo"})
         owui.emit("user.deleted", {"type": "user", "id": "u1"})
         assert seen[-1] == ("user.deleted", {"type": "user", "id": "u1"})
 

@@ -38,34 +38,31 @@ The harness then stops Open-WebUI, removes its modules, and imports and starts i
 
 | Call | What happens |
 | --- | --- |
-| `owui.load(folder, id=None, valves=None, active=True, sources=None, content=None)` | Bundles the folder and deploys it. [Details](#loading-a-folder) follow. |
+| `owui.load(folder, id=None, active=True, sources=None)` | Bundles the folder and deploys it. [Details](#loading-a-folder) follow. |
 | `owui.startup()` | Sends `system.startup.completed`. |
 | `owui.enable(id)` / `owui.disable(id)` | Switches the function on or off through Open-WebUI's API, as an admin does. Open-WebUI sends the events. |
 | `owui.set_valves(id, **valves)` | Saves the function's valves through Open-WebUI's API, as an admin does. Open-WebUI sends `function.valves_updated`. |
 | `owui.set_tool_valves(id, **valves)` | Saves a tool's valves through Open-WebUI's API. |
-| `owui.update(id)` | Bundles the folder again and deploys it again. Open-WebUI sends `function.updated`. |
+| `owui.update(id)` | Deploys the folder again. If its code changed, Open-WebUI stores it and sends `function.updated`. |
 | `owui.delete(id)` | Deletes the function through Open-WebUI's API. |
 | `owui.emit(name, subject=None, data=None)` | Sends any event through Open-WebUI's event sinks. [Details](#sending-an-event) follow. |
 
 ### Loading a folder
 
-`owui.load()` deploys a plugin as [`owpp deploy`](../commands/deploy.md) does, through Open-WebUI's HTTP API:
+`owui.load()` runs `owpp deploy` itself (`owpp.deploy.deploy`) for the folder, against the harness's Open-WebUI over its HTTP API. So a test deploys the plugin exactly as a real deploy does:
 
 1. It bundles the folder.
-2. It creates the function, or updates the function if the id is already there.
-3. It saves the valves.
-4. If the manifest says `global: true`, it makes the function global.
-5. If `active` is true, it switches the function on. Open-WebUI sends `function.enable_started`. Then the runtime installs the tool and the skills.
+2. It creates the function, or updates it if its code changed. If nothing changed, it writes nothing.
+3. It sets the valves in the manifest.
+4. It switches a new function on, and makes it global as a deploy does: a filter by default, any function that says `global: true`. Open-WebUI sends `function.enable_started`, and the runtime installs the tool and the skills.
 
 Its arguments:
 
 | Argument | Meaning |
 | --- | --- |
 | `id` | The function's id. Default: the name of the folder. |
-| `valves` | The valves to save. Default: the valves in the manifest. |
-| `active` | If a new function is switched on. An update does not change this. |
+| `active` | `False` switches a new function off again after the deploy, as an admin does. |
 | `sources` | Files that stand in for the files from git, so the load needs no network: `{"tool.py": "..."}`. For a [whole plugin from git](../plugin-format.md#a-whole-plugin-from-git), give the files of the upstream folder, `plugin.yaml` included. |
-| `content` | Code to deploy in place of the bundle. |
 
 Without `sources`, the files of a `source:` plugin come from git at the pinned commit, as in a deploy:
 
@@ -77,7 +74,7 @@ If Open-WebUI refuses the deploy, `load()` raises `OwppError` with the HTTP stat
 
 ### Sending an event
 
-`owui.emit()` sends the event as Open-WebUI does. Every Event function that is switched on gets the event, with its stored valves applied. For a `*_started` event about a function, that function also gets the event.
+`owui.emit()` sends the event as Open-WebUI does. Every Event function that is switched on gets the event, with its stored valves applied. A function's own `function.enable_started` comes from switching it on: use `owui.enable(id)`, which calls Open-WebUI's route that sends it.
 
 `subject` is the id of a function. For an event about something else, `subject` is the subject itself: `owui.emit("user.deleted", {"type": "user", "id": ada.id})`.
 
@@ -89,8 +86,11 @@ Open-WebUI catches an error in an Event function and logs it. So a test sees the
 | --- | --- |
 | `owui.send(user, message, model="mock-model", **body)` | Sends a chat request as the browser does (`POST /api/chat/completions`). Open-WebUI's chat pipeline runs: the filters that it picks for the chat (global filters, the model's filters, those in `filter_ids`), the tools in `tool_ids`, the model, and the outlets. `message` is the user's text, or the whole `messages` list. It returns the response. |
 | `plugin.inlet(body, user=, chat_id=, model=)`, `plugin.outlet(...)` | One filter, run with Open-WebUI's own code (`process_filter_function`): the stored valves, the user's valves in `__user__["valves"]`, and the arguments that the handler takes. `model` is the id of the chat's model. Default: `"mock-model"`. |
-| `plugin.call("method", *args, user=, chat_id=, **kwargs)` | Calls any method of the function's instance directly, with the stored valves applied. It supplies the arguments that Open-WebUI's chat middleware gives, if the method takes them: `__user__`, `__metadata__`, `__model__`, `__event_emitter__`, `__event_call__`, `__oauth_token__`, `__request__`, `__chat_id__` and `__message_id__`. It also supplies `__id__`, and `__app__`, as Open-WebUI gives it to an event handler. |
-| `owui.tool(id)` | The installed tool, loaded by Open-WebUI's loader with its stored valves. `.call("method", ..., user=, chat_id=)` calls a method as the model does. `.specs` is what Open-WebUI tells the model about the tool. |
+| `plugin.call("action", body, user=, __id__=)` | An action button, pressed under a reply: Open-WebUI's `chat_action`. Open-WebUI checks that the user may use the model and that the model offers the action (see `owui.add_model`). A page that the action returns reaches the chat as an `embeds` event in `owui.emitted`. `__id__` is the id of one of several buttons. |
+| `plugin.call("pipe", body, user=)` | A chat with the pipe's model: Open-WebUI's `generate_function_chat_completion`, with the arguments that Open-WebUI gives a pipe. It returns what the chat gets: a completion, or a streamed response for `"stream": True` (read it with `owui.stream_text`). |
+| `plugin.call("stream", chunk)` | A streamed chunk through the filter, with Open-WebUI's `process_filter_function`. |
+| `plugin.call("method", *args, user=, chat_id=, **kwargs)` | Any other method, called directly with the stored valves applied. Open-WebUI does not call such a method itself, so the harness gives it the arguments that Open-WebUI's chat middleware gives a filter, if the method takes them. A test checks that list against Open-WebUI. |
+| `owui.tool(id)` | The installed tool, loaded by Open-WebUI's loader. `.call("method", ..., user=, chat_id=)` calls a method as the model's call reaches it, through Open-WebUI's `get_tools`: it checks that the user may use the tool, applies the tool's valves and the user's valves, and gives the arguments. `user` defaults to the admin. `.specs` is what Open-WebUI tells the model about the tool. |
 | `owui.client(user=None, **kw)` | An `httpx.Client` for the app, signed in as `user`, or signed out. It follows redirects. To see a redirect, pass `follow_redirects=False`. |
 | `owui.run(coroutine)` | Runs async code on Open-WebUI's event loop. Then the tasks that the code started run until they finish or wait. |
 | `plugin.module`, `plugin.instance`, `plugin.valves`, `plugin.row` | The loaded module (for its helper functions), the instance that Open-WebUI keeps in its cache, its valves, and its row (`FunctionModel`). |
@@ -108,6 +108,8 @@ Open-WebUI catches an error in an Event function and logs it. So a test sees the
 | `owui.emitted` | `[(event, data)]` sent on the socket (`sio.emit`). |
 | `owui.chat_events` | `[(chat_id, event)]` sent through `__event_emitter__` or `__event_call__` in a call that the test made. |
 | `owui.event_call_reply` | What `__event_call__` answers: what the user would reply. Default: `None`. |
+| `owui.add_model(id, actions=, filters=, tools=, public=True)` | A model config, as an admin makes one under Admin Settings > Models, through Open-WebUI's API: the actions, filters and tools turned on for the model, and, if `public`, a read grant for every user. |
+| `owui.stream_text(response)` | The text of a streamed answer: the content of each event, joined. |
 | `owui.model_reply`, `owui.serve_model(id)`, `owui.completions` | For a plugin that asks a model: the answer of [the model](#the-model-aimock), another model id that it answers as, and every request that Open-WebUI sent it. |
 | `owui.requirements` | The `requirements:` of each plugin that Open-WebUI loaded. The harness does not install them. |
 | `owui.data_dir`, `owui.static_dir`, `owui.app` | Open-WebUI's `DATA_DIR` and `STATIC_DIR`, and its FastAPI app. |

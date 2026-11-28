@@ -41,8 +41,8 @@ Tests go in `plugins/<id>/tests/test_<id>.py`, using the `owui` and `plugin` fix
 | It is | Call it with |
 | --- | --- |
 | a filter | `plugin.inlet(body, user=, chat_id=, model=)`, `plugin.outlet(...)`, `plugin.call("stream", chunk)` |
-| an action | `plugin.call("action", body, user=)`; several buttons: `__id__="<button>"` |
-| a pipe | `plugin.call("pipes")`, `plugin.call("pipe", body, user=)` |
+| an action | `owui.add_model("mock-model", actions=["<id>"])` first (an action shows only on a model that offers it), then `plugin.call("action", body, user=)`; several buttons: `__id__="<button>"`; a returned page is an `embeds` event in `owui.emitted` |
+| a pipe | `plugin.call("pipes")`, `plugin.call("pipe", body, user=)` (returns the completion; `owui.stream_text()` for a stream), or the whole pipeline with `owui.send(user, text, model="<id>")` |
 | an event | `owui.startup()`, `owui.enable(id)`, `owui.emit("<event>", ...)` |
 | a page | `owui.client(user).get(path)` |
 | a tool it installs | `owui.tool("<tool id>").call("<method>", ...)` |

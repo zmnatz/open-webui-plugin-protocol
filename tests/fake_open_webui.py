@@ -53,7 +53,6 @@ class FakeOpenWebUI:
         oidc=None,  # {provider: token}: /auths/oauth/<provider>/token/exchange
         open_signin=False,  # an empty sign-in works (WEBUI_AUTH=False, or a trusted header)
         role="admin",  # of whoever signs in to an account given above
-        interface_settings=None,  # DEFAULT_INTERFACE_SETTINGS in the admin config
         admin_config_status=200,  # 403: a signed-in account that cannot read the admin config
         starting=0,  # how many /health checks fail (connection refused) before it is up
     ):
@@ -66,7 +65,6 @@ class FakeOpenWebUI:
         self.tokens: dict[str, str] = {key: "admin"}  # token: role
         self.key, self.role, self.fail_delete = key, role, fail_delete
         self.ldap, self.oidc, self.open_signin = ldap or {}, oidc or {}, open_signin
-        self.interface_settings = interface_settings or {}
         self.admin_config_status = admin_config_status
         self.valves: dict[str, dict] = {}
         self.starting = starting
@@ -115,7 +113,7 @@ class FakeOpenWebUI:
         if path == "/api/v1/auths/admin/config":
             if self.admin_config_status != 200:
                 return _json({"detail": "not allowed"}, self.admin_config_status)
-            return _json({"DEFAULT_INTERFACE_SETTINGS": self.interface_settings})
+            return _json({"DEFAULT_INTERFACE_SETTINGS": {}})
         if path == "/api/v1/auths/signin":
             if form.get("email") == "" and form.get("password") == "":
                 if self.open_signin:

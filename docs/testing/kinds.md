@@ -29,41 +29,42 @@ Examples: [`vision_router`](../examples/vision_router.md) (inlet), [`clear_think
 
 ## Actions
 
+Open-WebUI shows an action's button under a reply from a model that offers the action: one that an admin turned it on for, or every model for a global action. Turn it on for the model, then press the button:
+
 ```python
 def test_the_action_runs(owui, plugin):
-    """The action runs on a message without failing.
+    """The action runs on a message without failing, once an admin turns it on for a model.
 
-    By hand: under a reply, click the action's button: no error toast appears.
+    By hand: turn the action on for a model under Admin Settings > Models. Under a reply from
+    that model, click the action's button: no error toast appears.
     """
+    owui.add_model("mock-model", actions=["my_action"])
     user = owui.add_user("Ada")
     assert plugin.call("action", {"messages": []}, user=user) is None
 ```
 
-If the action has several buttons, `plugin.instance.actions` lists them. The action gets the id of the button as `__id__`, so pass it: `plugin.call("action", body, user=user, __id__="summarise")`.
+If the action has several buttons, `plugin.instance.actions` lists them. Pass the id of a button: `plugin.call("action", body, user=user, __id__="summarise")`.
 
-An action can return a page: an `HTMLResponse` with `content-disposition: inline`. Open-WebUI shows this page above the message. Assert on `page.headers` and `page.body`.
+An action can return a page: an `HTMLResponse` with `content-disposition: inline`. Open-WebUI sends this page to the chat as an `embeds` event, and shows it above the message. Assert on that event in `owui.emitted`.
 
 ## Pipes
+
+`plugin.call("pipe", ...)` returns what the chat gets from Open-WebUI: a completion. To run the whole chat pipeline, with its filters, use `owui.send(user, "hello", model="hello")`.
 
 ```python
 def test_it_answers_as_a_model(owui, plugin):
     """By hand: choose the pipe's model in a chat and say hello: it answers."""
     user = owui.add_user("Ada")
     assert plugin.call("pipes") == [{"id": "hello", "name": "Hello"}]
-    assert plugin.call("pipe", {"messages": []}, user=user) == "Hello from Hello"
+    reply = plugin.call("pipe", {"messages": []}, user=user)
+    assert reply["choices"][0]["message"]["content"] == "Hello from Hello"
 ```
 
-A pipe that streams returns an async generator. Read it inside `owui.run(...)`, which runs code on Open-WebUI's event loop:
+A pipe that streams gives a streamed response. Read its text with `owui.stream_text`:
 
 ```python
-chunks = plugin.call("pipe", {"messages": [], "stream": True}, user=user)
-
-
-async def read():
-    return "".join([chunk async for chunk in chunks])
-
-
-assert owui.run(read()) == "Hello from Hello"
+streamed = plugin.call("pipe", {"messages": [], "stream": True}, user=user)
+assert owui.stream_text(streamed) == "Hello from Hello"
 ```
 
 ## Tools
@@ -83,7 +84,7 @@ def test_show_creates_the_drawing_and_hands_the_filter_an_artifact(owui, plugin)
     assert owui.chat(chat).meta["excalidraw"]["elements"] == [RECT]
 ```
 
-- `.call(method, ..., user=, chat_id=)` calls a method as the model does.
+- `.call(method, ..., user=, chat_id=)` calls a method as the model's call reaches it, through Open-WebUI's `get_tools`: the user must be allowed to use the tool. `user` defaults to the admin.
 - `.specs` is the information that the model gets: the name, description and parameters of each method. If the model follows the docstrings as instructions, test `.specs`.
 - Open-WebUI and the model decide if the model calls the tool. This repository's [live suite](live.md#this-repositorys-live-suite) tests this, with aimock as the model.
 

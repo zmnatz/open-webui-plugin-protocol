@@ -28,6 +28,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import inspect
+import json
 import os
 import shutil
 import sys
@@ -38,7 +39,6 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-from ..bundle import bundle_function, parse_frontmatter
 from ..manifest import read_manifest
 from ..openwebui import HttpResponse, OpenWebUI
 from ..sources import Sources
@@ -433,12 +433,23 @@ class LoadedPlugin:
         model: str = "mock-model",
         **kwargs,
     ):
-        """Call a method of the instance directly, with the stored valves applied and the
-        `__name__` arguments it takes: those Open-WebUI's chat middleware passes (`__user__`,
-        `__metadata__`, `__model__` as Open-WebUI lists `model`, `__event_emitter__`,
-        `__event_call__`, `__oauth_token__`, `__request__`, `__chat_id__`, `__message_id__`),
-        `__id__`, and `__app__`, as Open-WebUI's event dispatch passes it. For the whole chat
-        pipeline, use `owui.send()`."""
+        """Call a method of the function as Open-WebUI does: `inlet`, `outlet` and `stream`
+        through its `process_filter_function`, `action` through its `chat_action` (a button's
+        id as `__id__=`), `pipe` through its `generate_function_chat_completion` (what the chat
+        gets back). Any other method is called directly, with the stored valves applied and the
+        `__name__` arguments it takes, from the list Open-WebUI's chat middleware gives. For
+        the whole chat pipeline, use `owui.send()`."""
+        if method in ("inlet", "outlet", "stream"):
+            (body,) = args
+            return self._filter(method, body, user, chat_id, model)
+        if method == "action":
+            (body,) = args
+            return self.owui._action(
+                self.id, body, user, chat_id, model, kwargs.pop("__id__", None)
+            )
+        if method == "pipe":
+            (body,) = args
+            return self.owui._pipe(self.id, body, user, chat_id)
         from open_webui.models.functions import Functions
 
         instance = self.instance
@@ -514,10 +525,24 @@ class LoadedTool:
     def call(
         self, method: str, *args, user: User | None = None, chat_id: str | None = None, **kwargs
     ):
-        """Call a tool method as the model would, with `__user__`, `__metadata__` and the other
-        injected arguments it asks for."""
-        fn = getattr(self.instance, method)
-        return self.owui._invoke(fn, args, kwargs, user=user, chat_id=chat_id, own_id=self.id)
+        """Call a tool method as the model's call reaches it: through Open-WebUI's `get_tools`,
+        which checks the user's access to the tool, applies its valves and the user's valves,
+        and gives the method the arguments it takes. `user` defaults to the admin."""
+        from open_webui.utils.tools import get_tools
+
+        owui = self.owui
+        user = user or owui.admin
+        named = inspect.signature(getattr(self.instance, method)).bind_partial(*args).arguments
+        extra = owui._chat_params(user, chat_id, "mock-model")
+
+        async def go():
+            tools = await get_tools(extra["__request__"], [self.id], user.model, extra)
+            if method not in tools:
+                raise LookupError(f"tool {self.id!r} offers no {method!r} to {user.name}")
+            return await tools[method]["callable"](**named, **kwargs)
+
+        with owui._missing_packages():
+            return owui.run(go())
 
 
 class _Config(MutableMapping):
@@ -869,19 +894,22 @@ class Harness:
         self,
         folder: Path | str,
         id: str | None = None,
-        valves: dict | None = None,
         active: bool = True,
         sources: dict[str, str] | None = None,
-        content: str | None = None,
     ) -> LoadedPlugin:
-        """Bundle a plugin folder as `owpp deploy` would and deploy it over Open-WebUI's API:
-        the function is created (or updated, if the id is there), its valves saved (default: the
-        manifest's), and it is switched on if `active`. A `source:` plugin's files are fetched
-        from git at the pinned commit through the harness's Sources (each file once). `sources`
-        stands in for them instead, so a test needs no network:
-        {path inside the source's `path`: text}, e.g. {"tool.py": "class Tools: ..."}. For a
-        plugin taken whole from git, they are the upstream folder's files, plugin.yaml included."""
-        from ..bundle import function_meta
+        """Deploy a plugin folder with `owpp deploy` itself (owpp.deploy.deploy), over
+        Open-WebUI's API: bundled, created or updated, its manifest's valves set, switched on and
+        made global as a deploy does. `active=False` switches a new function off again, as an
+        admin would. A `source:` plugin's files are fetched from git at the pinned commit through
+        the harness's Sources (each file once). `sources` stands in for them instead, so a test
+        needs no network: {path inside the source's `path`: text}, e.g.
+        {"tool.py": "class Tools: ..."}. For a plugin taken whole from git, they are the upstream
+        folder's files, plugin.yaml included."""
+        from dataclasses import replace
+
+        from ..build import Build
+        from ..bundle import function_file
+        from ..deploy import Choices, Instance, deploy
 
         folder = Path(folder)
         if folder.is_file():
@@ -889,36 +917,22 @@ class Harness:
                 f"{folder}: load() takes a plugin folder (one with a plugin.yaml). "
                 f"`owpp import {folder.as_posix()}` makes one of this file, header and all"
             )
-        id = id or folder.name
-        key = (_folder_key(folder), tuple(sorted((sources or {}).items())), content)
+        key = (_folder_key(folder), tuple(sorted((sources or {}).items())))
         if key not in _BUNDLES:
             reader = self.sources if sources is None else _stand_ins(folder, sources, self.sources)
-            resolved = reader.resolve(folder)
-            code = bundle_function(resolved) if content is None else content
-            if code is None:
+            item = function_file(folder, reader)
+            if item is None:
                 raise ValueError(f"{folder}: no function to load")
-            fn = resolved.manifest.get("function") or {}
-            _BUNDLES[key] = (code, function_meta(code, resolved), fn)
-        content, meta, fn = _BUNDLES[key]
-        if valves is None:
-            valves = fn.get("valves") or {}
-        name = parse_frontmatter(content).get("title") or id
-        existing = id in self.functions
+            _BUNDLES[key] = item
+        item = _BUNDLES[key]
+        id = id or item.id
+        new = id not in self.functions
+        instance = Instance(base_url=BASE_URL, fetch=self._fetch, api_key=self.admin.token)
+        choices = Choices(dir=folder.parent, sources=self.sources)
         with self._missing_packages():
-            if existing:
-                self.api.update_function(id, name, content, meta)
-            else:
-                self.api.create_function(id, name, content, meta)
-        if valves:
-            current = self.run(_function_valves(id)) or {}
-            self.api.update_valves(id, {**current, **valves})
-        row = self.functions[id]
-        if not existing:
-            if fn.get("global") and not row.is_global:
-                self.api.toggle_global(id)
-            if active and not row.is_active:
-                with self._missing_packages():
-                    self.api.toggle(id)
+            deploy(instance, choices, Build([replace(item, id=id)], complete=False))
+        if new and not active:
+            self.disable(id)
         plugin = LoadedPlugin(self, id, folder)
         self.plugins[id] = plugin
         return plugin
@@ -941,28 +955,17 @@ class Harness:
     # ---- events -----------------------------------------------------------------------------
 
     def emit(self, name: str, subject: str | dict | None = None, data: dict | None = None) -> None:
-        """Publish an Open-WebUI event through its event sinks, as Open-WebUI does. `subject` is
-        a function's id, or the subject itself for an event about something else
-        (`{"type": "user", "id": ...}`). For a `*_started` event about a function, that function
-        gets it too, as Open-WebUI does before it switches one on."""
-        from open_webui.events import build_event, dispatch_event_functions, publish_event
+        """Publish an Open-WebUI event through its event sinks, as Open-WebUI does: every Event
+        function that is switched on gets it. `subject` is a function's id, or the subject
+        itself for an event about something else (`{"type": "user", "id": ...}`). A function's
+        own `function.enable_started` comes from switching it on: `owui.enable(id)`."""
+        from open_webui.events import publish_event
 
         if isinstance(subject, dict):
             subject_id, subject_type = subject.get("id"), subject.get("type")
         else:
             subject_id, subject_type = subject, "function" if subject else None
         request = self.request(self.admin)
-        if name.endswith("_started") and subject_type == "function":
-            event = build_event(
-                request,
-                name,
-                actor=self.admin.model,
-                subject_id=subject_id,
-                subject_type=subject_type,
-                data=data,
-            )
-            self.run(dispatch_event_functions(request, event, extra_function_ids=[subject_id]))
-            return
         self.run(
             publish_event(
                 request,
@@ -1031,6 +1034,56 @@ class Harness:
             )
         return response.json() if not request.get("stream") else response.text
 
+    def add_model(
+        self,
+        model_id: str = "mock-model",
+        actions: list[str] = (),
+        filters: list[str] = (),
+        tools: list[str] = (),
+        public: bool = True,
+    ) -> None:
+        """An admin's model config (Admin Settings > Models), made through Open-WebUI's API: the
+        functions and tools turned on for the model, and, if `public`, a read grant for every
+        user. The model itself is served by the harness's model (`serve_model`)."""
+        self.serve_model(model_id)
+        form = {
+            "id": model_id,
+            "name": model_id,
+            "meta": {
+                "actionIds": list(actions),
+                "filterIds": list(filters),
+                "toolIds": list(tools),
+            },
+            "params": {},
+            "access_grants": (
+                [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
+                if public
+                else []
+            ),
+        }
+        status, body = self.api.request("POST", "/api/v1/models/create", form)
+        if status != 200:
+            raise RuntimeError(f"creating model {model_id}: HTTP {status}: {body}")
+        self.run(self._rt.refresh_models())
+
+    def stream_text(self, response) -> str:
+        """The text of a streamed chat answer (Open-WebUI's StreamingResponse of server-sent
+        events, or their text): each event's `delta.content`, joined."""
+
+        async def body():
+            if isinstance(response, str):
+                return response
+            parts = [p async for p in response.body_iterator]
+            return "".join(p.decode() if isinstance(p, bytes) else p for p in parts)
+
+        text = self.run(body())
+        out = []
+        for line in text.splitlines():
+            if line.startswith("data: {"):
+                for choice in json.loads(line[6:]).get("choices", []):
+                    out.append((choice.get("delta") or {}).get("content") or "")
+        return "".join(out)
+
     @property
     def completions(self) -> list[dict]:
         """Each chat request the model got, as Open-WebUI sent it (aimock's journal)."""
@@ -1065,6 +1118,30 @@ class Harness:
         self.plugins.pop(function_id, None)
 
     # ---- calling plugin code ----------------------------------------------------------------
+
+    def _action(self, action_id, body, user, chat_id, model, button=None):
+        """An action button pressed under a reply: Open-WebUI's `chat_action`. What the action
+        returns comes back; a page it returns reaches the chat as an `embeds` event."""
+        from open_webui.utils.actions import chat_action
+
+        user = user or self.admin
+        if not self._serving:
+            self._serve()
+        form = {"model": model, "chat_id": chat_id, "id": None, "session_id": None, **body}
+        target = f"{action_id}.{button}" if button else action_id
+        with self._missing_packages():
+            return self.run(chat_action(self.request(user), target, form, user.model))
+
+    def _pipe(self, pipe_id, body, user, chat_id):
+        """A chat with the pipe's model: Open-WebUI's `generate_function_chat_completion`, the
+        pipe alone (no filters; `owui.send` runs those too). The response comes back."""
+        from open_webui.functions import generate_function_chat_completion
+
+        user = user or self.admin
+        metadata = {"chat_id": chat_id, "message_id": None, "session_id": None, "user_id": user.id}
+        form = {"model": pipe_id, **body, "metadata": {**metadata, **body.get("metadata", {})}}
+        with self._missing_packages():
+            return self.run(generate_function_chat_completion(self.request(user), form, user.model))
 
     def _chat_params(self, user, chat_id, model) -> dict:
         """The arguments Open-WebUI's chat middleware gives plugins (utils/middleware.py,

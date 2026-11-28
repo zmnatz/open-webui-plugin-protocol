@@ -580,12 +580,15 @@ class TestSignIn:
         assert sign_in(instance) == "an API key" and instance.api_key == "sk-good"
         assert not any("/auths/" in c for c in m.calls)
 
-    def test_user_name_and_password(self, open_webui, functions_dir):
-        m = open_webui(accounts={"admin@example.com": "pw"})
+    def test_user_name_and_password(self, real_open_webui, functions_dir):
+        from owpp.testing.harness import PASSWORD
+
+        m = real_open_webui()
+        email = m.owui.admin.email
         how, res = self.run(
-            m, functions_dir({"demo.py": FILTER}), username="admin@example.com", password="pw"
+            m, functions_dir({"demo.py": FILTER}), username=email, password=PASSWORD
         )
-        assert how == "user admin@example.com" and res[0].action.startswith("created")
+        assert how == f"user {email}" and res[0].action.startswith("created")
         assert m.calls[0] == "POST /api/v1/auths/signin"
 
     def test_ldap_when_the_password_sign_in_fails(self, open_webui, functions_dir):
@@ -594,11 +597,11 @@ class TestSignIn:
         assert how == "LDAP user ada" and res[0].action.startswith("created")
         assert m.calls[:2] == ["POST /api/v1/auths/signin", "POST /api/v1/auths/ldap"]
 
-    def test_wrong_credentials_say_what_was_tried(self, open_webui, functions_dir):
-        m = open_webui(accounts={"admin@example.com": "pw"})
-        with pytest.raises(OwppError, match="with a password .*400.*with LDAP .*not enabled"):
+    def test_wrong_credentials_say_what_was_tried(self, real_open_webui, functions_dir):
+        m = real_open_webui()
+        with pytest.raises(OwppError, match="with a password .*400.*with LDAP"):
             self.run(
-                m, functions_dir({"demo.py": FILTER}), username="admin@example.com", password="no"
+                m, functions_dir({"demo.py": FILTER}), username=m.owui.admin.email, password="no"
             )
 
     def test_half_a_user_name_and_password_is_refused(self, real_open_webui, functions_dir):
@@ -626,10 +629,13 @@ class TestSignIn:
         with pytest.raises(OwppError, match="OPEN_WEBUI_API_KEY.*OPEN_WEBUI_USERNAME.*OIDC"):
             self.run(real_open_webui(), functions_dir({"demo.py": FILTER}))
 
-    def test_the_account_must_be_an_admin(self, open_webui, functions_dir):
-        m = open_webui(open_signin=True, role="user")
+    def test_the_account_must_be_an_admin(self, real_open_webui, functions_dir):
+        from owpp.testing.harness import PASSWORD
+
+        m = real_open_webui()
+        ada = m.owui.add_user("Ada")
         with pytest.raises(OwppError, match="not an admin"):
-            self.run(m, functions_dir({"demo.py": FILTER}))
+            self.run(m, functions_dir({"demo.py": FILTER}), username=ada.email, password=PASSWORD)
         assert not any("/functions" in c for c in m.calls)
 
     def test_the_environment_names(self):
@@ -669,8 +675,9 @@ class TestIframeRequirementWarning:
         assert warning_for(m.options(functions_dir({"demo.py": FILTER}))) is None
         assert m.calls == []
 
-    def test_setting_on_means_no_warning(self, open_webui, functions_dir):
-        m = open_webui(interface_settings={"iframeSandboxAllowSameOrigin": True})
+    def test_setting_on_means_no_warning(self, real_open_webui, functions_dir):
+        m = real_open_webui()
+        m.owui.config["ui.default_interface_settings"] = {"iframeSandboxAllowSameOrigin": True}
         assert warning_for(m.options(self.make(functions_dir))) is None
         assert m.calls == ["GET /api/v1/auths/admin/config"]
 

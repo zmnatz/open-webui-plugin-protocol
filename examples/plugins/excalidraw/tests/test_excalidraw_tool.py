@@ -23,6 +23,16 @@ def tool(owui, plugin):
     return owui.tool("excalidraw")
 
 
+def deployed_earlier(owui, function_id: str) -> None:
+    """The function as an earlier version left it: other code, so the next deploy updates it."""
+    from open_webui.models.functions import Functions
+
+    row = owui.functions[function_id]
+    owui.run(
+        Functions.update_function_by_id(function_id, {"content": row.content + "\n# earlier\n"})
+    )
+
+
 def share(owui, tool_id: str, access_grants: list[dict]) -> None:
     """An admin changes who the tool is shared with (Workspace > Tools > Access)."""
     res = owui.client(owui.admin).post(
@@ -61,6 +71,7 @@ def test_a_tool_an_earlier_runtime_shared_with_anyone_is_shared_with_every_user(
     group = {"principal_type": "group", "principal_id": "designers", "permission": "write"}
     anyone = {"principal_type": "anyone", "principal_id": "*", "permission": "read"}
     owui.run(AccessGrants.set_access_grants("tool", "excalidraw", [anyone, group]))
+    deployed_earlier(owui, "excalidraw")
     owui.update("excalidraw")  # the deploy of this version
     assert grants(owui.tools["excalidraw"]) == [
         group,
@@ -76,7 +87,8 @@ def test_grants_an_admin_set_are_left_alone(owui, plugin):
     """
     only = [{"principal_type": "group", "principal_id": "designers", "permission": "read"}]
     share(owui, "excalidraw", only)
-    owui.update("excalidraw")
+    deployed_earlier(owui, "excalidraw")
+    owui.update("excalidraw")  # a new version: the runtime syncs, and leaves the sharing
     assert grants(owui.tools["excalidraw"]) == only
 
 

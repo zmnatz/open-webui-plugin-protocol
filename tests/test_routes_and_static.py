@@ -79,10 +79,13 @@ def test_a_plugins_routes_go_after_open_webuis_and_before_its_web_app(owui, tmp_
 
 
 def test_a_new_version_replaces_its_routes_and_leaves_another_plugins_alone(owui, tmp_path):
-    owui.load(plugin(tmp_path / "a", "demo"))
+    demo = plugin(tmp_path / "a", "demo")
+    owui.load(demo)
     owui.load(plugin(tmp_path / "b", "other"))
-    owui.update("demo")
-    owui.update("demo")
+    for version in (2, 3):  # two new versions, each deployed: new code each time
+        (demo / "static" / "app.js").write_text(f"console.log({version})\n")
+        owui.update("demo")
+    assert owui.client(owui.admin).get("/demo/app.js").text == "console.log(3)\n"
     assert paths(owui.app).count("/demo/api/hello") == 1
     assert paths(owui.app).count("/demo/app.js") == 1
     assert paths(owui.app).count("/other/api/hello") == 1
