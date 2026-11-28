@@ -56,3 +56,10 @@ def test_every_pin_of_the_test_extra_is_for_the_image_python():
     pins = [r for r in extra["test"] if "==" in r]
     assert pins and all(r.endswith(f"python_version == '{pin.PYTHON}'") for r in pins)
     assert any(re.match(r"fastapi==", r) for r in pins)
+
+
+def test_this_repository_runs_on_the_pinned_python():
+    """.python-version and ruff's target are the image's Python, as the sync script writes them."""
+    assert (ROOT / ".python-version").read_text().strip() == pin.PYTHON
+    ruff = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["ruff"]
+    assert ruff["target-version"] == "py" + pin.PYTHON.replace(".", "")

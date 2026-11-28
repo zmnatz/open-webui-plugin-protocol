@@ -390,16 +390,17 @@ def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, s
     and the commit of the git repository it takes code from. `existing` is the live function
     (with its content), or None; `latest` notes which sources were moved to their latest commit."""
     old = existing.get("content") if existing else None
+    new = replace_imports(f.content)  # as Open-WebUI stores it, as `old` is
     changes = Changes()
     old_v, new_v = version_of(old), version_of(f.content)
     if existing is None:
         changes.details.append(f"function: new{f' ({new_v})' if new_v else ''}")
     elif old_v != new_v:
         changes.version_change("function", old_v, new_v)
-    elif own_code(old) != own_code(replace_imports(f.content)):
+    elif own_code(old) != own_code(new):
         changes.details.append(f"function: code changed, still {new_v or '(no version)'}")
-    _parts(changes, "tool", tools_of(old), tools_of(f.content), tool_version)
-    _parts(changes, "skill", skills_of(old), skills_of(f.content), skill_version)
+    _parts(changes, "tool", tools_of(old), tools_of(new), tool_version)
+    _parts(changes, "skill", skills_of(old), skills_of(new), skill_version)
     live_sources = FunctionMeta.of(existing).sources
     for label, sha in f.sources.items():
         was = live_sources.get(label)
@@ -423,6 +424,12 @@ def _with_content(instance: Instance, files: list[FunctionFile], live: list[dict
             fn = {**fn, "content": field_of(instance.open_webui.function(fn["id"]), "content")}
         out.append(fn)
     return out
+
+
+def _global_when_created(f: FunctionFile, kind: str | None) -> bool:
+    """A new function is made global if it says so, and a new filter unless it says
+    `global: false` (unattached, a filter does nothing; a toggle is one each user switches on)."""
+    return f.want_global or (kind == "filter" and not f.not_global)
 
 
 def _ensure_global(instance: Instance, fn_id: str, state: Any) -> list[str]:
@@ -491,6 +498,10 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
         version = version_of(f.content)
         if p.action == "unchanged" or choices.dry_run:
             pending = []
+            if p.existing is None:  # what creating it does, as the create branch below
+                pending.append("activate")
+                if _global_when_created(f, f.type):
+                    pending.append("make global")
             if f.want_global and p.existing:
                 if not p.existing.get("is_active"):
                     pending.append("activate")
@@ -547,10 +558,9 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
         if not field_of(created, "is_active"):
             created = api.toggle(f.id)
             notes.append("activated")
-        # A new filter is made global (unattached, it does nothing) unless it says
-        # `global: false`: a toggle that each user switches on.
-        default_global = field_of(created, "type") == "filter" and not f.not_global
-        if (f.want_global or default_global) and not field_of(created, "is_global"):
+        if _global_when_created(f, field_of(created, "type")) and not field_of(
+            created, "is_global"
+        ):
             api.toggle_global(f.id)
             notes.append("made global")
         results.append(

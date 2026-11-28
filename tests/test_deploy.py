@@ -113,10 +113,13 @@ class TestDeploy:
 
     def test_dry_run_lists_the_plan_and_writes_nothing(self, real_open_webui, functions_dir):
         m = real_open_webui()
-        res = deploy(*m.options(functions_dir({"demo.py": FILTER}), dry_run=True))
+        folder = functions_dir({"demo.py": FILTER})
+        res = deploy(*m.options(folder, dry_run=True))
         assert m.calls == [LIST]
-        assert res[0].action == "would create"
+        # The plan is what the deploy then does: a new filter is switched on and made global.
+        assert res[0].action == "would create, activate, make global"
         assert render_report(res, True).startswith("Dry run:")
+        assert deploy(*m.options(folder))[0].action == "created, activated, made global"
 
     def test_fails_on_a_bad_key_before_writing_anything(self, real_open_webui, functions_dir):
         m = real_open_webui()
@@ -158,6 +161,25 @@ class TestDeploy:
         assert res[0].action == "updated"
         assert m.state["demo"]["meta"]["managed_by"] == MANAGED_BY
         assert m.state["demo"]["is_global"] is True
+
+
+def test_a_tool_open_webui_rewrote_on_save_is_not_reported_as_changed(
+    real_open_webui, functions_dir
+):
+    """Open-WebUI rewrites old import prefixes (`from utils`) when it stores code, embedded tools
+    included. The dry run after a deploy compares against that, so it reports nothing."""
+    tool = '"""\ntitle: T\n"""\nfrom utils.misc import get_last_user_message_item\n\n\nclass Tools:\n    def x(self) -> str:\n        """X."""\n        return ""\n'
+    folder = functions_dir(
+        {
+            "p/plugin.yaml": "function:\n  title: P\ntool:\n  id: p_tool\n",
+            "p/function.py": "class Event:\n    async def event(self, *a, **k):\n        pass\n",
+            "p/tool.py": tool,
+        }
+    )
+    m = real_open_webui()
+    deploy(*m.options(folder))
+    (res,) = deploy(*m.options(folder, dry_run=True))
+    assert res.action == "unchanged" and not any(d.startswith("tool") for d in res.details)
 
 
 class TestDeclaredGlobal:

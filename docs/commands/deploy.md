@@ -76,7 +76,7 @@ A deploy does these steps in this order:
 1. It waits for `GET /health`, because the instance can be in a restart.
 2. It [signs in](#signing-in).
 3. It fetches the git sources and bundles every plugin. With `--from`, it reads the build instead.
-4. If a plugin [requires](../plugin-format.md#requires) `iframe_sandbox_allow_same_origin`, it reads the instance's admin config. If the setting is off, or the deploy cannot read it, the report gets a **warning**. The deploy continues, and it does not change instance settings.
+4. If a plugin [requires](../plugin-format.md#requires) `iframe_sandbox_allow_same_origin`, it reads the instance's admin config. If the setting is off, the report gets a **warning**. The deploy continues, and it does not change instance settings.
 5. It lists the functions (`GET /api/v1/functions/list`). A bad API key fails here, before the deploy writes anything.
 6. It stops if the run must delete two or more functions that are more than half of the managed functions. Thus renamed folders cannot delete them all. `--force-prune` removes this limit.
 7. It stops if a version goes back, unless you give `--force` ([older versions](#deploying-an-older-version)).

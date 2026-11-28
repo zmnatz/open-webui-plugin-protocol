@@ -168,7 +168,7 @@ class TestDeployFrom:
             deploy(*m.options(tmp_path, from_dir=out, sources=Sources(no_git)))
         assert m.calls == []
         res = deploy(*m.options(tmp_path, from_dir=out, dry_run=True, sources=Sources(no_git)))
-        assert {r.action for r in res} == {"would create"} and m.state == {}
+        assert all(r.action.startswith("would create") for r in res) and m.state == {}
 
     def test_latest_needs_the_sources(self, plugins, tmp_path, real_open_webui):
         out = built(plugins, tmp_path / "dist")

@@ -13,7 +13,8 @@ writes:
 - pyproject.toml: `requires-python`, the image's Python (owpp runs on the Python Open-WebUI runs
   on), and the `test` extra, every pin of the slim lock, with the lock's markers and the image's
   Python as markers;
-- src/owpp/live/compose.yaml: the `-slim` image tag.
+- src/owpp/live/compose.yaml: the `-slim` image tag;
+- .python-version and ruff's `target-version`: the image's Python, for this repository.
 """
 
 from __future__ import annotations
@@ -29,6 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PIN = ROOT / "src" / "owpp" / "testing" / "pin.py"
 PYPROJECT = ROOT / "pyproject.toml"
 COMPOSE = ROOT / "src" / "owpp" / "live" / "compose.yaml"
+PYTHON_VERSION = ROOT / ".python-version"
 
 GITHUB = "https://raw.githubusercontent.com/open-webui/open-webui/v{version}/"
 LOCK_URL = GITHUB + "backend/requirements-slim.lock"
@@ -130,6 +132,13 @@ def rendered(version: str) -> dict[Path, str]:
         count=1,
         flags=re.M,
     )
+    pyproject = re.sub(
+        r'^target-version = "py\d+"',
+        f'target-version = "py{major}{minor}"',
+        pyproject,
+        count=1,
+        flags=re.M,
+    )
 
     compose = re.sub(
         r"(ghcr\.io/open-webui/open-webui:v)[^\s-]+(-slim)",
@@ -142,6 +151,7 @@ def rendered(version: str) -> dict[Path, str]:
         ),
         PYPROJECT: pyproject,
         COMPOSE: compose,
+        PYTHON_VERSION: f"{python}\n",
     }
 
 
