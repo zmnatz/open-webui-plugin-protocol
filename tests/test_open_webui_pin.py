@@ -63,3 +63,20 @@ def test_this_repository_runs_on_the_pinned_python():
     assert (ROOT / ".python-version").read_text().strip() == pin.PYTHON
     ruff = tomllib.loads((ROOT / "pyproject.toml").read_text())["tool"]["ruff"]
     assert ruff["target-version"] == "py" + pin.PYTHON.replace(".", "")
+
+
+def test_every_documented_test_command_names_the_pinned_python():
+    """uv takes the newest Python it has unless told otherwise, and leaves out Open-WebUI's
+    packages on any but the pinned one. So every command that installs `owpp[test]` says which
+    Python, and a repository that adds it pins that Python first."""
+    files = [ROOT / "README.md", *(ROOT / "docs").rglob("*.md"), *(ROOT / "skills").rglob("*.md")]
+    found = 0
+    for path in [*files, *(ROOT / "src" / "owpp").rglob("*.py")]:
+        for line in path.read_text().splitlines():
+            for command in re.findall(r"(?:uvx|uv tool install) [^`\n#]*owpp\[test\]", line):
+                found += 1
+                wanted = ("--python " + pin.PYTHON, "--python {pin.PYTHON}")
+                assert any(w in command for w in wanted), f"{path.relative_to(ROOT)}: {command}"
+    assert found > 15
+    adopting = (ROOT / "docs" / "adopting.md").read_text()
+    assert f"uv python pin {pin.PYTHON}" in adopting

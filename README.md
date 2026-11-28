@@ -32,14 +32,14 @@ include: [routes, chat_data]
 uvx owpp list
 #  excalidraw              filter (global)
 #  mcpo_sync               event
-uvx owpp check                       # bundle, compile, report undefined names
-uvx owpp version                     # every plugin's versions (and its tool's and skills')
-uvx owpp version excalidraw minor    # a new version, with a CHANGELOG.md entry
-uvx --from 'owpp[test]' owpp test    # each plugin's tests/, on the real Open-WebUI
-uvx --from 'owpp[live]' owpp live    # live/ tests, on a throwaway Open-WebUI in Docker
+uvx owpp check                                   # bundle, compile, report undefined names
+uvx owpp version                                 # every plugin's versions (and its tool's and skills')
+uvx owpp version excalidraw minor                # a new version, with a CHANGELOG.md entry
+uvx --python 3.12 --from 'owpp[test]' owpp test  # each plugin's tests/, on the real Open-WebUI
+uvx --from 'owpp[live]' owpp live                # live/ tests, on a throwaway Open-WebUI in Docker
 uvx owpp deploy --only excalidraw --dry-run
-uvx owpp pull                        # move plugins taken from git to their latest commit, for review
-uvx owpp deploy --dry-run --latest     # what that would change on the live instance, by version
+uvx owpp pull                                    # move plugins taken from git to their latest commit, for review
+uvx owpp deploy --dry-run --latest               # what that would change on the live instance, by version
 ```
 
 ## Why

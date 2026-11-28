@@ -8,7 +8,7 @@ The `owui` fixture is the harness for one test. This page lists what the harness
 
 owpp follows the Open-WebUI version that it pins, and does not keep a copy of it:
 
-- **The same Python.** owpp runs on the Python of Open-WebUI's image: Python 3.12 for v0.13.5. uv picks it for you.
+- **The same Python.** owpp runs on the Python of Open-WebUI's image: Python 3.12 for v0.13.5. Tell uv to use it: `uvx --python 3.12 ...`. Without the flag, uv can pick a newer Python. It then leaves out Open-WebUI's packages, and `owpp test` stops.
 - **The same packages.** The `test` extra installs the packages of Open-WebUI's slim image, at Open-WebUI's versions.
 - **The same code.** The harness runs Open-WebUI's own code, and its model is aimock, as on the stack of `owpp live`.
 - **The same settings.** The harness reads Open-WebUI's settings from the compose file of `owpp live`, so the unit tests and the live tests run the same Open-WebUI. For example, every user may use the models, and Open-WebUI makes no titles, tags or follow-up suggestions.
@@ -174,7 +174,7 @@ To use such a package in the tests:
 An editor finds `open_webui` in the cached wheel. To get its folder:
 
 ```sh
-uvx --from 'owpp[test]' owpp test --editor
+uvx --python 3.12 --from 'owpp[test]' owpp test --editor
 ```
 
 Add the folder to the search path of your editor. For Pyright or Pylance, add it to `extraPaths`. For other tools, add it to `PYTHONPATH`.

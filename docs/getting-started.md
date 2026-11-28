@@ -36,13 +36,13 @@ If you already have functions in Open-WebUI, see [adopting](adopting.md) to move
 ## 3. Check and test it
 
 1. Run `uvx owpp check --strict`. It bundles the plugin as a deploy does, then compiles and lints it.
-2. Run `uvx --from 'owpp[test]' owpp test`. It runs the plugin's tests against the real Open-WebUI, in the test process. The first run downloads Open-WebUI.
+2. Run `uvx --python 3.12 --from 'owpp[test]' owpp test`. It runs the plugin's tests against the real Open-WebUI, in the test process. The first run downloads Open-WebUI.
 3. Optional: run `uvx owpp bundle hello`. It prints the single file that Open-WebUI will store.
 
 ```sh
-uvx owpp check --strict                    # bundle it exactly as a deploy would, compile, lint
-uvx --from 'owpp[test]' owpp test    # its tests, on the real Open-WebUI
-uvx owpp bundle hello                      # print the single file Open-WebUI will store
+uvx owpp check --strict                          # bundle it exactly as a deploy would, compile, lint
+uvx --python 3.12 --from 'owpp[test]' owpp test  # its tests, on the real Open-WebUI
+uvx owpp bundle hello                            # print the single file Open-WebUI will store
 ```
 
 Now write the plugin. The [authoring guide](authoring.md) has the conventions. [Libraries](libraries.md) has routes, jobs, per-chat data, pages and more. Run `check` and `test` after each change.

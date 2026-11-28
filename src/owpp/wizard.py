@@ -44,6 +44,7 @@ from .create import (
 from .errors import OwppError
 from .events import KNOWN_EVENTS, problem_with
 from .sources import GIT_URL, SHA40, Sources
+from .testing import pin
 
 DOCS = "https://docs.openwebui.com/features/extensibility/"
 # (stages, minutes) for each branch; the first two stages are the same in both.
@@ -681,7 +682,7 @@ def _summary(p: Prompter, folder: Path, spec: PluginSpec, checked: int | None) -
     p.say("Then:")
     for cmd in (
         f"owpp check {spec.id} --strict",
-        f"uvx --from 'owpp[test]' owpp test {spec.id}",
+        f"uvx --python {pin.PYTHON} --from 'owpp[test]' owpp test {spec.id}",
         f"owpp deploy --only {spec.id} --dry-run",
     ):
         p.print(f"   $ {cmd}")

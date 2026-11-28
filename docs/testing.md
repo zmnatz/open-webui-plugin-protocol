@@ -34,9 +34,9 @@ plugins/excalidraw/
 ```
 
 ```sh
-uvx --from 'owpp[test]' owpp test               # every plugin with a tests/ folder
-uvx --from 'owpp[test]' owpp test excalidraw    # just these
-owpp test excalidraw -- -k token -x                           # after --: arguments for pytest
+uvx --python 3.12 --from 'owpp[test]' owpp test             # every plugin with a tests/ folder
+uvx --python 3.12 --from 'owpp[test]' owpp test excalidraw  # just these
+owpp test excalidraw -- -k token -x                         # after --: arguments for pytest
 ```
 
 `owpp test` runs the tests with pytest, on the [test harness](testing/harness.md). It needs the `test` extra, on the Python of Open-WebUI (3.12). The extra has pytest, and the packages of Open-WebUI's slim image at Open-WebUI's versions.

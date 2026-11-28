@@ -7,7 +7,7 @@ description: Tests for an Open-WebUI function or owpp plugin that already works,
 
 The code works today, so its tests are **characterization tests**: each one pins what the code does now, not what it ought to do. A test that disagrees with the code is a **finding**: report it to the user, and change the code only when they ask.
 
-Run owpp as `uvx owpp <command>`, and its tests as `uvx --from 'owpp[test]' owpp test <id>` (in the owpp repository itself: `uv run owpp`). Every command takes `--dir`, the plugins folder (default `./plugins`). The testing guide, for each call named here: https://zmnatz.github.io/open-webui-plugin-protocol/testing/
+Run owpp as `uvx owpp <command>`, and its tests as `uvx --python 3.12 --from 'owpp[test]' owpp test <id>` (in the owpp repository itself: `uv run owpp`). Every command takes `--dir`, the plugins folder (default `./plugins`). The testing guide, for each call named here: https://zmnatz.github.io/open-webui-plugin-protocol/testing/
 
 ## 1. Bring it in with `owpp import`
 

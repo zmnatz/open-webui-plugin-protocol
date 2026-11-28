@@ -24,7 +24,7 @@ uvx owpp@0.7.2 list        # a pinned release (recommended: see below)
 `owpp test` runs each plugin's tests against the real Open-WebUI, in the test process ([the test harness](testing/harness.md)). It needs pytest and the packages of Open-WebUI's slim image, at Open-WebUI's versions. The `test` extra adds them:
 
 ```sh
-uvx --from 'owpp[test]' owpp test
+uvx --python 3.12 --from 'owpp[test]' owpp test
 ```
 
 The first run downloads Open-WebUI's own code (about 110 MB) to a cache: [`OWPP_CACHE_DIR`](environment-variables.md#owpp_cache_dir).
@@ -36,9 +36,9 @@ The first run downloads Open-WebUI's own code (about 110 MB) to a cache: [`OWPP_
 To put `owpp` on your `PATH`, use one of these commands:
 
 ```sh
-uv tool install owpp==0.7.2          # or: uv tool install 'owpp[test]==0.7.2'
-pipx install owpp==0.7.2             # or with pipx
-pip install owpp==0.7.2              # or into a virtual environment
+uv tool install owpp==0.7.2  # or: uv tool install --python 3.12 'owpp[test]==0.7.2'
+pipx install owpp==0.7.2     # or with pipx
+pip install owpp==0.7.2      # or into a virtual environment
 ```
 
 `python -m owpp` is the same command as `owpp`.

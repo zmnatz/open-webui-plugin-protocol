@@ -14,14 +14,14 @@ uvx owpp check
 OPEN_WEBUI_URL=https://chat.example.com OPEN_WEBUI_API_KEY=sk-... uvx owpp deploy --dry-run
 ```
 
-To let an editor find what a plugin imports, install owpp as a development dependency of the repository: `uv add --dev 'owpp[test]'`. The plugin's tests need it too. It gives the editor `owpp.lib` (the [libraries](libraries.md)). For `open_webui`, add the folder that `owpp test --editor` gives to the search path of the editor ([in an editor](testing/harness.md#in-an-editor)).
+To let an editor find what a plugin imports, install owpp as a development dependency of the repository. First run `uv python pin 3.12`, the Python of Open-WebUI. Then run `uv add --dev 'owpp[test]'`. The plugin's tests need it too. It gives the editor `owpp.lib` (the [libraries](libraries.md)). For `open_webui`, add the folder that `owpp test --editor` gives to the search path of the editor ([in an editor](testing/harness.md#in-an-editor)).
 
 ## Existing functions pasted into the UI
 
 1. **Import each function from the instance:** run `uvx owpp import --instance <id>` ([owpp import](commands/import.md)). To import from a `.py` file, run `uvx owpp import shout.py`.
 2. **Keep the id that the function has in Open-WebUI.** With a different id, the deploy creates a second copy. If the id has hyphens, set a new one with `--id`, because ids cannot contain hyphens.
 3. **Test the function as it is:** write its tests in `plugins/<id>/tests/` ([writing a test](testing/writing.md)). An agent can do this with the [`test-existing-plugin` skill](ai-agents.md#the-test-existing-plugin-skill).
-4. Run `uvx --from 'owpp[test]' owpp test <id>`.
+4. Run `uvx --python 3.12 --from 'owpp[test]' owpp test <id>`.
 5. **Deploy.** The first deploy **updates** the function with the same id and marks it as managed. The code stays the same, and the deploy keeps its valves and its active and global state.
 6. **Replace copied helpers with libraries** (`routes`, `jobs`, `chat_data`, `static`, `templates`), one at a time. `owpp check` reports all names that are still undefined.
 7. **Add the `protocol:` key** if the manifest has none: run `uvx owpp migrate`, or add `protocol: "0.7"` yourself. A manifest from `owpp import` already has the key.

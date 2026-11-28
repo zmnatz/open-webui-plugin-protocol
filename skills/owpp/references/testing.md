@@ -5,7 +5,7 @@ A plugin's tests are its **spec**: each one names a behaviour in the plugin's te
 ## Steps
 
 1. **List the behaviours.** One per sentence of the README, one per valve, one per branch in the code (each early `return` is one): what happens, and when it is left alone. Done when every valve and every branch is on the list.
-2. **For each behaviour, write the test first and see it go red**: `uvx --from 'owpp[test]' owpp test <id> -- -k <name>`. Name it as a sentence about the plugin (`test_a_message_without_an_image_stays_with_its_model`), and give it the docstring:
+2. **For each behaviour, write the test first and see it go red**: `uvx --python 3.12 --from 'owpp[test]' owpp test <id> -- -k <name>`. Name it as a sentence about the plugin (`test_a_message_without_an_image_stays_with_its_model`), and give it the docstring:
 
    ```python
    def test_admins_are_left_alone_unless_it_is_turned_on_for_them(owui, plugin):

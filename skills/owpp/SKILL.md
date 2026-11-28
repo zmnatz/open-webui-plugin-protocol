@@ -35,7 +35,7 @@ Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](h
 2. **Describe it in a spec and create it**: write the spec ([references/spec.md](references/spec.md)) to a file, then `uvx owpp create --spec <file>`. It writes the folder, with stubs, tests, a README and a CHANGELOG, and runs `owpp check --strict` on it. (`owpp create` with no `--spec` is a wizard for a person at a terminal: it waits for typed answers.)
 3. **Fill in the stubs**: the work goes in `function.py`, `tool.py`, `skills/<name>/SKILL.md` and the pages, following [the rules](#the-rules-owpp-and-open-webui-hold-the-code-to). Test every behaviour, in the plugin's `tests/`: [references/testing.md](references/testing.md).
 
-Done when `uvx owpp check <id> --strict` reports no `FAIL` and no `warn`, and `uvx --from 'owpp[test]' owpp test <id>` passes.
+Done when `uvx owpp check <id> --strict` reports no `FAIL` and no `warn`, and `uvx --python 3.12 --from 'owpp[test]' owpp test <id>` passes.
 
 ## Change
 
