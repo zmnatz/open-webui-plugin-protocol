@@ -94,7 +94,10 @@ In step 8, the deploy compares each function with the one on the instance:
 | A function that differs | Updates it. |
 | The same function | Leaves its code as it is. |
 
-A function differs if its code, marker, description, source commits or `requires:` differ. The code comparison ignores line endings and space at the end of the file. It also allows for the changes that Open-WebUI makes to some imports.
+A function differs if its code, marker, description, source commits or `requires:` differ. To compare the code, the deploy compares the two copies as Open-WebUI stores them:
+
+- It applies Open-WebUI's import rewrite to the two copies. Open-WebUI changes some import prefixes, such as `from utils` to `from open_webui.utils`.
+- It ignores line endings and space at the end of the file.
 
 A plugin with `global: true` is active and global after every deploy. A plugin with `global: false` is never global. In all other cases, an existing function keeps its active and global state.
 

@@ -77,7 +77,7 @@ FAIL  viz: changed since origin/main but its version is still 1.0.0 (run `owpp v
 FAIL  tool viz: changed since origin/main but its version is still 1.0.0 (run `owpp version viz patch --tool`)
 ```
 
-The check bundles every plugin as it was at that git ref (with `git archive`) and as it is now. It fails for each change that has no new version:
+The check bundles every plugin as it was at that git ref (with `git archive`) and as it is now. It compares the two bundles as the deploy compares a bundle with the instance (see [what a deploy does](deploy.md#what-a-deploy-does)). It fails for each change that has no new version:
 
 - A **tool or skill that has a version** must get a new one when it changes.
 - The **plugin** (the function's version) must get a new one in these cases:
