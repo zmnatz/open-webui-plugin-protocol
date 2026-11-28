@@ -181,7 +181,15 @@ def test_what_stand_ins_do_not_hold_is_fetched_through_the_harnesss_sources(tmp_
     assert calls == [("https://example.com/other.git", PINNED, ("event.py",))]
 
 
-def test_the_owui_fixture_gives_every_harness_the_sessions_sources(pytester):
+@pytest.fixture
+def open_webui_started():
+    """This process's Open-WebUI, started. Ask for it before `pytester`: pytester puts
+    sys.modules back when the test ends, and an Open-WebUI first imported inside it is then gone
+    for the tests after this one."""
+    Harness().close()
+
+
+def test_the_owui_fixture_gives_every_harness_the_sessions_sources(open_webui_started, pytester):
     """The pytest plugin owns one Sources for the session: each test's `owui` is built with it,
     and it is closed when the session ends."""
     pytester.makepyfile(

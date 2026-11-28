@@ -702,16 +702,3 @@ class TestIframeRequirementWarning:
         assert "DEFAULT_INTERFACE_SETTINGS" in out and "Deploying anyway." in out
         assert m.calls[0] == "GET /api/v1/auths/admin/config"
         assert "POST /api/v1/functions/create" in m.calls
-
-
-def test_deploy_and_versioning_share_one_text_normaliser():
-    # Both compare stored code with a local file, so both must treat CRLF and trailing space alike.
-    import owpp.deploy as deploy
-    import owpp.versioning as versioning
-
-    assert deploy.norm is versioning.norm
-    files = [FunctionFile(id="a", content="x = 1\r\n", description="d")]
-    live = [
-        {"id": "a", "content": "x = 1   \n", "meta": {"managed_by": "mine", "description": "d"}}
-    ]
-    assert plan_deploy(files, live, "mine")[0].action == "unchanged"

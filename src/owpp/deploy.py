@@ -37,6 +37,7 @@ from typing import Any
 
 from .build import Build, read_build
 from .bundle import VALID_ID, FunctionFile, load_function_files
+from .compare import Part, compare
 from .errors import OwppError
 from .manifest import plugin_folders, read_manifest
 from .openwebui import (
@@ -46,21 +47,10 @@ from .openwebui import (
     OpenWebUI,
     SignInRefused,
     field_of,
-    replace_imports,
     urllib_fetch,
 )
 from .sources import Sources
-from .versioning import (
-    is_older,
-    norm,
-    own_code,
-    same,
-    skill_version,
-    skills_of,
-    tool_version,
-    tools_of,
-    version_of,
-)
+from .versioning import version_of
 
 # ---- TLS: a CA to trust, a client certificate to present ------------------------
 
@@ -311,7 +301,7 @@ def plan_deploy(
         else:
             meta = FunctionMeta.of(existing)
             same = (
-                norm(existing.get("content")) == norm(replace_imports(f.content))
+                compare(existing.get("content") or "", f.content).unchanged
                 and meta.managed_by == managed_by
                 and meta.description == f.description
                 and meta.sources == f.sources
@@ -359,48 +349,39 @@ class Changes:
     details: list[str] = field(default_factory=list)
     downgrades: list[str] = field(default_factory=list)
 
-    def version_change(self, label: str, old: str, new: str) -> None:
-        if is_older(new, old):
-            self.downgrades.append(f"{label} {old} -> {new}")
-            self.details.append(f"{label}: {_from_to(old, new)}, OLDER than the live version")
-        else:
-            self.details.append(f"{label}: {_from_to(old, new)}")
+
+def _label(part: Part) -> str:
+    return "function" if part.kind == "function" else f"{part.kind} `{part.id}`"
 
 
-def _parts(changes: Changes, kind: str, old: dict, new: dict, version) -> None:
-    """One line per tool (or skill) that is added, removed or changed."""
-    for item_id in sorted(set(old) | set(new)):
-        a, b = old.get(item_id), new.get(item_id)
-        label = f"{kind} `{item_id}`"
-        if a is None:
-            v = version(b)
-            changes.details.append(f"{label}: new{f' ({v})' if v else ''}")
-        elif b is None:
-            changes.details.append(f"{label}: removed")
-        elif not same(a, b):
-            va, vb = version(a), version(b)
-            if va != vb:
-                changes.version_change(label, va, vb)
-            else:
-                changes.details.append(f"{label}: changed, still {vb or '(no version)'}")
+def _part_line(part: Part, older: bool) -> str:
+    """The report line for a part that is not unchanged."""
+    label = _label(part)
+    old, new = part.old_version, part.new_version
+    if part.status == "new":
+        return f"{label}: new{f' ({new})' if new else ''}"
+    if part.status == "removed":
+        return f"{label}: removed"
+    if old == new:
+        code = "code changed" if part.kind == "function" else "changed"
+        return f"{label}: {code}, still {new or '(no version)'}"
+    return f"{label}: {_from_to(old, new)}" + (", OLDER than the live version" if older else "")
 
 
 def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, str]) -> Changes:
     """What deploying `f` changes, by version: the function, each tool and skill it installs,
     and the commit of the git repository it takes code from. `existing` is the live function
     (with its content), or None; `latest` notes which sources were moved to their latest commit."""
-    old = existing.get("content") if existing else None
-    new = replace_imports(f.content)  # as Open-WebUI stores it, as `old` is
+    comparison = compare((existing.get("content") or "") if existing else None, f.content)
     changes = Changes()
-    old_v, new_v = version_of(old), version_of(f.content)
-    if existing is None:
-        changes.details.append(f"function: new{f' ({new_v})' if new_v else ''}")
-    elif old_v != new_v:
-        changes.version_change("function", old_v, new_v)
-    elif own_code(old) != own_code(new):
-        changes.details.append(f"function: code changed, still {new_v or '(no version)'}")
-    _parts(changes, "tool", tools_of(old), tools_of(new), tool_version)
-    _parts(changes, "skill", skills_of(old), skills_of(new), skill_version)
+    downgrades = comparison.downgrades
+    for part in comparison.parts:
+        if part.status == "unchanged":
+            continue
+        older = part in downgrades
+        changes.details.append(_part_line(part, older))
+        if older:
+            changes.downgrades.append(f"{_label(part)} {part.old_version} -> {part.new_version}")
     live_sources = FunctionMeta.of(existing).sources
     for label, sha in f.sources.items():
         was = live_sources.get(label)

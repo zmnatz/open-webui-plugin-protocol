@@ -36,6 +36,10 @@ _Avoid_: decompiling, extracting
 The list of every library with what it pulls in, what turns it on and what data it carries.
 _Avoid_: LIBS, library table
 
+**Comparison**:
+What changed between two copies of a function's code, compared as Open-WebUI stores them: the function, its tool and each skill, each with its old and new version.
+_Avoid_: diff
+
 ### Testing
 
 **Test harness**:

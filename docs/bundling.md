@@ -97,14 +97,6 @@ owpp embeds the files of `templates/` the same way (`__TEMPLATES_DATA__`). The p
 
 ## What the deploy script does with a bundle
 
-For each function in the plugins folder, the deploy compares it with the function on the instance:
-
-| On the instance | The deploy |
-| --- | --- |
-| Not there | Creates it and activates it. It makes a filter global, unless the filter says `global: false`. |
-| Different | Updates it. |
-| Identical | Does not change its code. [`global`](plugin-format.md#function) can still change its state. |
-
-A function is different if its code differs, or if its stored meta differs: the ownership marker, the description, the git sources or `requires:`. To compare the code, the deploy ignores the style of line endings and any whitespace at the end of the file. It also applies Open-WebUI's own import rewrite to the local copy first.
+For each function in the plugins folder, the deploy compares the bundle with the function on the instance. It creates the function, updates it, or leaves its code as it is. See [what a deploy does](commands/deploy.md#what-a-deploy-does).
 
 The deploy never overwrites the valves in the database, except the keys that the manifest declares. See [what a deploy does](commands/deploy.md#what-a-deploy-does).
