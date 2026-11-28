@@ -80,7 +80,7 @@ A deploy does these steps in this order:
 5. It lists the functions (`GET /api/v1/functions/list`). A bad API key fails here, before the deploy writes anything.
 6. It stops if the run must delete two or more functions that are more than half of the managed functions. Thus renamed folders cannot delete them all. `--force-prune` removes this limit.
 7. It stops if a version goes back, unless you give `--force` ([older versions](#deploying-an-older-version)).
-8. It creates, updates or leaves alone each function, and sets its active and global state.
+8. It creates or updates each function. Then, if necessary, it activates the function and makes it global or not global.
 9. It sets the valves that the manifest declares. All other valves keep their values.
 10. It deletes each managed function that has no plugin.
 
@@ -90,13 +90,34 @@ In step 8, the deploy compares each function with the one on the instance:
 
 | On the instance | What the deploy does |
 | --- | --- |
-| No function with this id | Creates it and activates it. It makes a filter global, unless the plugin says `global: false`. |
+| No function with this id | Creates it and activates it. It makes it global if the plugin says `global: true`. It also makes a filter global, unless the plugin says `global: false`. |
 | A function that differs | Updates it. |
 | The same function | Leaves its code as it is. |
 
-A function differs if its code, marker, description, source commits or `requires:` differ. The code comparison ignores line endings and space at the end of the file. It also allows for the changes that Open-WebUI makes to some imports.
+A function differs if its code, marker, description, source commits or `requires:` differ. To compare the code, the deploy compares the two copies as Open-WebUI stores them:
+
+- It applies Open-WebUI's import rewrite to the two copies. Open-WebUI changes some import prefixes, such as `from utils` to `from open_webui.utils`.
+- It ignores line endings and space at the end of the file.
+
+The comparison then examines the function, each tool and each skill apart, because each one has its own version. [`owpp check --since`](check.md#a-change-needs-a-new-version) uses the same comparison for two bundles from git.
+
+```mermaid
+flowchart TD
+    old["Live code (or the old bundle)"] --> rewrite
+    new["New bundle"] --> rewrite
+    rewrite["Apply the import rewrite to the two copies"] --> norm
+    norm["Ignore line endings and space at the end of the file"] --> same{"Is the code the same?"}
+    same -- Yes --> unchanged["The function is unchanged"]
+    same -- No --> parts["Examine each part: the function's own code, each tool and each skill, by id"]
+    parts --> status["Give each part a status: new, removed, changed or unchanged"]
+    status --> older{"Does the version of a part go back?"}
+    older -- Yes --> downgrade["The part is a downgrade (see step 7)"]
+    older -- No --> report["The report shows each part that is not unchanged"]
+```
 
 A plugin with `global: true` is active and global after every deploy. A plugin with `global: false` is never global. In all other cases, an existing function keeps its active and global state.
+
+The deploy decides all these steps before it writes. A dry run reports the steps, for example `would create, activate, make global`. A deploy does the same steps.
 
 The report names each function with its type, for example ``- event function `mcpo_sync` (mcpo_sync/): unchanged (0.3.0)``. In GitHub Actions, the deploy also writes the report to the job summary.
 

@@ -77,7 +77,7 @@ FAIL  viz: changed since origin/main but its version is still 1.0.0 (run `owpp v
 FAIL  tool viz: changed since origin/main but its version is still 1.0.0 (run `owpp version viz patch --tool`)
 ```
 
-The check bundles every plugin as it was at that git ref (with `git archive`) and as it is now. It fails for each change that has no new version:
+The check bundles every plugin as it was at that git ref (with `git archive`) and as it is now. It compares the code of the two bundles as the deploy compares code (see [what a deploy does](deploy.md#what-a-deploy-does)). It does not compare the meta. It fails for each change that has no new version:
 
 - A **tool or skill that has a version** must get a new one when it changes.
 - The **plugin** (the function's version) must get a new one in these cases:
@@ -88,11 +88,17 @@ The check bundles every plugin as it was at that git ref (with `git archive`) an
 
 A plugin that did not exist at that ref needs nothing.
 
-The upstream sets the version of code that a plugin takes verbatim from a `source:`:
+The upstream sets the version of code that a plugin takes verbatim from a `source:`. In a plugin with a `source:`, these parts are verbatim:
 
-- A change to such a tool or skill counts as a change of the plugin.
-- In a plugin with a `source:`, a change to any skill counts as a change of the plugin.
-- If the function itself is taken verbatim, the plugin needs no new version.
+- The function or the tool, when its section has `file:`.
+- A skill, when its [`skills:`](../plugin-format.md#skills) entry has `file:` or `dir:`.
+- Every part of a [whole plugin from git](../plugin-format.md#a-whole-plugin-from-git).
+
+The check treats the parts as follows:
+
+- A change to a verbatim tool or skill counts as a change of the plugin.
+- If the function is verbatim, the plugin needs no new version.
+- All other tools and skills follow the rules above.
 
 The check needs the `git` CLI. To use it in CI:
 
