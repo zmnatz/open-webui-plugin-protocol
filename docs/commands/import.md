@@ -1,7 +1,7 @@
 # owpp import
 
 ```
-owpp import <url|file> [--id ID] [--path FOLDER] [--ref BRANCH|TAG] [--public] [--dir FOLDER]
+owpp import <url|file> [--id ID] [--path FOLDER] [--ref BRANCH|TAG|SHA] [--public] [--dir FOLDER]
 owpp import --instance ID [--id ID] [--dir FOLDER]
             [--ca-cert PEM] [--client-cert PEM] [--client-key PEM]
 ```
@@ -16,7 +16,11 @@ owpp import https://github.com/owner/repo/blob/main/functions/shout.py     # one
 owpp import https://github.com/owner/repo.git --path functions --ref v1.2  # a clone URL
 ```
 
-The code is **pinned, not copied**. `plugin.yaml` gets a [`source:`](../plugin-format.md#source) at the current commit of the branch, tag or default branch. If the URL or `--ref` names a branch or tag, `source:` records it, and [`owpp pull`](pull.md) follows it.
+The code is **pinned, not copied**. `plugin.yaml` gets a [`source:`](../plugin-format.md#source) at one commit: the one that you give, else the current commit of the branch, tag or default branch. If the URL or `--ref` names a branch or tag, `source:` records it, and [`owpp pull`](pull.md) follows it.
+
+The URL or `--ref` can also give a full commit SHA (40 lowercase hex characters). Then `source:` pins that commit and has no `branch:` or `tag:`. The command refuses a short SHA, because it reads a short SHA as a branch or tag name.
+
+**Caution:** [`owpp pull`](pull.md) moves a pin without `branch:` or `tag:` to the latest commit of the [default branch](../plugin-format.md#source).
 
 The command looks for these in the folder:
 
@@ -36,9 +40,9 @@ If there is a tool or a skill but no function, the plugin is an installer: owpp 
 The URL can have one of these forms:
 
 - A GitHub or GitLab page: `.../tree/<branch>/<folder>` or `.../blob/<branch>/<folder>/<file>`.
-- A repository: its GitHub page, or a clone URL (https, ssh or `user@host:path`). Give the folder with `--path`, and the branch or tag with `--ref`.
+- A repository: its GitHub page, or a clone URL (https, ssh or `user@host:path`). Give the folder with `--path`, and the branch, tag or commit SHA with `--ref`.
 
-The command reads the first part after `tree/` or `blob/` as the branch. For a branch with a slash in its name, use the clone URL and `--ref`.
+The command reads the first part after `tree/` or `blob/` as the branch, tag or commit SHA. For a branch with a slash in its name, use the clone URL and `--ref`.
 
 ## From a file, or a function on Open-WebUI
 
@@ -92,6 +96,6 @@ The import does not copy the valves, because they can hold keys or passwords. Th
 | `--client-key PEM` | With `--instance`: as for [`owpp deploy`](deploy.md#options). |
 | `--id ID` | The plugin's id. Default: the instance's id, or a name from the file or folder (the repository's name for its root). In a name, hyphens become underscores. |
 | `--path FOLDER` | With a clone URL: the folder in the repository. |
-| `--ref BRANCH\|TAG` | With a clone URL: the branch or tag to pin and follow. Default: the default branch. |
+| `--ref BRANCH\|TAG\|SHA` | With a clone URL: the branch or tag to pin and follow, or a full commit SHA to pin. Default: the default branch. |
 | `--public` | With a git URL: give every user the tool and skills that the plugin installs (`access: public`). |
 | `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |

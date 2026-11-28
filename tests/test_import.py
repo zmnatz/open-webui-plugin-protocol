@@ -12,6 +12,7 @@ import pytest
 from conftest import FakeRepo, write_tree
 from fake_open_webui import FakeOpenWebUI, serve
 from pki import make_pki
+from test_sources import commit, git
 
 from owpp.bundle import bundle_function, load_function_files
 from owpp.cli import main
@@ -21,6 +22,7 @@ from owpp.importer import import_code, import_file, import_git, import_instance,
 from owpp.libraries import BY_NAME
 from owpp.manifest import read_manifest
 from owpp.sources import Sources
+from owpp.sources._git import git_fetcher, kind_in
 from owpp.unbundle import _protocol_body, unbundle
 
 SHOUT = '''"""
@@ -272,6 +274,38 @@ class TestFromGit:
     def test_a_branch_that_is_not_there_is_refused(self, tmp_path):
         with pytest.raises(OwppError, match="no branch or tag nope"):
             run_import(tmp_path / "p", "https://github.com/someone/their-plugins/tree/nope/viz")
+
+    @pytest.mark.parametrize(
+        ("url", "flags"),
+        [
+            ("https://github.com/someone/their-plugins/tree/{sha}/viz", {}),
+            (GIT, {"path": "viz", "name": "{sha}"}),
+        ],
+        ids=["a-page-url", "a-clone-url-and-ref"],
+    )
+    def test_a_full_commit_sha_pins_that_commit_with_no_branch_or_tag(self, tmp_path, url, flags):
+        theirs = write_tree(tmp_path / "theirs", {"viz/shout.py": SHOUT})
+        git(theirs, "init", "-q")
+        git(theirs, "add", ".")
+        commit(theirs, "one")
+        sha = git(theirs, "rev-parse", "HEAD")
+        git(theirs, "mv", "viz/shout.py", "viz/newer.py")  # the branch moves on
+        commit(theirs, "two")
+        sources = Sources(  # their repository, from a local copy
+            lambda _, ref, paths: git_fetcher(f"file://{theirs}", ref, paths, "file"),
+            kind_of=lambda _, name: kind_in(git(theirs, "ls-remote", "."), name),
+        )
+        flags = {k: v.format(sha=sha) for k, v in flags.items()}
+        imported = import_git(tmp_path / "p", url.format(sha=sha), sources=sources, **flags)
+        manifest = read_manifest(imported.folder)
+        assert manifest["source"] == {"git": GIT, "ref": sha, "path": "viz"}
+        assert manifest["function"]["file"] == "shout.py"
+        assert any("`owpp pull` follows the default branch" in n for n in imported.notes)
+
+    def test_a_short_commit_sha_is_refused(self, tmp_path):
+        url = f"https://github.com/someone/their-plugins/tree/{SHA[:7]}/viz"
+        with pytest.raises(OwppError, match="no branch or tag 917c88f"):
+            run_import(tmp_path / "p", url)
 
     def test_the_repository_root_is_read_whole(self, tmp_path):
         files = {"shout.py": SHOUT, "README.md": "hi\n"}

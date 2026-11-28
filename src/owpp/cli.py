@@ -432,7 +432,9 @@ def build_parser() -> argparse.ArgumentParser:
     imp.add_argument("--id", help="the plugin's id (default: from the file, folder or instance)")
     imp.add_argument("--path", help="with a clone URL: the folder in the repository")
     imp.add_argument(
-        "--ref", metavar="BRANCH|TAG", help="with a clone URL: the branch or tag to follow"
+        "--ref",
+        metavar="BRANCH|TAG|SHA",
+        help="with a clone URL: the branch or tag to follow, or a full commit SHA to pin",
     )
     imp.add_argument(
         "--public",
