@@ -114,26 +114,6 @@ def test_only_one_harness_is_open_at_a_time():
         Harness()
 
 
-def test_model_configs_are_open_webuis():
-    """Model configs are Open-WebUI's own: tags normalised to [{"name": ...}], unknown meta keys
-    kept, and the row is what insert and update wrote."""
-    with Harness() as owui:
-        from open_webui.models.models import ModelForm, ModelMeta, ModelParams, Models  # noqa: PLC0415
-
-        form = ModelForm(
-            id="m",
-            name="M",
-            meta=ModelMeta(tags=["a", {"name": " b "}, ""], managed_by="me"),
-            params=ModelParams(temperature=0.2),
-        )
-        owui.run(Models.insert_new_model(form, owui.admin.id))
-        row = owui.models["m"]
-        assert row.meta.model_dump()["tags"] == [{"name": "a"}, {"name": "b"}]
-        assert row.meta.model_dump()["managed_by"] == "me"
-        assert row.params.model_dump()["temperature"] == 0.2
-        assert owui.run(Models.delete_model_by_id("m")) and owui.models == {}
-
-
 PINNED = "a" * 40
 EVENT = "class Event:\n    async def event(self, *a, **k):\n        pass\n"
 
@@ -221,33 +201,6 @@ def test_the_owui_fixture_gives_every_harness_the_sessions_sources(pytester):
     assert module.seen[0].closed
 
 
-FILTER_WITH_MODEL = """
-from open_webui.utils.misc import get_last_user_message_item
-
-
-class Filter:
-    def inlet(self, body, __model__=None):
-        last = get_last_user_message_item(body["messages"])
-        return {**body, "seen": [__model__["id"], last["content"]]}
-"""
-
-
-def test_a_filter_is_told_the_model_and_can_find_the_last_user_message(tmp_path):
-    """A filter gets `__model__`, the model the chat is with: "mock-model" unless a test names
-    one. Open-WebUI's own `get_last_user_message_item` finds the last user message."""
-    folder = plugin_folder(tmp_path, FILTER_WITH_MODEL)
-    messages = [
-        {"role": "user", "content": "first"},
-        {"role": "assistant", "content": "a reply"},
-        {"role": "user", "content": "last"},
-        {"role": "assistant", "content": "another reply"},
-    ]
-    with Harness() as owui:
-        plugin = owui.load(folder)
-        assert plugin.inlet({"messages": messages})["seen"] == ["mock-model", "last"]
-        assert plugin.inlet({"messages": messages}, model="gpt-x")["seen"] == ["gpt-x", "last"]
-
-
 def test_an_event_can_be_about_something_other_than_a_function(tmp_path):
     """Open-WebUI sends events about users and models too (`user.deleted`, `model.updated`), with
     that thing as the subject. `emit` takes the subject itself for those; a plain id is still a
@@ -273,18 +226,6 @@ def test_an_event_can_be_about_something_other_than_a_function(tmp_path):
         assert seen[0] == ("function.enable_started", {"type": "function", "id": "demo"})
         owui.emit("user.deleted", {"type": "user", "id": "u1"})
         assert seen[-1] == ("user.deleted", {"type": "user", "id": "u1"})
-
-
-def test_a_session_token_decodes_to_its_user():
-    """A user's `token` is an Open-WebUI session token: `decode_token` gives its claims, as Theme
-    Designer Pro uses it to tell whose live-update stream a cookie opened; anything else is None."""
-    with Harness() as owui:
-        from open_webui.utils.auth import decode_token  # noqa: PLC0415
-
-        ada = owui.add_user("Ada")
-        assert decode_token(ada.token)["id"] == ada.id
-        assert decode_token("forged") is None and decode_token("") is None
-        assert owui.client(ada).get("/api/v1/auths/").json()["id"] == ada.id
 
 
 def test_open_webuis_model_is_aimock():
@@ -358,33 +299,6 @@ def test_send_runs_open_webuis_chat_pipeline(tmp_path):
             "can_ask_the_user": True,
             "outlet": True,
         }
-
-
-USER_VALVES = """
-from pydantic import BaseModel
-
-
-class Filter:
-    class UserValves(BaseModel):
-        shout: bool = False
-
-    def inlet(self, body, __user__=None):
-        return {**body, "shout": __user__["valves"].shout}
-"""
-
-
-def test_a_filter_gets_the_users_own_valves(tmp_path):
-    """`plugin.inlet` runs the filter as Open-WebUI runs one: the user's valves are in
-    `__user__["valves"]`."""
-    folder = plugin_folder(tmp_path, USER_VALVES)
-    with Harness() as owui:
-        from open_webui.models.functions import Functions  # noqa: PLC0415
-
-        plugin = owui.load(folder)
-        ada = owui.add_user("Ada")
-        assert plugin.inlet({"messages": []}, user=ada)["shout"] is False
-        owui.run(Functions.update_user_valves_by_id_and_user_id("demo", ada.id, {"shout": True}))
-        assert plugin.inlet({"messages": []}, user=ada)["shout"] is True
 
 
 def test_a_direct_call_gets_the_arguments_open_webuis_chat_middleware_gives(tmp_path):

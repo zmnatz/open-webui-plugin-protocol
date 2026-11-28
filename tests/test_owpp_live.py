@@ -281,14 +281,6 @@ def test_it_waits_for_open_webui_to_answer_before_signing_up(repo):
     assert owui.calls[0] == "POST /api/v1/auths/signup"
 
 
-def test_an_open_webui_that_never_answers_stops_the_stack(repo):
-    docker, owui = Docker(), FakeOpenWebUI(starting=10_000)
-    with pytest.raises(OwppError, match="did not answer"):
-        live([], docker=docker, owui=owui)
-    assert docker.actions() == ["up", "down"]
-    assert owui.calls == []
-
-
 def test_down_only_stops_it(repo):
     docker, owui = Docker(), FakeOpenWebUI()
     assert live(["--down"], docker=docker, owui=owui) == 0

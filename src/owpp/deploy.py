@@ -715,8 +715,7 @@ def iframe_sandbox_warning(instance: Instance, plugins: Build) -> str | None:
     if not ids:
         return None
     config = instance.open_webui.admin_config()
-    settings = config.get("DEFAULT_INTERFACE_SETTINGS") if isinstance(config, dict) else None
-    if isinstance(settings, dict) and settings.get(IFRAME_SETTING) is True:
+    if (config.get("DEFAULT_INTERFACE_SETTINGS") or {}).get(IFRAME_SETTING) is True:
         return None
     return (
         f"Warning: {', '.join(f'`{i}`' for i in ids)} need Open-WebUI's iframe Sandbox Allow Same "

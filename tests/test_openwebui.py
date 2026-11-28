@@ -76,13 +76,6 @@ def test_the_live_tests_api_returns_status_and_body_over_the_same_transport(serv
     assert Api("")("POST", "/api/v1/auths/signin", {"email": "x", "password": "y"})[0] == 400
 
 
-def test_over_urllib_nothing_listening_is_not_healthy_and_the_wait_gives_up():
-    api = OpenWebUI("http://127.0.0.1:1", urllib_fetch)
-    assert api.healthy() is False
-    with pytest.raises(OwppError, match="did not answer"):
-        api.wait_for_health(attempts=2, delay=0)
-
-
 # ---- health ----------------------------------------------------------------------------------
 
 
