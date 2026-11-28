@@ -5,15 +5,41 @@
 - `plugin_dir`: the plugin folder the test file is in (the nearest plugin.yaml above it).
 - `plugin`: that plugin, loaded into `owui` (enabled, with the manifest's valves).
 
-Every `owui` reads git through one Sources, so what `owui.load()` fetched is kept for the session
-and deleted when it ends.
+Every `owui` reads git through one Sources for the session, which keeps what `owui.load()` reads
+in the project's `.owpp/` (plugins_folder).
 
 Imports are deferred so that loading this plugin costs nothing in a run that never uses them.
 """
 
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
+
+
+def plugins_folder(test: Path, passed: str = "") -> Path | None:
+    """The plugins folder whose project keeps what a test reads from git: the one `owpp test`
+    passed, else OWPP_PLUGINS_DIR, else the folder that holds the test's plugin. None when
+    there is none, or the plugin is a whole repository, whose parent is not its project."""
+    from owpp.testing import plugin_folder
+
+    declared = passed or os.environ.get("OWPP_PLUGINS_DIR")
+    if declared:
+        folder = Path(declared).resolve()
+        return folder if folder.is_dir() else None
+    try:
+        plugin = plugin_folder(test)
+    except LookupError:
+        return None
+    return None if (plugin / ".git").exists() else plugin.parent
+
+
+def pytest_addoption(parser):
+    parser.addini(
+        "owpp_plugins_dir", "the plugins folder whose .owpp/ the owui fixture uses", default=""
+    )
 
 
 def pytest_configure(config):
@@ -32,12 +58,20 @@ def pytest_configure(config):
 
 @pytest.fixture(scope="session")
 def _owpp_session_sources():
-    """The session's Sources, which every `owui` reads git through: each pinned file is
-    fetched once. Closed once the session is done."""
+    """The session's Sources, which every `owui` reads git through, one for each plugins
+    folder: each pinned file is read once. Closed once the session is done."""
     from owpp.sources import Sources
 
-    with Sources() as sources:
-        yield sources
+    made: dict[Path | None, Sources] = {}
+
+    def for_folder(folder: Path | None) -> Sources:
+        if folder not in made:
+            made[folder] = Sources(plugins=folder)
+        return made[folder]
+
+    yield for_folder
+    for sources in made.values():
+        sources.close()
 
 
 @pytest.fixture
@@ -45,14 +79,14 @@ def owui(request, _owpp_session_sources):
     """The test harness (owpp.testing.Harness) for this test. A test marked
     `@pytest.mark.fresh_open_webui`, or every test when OWPP_FRESH_OPEN_WEBUI is set, gets a new
     Open-WebUI, imported and started again (slower)."""
-    import os
-
     from owpp.testing import Harness
 
     fresh = bool(os.environ.get("OWPP_FRESH_OPEN_WEBUI")) or (
         request.node.get_closest_marker("fresh_open_webui") is not None
     )
-    with Harness(sources=_owpp_session_sources, fresh=fresh) as harness:
+    passed = request.config.getini("owpp_plugins_dir")
+    sources = _owpp_session_sources(plugins_folder(request.path, passed))
+    with Harness(sources=sources, fresh=fresh) as harness:
         yield harness
 
 

@@ -828,8 +828,8 @@ def render_tests(spec: PluginSpec) -> str:
     ]
     if spec.source:
         out += [
-            "Its files are fetched from the pinned commit, so these tests need the network; to run",
-            'them offline, load it with stand-ins: owui.load(plugin_dir, sources={"tool.py": "..."}).',
+            "Its files come from the pinned commit: these tests need the network until .owpp/ holds",
+            'them. To run them offline before that: owui.load(plugin_dir, sources={"tool.py": "..."}).',
         ]
     out += ['"""', "", f"TITLE = {_py(spec.title)}"]
     if spec.has_code:

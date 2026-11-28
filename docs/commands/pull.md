@@ -34,7 +34,7 @@ To see first what the move changes on the live instance, run [`owpp deploy --dry
 The command reads each plugin with a `source:`, or only the ids that you give. For each one, it does these steps:
 
 1. It finds the latest commit with `git ls-remote`. It uses the branch in `source: branch:` or the tag in `source: tag:`. If there is neither, it uses the default branch of the repository.
-2. It fetches the files that the plugin takes, at the pinned commit and at the latest one. It lists each file that was **changed**, **added** or **removed**, including each file under a `dir:`. For GitHub, it adds a compare link.
+2. It reads the files that the plugin takes, at the pinned commit and at the latest one. It lists each file that was **changed**, **added** or **removed**, including each file under a `dir:`. For GitHub, it adds a compare link.
 3. It writes the new SHA in the `ref:` line of `plugin.yaml`, and keeps every comment and the layout. If there is no `ref:` yet, it adds one after `git:`. This first pin shows `pinned to <sha>` and, for GitHub, a link to the files.
 4. If the files changed, it gives the plugin a new version (`--bump`). It also adds a `CHANGELOG.md` entry that names the commits and the files.
 

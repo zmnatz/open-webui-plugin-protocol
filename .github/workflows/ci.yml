@@ -14,6 +14,11 @@ jobs:
         with:
           path: ~/.cache/owpp
           key: owpp-open-webui-${{ hashFiles('src/owpp/testing/pin.py') }}
+      # What owpp reads from git for the examples' pinned `source:`, keyed on the pins.
+      - uses: actions/cache@v4
+        with:
+          path: examples/.owpp/store
+          key: owpp-store-${{ hashFiles('examples/plugins/**/plugin.yaml') }}
       # The Python the pinned Open-WebUI runs on (.python-version, ADR 0004).
       - run: uv sync
       - name: The Open-WebUI pin matches upstream's slim lock

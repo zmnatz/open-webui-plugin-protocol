@@ -6,7 +6,7 @@ owpp build [id ...] [--out FOLDER] [--latest] [--dir FOLDER]
 
 `owpp build` bundles the plugins into a folder, the **build**. [`owpp deploy --from`](deploy.md#deploying-a-build) deploys that folder, possibly on a different machine:
 
-- Make the build where owpp can fetch the plugins' [git sources](../bundling.md#git-sources), for example in CI, with `git` and the network.
+- Make the build where owpp can get the plugins' [git sources](../bundling.md#git-sources). For example, use CI with `git` and the network.
 - Deploy it where owpp can reach the instance. That machine needs no copy of your repository, no `git` and no access to the source repositories.
 
 ```

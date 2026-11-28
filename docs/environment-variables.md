@@ -24,7 +24,7 @@ A plugin can name its own variables in `${NAME:-default}` templates. `owpp` does
 The plugins folder. A relative path starts at the current directory.
 
 - **Default**: `./plugins`.
-- **Read by**: every command, as the default of `--dir`.
+- **Read by**: every command, as the default of `--dir`. The [`owui` test fixture](testing/harness.md) also reads it, to find [`.owpp/`](bundling.md#the-owpp-folder).
 - If the folder does not exist, some commands stop with `no plugins folder at <folder> (pass --dir, or set OWPP_PLUGINS_DIR)`. These are `list`, `check`, `bundle`, `build`, `test`, `pull`, `migrate` and `live` (except `live --down`).
 - `create`, `init` and `import` make the folder.
 

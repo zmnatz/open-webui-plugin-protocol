@@ -68,12 +68,39 @@ For each key, see [plugin format: `source:`](plugin-format.md#source). These rul
 
 - `git` is an https URL, an ssh URL or `user@host:path`. owpp reads it with the `git` CLI, so any git host works, and ssh deploy keys need no new secret. owpp allows only the `https` and `ssh` protocols.
 - `ref` must be a **full commit SHA**. A branch or a tag can move, and this code runs with admin rights, so owpp refuses anything else. To upgrade, change the SHA and review the change. [`owpp pull`](commands/pull.md) changes it and lists the files that changed.
-- Before it bundles, owpp makes a shallow fetch of that exact commit into a scratch repository. Then it embeds the files. Thus the plugins repository, the pinned commit and the owpp version give the same bundle again.
+- Before it bundles, owpp reads the files at that exact commit. It takes them from [`.owpp/`](#the-owpp-folder), or makes a shallow fetch into a scratch repository. Then it embeds the files. Thus the plugins repository, the pinned commit and the owpp version give the same bundle again.
 - With `plugin: true`, owpp fetches the whole folder at `path` and bundles it as a local plugin. The owpp that reads your manifest does this. See [a whole plugin from git](plugin-format.md#a-whole-plugin-from-git).
 - For a folder (`dir:`, or a whole plugin), owpp takes every regular file in that commit. It skips symlinks and submodules.
 - The limits are 1000 files per folder and 2 MB per file. owpp embeds a file that is not UTF-8 as base64.
 
-Plugins can pin different commits of the same repository. The **Sources** of a run are everything that it reads from git, and it fetches each file at a commit once.
+Plugins can pin different commits of the same repository. The **Sources** of a run are everything that it reads from git, and it reads each file at a commit once.
+
+### The `.owpp/` folder
+
+owpp keeps what it takes from git in `.owpp/`, as Node keeps `node_modules`. The folder is beside the plugins folder. If the plugins folder is itself a git repository, `.owpp/` is inside it. The pins in `plugin.yaml` say what goes into the folder.
+
+**Caution: do not commit `.owpp/`.** owpp writes a `.gitignore` inside the folder, so git ignores it. Also add this line to the `.gitignore` of your repository, so that your project says so:
+
+```gitignore
+.owpp/
+```
+
+| Folder | Holds |
+| --- | --- |
+| `.owpp/store/` | The upstream files, unchanged, for each repository and commit. |
+| `.owpp/modules/<id>/` | A [whole plugin from git](plugin-format.md#a-whole-plugin-from-git), with your overrides. owpp bundles this folder. |
+
+- owpp fetches files only if the store does not hold them. When it holds every pinned file, `check`, `build`, `deploy` and `test` need no network for git sources. A [test harness](testing/harness.md) that you make yourself does not use the store.
+- owpp writes a folder in `modules/` again when the pin, your `plugin.yaml`, your `config.yaml` or the owpp version changes.
+- A build at the latest commits and `check --since` add to the store, but they use scratch copies of whole plugins. The same applies to the new commit in `owpp pull`. Thus `modules/` keeps the pinned code.
+- [Upstream tests](commands/test.md#upstream-tests) also run in a scratch copy.
+- You can delete `.owpp/` between two commands. owpp fetches the files again when it needs them.
+- Do not change a file in `.owpp/`. owpp [refuses a changed file](troubleshooting.md#a-file-in-owpp-was-changed), because this code runs with admin rights.
+- owpp also [refuses a `.owpp/` that git tracks](troubleshooting.md#git-tracks-owpp).
+- If git cannot say whether it tracks the folder, owpp prints a note and does not use it. An example is a repository that another user owns.
+- When owpp creates `.owpp/` in a repository that does not name it, owpp prints a note. owpp never changes your `.gitignore`.
+- A CI job can [keep `store/` between runs](testing/ci.md#caching-the-git-sources).
+- If owpp cannot write the folder, it prints a note, keeps nothing, and continues.
 
 ## Skills
 

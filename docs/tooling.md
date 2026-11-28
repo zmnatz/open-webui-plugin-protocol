@@ -58,6 +58,7 @@ jobs:
 | `dry-run`, `latest`, `force`, `no-prune` | [`owpp deploy`](commands/deploy.md)'s `--dry-run`, `--latest`, `--force` and `--no-prune`. Set `"true"` to turn one on. `latest` works only with `dry-run`. |
 | `from` | A folder that [`owpp build`](commands/build.md) wrote. The action deploys it instead of the plugins folder ([deploying a build](commands/deploy.md#deploying-a-build)). It skips `owpp check`: run that where you make the build. |
 | `check` | `"false"` skips `owpp check` before the deploy (default `"true"`). |
+| `cache` | `"true"` keeps [`.owpp/store/`](bundling.md#the-owpp-folder) between runs (default `"false"`). Read [the caution](testing/ci.md#caching-the-git-sources) first. |
 | `since` | A git ref for [`owpp check --since`](commands/check.md#a-change-needs-a-new-version). The checkout must have that ref (`actions/checkout` with `fetch-depth: 0`). |
 
 More CI examples:

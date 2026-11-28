@@ -162,7 +162,7 @@ skills:
 
 The README gives the origin of the code, the pinned commit and how to upgrade it. To upgrade, `owpp pull <id>` moves `ref` to the latest commit and lists the files that changed. You review the diff before you commit.
 
-The tests get the pinned files, so they need the network. The test file tells how to load the plugin with stand-ins: `owui.load(plugin_dir, sources={...})`. [`inline_visualizer`](../examples/plugins/inline_visualizer) does this. See [bundling: git sources](bundling.md#git-sources).
+The tests read the pinned files. They need the network until [`.owpp/`](bundling.md#the-owpp-folder) holds the files. The test file tells how to load the plugin with stand-ins: `owui.load(plugin_dir, sources={...})`. [`inline_visualizer`](../examples/plugins/inline_visualizer) does this. See [bundling: git sources](bundling.md#git-sources).
 
 ## What it writes, in every case
 

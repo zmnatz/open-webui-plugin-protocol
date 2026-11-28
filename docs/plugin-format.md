@@ -124,7 +124,7 @@ source:
   branch: main                              # optional: the branch `owpp pull` follows (or tag:)
 ```
 
-With `source:`, owpp reads `function: {file}`, `tool: {file}` and `skills: {<id>: {file|dir}}` from that repository at that commit. For the allowed URLs and the limits, see [bundling: git sources](bundling.md#git-sources).
+With `source:`, owpp reads `function: {file}`, `tool: {file}` and `skills: {<id>: {file|dir}}` from that repository at that commit. For the allowed URLs and the limits, see [bundling: git sources](bundling.md#git-sources). owpp keeps the files in [`.owpp/`](bundling.md#the-owpp-folder), which you must not commit.
 
 You can write the manifest without `ref`. [`owpp pull`](commands/pull.md) then looks up the latest commit and adds the line. Until then, `owpp check` and `owpp deploy` refuse the plugin.
 
@@ -145,7 +145,7 @@ source:
 # then: owpp pull excalidraw, which adds ref:
 ```
 
-owpp fetches the folder at the pinned commit and bundles it like a local plugin, with the upstream `plugin.yaml`. The name of your local folder is the plugin id. Besides `protocol:`, `source:` and `x-` keys, your local manifest can set only these:
+owpp takes the folder at the pinned commit and writes it to [`.owpp/modules/<id>/`](bundling.md#the-owpp-folder). Then it bundles that folder like a local plugin, with the upstream `plugin.yaml`. The name of your local folder is the plugin id. Besides `protocol:`, `source:` and `x-` keys, your local manifest can set only these:
 
 | Key | Effect |
 | --- | --- |

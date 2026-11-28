@@ -12,7 +12,7 @@ excalidraw              filter (global)
 mcpo_sync               event
 ```
 
-The command bundles every plugin as [`owpp deploy`](deploy.md) does, and fetches the files that a `source:` takes from git. Thus a plugin that cannot be bundled also fails here.
+The command bundles every plugin as [`owpp deploy`](deploy.md) does, and reads the files that a `source:` takes from git. Thus a plugin that cannot be bundled also fails here.
 
 ## Options
 

@@ -9,6 +9,7 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .. import __version__
 from ..errors import OwppError
 from ..manifest import (
     Value,
@@ -21,6 +22,7 @@ from ..manifest import (
 )
 from . import _git
 from ._git import GIT_URL, MAX_SOURCE_BYTES, SHA40, Fetcher, KindOf, Lookup
+from ._project import ProjectFolder
 from ._upstream import is_plugin_source, write_upstream
 
 MAX_SKILL_FILES = 1000
@@ -132,10 +134,11 @@ def _size(value: Value) -> int:
 class ResolvedPlugin:
     """A plugin folder with its `source:` applied.
 
-    `root` is the folder to bundle: the plugin folder, or for a plugin taken whole from git a
-    scratch copy of the upstream folder with the local overrides applied (it is gone once its
-    Sources is closed). `manifest` is that folder's manifest. `pins` names each repository the
-    plugin takes code from with its commit: {"<git>[ <path>]": sha}."""
+    `root` is the folder to bundle: the plugin folder, or for a plugin taken whole from git the
+    upstream folder with the local overrides applied. That is `.owpp/modules/<id>`, or when
+    `temporary` a scratch copy, which is gone once its Sources is closed. `manifest` is the
+    root's manifest. `pins` names each repository the plugin takes code from with its commit:
+    {"<git>[ <path>]": sha}."""
 
     folder: Path
     manifest: dict
@@ -147,10 +150,11 @@ class ResolvedPlugin:
     # The files of `manifest`'s own `source:`, by path inside its `path`.
     _files: dict[str, Value] = field(repr=False)
     _sources: Sources = field(repr=False)
+    temporary: bool = False
 
     @property
     def root(self) -> Path:
-        if self._root != self.folder and self._sources.closed:
+        if self.temporary and self._sources.closed:
             raise OwppError(
                 f"{self.folder.name}: its upstream copy was deleted when its Sources was closed"
             )
@@ -186,7 +190,10 @@ class ResolvedPlugin:
 
 class Sources:
     """What one run reads from git through: each plugin file at its pinned commit, fetched
-    once, the scratch copies of plugins taken whole from git, and what a branch or tag names.
+    once, the copies of plugins taken whole from git, and what a branch or tag names.
+
+    Given the plugins folder `plugins`, it keeps what it takes in that project's `.owpp/`
+    (_project.py): a commit held there is not fetched again. Without it, nothing is kept.
 
     Use it as a context manager: the scratch copies are deleted when it closes (or when the
     process exits, for one that is never closed)."""
@@ -196,12 +203,16 @@ class Sources:
         fetcher: Fetcher | None = None,
         lookup: Lookup | None = None,
         kind_of: KindOf | None = None,
+        plugins: Path | str | None = None,
     ):
-        self.fetcher = fetcher if fetcher is not None else _git.git_fetcher
+        fetcher = fetcher if fetcher is not None else _git.git_fetcher
+        self._project = None if plugins is None else ProjectFolder(Path(plugins))
+        # What reads files at a commit: through the project's .owpp/ when there is one.
+        self.fetcher = fetcher if self._project is None else self._project.fetcher(fetcher)
         self._lookup = lookup if lookup is not None else _git.resolve_ref
         self._kind_of = kind_of if kind_of is not None else _git.ref_kind
         self._cache: dict[str, dict[str, Value]] = {}
-        self._made: dict[str, Path] = {}
+        self._made: dict[tuple[str, str], Path] = {}
         self._scratch: tempfile.TemporaryDirectory | None = None
         self.closed = False
 
@@ -235,9 +246,13 @@ class Sources:
         got = self.fetcher(git, sha, [prefix or "./"])
         return {k[len(prefix) :]: v for k, v in got.items() if k.startswith(prefix)}
 
-    def resolve(self, folder: Path | str, ref: str | None = None) -> ResolvedPlugin:
+    def resolve(
+        self, folder: Path | str, ref: str | None = None, scratch: bool = False
+    ) -> ResolvedPlugin:
         """The plugin in `folder`, with what its `source:` takes fetched at the pinned commit,
-        or at `ref` instead when given."""
+        or at `ref` instead when given. A whole plugin from git is written to
+        `.owpp/modules/` only for a plugin of the plugins folder at its own pin; at `ref`, with
+        `scratch`, or without a `.owpp/`, it is a scratch copy."""
         if self.closed:
             raise OwppError("this Sources is closed")
         folder = Path(folder)
@@ -253,7 +268,8 @@ class Sources:
         taken = self._repo_paths(src, files)
         if not is_plugin_source(manifest):
             return ResolvedPlugin(folder, manifest, pins, taken, folder, files, self)
-        root = self._upstream_copy(folder, manifest, files)
+        keep = ref is None and not scratch
+        root, temporary = self._upstream_copy(folder, manifest, files, keep)
         inner = read_manifest(root)
         inner_src = inner.get("source")
         inner_files: dict[str, Value] = {}
@@ -262,7 +278,7 @@ class Sources:
             pins[source_label(inner_src)] = text_of(inner_src.get("ref"))
             git = text_of(inner_src.get("git"))
             taken |= {f"{git} {p}": v for p, v in self._repo_paths(inner_src, inner_files).items()}
-        return ResolvedPlugin(folder, inner, pins, taken, root, inner_files, self)
+        return ResolvedPlugin(folder, inner, pins, taken, root, inner_files, self, temporary)
 
     # ---- inside -------------------------------------------------------------------------
 
@@ -305,23 +321,34 @@ class Sources:
                 out[p[len(base) + 1 :] if base else p] = v
         return out
 
-    def _upstream_copy(self, folder: Path, manifest: dict, files: dict[str, Value]) -> Path:
-        """The scratch copy of a whole plugin's upstream folder, made once per Sources for the
-        same local manifest, config.yaml and files."""
+    def _upstream_copy(
+        self, folder: Path, manifest: dict, files: dict[str, Value], keep: bool
+    ) -> tuple[Path, bool]:
+        """A whole plugin's upstream folder with the local overrides, and whether it is a
+        scratch copy: with `keep`, the project's module for it, else (or when the project cannot
+        keep one) a scratch copy, made once per Sources for the same local manifest, config.yaml
+        and files."""
         local_text = read_text(folder / "plugin.yaml")
         config = folder / "config.yaml"
         config_text = read_text(config) if config.is_file() else None
         where = _key(folder.name, manifest["source"], "", True)
-        digest = hashlib.sha256(
-            repr(
-                (str(folder.resolve()), where, local_text, config_text, sorted(files.items()))
-            ).encode()
-        ).hexdigest()[:16]
-        if digest in self._made:
-            return self._made[digest]
+        made_from = (__version__, where, local_text, config_text, sorted(files.items()))
+        inputs = hashlib.sha256(repr(made_from).encode()).hexdigest()
+
+        def write(root: Path) -> None:
+            write_upstream(root, folder, manifest, files, where)
+
+        if keep and self._project is not None and self._project.holds(folder):
+            kept = self._project.plugin_copy(folder.name, inputs, write)
+            if kept is not None:
+                return kept, False
+        key = (str(folder.resolve()), inputs)
+        if key in self._made:
+            return self._made[key], True
         if self._scratch is None:
             self._scratch = tempfile.TemporaryDirectory(prefix="owpp-upstream-")
+        digest = hashlib.sha256(repr(key).encode()).hexdigest()[:16]
         root = Path(self._scratch.name) / digest / folder.name
-        write_upstream(root, folder, manifest, files, where)
-        self._made[digest] = root
-        return root
+        write(root)
+        self._made[key] = root
+        return root, True

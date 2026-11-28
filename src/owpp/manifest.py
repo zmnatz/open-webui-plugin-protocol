@@ -240,6 +240,18 @@ def file_value(buf: bytes) -> Value:
         return {"base64": base64.b64encode(buf).decode("ascii")}
 
 
+def value_bytes(value: Value) -> bytes:
+    """The bytes of a file as file_value read it."""
+    return value.encode("utf-8") if isinstance(value, str) else base64.b64decode(value["base64"])
+
+
+def is_plain_path(path: str) -> bool:
+    """Whether the path of a file in a repository stays inside the folder it is written to."""
+    if os.sep == "\\" and "\\" in path:  # on Windows it separates folders too
+        return False
+    return not any(p in ("", ".", "..") or Path(p).anchor for p in path.split("/"))
+
+
 def file_entry(path: str, value: Value) -> dict:
     """A file as the runtime installs it: {path, content, encoding?}."""
     if isinstance(value, str):

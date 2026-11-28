@@ -8,7 +8,6 @@ of upstream's slim image instead.
 
 from __future__ import annotations
 
-import contextlib
 import hashlib
 import os
 import shutil
@@ -18,6 +17,7 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+from ..locking import locked
 from . import pin
 
 
@@ -38,7 +38,7 @@ def open_webui_dir() -> Path:
         return folder
     folder.parent.mkdir(parents=True, exist_ok=True)
     # One download for every process that starts at once (pytest -n auto): the others wait.
-    with _locked(folder.parent / f".open-webui-{pin.VERSION}.lock"):
+    with locked(folder.parent / f".open-webui-{pin.VERSION}.lock"):
         if not _ready(folder):
             _download(folder)
     return folder
@@ -46,35 +46,6 @@ def open_webui_dir() -> Path:
 
 def _ready(folder: Path) -> bool:
     return (folder / "open_webui").is_dir() and (folder / ".sha256").is_file()
-
-
-@contextlib.contextmanager
-def _locked(path: Path):
-    """An exclusive lock on `path`, held until the block ends (fcntl, or msvcrt on Windows)."""
-    with path.open("a+") as handle:
-        try:
-            import fcntl
-        except ImportError:  # Windows
-            import msvcrt
-
-            handle.seek(0)
-            while True:
-                try:
-                    msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
-                    break
-                except OSError:  # LK_LOCK gives up after ten tries: try again
-                    continue
-            try:
-                yield
-            finally:
-                handle.seek(0)
-                msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
-            return
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def _download(folder: Path) -> None:

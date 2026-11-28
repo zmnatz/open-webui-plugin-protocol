@@ -27,6 +27,7 @@ Caution: move all the pins before you migrate (CI, the action, your own computer
 ## 0.7 -> 0.8
 
 - **Nothing to migrate.** The protocol does not change, and the bundles that a deploy writes are the same.
+- **owpp keeps git sources in your project**, in [`.owpp/`](bundling.md#the-owpp-folder). Add `.owpp/` to your `.gitignore`.
 - **The tests run the real Open-WebUI.** `owpp test` runs each plugin on the [test harness](testing/harness.md): Open-WebUI v0.13.5 in the test process, in place of the mock ([why](adr/0004-unit-tests-run-the-real-open-webui.md)). The `owui` fixture keeps its calls.
 - **owpp runs on Python 3.12**, the Python of Open-WebUI v0.13.5 ([owpp mirrors Open-WebUI](testing/harness.md#owpp-mirrors-open-webui)). Add `--python 3.12` to `uvx` for the tests. Without it, uv can pick a newer Python. In a repository that installs owpp with uv, run `uv python pin 3.12`. With pip, use Python 3.12. The `test` extra now installs the packages of Open-WebUI's slim image, at Open-WebUI's versions. Your own test dependencies must agree with those versions.
 - **The first run downloads Open-WebUI** (about 110 MB) to [`OWPP_CACHE_DIR`](environment-variables.md#owpp_cache_dir). Later runs use the cache. In CI, cache that folder.

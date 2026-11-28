@@ -93,7 +93,7 @@ If the server or a proxy wants a client certificate, the hint names `OPEN_WEBUI_
 
 ## Code taken from git
 
-owpp checks a plugin's [`source:`](plugin-format.md#source) before it fetches anything. Every command that bundles the plugin fetches the code, for example `check`, `test`, `bundle` and `deploy`.
+owpp checks a plugin's [`source:`](plugin-format.md#source) before it fetches anything. Every command that bundles the plugin reads the code, for example `check`, `test`, `bundle` and `deploy`.
 
 ### No pinned commit
 
@@ -144,6 +144,33 @@ error: no files under <path>/ in <git url> at <sha>
 The repository does not have the file, or the folder of a `dir:` or of a [whole plugin](plugin-format.md#a-whole-plugin-from-git), at the pinned commit. Compare `path:` with the repository at that commit, not at its latest commit.
 
 If a file that the plugin takes is gone at a new commit, [`owpp pull`](commands/pull.md) reports `FAIL  <id>: ...` and does not move the pin.
+
+### A file in `.owpp/` was changed
+
+```
+error: <file> is not as owpp wrote it, so it is not the pinned code. Delete <folder> and run again
+```
+
+After owpp wrote [`.owpp/`](bundling.md#the-owpp-folder), something changed, added or deleted a file or folder in it.
+
+1. If you want to keep your change, copy it to a different folder.
+2. Delete the folder that the message names.
+3. Run the command again.
+
+To change upstream code, change it in its repository and move the pin.
+
+### git tracks `.owpp/`
+
+```
+error: git tracks files in <project>/.owpp, so owpp cannot trust them: ...
+```
+
+A person committed `.owpp/`, or added it with `git add -f`. A committed folder could change the bundle without a change to a pin.
+
+1. In the folder that holds `.owpp/`, run `git rm -r --cached .owpp`.
+2. Add `.owpp/` to `.gitignore`.
+3. Delete the `.owpp/` folder.
+4. Commit the change.
 
 ## [`owpp check`](commands/check.md)
 

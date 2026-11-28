@@ -566,7 +566,10 @@ def latest_copy(directory: Path, sources: Sources, work: Path) -> tuple[Path, di
 
     copy = work / directory.name
     shutil.copytree(
-        directory, copy, symlinks=True, ignore=shutil.ignore_patterns(".git", "node_modules")
+        directory,
+        copy,
+        symlinks=True,
+        ignore=shutil.ignore_patterns(".git", ".owpp", "node_modules"),
     )
     notes: dict[str, str] = {}
     for folder in plugin_folders(copy):
@@ -644,7 +647,7 @@ def build_plugins(
     else:
         with tempfile.TemporaryDirectory(prefix="owpp-latest-") as work:
             copy, notes = latest_copy(directory, sources, Path(work))
-            files = load_function_files(copy, sources)
+            files = [replace(f, root=None) for f in load_function_files(copy, sources)]
     if ids:
         missing = [i for i in ids if not any(f.id == i for f in files)]
         if missing:

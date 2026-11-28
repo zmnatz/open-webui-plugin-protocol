@@ -704,7 +704,14 @@ def function_type(content: str) -> list[str]:
 
 @dataclass
 class FunctionFile:
-    """One function to deploy."""
+    """One function to deploy.
+
+    `root` is the folder that was bundled, when it stays on disk: the plugin's folder in the
+    plugins folder, or for a plugin taken whole from git its `.owpp/modules/<id>`. It is None
+    when that folder is a temporary one: a scratch copy of a whole plugin (its Sources keeps no
+    `.owpp/`; `Sources.resolve` gives the copy while it is open), or anything made from a
+    temporary copy of the plugins folder (a build at the latest commits, the old tree of
+    `check --since`). It is also None for a loose <id>.py and a function read from a build."""
 
     id: str
     content: str = ""
@@ -718,8 +725,6 @@ class FunctionFile:
     # What the deploy stores with it (function_meta): the description, the commit of each git
     # source ({"<git>[ <path>]": sha}) and the instance settings it `requires:`.
     meta: FunctionMeta = field(default_factory=lambda: FunctionMeta(MANAGED_BY, requires={}))
-    # The folder that was bundled: the plugin folder, or for a plugin taken whole from git the
-    # upstream folder as fetched, with the local overrides applied. None for a loose <id>.py.
     root: Path | None = None
 
 
@@ -825,5 +830,5 @@ def function_file(folder: Path | str, sources: Sources) -> FunctionFile | None:
         else None,
         plugin=plugin,
     )
-    item.root = plugin.root
+    item.root = None if plugin.temporary else plugin.root
     return item

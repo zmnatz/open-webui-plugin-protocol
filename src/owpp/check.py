@@ -94,13 +94,13 @@ def check_plugins(
             raise UnknownPlugin(f"no plugin {', '.join(missing)} in {directory}")
         chosen = [fn for fn in functions if not ids or fn.id in ids]
         for fn in chosen:
-            yield from _check_function(directory, fn)
+            yield from _check_function(directory, fn, sources)
         if since:
             for found in check_since(directory, since, list(ids), sources, new_files=chosen):
                 yield Finding("fail", str(found))
 
 
-def _check_function(directory: Path, fn: FunctionFile) -> Iterator[Finding]:
+def _check_function(directory: Path, fn: FunctionFile, sources: Sources) -> Iterator[Finding]:
     for part, code in bundle_parts(fn):
         problem = check_bundle(code, f"{fn.id}.py")
         if problem:
@@ -113,12 +113,13 @@ def _check_function(directory: Path, fn: FunctionFile) -> Iterator[Finding]:
     for found in lint_notes(directory / name, name):
         yield Finding("note", str(found))
     if fn.file.endswith("/"):
-        yield from _check_folder(directory / name, fn)
+        yield from _check_folder(directory / name, fn, sources)
 
 
-def _check_folder(folder: Path, fn: FunctionFile) -> Iterator[Finding]:
+def _check_folder(folder: Path, fn: FunctionFile, sources: Sources) -> Iterator[Finding]:
     """What only a plugin folder has: a changelog, a manifest and the variables it reads."""
-    root = fn.root or folder
+    # No root: a plugin taken whole from git into a scratch copy, which `sources` holds.
+    root = fn.root or sources.resolve(folder).root
     problem = changelog_problem(root, version_of(fn.content))
     if problem:
         yield Finding("warn", f"{fn.id}/{problem}")
