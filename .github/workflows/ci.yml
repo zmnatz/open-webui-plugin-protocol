@@ -23,10 +23,6 @@ jobs:
       - run: uv run pytest -n auto
       - name: Run the example plugins' tests the way a plugin repository would
         run: uv run owpp test --dir examples/plugins -- -n auto
-      - name: Run the tests written for plugins that already worked (docs/testing/existing-plugins.md)
-        run: |
-          uv run owpp test --dir examples/existing-plugins/better-banners/plugins
-          uv run owpp test --dir examples/existing-plugins/excalidraw/plugins
       - name: Check the examples against their real upstream sources
         run: uv run owpp check --strict --dir examples/plugins
   package:

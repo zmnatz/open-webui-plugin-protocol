@@ -29,10 +29,6 @@ You can also copy the folder into the skills folder of your agent. For Claude Co
 npx skills add zmnatz/open-webui-plugin-protocol@test-existing-plugin
 ```
 
-### How well it works
-
-This project tried the skill on two plugins: Classic298's Better Banners, imported from git, and this repository's Excalidraw. Then it put bugs into each plugin, one at a time, and ran all the tests that the skill wrote against each bug. The tests found 14 of 16 bugs in Better Banners, and 16 of 19 in Excalidraw. The unit tests (then against a mock Open-WebUI) found the bugs on the server, and the live tests found the bugs on the page. [Testing a plugin that already works](testing/existing-plugins.md) gives the full results.
-
 ## A plugin spec instead of the wizard
 
 `owpp create` asks questions at a terminal, and an agent cannot answer them. `owpp create --spec <file>` takes the same answers as a YAML or JSON file (`-` reads stdin). It writes the plugin and checks it:

@@ -164,8 +164,6 @@ With such code, note these points:
 - **A package that Open-WebUI's slim image does not have** stops the load with its name and its version: [a package that the slim image does not have](harness.md#a-package-that-the-slim-image-does-not-have).
 - **A service that the function calls** needs a stand-in, as for [any plugin that calls other services](#plugins-that-call-other-services).
 
-For two examples with their tests, see [a plugin that already works](existing-plugins.md).
-
 ## Code from git
 
 A plugin can take its tool, function or skills from a `source:`. A load then fetches the files from the pinned commit, which needs the network. To test offline, and to test only the files in your folder, load the plugin with stand-ins:

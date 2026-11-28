@@ -18,7 +18,6 @@ CI runs the first two layers on every change. If you set up a [live check](testi
 | [Testing each kind of plugin](testing/kinds.md) | Recipes for filters, actions, pipes, tools, events, scheduled jobs, pages, installers and skills. Also for outside code, code from git and other services. |
 | [The test harness](testing/harness.md) | Every call and table of the harness, and what it fakes. |
 | [On a real Open-WebUI](testing/live.md) | Tests by hand, live tests in your repository, a throwaway Open-WebUI for experiments, and this repository's live suite. |
-| [A plugin that already works](testing/existing-plugins.md) | Tests that an agent wrote for existing code: two examples, and the number of planted bugs that their tests caught. |
 | [In CI](testing/ci.md) | A workflow that checks and tests every pull request. |
 
 ## Running the tests
