@@ -184,12 +184,17 @@ def git(repo, *args):
     )
 
 
+def commit_all(folder):
+    """Make `folder` a git repository, with everything in it committed to main."""
+    git(folder, "init", "-q", "-b", "main")
+    git(folder, "add", "-A")
+    git(folder, "commit", "-qm", "first")
+
+
 @pytest.fixture
 def repo(plugin):
     """The plugins folder `plugin` made, inside a git repository, committed."""
-    git(plugin, "init", "-q", "-b", "main")
-    git(plugin, "add", "-A")
-    git(plugin, "commit", "-qm", "first")
+    commit_all(plugin)
     return plugin
 
 
@@ -258,6 +263,7 @@ tool:
 """
 
 FUNCTION = "class Filter:\n    pass\n"
+TOOL = "class Tools:\n    pass\n"
 
 
 def skill_md(body):
@@ -265,14 +271,12 @@ def skill_md(body):
 
 
 @pytest.fixture
-def sourced(tmp_path):
-    """Commit a plugin `viz` with these files to a new git repository, as `main`."""
+def commit_plugin(tmp_path):
+    """Commit a plugin `viz` with these files to a new plugins folder in git."""
 
     def make(files):
         write_tree(tmp_path / "viz", files)
-        git(tmp_path, "init", "-q", "-b", "main")
-        git(tmp_path, "add", "-A")
-        git(tmp_path, "commit", "-qm", "first")
+        commit_all(tmp_path)
         return tmp_path
 
     return make
@@ -290,8 +294,8 @@ def findings(folder, upstream):
 
 
 class TestCheckSinceWithASource:
-    def test_a_local_skill_needs_its_own_bump_when_the_tool_is_from_git(self, sourced):
-        folder = sourced(
+    def test_a_local_skill_needs_its_own_bump_when_the_tool_is_from_git(self, commit_plugin):
+        folder = commit_plugin(
             {
                 "plugin.yaml": SOURCED,
                 "function.py": FUNCTION,
@@ -299,7 +303,7 @@ class TestCheckSinceWithASource:
             }
         )
         (folder / "viz" / "skills" / "draw" / "SKILL.md").write_text(skill_md("Draw more."))
-        assert findings(folder, {OLD: {"tool.py": "class Tools:\n    pass\n"}}) == [
+        assert findings(folder, {OLD: {"tool.py": TOOL}}) == [
             "skill draw: changed since main but its version is still 1.0.0 "
             "(run `owpp version viz patch --skill draw`)"
         ]
@@ -307,22 +311,22 @@ class TestCheckSinceWithASource:
     @pytest.mark.parametrize(
         "entry, path", [("file: SKILL.md", "SKILL.md"), ("dir: draw", "draw/SKILL.md")]
     )
-    def test_a_skill_from_git_is_the_plugins_change(self, sourced, entry, path):
+    def test_a_skill_from_git_is_the_plugins_change(self, commit_plugin, entry, path):
         """Its id in the manifest may be in upper case: the bundle's is in lower case."""
         manifest = SOURCED + f"skills:\n  Draw:\n    {entry}\n"
-        folder = sourced({"plugin.yaml": manifest, "function.py": FUNCTION})
+        folder = commit_plugin({"plugin.yaml": manifest, "function.py": FUNCTION})
         move_pin(folder)
         upstream = {
-            sha: {"tool.py": "class Tools:\n    pass\n", path: skill_md(body)}
+            sha: {"tool.py": TOOL, path: skill_md(body)}
             for sha, body in ((OLD, "Draw."), (NEW, "Draw more."))
         }
         assert findings(folder, upstream) == [
             "viz: changed since main but its version is still 1.0.0 (run `owpp version viz patch`)"
         ]
 
-    def test_every_part_of_a_whole_plugin_from_git_is_the_upstreams(self, sourced):
+    def test_every_part_of_a_whole_plugin_from_git_is_the_upstreams(self, commit_plugin):
         manifest = f"source:\n  git: {REPO}\n  ref: {OLD}\n  path: viz\n  plugin: true\n"
-        folder = sourced({"plugin.yaml": manifest})
+        folder = commit_plugin({"plugin.yaml": manifest})
         move_pin(folder)
         upstream = {
             sha: {

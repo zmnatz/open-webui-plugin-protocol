@@ -88,14 +88,17 @@ The check bundles every plugin as it was at that git ref (with `git archive`) an
 
 A plugin that did not exist at that ref needs nothing.
 
-The upstream sets the version of code that a plugin takes verbatim from a `source:`:
+The upstream sets the version of code that a plugin takes verbatim from a `source:`. In a plugin with a `source:`, these parts are verbatim:
 
-- A tool is verbatim when `tool:` has `file:` or `from:`.
-- A skill is verbatim when the plugin has a `source:`, and its [`skills:`](../plugin-format.md#skills) entry has `file:` or `dir:`.
-- In a [whole plugin from git](../plugin-format.md#a-whole-plugin-from-git), every part is verbatim.
+- The function or the tool, when its section has `file:`.
+- A skill, when its [`skills:`](../plugin-format.md#skills) entry has `file:` or `dir:`.
+- Every part of a [whole plugin from git](../plugin-format.md#a-whole-plugin-from-git).
+
+The check treats the parts as follows:
+
 - A change to a verbatim tool or skill counts as a change of the plugin.
-- Other tools and skills follow the rules above, also in a plugin with a `source:`.
-- If the function itself is verbatim, the plugin needs no new version.
+- If the function is verbatim, the plugin needs no new version.
+- All other tools and skills follow the rules above.
 
 The check needs the `git` CLI. To use it in CI:
 

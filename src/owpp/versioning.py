@@ -361,16 +361,16 @@ class Finding:
         return f"{self.id}: {self.message}" + (f" (run `{self.fix}`)" if self.fix else "")
 
 
-def _from_source(manifest: dict, kind: str, skill_id: str = "") -> bool:
-    """Whether the plugin's function, tool or skill `skill_id` is taken verbatim, so it keeps the
-    upstream's version."""
+def _from_source(manifest: dict, kind: str, item_id: str = "") -> bool:
+    """Whether the plugin's function, tool or skill is taken verbatim, so it keeps the upstream's
+    version. `item_id` says which skill."""
     if is_plugin_source(manifest):  # a whole plugin from git: every version is the upstream's
         return True
     if kind == "skill":
         declared = manifest.get("skills")
         entries = declared.items() if isinstance(declared, dict) else []
         # a bundle holds a skill's id in lower case
-        section = next((v for k, v in entries if str(k).lower() == skill_id), None)
+        section = next((v for k, v in entries if str(k).lower() == item_id), None)
         keys = ("file", "dir")
     else:
         section = manifest.get(kind)
