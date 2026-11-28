@@ -27,7 +27,7 @@ from pathlib import Path
 from .bundle import FunctionFile, load_function_files, parse_frontmatter, parse_skill
 from .errors import OwppError
 from .manifest import get, parse_yaml, read_manifest, read_text, set_key, text_of
-from .sources import Sources, is_plugin_source
+from .sources import Sources, UpstreamParts, upstream_parts
 
 SEMVER = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 PARTS = ("patch", "minor", "major")
@@ -90,10 +90,10 @@ def set_block_version(text: str, block: str, version: str) -> tuple[str, str]:
     """plugin.yaml with `version:` of the top-level `block:` mapping set (added after `title:`
     when it has none), comments and layout kept: the new text and the old version ("" when it
     had none)."""
-    section = get(parse_yaml(text), block)
-    if isinstance(section, dict) and section.get("file"):
+    manifest = parse_yaml(text)
+    if _upstream(upstream_parts(manifest if isinstance(manifest, dict) else {}), block):
         raise OwppError(f"the {block} is taken verbatim from its source, which sets its version")
-    old = text_of(get(section, "version"))
+    old = text_of(get(get(manifest, block), "version"))
     return set_key(text, f"{block}.version", version, after="title"), old
 
 
@@ -175,6 +175,17 @@ def changelog_problem(folder: Path, version: str) -> str | None:
 UPSTREAM = "(the upstream's)"
 
 
+def _upstream(parts: UpstreamParts, block: str) -> bool:
+    """Whether the plugin's `function` or `tool` (`block`) is the upstream's."""
+    return parts.function if block == "function" else parts.tool
+
+
+def _set_elsewhere(parts: UpstreamParts, block: str) -> bool:
+    """Whether the version of the `function` or `tool` is set outside its plugin.yaml section:
+    by the upstream, or, for a tool with `from: function`, by the function."""
+    return _upstream(parts, block) or (block == "tool" and parts.tool_is_function)
+
+
 def versions_of(directory: Path, plugin_id: str) -> list[tuple[str, str]]:
     """A plugin's versions as its files declare them: [(what, version)], the function first.
     Read from the files, not bundled, so a plugin from git needs no fetch: what it takes verbatim
@@ -185,7 +196,8 @@ def versions_of(directory: Path, plugin_id: str) -> list[tuple[str, str]]:
     if not (folder / "plugin.yaml").is_file():
         raise OwppError(f"no plugin {plugin_id} in {directory}")
     manifest = read_manifest(folder)
-    if is_plugin_source(manifest):
+    parts = upstream_parts(manifest)
+    if parts.whole:
         return [("function", UPSTREAM)]
     out = []
     for block in ("function", "tool"):
@@ -193,11 +205,11 @@ def versions_of(directory: Path, plugin_id: str) -> list[tuple[str, str]]:
         if not isinstance(section, dict):
             continue
         label = block if block == "function" else f"tool {get(section, 'id') or plugin_id}"
-        verbatim = section.get("file") or section.get("from")
+        verbatim = _set_elsewhere(parts, block)
         out.append((label, UPSTREAM if verbatim else str(get(section, "version") or "")))
     declared = manifest.get("skills")
     if manifest.get("source") and isinstance(declared, dict):
-        out += [(f"skill {s}", UPSTREAM) for s in declared]
+        out += [(f"skill {s}", UPSTREAM) for s in declared if parts.skill(s)]
     skills = folder / "skills"
     for path in sorted(skills.glob("*/SKILL.md")) if skills.is_dir() else []:
         fm, _ = parse_skill(str(path), read_text(path))
@@ -238,7 +250,8 @@ def bump(
     if not (folder / "plugin.yaml").is_file():
         raise OwppError(f"no plugin {plugin_id} in {directory}")
     manifest = read_manifest(folder)
-    if is_plugin_source(manifest):
+    parts = upstream_parts(manifest)
+    if parts.whole:
         raise OwppError(
             f"{plugin_id} is taken whole from git, so its versions are the upstream's; "
             f"`owpp pull {plugin_id}` moves it to a newer commit"
@@ -256,7 +269,7 @@ def bump(
     section = manifest.get(block)
     if not isinstance(section, dict):
         raise OwppError(f"{plugin_id}/plugin.yaml has no `{block}:` section")
-    if section.get("file") or section.get("from"):
+    if _set_elsewhere(parts, block):
         raise OwppError(
             f"{plugin_id}'s {block} is taken verbatim from elsewhere, which sets its version"
         )
@@ -326,23 +339,6 @@ class Finding:
         return f"{self.id}: {self.message}" + (f" (run `{self.fix}`)" if self.fix else "")
 
 
-def _from_source(manifest: dict, kind: str, item_id: str = "") -> bool:
-    """Whether the plugin's function, tool or skill is taken verbatim, so it keeps the upstream's
-    version. `item_id` says which skill."""
-    if is_plugin_source(manifest):  # a whole plugin from git: every version is the upstream's
-        return True
-    if kind == "skill":
-        declared = manifest.get("skills")
-        entries = declared.items() if isinstance(declared, dict) else []
-        # a bundle holds a skill's id in lower case
-        section = next((v for k, v in entries if str(k).lower() == item_id), None)
-        keys = ("file", "dir")
-    else:
-        section = manifest.get(kind)
-        keys = ("file", "from")
-    return isinstance(section, dict) and any(section.get(k) for k in keys)
-
-
 def unbumped(old: FunctionFile, new: FunctionFile, manifest: dict, since: str) -> list[Finding]:
     """What changed between `old` and `new` without a new version."""
     from .compare import compare  # noqa: PLC0415 (compare reads versions with this module)
@@ -350,6 +346,7 @@ def unbumped(old: FunctionFile, new: FunctionFile, manifest: dict, since: str) -
     function, *items = compare(old.content, new.content).parts
     findings: list[Finding] = []
     sourced = bool(manifest.get("source"))
+    parts = upstream_parts(manifest)
     plugin_changed = function.status != "unchanged" or old.meta.sources != new.meta.sources
     fixes = {
         "tool": f"owpp version {new.id} patch --tool",
@@ -358,7 +355,7 @@ def unbumped(old: FunctionFile, new: FunctionFile, manifest: dict, since: str) -
     for part in items:
         if part.status == "unchanged":
             continue
-        upstream = sourced and _from_source(manifest, part.kind, part.id)
+        upstream = sourced and (parts.tool if part.kind == "tool" else parts.skill(part.id))
         if part.status != "changed" or upstream or not (part.old_version or part.new_version):
             plugin_changed = True  # added, removed, upstream's or unversioned: the plugin's change
         elif part.old_version == part.new_version:
@@ -370,7 +367,7 @@ def unbumped(old: FunctionFile, new: FunctionFile, manifest: dict, since: str) -
                 )
             )
     if plugin_changed and function.old_version == function.new_version:
-        if _from_source(manifest, "function"):
+        if parts.function:
             return findings  # the upstream function's version is the upstream's to change
         findings.insert(
             0,

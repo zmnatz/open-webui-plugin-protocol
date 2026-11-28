@@ -59,23 +59,69 @@ def _key(folder: str, src: object, rel: str, directory: bool = False) -> str:
     return f"{git}#{ref}:{'/'.join(parts)}{'/' if directory else ''}"
 
 
-def _taken(manifest: dict) -> list[tuple[str, bool]]:
-    """The files (and directories) in `source` that a manifest refers to: (path, is_dir).
-    A whole plugin taken from git is one directory: the source's `path`."""
+@dataclass(frozen=True)
+class UpstreamParts:
+    """Which parts of a plugin are the upstream's: taken verbatim from the files that its
+    manifest names, so their code and versions are not ours to change. See `upstream_parts`."""
+
+    whole: bool = False  # `source: {plugin: true}`: every part is the upstream's
+    function_file: str = ""  # `function.file`
+    tool_file: str = ""  # `tool.file`
+    tool_is_function: bool = False  # `tool.from: function`: the tool is the function's bundle
+    # Each `skills.<id>` with a `dir:` or `file:`, by its id in lower case (as a bundle holds
+    # it): (path, is_dir).
+    skill_paths: dict[str, tuple[str, bool]] = field(default_factory=dict)
+
+    @property
+    def function(self) -> bool:
+        return self.whole or bool(self.function_file)
+
+    @property
+    def tool(self) -> bool:
+        return self.whole or bool(self.tool_file) or (self.tool_is_function and self.function)
+
+    def skill(self, skill_id: str) -> bool:
+        return self.whole or self.skill_path(skill_id) is not None
+
+    def skill_path(self, skill_id: str) -> tuple[str, bool] | None:
+        """The (path, is_dir) that `skills.<skill_id>` names, or None when it names none."""
+        return self.skill_paths.get(str(skill_id).lower())
+
+    @property
+    def files(self) -> list[tuple[str, bool]]:
+        """The files (and directories) these parts name in the source: (path, is_dir). A whole
+        plugin is one directory: the source's `path`."""
+        if self.whole:
+            return [("", True)]
+        named = [(p, False) for p in (self.function_file, self.tool_file) if p]
+        return named + list(self.skill_paths.values())
+
+
+def upstream_parts(manifest: dict) -> UpstreamParts:
+    """The parts of a plugin that its manifest takes verbatim from the files it names: the one
+    place that reads `function.file`, `tool.file`, `tool.from`, `skills.<id>.dir`/`.file` and
+    `source.plugin` for this. It reads the manifest alone, so it fetches nothing."""
     if is_plugin_source(manifest):
-        return [("", True)]
-    files: list[tuple[str, bool]] = []
-    if get(manifest.get("function"), "file"):
-        files.append((manifest["function"]["file"], False))
-    if get(manifest.get("tool"), "file"):
-        files.append((manifest["tool"]["file"], False))
-    skills = manifest.get("skills")
-    for sk in skills.values() if isinstance(skills, dict) else []:
+        return UpstreamParts(whole=True)
+    function, tool = manifest.get("function"), manifest.get("tool")
+    skills: dict[str, tuple[str, bool]] = {}
+    declared = manifest.get("skills")
+    for skill_id, sk in declared.items() if isinstance(declared, dict) else []:
         if get(sk, "dir"):
-            files.append((sk["dir"], True))
+            skills[str(skill_id).lower()] = (sk["dir"], True)
         elif get(sk, "file"):
-            files.append((sk["file"], False))
-    return files
+            skills[str(skill_id).lower()] = (sk["file"], False)
+    return UpstreamParts(
+        function_file=get(function, "file") or "",
+        tool_file=get(tool, "file") or "",
+        tool_is_function=get(tool, "from") == "function",
+        skill_paths=skills,
+    )
+
+
+def _taken(manifest: dict) -> list[tuple[str, bool]]:
+    """The files (and directories) in `source` that a manifest refers to: (path, is_dir)."""
+    return upstream_parts(manifest).files
 
 
 def _size(value: Value) -> int:

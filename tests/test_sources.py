@@ -11,7 +11,8 @@ from conftest import embedded, fake_sources, write_tree
 from owpp.bundle import bundle_function, load_function_files
 from owpp.deploy import deploy
 from owpp.errors import OwppError
-from owpp.sources import Sources
+from owpp.manifest import parse_yaml
+from owpp.sources import Sources, upstream_parts
 from owpp.sources._git import git_fetcher, kind_in, pick_sha
 
 SHA = "0123456789abcdef0123456789abcdef01234567"
@@ -69,6 +70,53 @@ def commit(repo_dir, message="c", flags=("-a",)):
     git(
         repo_dir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", *flags, "-m", message
     )
+
+
+SOURCE = f"source: {{git: {REPO}, ref: {SHA}}}\n"
+
+
+class TestUpstreamParts:
+    """Which parts of a plugin are the upstream's, from its manifest alone."""
+
+    @staticmethod
+    def parts(manifest: str):
+        return upstream_parts(parse_yaml(manifest))
+
+    def test_a_whole_plugin_from_git_is_the_upstreams_in_every_part(self):
+        parts = self.parts(f"source: {{git: {REPO}, ref: {SHA}, plugin: true}}\n")
+        assert parts.function and parts.tool and parts.skill("any")
+        assert parts.files == [("", True)]
+
+    def test_a_function_from_git(self):
+        parts = self.parts(SOURCE + "function: {file: fn.py}\ntool: {title: T}\n")
+        assert parts.function and not parts.tool
+        assert parts.files == [("fn.py", False)]
+
+    def test_a_tool_from_git(self):
+        parts = self.parts(SOURCE + "function: {title: F}\ntool: {file: tool.py}\n")
+        assert parts.tool and not parts.function
+        assert parts.files == [("tool.py", False)]
+
+    def test_a_tool_from_the_function_is_the_upstreams_when_the_function_is(self):
+        local = self.parts("function: {title: F}\ntool: {from: function}\n")
+        assert local.tool_is_function and not local.tool
+        taken = self.parts(SOURCE + "function: {file: fn.py}\ntool: {from: function}\n")
+        assert taken.tool and taken.files == [("fn.py", False)]
+
+    def test_a_skill_dir_and_a_skill_file_from_git(self):
+        parts = self.parts(
+            SOURCE + "skills:\n  Draw: {dir: skills/draw}\n  note: {file: NOTE.md}\n"
+        )
+        assert parts.skill("draw") and parts.skill("Draw") and parts.skill("note")
+        assert parts.files == [("skills/draw", True), ("NOTE.md", False)]
+
+    def test_a_local_skill_is_not_the_upstreams(self):
+        parts = self.parts(SOURCE + "tool: {file: tool.py}\nskills:\n  note: {file: NOTE.md}\n")
+        assert parts.tool and parts.skill("note") and not parts.skill("draw")
+
+    def test_a_local_plugin_has_no_upstream_part(self):
+        parts = self.parts("function: {title: F}\ntool: {title: T}\n")
+        assert not (parts.function or parts.tool or parts.skill("draw")) and parts.files == []
 
 
 class TestResolve:
