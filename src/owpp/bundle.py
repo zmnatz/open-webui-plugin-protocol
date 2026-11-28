@@ -701,7 +701,13 @@ def function_type(content: str) -> list[str]:
 
 @dataclass
 class FunctionFile:
-    """One function to deploy."""
+    """One function to deploy.
+
+    `root` is its plugin folder in the plugins folder that was bundled. It is None when the
+    bundled folder does not outlive the build: the upstream copy of a plugin taken whole from
+    git (`Sources.resolve` gives it while those Sources are open), and every folder of a build
+    at the latest commits. It is also None for a loose <id>.py and a function read from a
+    build."""
 
     id: str
     content: str = ""
@@ -715,8 +721,6 @@ class FunctionFile:
     # What the deploy stores with it (function_meta): the description, the commit of each git
     # source ({"<git>[ <path>]": sha}) and the instance settings it `requires:`.
     meta: FunctionMeta = field(default_factory=lambda: FunctionMeta(MANAGED_BY, requires={}))
-    # The folder that was bundled: the plugin folder, or for a plugin taken whole from git the
-    # upstream folder as fetched, with the local overrides applied. None for a loose <id>.py.
     root: Path | None = None
 
 
@@ -820,5 +824,5 @@ def function_file(folder: Path | str, sources: Sources) -> FunctionFile | None:
         global_=declared if isinstance(declared, bool) and "file" in fn else None,
         plugin=plugin,
     )
-    item.root = plugin.root
+    item.root = folder if plugin.root == folder else None
     return item

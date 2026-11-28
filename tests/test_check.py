@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 
 import pytest
-from conftest import EXAMPLES, FILTER, fake_sources, write_tree
+from conftest import EXAMPLES, FILTER, FakeRepo, fake_sources, write_tree
 
 from owpp.bundle import load_function_files
 from owpp.check import (
@@ -171,6 +171,24 @@ class TestStrict:
     def test_a_clean_plugin_has_nothing_to_warn_about(self, tmp_path):
         write_tree(tmp_path / "p", CLEAN)
         assert [f.kind for f in check_plugins(tmp_path)] == ["ok"]
+
+
+def test_a_plugin_taken_whole_from_git_is_checked_in_its_upstream_folder(tmp_path):
+    """Its changelog and its variables are the upstream's: the local folder has neither."""
+    url, sha = "https://example.com/owner/repo.git", "a" * 40
+    write_tree(
+        tmp_path / "p",
+        {"plugin.yaml": f"source: {{git: {url}, ref: {sha}, path: up, plugin: true}}\n"},
+    )
+    upstream = {
+        "up/plugin.yaml": 'protocol: "0.7"\nfunction:\n  title: T\n  version: 1.2.0\n',
+        "up/function.py": CLEAN["function.py"],
+        "up/config.yaml": "greeting: ${GREETING:-hello}\n",
+        "up/CHANGELOG.md": "# Changelog\n\n## 1.1.0\n",
+    }
+    found = [str(f) for f in check_plugins(tmp_path, FakeRepo(url, upstream).sources())]
+    assert "warn  p/CHANGELOG.md has no `## 1.2.0` entry for the current version" in found
+    assert "env   GREETING (default hello)" in found
 
 
 class TestCheckProtocol:

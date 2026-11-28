@@ -6,7 +6,7 @@ import json
 from dataclasses import asdict
 
 import pytest
-from conftest import FILTER, embedded, fake_fetcher, write_tree
+from conftest import FILTER, FakeRepo, embedded, fake_fetcher, write_tree
 
 from owpp import __version__
 from owpp.build import Build, read_build, write_build
@@ -103,6 +103,37 @@ class TestBuild:
         printed = capsys.readouterr().out
         assert f"built {out / 'up.py'}" in printed
         assert f"2 function(s) in {out}: every plugin" in printed
+
+
+class TestRoot:
+    """FunctionFile.root is the plugin folder in the plugins folder, or None: never a temporary
+    copy, which is gone after the build or when its Sources closes."""
+
+    def roots(self, tmp_path, latest):
+        directory = write_tree(
+            tmp_path / "plugins",
+            {
+                "loose.py": FILTER,
+                "local/plugin.yaml": "function: {title: Local}\n",
+                "local/function.py": "class Filter:\n    pass\n",
+                "whole/plugin.yaml": f"source: {{git: {GIT}, ref: {SHA}, path: up, plugin: true}}\n",
+            },
+        )
+        upstream = {
+            "up/plugin.yaml": "function: {title: Whole}\n",
+            "up/function.py": "class Filter:\n    pass\n",
+        }
+        with FakeRepo(GIT, upstream, head=SHA).sources() as sources:
+            made = build_plugins(directory, sources, latest=latest)
+        return directory, {f.id: f.root for f in made.files}
+
+    def test_at_the_pinned_commits_only_a_folder_of_the_repository_is_a_root(self, tmp_path):
+        directory, roots = self.roots(tmp_path, latest=False)
+        assert roots == {"local": directory / "local", "loose": None, "whole": None}
+
+    def test_at_the_latest_commits_there_is_no_root(self, tmp_path):
+        _, roots = self.roots(tmp_path, latest=True)
+        assert roots == {"local": None, "loose": None, "whole": None}
 
 
 class TestReadingABuild:

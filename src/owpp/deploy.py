@@ -644,7 +644,7 @@ def build_plugins(
     else:
         with tempfile.TemporaryDirectory(prefix="owpp-latest-") as work:
             copy, notes = latest_copy(directory, sources, Path(work))
-            files = load_function_files(copy, sources)
+            files = [replace(f, root=None) for f in load_function_files(copy, sources)]
     if ids:
         missing = [i for i in ids if not any(f.id == i for f in files)]
         if missing:
