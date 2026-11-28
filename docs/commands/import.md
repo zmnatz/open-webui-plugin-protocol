@@ -16,11 +16,11 @@ owpp import https://github.com/owner/repo/blob/main/functions/shout.py     # one
 owpp import https://github.com/owner/repo.git --path functions --ref v1.2  # a clone URL
 ```
 
-The code is **pinned, not copied**. `plugin.yaml` gets a [`source:`](../plugin-format.md#source) at the current commit of the branch, tag or default branch. If the URL or `--ref` names a branch or tag, `source:` records it, and [`owpp pull`](pull.md) follows it.
+The code is **pinned, not copied**. `plugin.yaml` gets a [`source:`](../plugin-format.md#source) at one commit: the one that you give, else the current commit of the branch, tag or default branch. If the URL or `--ref` names a branch or tag, `source:` records it, and [`owpp pull`](pull.md) follows it.
 
-The URL or `--ref` can also give a full commit SHA (40 lowercase hex characters). Then `source:` pins that commit and has no `branch:` or `tag:`. The command does not accept a short SHA, because it reads it as a branch or tag name.
+The URL or `--ref` can also give a full commit SHA (40 lowercase hex characters). Then `source:` pins that commit and has no `branch:` or `tag:`. The command refuses a short SHA, because it reads a short SHA as a branch or tag name.
 
-**Caution:** [`owpp pull`](pull.md) moves a pin without `branch:` or `tag:` to the latest commit of the default branch.
+**Caution:** [`owpp pull`](pull.md) moves a pin without `branch:` or `tag:` to the latest commit of the [default branch](../plugin-format.md#source).
 
 The command looks for these in the folder:
 

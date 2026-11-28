@@ -283,7 +283,7 @@ class TestFromGit:
         ],
         ids=["a-page-url", "a-clone-url-and-ref"],
     )
-    def test_a_full_commit_sha_pins_that_commit_and_follows_nothing(self, tmp_path, url, flags):
+    def test_a_full_commit_sha_pins_that_commit_with_no_branch_or_tag(self, tmp_path, url, flags):
         theirs = write_tree(tmp_path / "theirs", {"viz/shout.py": SHOUT})
         git(theirs, "init", "-q")
         git(theirs, "add", ".")

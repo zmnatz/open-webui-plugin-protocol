@@ -4,8 +4,9 @@
   into plugin.yaml under `function:`, and the rest is function.py, so the bundle is the code
   again. A README, a CHANGELOG and a first test are written beside it.
 - **A folder in a git repository**: the function, the tool and the skills in it are found and
-  pinned at the commit its branch points at (`source:`), never copied. The folder is written by
-  `owpp create`'s renderer, as a spec of type `upstream` (or `installer`) would write it.
+  pinned (`source:`) at the commit its branch points at, or at the one given, never copied. The
+  folder is written by `owpp create`'s renderer, as a spec of type `upstream` (or `installer`)
+  would write it.
 
 Nothing here decides who may use what it installs: a tool and skills are private (admins only)
 unless asked otherwise, and the report says so.
@@ -388,10 +389,11 @@ _GITLAB = re.compile(r"(https://[^/]+/.+?)(?:\.git)?/-/(tree|blob)/([^/]+)(?:/(.
 
 
 def parse_git_url(url: str, path: str = "", name: str = "") -> GitTarget:
-    """The repository, branch, tag or commit, folder and file a URL names. A GitHub or GitLab page's
-    URL (`.../tree/<branch>/<folder>`, `.../blob/<branch>/<folder>/<file>`) names all four; a
-    clone URL names only the repository, and `path` and `name` give the rest. The branch (or tag,
-    or commit) is the first part after tree/ or blob/: a branch with a slash in it needs the clone URL and `name`."""
+    """The repository, branch (or tag, or commit), folder and file a URL names. A GitHub or
+    GitLab page's URL (`.../tree/<branch>/<folder>`, `.../blob/<branch>/<folder>/<file>`) names
+    all four; a clone URL names only the repository, and `path` and `name` give the rest. The
+    branch is the first part after tree/ or blob/: a branch with a slash in it needs the clone
+    URL and `name`."""
     url = url.strip()
     if not GIT_URL.fullmatch(url) or url.startswith("file:"):
         raise OwppError(
@@ -474,7 +476,7 @@ def import_git(
 ) -> Imported:
     """Write a plugin that takes what a folder of a git repository holds, pinned at the commit
     its branch (or tag, or the default branch) points at, or at the full commit SHA given in
-    their place (then `source:` names nothing to follow): the function (a .py with a header and
+    their place (then `source:` records no branch or tag): the function (a .py with a header and
     one function class), the tool (a .py with `class Tools`) and each skill (a SKILL.md), or the
     whole folder when it is an owpp plugin (a plugin.yaml). Nothing is copied."""
     target = parse_git_url(url, path, name)
@@ -482,13 +484,16 @@ def import_git(
     kind = ""
     if SHA40.fullmatch(target.name):  # a commit is the pin itself, as in the wizard
         sha = target.name
+        at = "the commit given: `owpp pull` follows the default branch"
     elif target.name:
         kind = sources.kind(git, target.name) or ""
         if not kind:
             raise OwppError(f"no branch or tag {target.name} in {git}")
         sha = sources.latest(git, refname(kind, target.name))
+        at = f"{kind} {target.name}"
     else:
         sha = sources.latest(git, "HEAD")
+        at = "the default branch"
     if not sha:
         raise OwppError(f"could not look up the commit of {target.name or 'HEAD'} in {git}")
     files = sources.files(git, sha, target.path)
@@ -502,12 +507,6 @@ def import_git(
     repo = git.rstrip("/").rpartition("/")[2].rpartition(":")[2].removesuffix(".git")
     default_id = Path(target.file).stem if target.file else target.path.rpartition("/")[2] or repo
     plugin_id = _check_id(plugin_id) if plugin_id else to_id(default_id)
-    if kind:
-        at = f"{kind} {target.name}"
-    elif target.name:
-        at = "the commit given: `owpp pull` follows the default branch"
-    else:
-        at = "the default branch"
     pinned = f"pinned {git} at {sha[:7]} ({at})"
     if "plugin.yaml" in files:
         folder = Path(directory) / plugin_id
