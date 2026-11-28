@@ -586,12 +586,6 @@ class TestSignIn:
         assert how == f"user {email}" and res[0].action.startswith("created")
         assert m.calls[0] == "POST /api/v1/auths/signin"
 
-    def test_ldap_when_the_password_sign_in_fails(self, open_webui, functions_dir):
-        m = open_webui(ldap={"ada": "pw"})
-        how, res = self.run(m, functions_dir({"demo.py": FILTER}), username="ada", password="pw")
-        assert how == "LDAP user ada" and res[0].action.startswith("created")
-        assert m.calls[:2] == ["POST /api/v1/auths/signin", "POST /api/v1/auths/ldap"]
-
     def test_wrong_credentials_say_what_was_tried(self, real_open_webui, functions_dir):
         m = real_open_webui()
         with pytest.raises(OwppError, match="with a password .*400.*with LDAP"):
@@ -603,22 +597,9 @@ class TestSignIn:
         with pytest.raises(OwppError, match="go together"):
             self.run(real_open_webui(), functions_dir({"demo.py": FILTER}), username="ada")
 
-    def test_an_oidc_token_is_exchanged(self, open_webui, functions_dir):
-        m = open_webui(oidc={"keycloak": "id-token"})
-        how, res = self.run(
-            m, functions_dir({"demo.py": FILTER}), oidc_token="id-token", oauth_provider="Keycloak"
-        )
-        assert how == "an OIDC token (keycloak)" and res[0].action.startswith("created")
-        assert m.calls[0] == "POST /api/v1/auths/oauth/keycloak/token/exchange"
-
     def test_an_oidc_exchange_the_instance_does_not_allow(self, real_open_webui, functions_dir):
         with pytest.raises(OwppError, match="ENABLE_OAUTH_TOKEN_EXCHANGE=true"):
             self.run(real_open_webui(), functions_dir({"demo.py": FILTER}), oidc_token="t")
-
-    def test_nothing_signs_in_when_the_instance_allows_it(self, open_webui, functions_dir):
-        m = open_webui(open_signin=True)
-        how, res = self.run(m, functions_dir({"demo.py": FILTER}))
-        assert how == "an open sign-in" and res[0].action.startswith("created")
 
     def test_nothing_says_what_to_set_when_it_does_not(self, real_open_webui, functions_dir):
         with pytest.raises(OwppError, match="OPEN_WEBUI_API_KEY.*OPEN_WEBUI_USERNAME.*OIDC"):

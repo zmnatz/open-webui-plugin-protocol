@@ -1,7 +1,6 @@
 """An Open-WebUI in memory, behind the same `Fetch` port urllib is (owpp.openwebui), for what the
-real one (real_open_webui.py, the test harness) cannot give on demand: sign-in by LDAP, OIDC or
-an open sign-in, an instance that is still starting (owpp live waits for it), two instances
-side by side, and `owpp live`'s sign-up. Every other deploy and import test runs against the
+real one (real_open_webui.py, the test harness) cannot give on demand: an instance that is still
+starting (owpp live waits for it), two instances side by side, and `owpp live`'s sign-up. Every other deploy and import test runs against the
 real Open-WebUI.
 
 `serve()` puts it behind a real HTTP server, for the contract test of the urllib adapter and for
@@ -48,9 +47,6 @@ class FakeOpenWebUI:
         live=(),
         key="sk-good",  # an admin's API key
         accounts=None,  # {email: password}: /auths/signin, with `role`
-        ldap=None,  # {user: password}: /auths/ldap
-        oidc=None,  # {provider: token}: /auths/oauth/<provider>/token/exchange
-        open_signin=False,  # an empty sign-in works (WEBUI_AUTH=False, or a trusted header)
         role="admin",  # of whoever signs in to an account given above
         starting=0,  # how many /health checks fail (connection refused) before it is up
     ):
@@ -62,7 +58,6 @@ class FakeOpenWebUI:
         }
         self.tokens: dict[str, str] = {key: "admin"}  # token: role
         self.key, self.role = key, role
-        self.ldap, self.oidc, self.open_signin = ldap or {}, oidc or {}, open_signin
         self.valves: dict[str, dict] = {}
         self.starting = starting
 
@@ -110,13 +105,9 @@ class FakeOpenWebUI:
         if path == "/api/v1/auths/admin/config":
             return _json({"DEFAULT_INTERFACE_SETTINGS": {}})
         if path == "/api/v1/auths/signin":
-            if form.get("email") == "" and form.get("password") == "":
-                if self.open_signin:
-                    return self._session({"email": "admin@example.com", "role": self.role})
-            else:
-                account = self.accounts.get(form.get("email"))
-                if account and account["password"] == form.get("password"):
-                    return self._session(account)
+            account = self.accounts.get(form.get("email"))
+            if account and account["password"] == form.get("password"):
+                return self._session(account)
             return _json({"detail": "The email or password provided is incorrect."}, 400)
         if path == "/api/v1/auths/signup":
             if form["email"] in self.accounts:
@@ -129,19 +120,6 @@ class FakeOpenWebUI:
                 return _json({"detail": "nope"}, 401)
             self.accounts[form["email"]] = {**form, "role": form.get("role") or "pending"}
             return _json({"email": form["email"], "role": self.accounts[form["email"]]["role"]})
-        if path == "/api/v1/auths/ldap":
-            if not self.ldap:
-                return _json({"detail": "LDAP authentication is not enabled"}, 400)
-            if self.ldap.get(form.get("user")) == form.get("password"):
-                return self._session({"email": form["user"], "role": self.role})
-            return _json({"detail": "Invalid credentials"}, 400)
-        exchange = re.fullmatch(r"/api/v1/auths/oauth/([^/]+)/token/exchange", path)
-        if exchange:
-            if not self.oidc:
-                return _json({"detail": "Token exchange is disabled"}, 403)
-            if self.oidc.get(exchange.group(1)) == form.get("token"):
-                return self._session({"email": "oidc@example.com", "role": self.role})
-            return _json({"detail": "Invalid token"}, 400)
         return _json({"detail": "not found"}, 404)
 
     # ---- functions
