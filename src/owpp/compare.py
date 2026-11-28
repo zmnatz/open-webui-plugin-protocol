@@ -11,11 +11,15 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from typing import Literal
 
 from .bundle import parse_skill
 from .embedding import runtime_data, without_runtime_data
 from .openwebui import replace_imports
 from .versioning import is_older, version_of
+
+Kind = Literal["function", "tool", "skill"]
+Status = Literal["new", "removed", "changed", "unchanged"]
 
 
 @dataclass(frozen=True)
@@ -23,9 +27,9 @@ class Part:
     """The function (`id` is ""), its tool or one skill, and how it changed: `status` is new,
     removed, changed or unchanged. A version is "" when the part has none, or is absent."""
 
-    kind: str
+    kind: Kind
     id: str
-    status: str
+    status: Status
     old_version: str = ""
     new_version: str = ""
 
@@ -57,10 +61,11 @@ def compare(old: str | None, new: str) -> Comparison:
     return Comparison(unchanged=a == b, parts=tuple(parts))
 
 
-def _items(kind: str, old: dict, new: dict, version) -> list[Part]:
+def _items(kind: Kind, old: dict, new: dict, version) -> list[Part]:
     parts = []
     for item_id in sorted(set(old) | set(new)):
         a, b = old.get(item_id), new.get(item_id)
+        status: Status
         if a is None:
             status = "new"
         elif b is None:

@@ -374,10 +374,11 @@ def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, s
     (with its content), or None; `latest` notes which sources were moved to their latest commit."""
     comparison = compare((existing.get("content") or "") if existing else None, f.content)
     changes = Changes()
+    downgrades = comparison.downgrades
     for part in comparison.parts:
         if part.status == "unchanged":
             continue
-        older = part in comparison.downgrades
+        older = part in downgrades
         changes.details.append(_part_line(part, older))
         if older:
             changes.downgrades.append(f"{_label(part)} {part.old_version} -> {part.new_version}")

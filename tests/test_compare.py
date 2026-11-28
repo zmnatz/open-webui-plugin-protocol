@@ -76,3 +76,15 @@ def test_an_unversioned_part_is_never_a_downgrade():
     c = compare(bundle([tool("1.0")]), bundle([tool(body="x = 1")]))
     assert part(c, "tool") == Part("tool", "t", "changed", "1.0", "")
     assert c.downgrades == ()
+
+
+def test_a_removed_tool_and_a_new_skill():
+    c = compare(bundle([tool("2.0")]), bundle(skills=[skill("1.0")]))
+    assert part(c, "tool") == Part("tool", "t", "removed", "2.0", "")
+    assert part(c, "skill") == Part("skill", "s", "new", "", "1.0")
+
+
+def test_an_unversioned_skill_that_changes_is_never_a_downgrade():
+    c = compare(bundle(skills=[skill()]), bundle(skills=[skill(text="Paint.")]))
+    assert part(c, "skill") == Part("skill", "s", "changed", "", "")
+    assert c.downgrades == ()
