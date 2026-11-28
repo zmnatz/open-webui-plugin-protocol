@@ -21,7 +21,7 @@ import re
 import subprocess
 import tarfile
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from .bundle import FunctionFile, load_function_files, parse_frontmatter, parse_skill
@@ -389,7 +389,8 @@ def check_since(
         old_dir = tree_at(directory, since, Path(work))
         if old_dir is None or not old_dir.is_dir():
             return []
-        old_files = {f.id: f for f in load_function_files(old_dir, sources)}
+        # The tree is deleted here, so no function keeps a root in it.
+        old_files = {f.id: replace(f, root=None) for f in load_function_files(old_dir, sources)}
     findings: list[Finding] = []
     for f in new_files:
         if ids and f.id not in ids:

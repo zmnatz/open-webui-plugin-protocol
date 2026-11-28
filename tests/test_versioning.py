@@ -236,6 +236,15 @@ class TestCheckSince:
         write_plugin(repo, PluginSpec(id="fresh"))
         assert since(repo)[0] == 0
 
+    def test_a_plugin_as_it_was_has_no_root_in_the_deleted_tree(self, repo, monkeypatch):
+        roots = []
+        monkeypatch.setattr(
+            "owpp.versioning.unbumped",
+            lambda old, new, *_: roots.append((old.root, new.root)) or [],
+        )
+        since(repo)
+        assert roots == [(None, repo / "viz")]
+
     def test_a_ref_that_is_not_one_is_an_error(self, repo):
         with pytest.raises(OwppError):
             list(check_plugins(repo, since="nope"))

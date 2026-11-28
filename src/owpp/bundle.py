@@ -703,11 +703,11 @@ def function_type(content: str) -> list[str]:
 class FunctionFile:
     """One function to deploy.
 
-    `root` is its plugin folder in the plugins folder that was bundled. It is None when the
-    bundled folder does not outlive the build: the upstream copy of a plugin taken whole from
-    git (`Sources.resolve` gives it while those Sources are open), and every folder of a build
-    at the latest commits. It is also None for a loose <id>.py and a function read from a
-    build."""
+    `root` is the plugin's folder in the plugins folder, or None. It is None when the bundled
+    folder is a temporary one: the upstream copy of a plugin taken whole from git, which lasts
+    only as long as its Sources (`Sources.resolve` gives it), or a folder in a temporary copy
+    of the plugins folder (a build at the latest commits, the old tree of `check --since`). It
+    is also None for a loose <id>.py and a function read from a build."""
 
     id: str
     content: str = ""
