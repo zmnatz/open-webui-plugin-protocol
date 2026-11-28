@@ -207,7 +207,7 @@ class TestBundling:
         assert [(s["id"], s["name"], [f["path"] for f in s["files"]]) for s in data["skills"]] == [
             ("visualize", "visualize", ["SKILL.md"])
         ]
-        assert fn.sources == {f"{REPO} sub/dir": SHA}
+        assert fn.meta.sources == {f"{REPO} sub/dir": SHA}
 
     def test_takes_the_function_from_the_source_verbatim_with_global_from_the_manifest(
         self, plugin

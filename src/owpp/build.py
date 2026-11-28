@@ -23,8 +23,9 @@ from typing import Any
 from . import __version__
 from .bundle import FunctionFile
 from .errors import OwppError
+from .openwebui import FunctionMeta
 
-FORMAT = 1
+FORMAT = 2
 INDEX = "build.json"
 
 
@@ -39,20 +40,9 @@ class Build:
     owpp: str = __version__
 
 
-# What a function's <id>.json holds: every FunctionFile field but its code and its folder.
-_FIELDS = (
-    "id",
-    "file",
-    "kind",
-    "type",
-    "name",
-    "description",
-    "want_global",
-    "not_global",
-    "valves",
-    "sources",
-    "requires",
-)
+# What a function's <id>.json holds: every FunctionFile field but its code, its folder and its
+# meta (which is stored as a deploy sends it, under `meta`).
+_FIELDS = ("id", "file", "kind", "type", "name", "want_global", "not_global", "valves")
 
 
 def _digest(content: str) -> str:
@@ -80,7 +70,10 @@ def write_build(build: Build, out: Path | str) -> list[Path]:
     written = []
     for f in build.files:
         (out / f"{f.id}.py").write_bytes(f.content.encode("utf-8"))
-        data = {k: getattr(f, k) for k in _FIELDS} | {"sha256": _digest(f.content)}
+        data = {k: getattr(f, k) for k in _FIELDS} | {
+            "meta": f.meta.stored(),
+            "sha256": _digest(f.content),
+        }
         (out / f"{f.id}.json").write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
         written.append(out / f"{f.id}.py")
     index = {
@@ -126,14 +119,20 @@ def read_build(folder: Path | str) -> Build:
         meta_path, code_path = folder / f"{name}.json", folder / f"{name}.py"
         if not meta_path.is_file() or not code_path.is_file():
             raise OwppError(f"{folder}: {name}.py or {name}.json is missing")
-        meta = json.loads(meta_path.read_text())
+        data = json.loads(meta_path.read_text())
         content = code_path.read_bytes().decode("utf-8")
-        if meta.get("sha256") != _digest(content):
+        if data.get("sha256") != _digest(content):
             raise OwppError(f"{code_path} does not match the build (changed since it was built)")
-        missing = [k for k in _FIELDS if k not in meta]
+        missing = [k for k in (*_FIELDS, "meta") if k not in data]
         if missing:
             raise OwppError(f"{meta_path}: missing {', '.join(missing)}")
-        files.append(FunctionFile(content=content, **{k: meta[k] for k in _FIELDS}))
+        files.append(
+            FunctionFile(
+                content=content,
+                meta=FunctionMeta.from_stored(data["meta"]),
+                **{k: data[k] for k in _FIELDS},
+            )
+        )
     return Build(
         files,
         complete=_field(index, "complete", bool, where),

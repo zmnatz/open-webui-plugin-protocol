@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import datetime as _dt
 import io
-import json
 import re
 import subprocess
 import tarfile
@@ -26,7 +25,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .bundle import FunctionFile, load_function_files, parse_frontmatter, parse_skill
-from .embedding import runtime_data, without_runtime_data
 from .errors import OwppError
 from .manifest import get, parse_yaml, read_manifest, read_text, set_key, text_of
 from .sources import Sources, is_plugin_source
@@ -38,42 +36,9 @@ PARTS = ("patch", "minor", "major")
 # ---- reading versions out of a bundle -----------------------------------------------
 
 
-def norm(s: object) -> str:
-    return str(s or "").replace("\r\n", "\n").rstrip()
-
-
 def version_of(content: str | None) -> str:
     """The `version:` of a module's docstring header."""
     return str(parse_frontmatter(content or "").get("version") or "")
-
-
-def own_code(content: str | None) -> str:
-    """A function's code without the tool and skills it embeds, which are versioned apart."""
-    return without_runtime_data(norm(content))
-
-
-def tools_of(content: str | None) -> dict[str, dict]:
-    return {t["id"]: t for t in runtime_data(content)["tools"] if not t.get("self")}
-
-
-def skills_of(content: str | None) -> dict[str, dict]:
-    return {s["id"]: s for s in runtime_data(content)["skills"]}
-
-
-def tool_version(tool: dict) -> str:
-    return version_of(tool.get("content"))
-
-
-def skill_version(skill: dict) -> str:
-    root = next((f for f in skill.get("files", []) if f.get("path") == "SKILL.md"), None)
-    if not root or "content" not in root:
-        return ""
-    fm, _ = parse_skill(skill["id"], root["content"])
-    return str(fm.get("version") or "")
-
-
-def same(a: object, b: object) -> bool:
-    return json.dumps(a, sort_keys=True) == json.dumps(b, sort_keys=True)
 
 
 def parse_version(version: str) -> tuple[int, ...] | None:
@@ -380,41 +345,38 @@ def _from_source(manifest: dict, kind: str, item_id: str = "") -> bool:
 
 def unbumped(old: FunctionFile, new: FunctionFile, manifest: dict, since: str) -> list[Finding]:
     """What changed between `old` and `new` without a new version."""
+    from .compare import compare  # noqa: PLC0415 (compare reads versions with this module)
+
+    function, *items = compare(old.content, new.content).parts
     findings: list[Finding] = []
     sourced = bool(manifest.get("source"))
-    plugin_changed = own_code(old.content) != own_code(new.content) or old.sources != new.sources
-    for kind, items_of, version, fix in (
-        ("tool", tools_of, tool_version, f"owpp version {new.id} patch --tool"),
-        ("skill", skills_of, skill_version, f"owpp version {new.id} patch --skill {{id}}"),
-    ):
-        a_items, b_items = items_of(old.content), items_of(new.content)
-        for item_id in sorted(set(a_items) | set(b_items)):
-            a, b = a_items.get(item_id), b_items.get(item_id)
-            if a is not None and b is not None and same(a, b):
-                continue
-            upstream = sourced and _from_source(manifest, kind, item_id)
-            va, vb = (version(a) if a else ""), (version(b) if b else "")
-            if a is None or b is None or upstream or not (va or vb):
-                plugin_changed = (
-                    True  # added, removed, upstream's or unversioned: the plugin's change
+    plugin_changed = function.status != "unchanged" or old.meta.sources != new.meta.sources
+    fixes = {
+        "tool": f"owpp version {new.id} patch --tool",
+        "skill": f"owpp version {new.id} patch --skill {{id}}",
+    }
+    for part in items:
+        if part.status == "unchanged":
+            continue
+        upstream = sourced and _from_source(manifest, part.kind, part.id)
+        if part.status != "changed" or upstream or not (part.old_version or part.new_version):
+            plugin_changed = True  # added, removed, upstream's or unversioned: the plugin's change
+        elif part.old_version == part.new_version:
+            findings.append(
+                Finding(
+                    f"{part.kind} {part.id}",
+                    f"changed since {since} but its version is still {part.new_version}",
+                    fixes[part.kind].format(id=part.id),
                 )
-            elif va == vb:
-                findings.append(
-                    Finding(
-                        f"{kind} {item_id}",
-                        f"changed since {since} but its version is still {vb}",
-                        fix.format(id=item_id),
-                    )
-                )
-    if plugin_changed and version_of(old.content) == version_of(new.content):
+            )
+    if plugin_changed and function.old_version == function.new_version:
         if _from_source(manifest, "function"):
             return findings  # the upstream function's version is the upstream's to change
         findings.insert(
             0,
             Finding(
                 new.id,
-                f"changed since {since} but its version is still "
-                f"{version_of(new.content) or '(none)'}",
+                f"changed since {since} but its version is still {function.new_version or '(none)'}",
                 f"owpp version {new.id} patch",
             ),
         )

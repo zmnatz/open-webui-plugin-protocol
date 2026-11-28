@@ -28,6 +28,7 @@ from owpp.bundle import (
 from owpp.check import check_bundle
 from owpp.deploy import MANAGED_BY, Result, plan_deploy, render_report
 from owpp.errors import OwppError
+from owpp.openwebui import FunctionMeta
 
 
 class TestFrontmatterAndIds:
@@ -58,8 +59,8 @@ class TestFrontmatterAndIds:
         files = load_function_files(EXAMPLES, fake_sources())
         assert len(files) >= 3
         for f in files:
-            assert len(f.description) > 20, f"{f.file} has a description"
-            assert ">" not in f.description, f"{f.file} description is not a block marker"
+            assert len(f.meta.description) > 20, f"{f.file} has a description"
+            assert ">" not in f.meta.description, f"{f.file} description is not a block marker"
 
     def test_global_true_in_the_docstring_only(self, functions_dir):
         with_global = FILTER.replace("author: me\n", "author: me\nglobal: true\n")
@@ -82,7 +83,12 @@ class TestFrontmatterAndIds:
             }
         ]
         plan = plan_deploy(
-            [FunctionFile(id="a", file="a.py", content="x = 1\n", description="d")], live
+            [
+                FunctionFile(
+                    id="a", file="a.py", content="x = 1\n", meta=FunctionMeta(MANAGED_BY, "d")
+                )
+            ],
+            live,
         )
         assert plan[0].action == "unchanged"
 
