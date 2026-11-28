@@ -32,14 +32,14 @@ include: [routes, chat_data]
 uvx owpp list
 #  excalidraw              filter (global)
 #  mcpo_sync               event
-uvx owpp check                       # bundle, compile, report undefined names
-uvx owpp version                     # every plugin's versions (and its tool's and skills')
-uvx owpp version excalidraw minor    # a new version, with a CHANGELOG.md entry
-uvx --from 'owpp[test]' owpp test    # each plugin's tests/, against a mock Open-WebUI
-uvx --from 'owpp[live]' owpp live    # live/ tests, on a throwaway Open-WebUI in Docker
+uvx owpp check                                   # bundle, compile, report undefined names
+uvx owpp version                                 # every plugin's versions (and its tool's and skills')
+uvx owpp version excalidraw minor                # a new version, with a CHANGELOG.md entry
+uvx --python 3.12 --from 'owpp[test]' owpp test  # each plugin's tests/, on the real Open-WebUI
+uvx --from 'owpp[live]' owpp live                # live/ tests, on a throwaway Open-WebUI in Docker
 uvx owpp deploy --only excalidraw --dry-run
-uvx owpp pull                        # move plugins taken from git to their latest commit, for review
-uvx owpp deploy --dry-run --latest     # what that would change on the live instance, by version
+uvx owpp pull                                    # move plugins taken from git to their latest commit, for review
+uvx owpp deploy --dry-run --latest               # what that would change on the live instance, by version
 ```
 
 ## Why
@@ -93,7 +93,7 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 | [Bundling](docs/bundling.md) | exactly what gets deployed; git sources |
 | [Runtime](docs/runtime.md) | install/remove of tools and skills, parent valves |
 | [Libraries](docs/libraries.md) | `core`, `routes`, `jobs`, `events`, `chat_data`, `static`, `templates`, `assets`, Shared Assets |
-| [Testing](docs/testing.md) | unit tests per plugin, the mock Open-WebUI, `owpp test` |
+| [Testing](docs/testing.md) | unit tests per plugin, the test harness, `owpp test` |
 | [Tooling](docs/tooling.md) | the CLI, a page per command (deploy settings, signing in, `pull`, versions), GitHub Action, tests |
 | [Adopting](docs/adopting.md) | new repositories, migrating existing functions |
 | [Upgrading](docs/upgrading.md) | moving to a new owpp, `owpp migrate`, what changed in 0.2 |
@@ -105,14 +105,14 @@ Published at **https://zmnatz.github.io/open-webui-plugin-protocol/**, built fro
 
 ## Status
 
-0.7.2, written against Open-WebUI v0.13.5 (and v0.13.4). The bundler, runtime and libraries are tested against stubbed Open-WebUI modules, and each example plugin has unit tests run against a mock Open-WebUI (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.5 ([screenshots](docs/screenshots.md)), and checked there on every change by an end-to-end run with aimock as its models ([the live suite](docs/testing/live.md#this-repositorys-live-suite)). See [status and limits](docs/README.md#status-and-limits).
+0.7.2, written against Open-WebUI v0.13.5, the one version it pins and mirrors ([owpp mirrors Open-WebUI](docs/testing/harness.md#owpp-mirrors-open-webui)). The bundler, runtime and libraries are tested on the real Open-WebUI v0.13.5, run in the test process ([the test harness](docs/testing/harness.md)), and so is each example plugin (`owpp test`). The examples have been deployed and photographed on a real Open-WebUI v0.13.5 ([screenshots](docs/screenshots.md)), and checked there on every change by an end-to-end run with aimock as its models ([the live suite](docs/testing/live.md#this-repositorys-live-suite)). See [status and limits](docs/README.md#status-and-limits).
 
 ## Development
 
 ```sh
 uv sync
-uv run pytest                        # owpp's tests and every example plugin's tests/
-uv run owpp test --dir examples/plugins
+uv run pytest -n auto                              # owpp's tests, in parallel
+uv run owpp test --dir examples/plugins -- -n auto  # every example plugin's tests/
 uv run ruff check . && uv run ruff format --check .
 uv run owpp check --dir examples/plugins
 ```

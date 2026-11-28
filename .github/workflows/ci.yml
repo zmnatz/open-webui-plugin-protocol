@@ -6,18 +6,23 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python: ["3.10", "3.14"]
     steps:
       - uses: actions/checkout@v5
       - uses: astral-sh/setup-uv@v6
-      - run: uv sync --python ${{ matrix.python }}
+      # The Open-WebUI code the test harness runs (owpp.testing.wheel), keyed on its pin.
+      - uses: actions/cache@v4
+        with:
+          path: ~/.cache/owpp
+          key: owpp-open-webui-${{ hashFiles('src/owpp/testing/pin.py') }}
+      # The Python the pinned Open-WebUI runs on (.python-version, ADR 0004).
+      - run: uv sync
+      - name: The Open-WebUI pin matches upstream's slim lock
+        run: python3 tools/sync_open_webui.py --check
       - run: uv run ruff check .
       - run: uv run ruff format --check .
-      - run: uv run pytest
+      - run: uv run pytest -n auto
       - name: Run the example plugins' tests the way a plugin repository would
-        run: uv run owpp test --dir examples/plugins
+        run: uv run owpp test --dir examples/plugins -- -n auto
       - name: Check the examples against their real upstream sources
         run: uv run owpp check --strict --dir examples/plugins
   package:

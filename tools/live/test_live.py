@@ -1,4 +1,4 @@
-"""What the mock cannot promise, asserted on a real Open-WebUI whose model is aimock, answering
+"""What the test harness cannot reach, asserted on a real Open-WebUI whose model is aimock, answering
 from tools/screenshots/aimock/ (docs/testing/live.md)."""
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ def test_the_deployed_functions_are_installed_and_active(api):
 
 
 def test_a_public_tool_is_readable_by_a_user_who_is_not_the_owner(user_api):
-    """`access: public` once used a grant Open-WebUI ignores for tools (the mock agreed)."""
+    """`access: public` once used a grant Open-WebUI ignores for tools (the old mock agreed)."""
     status, tools = user_api("GET", "/api/v1/tools/")
     assert status == 200
     assert "excalidraw" in {t["id"] for t in tools}

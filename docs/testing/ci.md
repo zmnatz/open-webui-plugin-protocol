@@ -15,22 +15,26 @@ jobs:
         with:
           fetch-depth: 0 # --since needs the branch it compares with
       - uses: astral-sh/setup-uv@v6
+      - uses: actions/cache@v4 # the Open-WebUI code that the tests run
+        with:
+          path: ~/.cache/owpp
+          key: owpp-open-webui-v0.13.5
       - run: uvx owpp@0.7.2 check --strict
-      - run: uvx --from 'owpp[test]==0.7.2' owpp test
+      - run: uvx --python 3.12 --from 'owpp[test]==0.7.2' owpp test
       - run: uvx owpp@0.7.2 check --since origin/${{ github.base_ref }}
 ```
 
 | Step | Fails when |
 | --- | --- |
 | [`owpp check --strict`](../commands/check.md) | A bundle fails or does not compile, a name is undefined, a manifest is wrong, or there is a warning. |
-| [`owpp test`](../commands/test.md) | The tests of a plugin fail against the mock. A plugin with code from git fetches the code, so the job needs the network (unless the tests [load stand-ins](kinds.md#code-from-git)). |
+| [`owpp test`](../commands/test.md) | The tests of a plugin fail on the [test harness](harness.md). A test that asks a model runs [aimock](harness.md#the-model-aimock) with Node or Docker, which GitHub's runners have. A plugin with code from git fetches the code, so the job needs the network (unless the tests [load stand-ins](kinds.md#code-from-git)). |
 | [`owpp check --since`](../commands/check.md#a-change-needs-a-new-version) | A plugin changed, but its version did not. The message names the `owpp version` command to run. |
 
 Pin the same owpp version here as in the deploy (`uses: zmnatz/open-webui-plugin-protocol@v0.7.2`). Then the tests use the same bundle as the deploy. The [GitHub Action](../tooling.md#github-action) runs `owpp check` before it deploys, but it does not run the tests.
 
 ## A live check
 
-The mock is not Open-WebUI. A second workflow can run your [live tests](live.md#live-tests-in-your-repository) with [`owpp live`](../commands/live.md), which finds problems that the mock cannot find. GitHub's runners have Docker:
+The test harness runs Open-WebUI's code, with aimock as its model, but not a real model or a browser ([what the harness fakes](harness.md#what-the-harness-fakes)). A second workflow can run your [live tests](live.md#live-tests-in-your-repository) with [`owpp live`](../commands/live.md), which finds the problems that only these show. GitHub's runners have Docker:
 
 ```yaml
 # .github/workflows/live.yml in your repository

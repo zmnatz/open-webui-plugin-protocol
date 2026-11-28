@@ -58,7 +58,7 @@ For a check that these cannot do, the function uses the `user` that it gets.
 1. Make the plugin with `owpp create`. You can also use `owpp init <id> --type event|filter|action|pipe`, or write `plugins/<id>/plugin.yaml` and `function.py` yourself. The manifest needs a `function:` section.
 2. Add `tool.py`, `shared.py`, `skills/`, `static/`, `templates/` or `include:` only when the plugin needs them.
 3. Run `owpp check <id>`, and fix what it reports until it is clean.
-4. Add tests ([writing a test](testing/writing.md)). Test through the mock, or test pure logic with `plugin_source()`.
+4. Add tests ([writing a test](testing/writing.md)). Test through the [test harness](testing/harness.md), or test pure logic with `plugin_source()`.
 5. Put each Open-WebUI import inside the function that uses it.
 6. Write the README ([below](#documentation-the-readme-every-plugin-has)). Add to it the checks to do on a live instance. `owpp init` starts a README with the required sections.
 7. Run `owpp deploy --only <id> --dry-run`.

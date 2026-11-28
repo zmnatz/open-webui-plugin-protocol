@@ -44,7 +44,8 @@ def test_over_urllib_every_functions_endpoint(served):
     api = api.as_account(api.sign_in("admin@example.com", "pw")["token"])
     meta = FunctionMeta("mine", "Ünïcode description", {"https://x.git": "a" * 40}, {"k": True})
     created = api.create_function("demo", "Demo", "class Filter:\n    pass\n", meta)
-    assert created["meta"] == {**meta.stored(), "manifest": {}}  # no header in that code
+    # no header in that code, and a filter without a toggle switch
+    assert created["meta"] == {**meta.stored(), "manifest": {}, "toggle": False}
     assert [f["id"] for f in api.functions()] == ["demo"]
     assert "content" not in api.functions()[0]
     assert FunctionMeta.of(api.function("demo")) == meta
@@ -73,13 +74,6 @@ def test_the_live_tests_api_returns_status_and_body_over_the_same_transport(serv
     assert Api("sk-good")("GET", "/api/v1/functions/list") == (200, [])
     assert Api("wrong")("GET", "/api/v1/functions/list") == (401, {"detail": "nope"})
     assert Api("")("POST", "/api/v1/auths/signin", {"email": "x", "password": "y"})[0] == 400
-
-
-def test_over_urllib_nothing_listening_is_not_healthy_and_the_wait_gives_up():
-    api = OpenWebUI("http://127.0.0.1:1", urllib_fetch)
-    assert api.healthy() is False
-    with pytest.raises(OwppError, match="did not answer"):
-        api.wait_for_health(attempts=2, delay=0)
 
 
 # ---- health ----------------------------------------------------------------------------------

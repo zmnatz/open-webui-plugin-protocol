@@ -9,7 +9,7 @@
 | [`owpp bundle`](commands/bundle.md) | Prints (or writes) the code that a deploy stores. |
 | [`owpp build`](commands/build.md) | Bundles the plugins into a folder that `owpp deploy --from` deploys elsewhere. |
 | [`owpp deploy`](commands/deploy.md) | Deploys the plugins to an Open-WebUI instance. Its page covers the settings, sign-in, the ownership marker and the report. |
-| [`owpp test`](commands/test.md) | Runs each plugin's `tests/` against a mock Open-WebUI. |
+| [`owpp test`](commands/test.md) | Runs each plugin's `tests/` against the real Open-WebUI, in the test process. |
 | [`owpp pull`](commands/pull.md) | Moves plugins taken from git to the latest commit that they follow. |
 | [`owpp version`](commands/version.md) | Shows the plugins' versions, or gives one a new version. |
 | [`owpp migrate`](commands/migrate.md) | Brings plugins to the current protocol version. |
@@ -68,10 +68,10 @@ More CI examples:
 
 ## Tests (this repository)
 
-`uv run pytest` runs all the tests: those of owpp in `tests/`, and those of each example plugin in `examples/plugins/<id>/tests/`. The [test catalogue](reference/test-catalogue.md#the-librarys-own-tests) says what each file in `tests/` covers.
+`uv run pytest -n auto` runs the tests of owpp, in `tests/`. `uv run owpp test --dir examples/plugins -- -n auto` runs the tests of each example plugin, in `examples/plugins/<id>/tests/`, as a plugin repository runs them. `-n auto` runs the tests in parallel: each worker starts its own Open-WebUI. The [test catalogue](reference/test-catalogue.md#the-librarys-own-tests) says what each file in `tests/` covers.
 
 In these tests, stand-ins take the place of git sources, so they need no network. `owpp check` compiles the real code that it fetches.
 
 ### Testing your own plugins
 
-See [testing plugins](testing.md): how to write tests, the mock, live checks, and [a CI workflow](testing/ci.md).
+See [testing plugins](testing.md): how to write tests, the test harness, live checks, and [a CI workflow](testing/ci.md).

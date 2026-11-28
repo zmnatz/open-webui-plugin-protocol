@@ -14,7 +14,7 @@ Valves: `priority`, `vision_model_id`, `skip_reroute_models`, `enabled_for_admin
 
 - `owpp check vision_router` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines.
 - `owpp bundle vision_router out.py` writes the deployed code to read or diff.
-- `owpp test vision_router` runs `tests/` against a mock Open-WebUI (docs/testing.md).
+- `owpp test vision_router` runs `tests/` against the real Open-WebUI, in process (docs/testing.md).
 - On a live Open-WebUI: set `vision_model_id` to a model that can see pictures, and as a user who is not an admin send a picture in a chat with another model. The vision model answers. The live suite (`tools/screenshots/run.py --live`) checks this with aimock as the model.
 
 ## Deploy

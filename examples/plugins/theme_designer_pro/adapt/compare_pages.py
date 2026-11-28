@@ -1,5 +1,5 @@
-"""Drive upstream Theme Designer Pro and the owpp adaptation through the same requests in owpp's
-mock Open-WebUI, and diff every response.
+"""Drive upstream Theme Designer Pro and the owpp adaptation through the same requests on owpp's
+test harness, and diff every response.
 
 usage, from the repository root:
 
@@ -16,7 +16,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from owpp.testing import MockOpenWebUI
+from owpp.testing import Harness
 
 upstream_file = Path(sys.argv[1]) / "event-function/theme_designer_pro_event.py"
 plugin_dir = Path(sys.argv[2])
@@ -61,7 +61,7 @@ def run(kind: str) -> dict:
     out = {}
     tmp = Path(tempfile.mkdtemp())
     try:
-        with MockOpenWebUI() as owui:
+        with Harness() as owui:
             if kind == "upstream":
                 plugin = owui.load(
                     upstream_folder(tmp),
@@ -77,11 +77,10 @@ def run(kind: str) -> dict:
                 )
                 plugin = owui.load(tmp / "theme_designer_pro")
             owui.startup()
-            admin, ada = owui.admin, owui.add_user("Ada")
-            admin.token, ada.token = (
-                "session-admin-0123456789",
-                "session-ada-0123456789",
-            )  # upstream refuses sk- keys
+            admin, ada = (
+                owui.admin,
+                owui.add_user("Ada"),
+            )  # session tokens: upstream refuses sk- keys
             a, u, anon = owui.client(admin), owui.client(ada), owui.client()
 
             def rec(name, r):

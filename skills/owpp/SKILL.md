@@ -5,7 +5,7 @@ description: Open-WebUI plugins kept in git with owpp, the Open-WebUI plugin pro
 
 # Open-WebUI plugins with owpp
 
-A **plugin** is a folder, `plugins/<id>/`, with a `plugin.yaml`: a function (the parent) and, optionally, a tool and skills that the function installs when it is enabled and removes when it is disabled. `owpp` bundles the folder into the single file Open-WebUI stores, tests it against a mock Open-WebUI, and deploys it.
+A **plugin** is a folder, `plugins/<id>/`, with a `plugin.yaml`: a function (the parent) and, optionally, a tool and skills that the function installs when it is enabled and removes when it is disabled. `owpp` bundles the folder into the single file Open-WebUI stores, tests it against the real Open-WebUI in the test process, and deploys it.
 
 Run it as `uvx owpp <command>` (in scripts and CI, pinned: `uvx owpp@0.7.2`). `uvx owpp <command> --help` is the reference for every flag, and each command has a page at https://zmnatz.github.io/open-webui-plugin-protocol/commands/<command>/. The full documentation is at https://zmnatz.github.io/open-webui-plugin-protocol/, and its whole text, for reading in one go, at https://zmnatz.github.io/open-webui-plugin-protocol/llms-full.txt.
 
@@ -35,7 +35,7 @@ Every command takes `--dir`: the plugins folder, default [`$OWPP_PLUGINS_DIR`](h
 2. **Describe it in a spec and create it**: write the spec ([references/spec.md](references/spec.md)) to a file, then `uvx owpp create --spec <file>`. It writes the folder, with stubs, tests, a README and a CHANGELOG, and runs `owpp check --strict` on it. (`owpp create` with no `--spec` is a wizard for a person at a terminal: it waits for typed answers.)
 3. **Fill in the stubs**: the work goes in `function.py`, `tool.py`, `skills/<name>/SKILL.md` and the pages, following [the rules](#the-rules-owpp-and-open-webui-hold-the-code-to). Test every behaviour, in the plugin's `tests/`: [references/testing.md](references/testing.md).
 
-Done when `uvx owpp check <id> --strict` reports no `FAIL` and no `warn`, and `uvx --from 'owpp[test]' owpp test <id>` passes.
+Done when `uvx owpp check <id> --strict` reports no `FAIL` and no `warn`, and `uvx --python 3.12 --from 'owpp[test]' owpp test <id>` passes.
 
 ## Change
 
@@ -69,7 +69,7 @@ Done when the deploy's report lists every plugin as the user expected, and the R
 - **One function class** at the top level of `function.py`: `Filter`, `Action`, `Event` or `Pipe`. The header (`title`, `version`, `description`, ...) lives under `function:` in `plugin.yaml`, one line per value, never in a docstring of `function.py`.
 - **Ids** are `[a-z_][a-z0-9_]*`: the folder name is the function id, so no hyphens.
 - **Every file imports what it uses**, as ordinary Python. Library names come from `from owpp.lib import plugin_mount, PluginAdmin, on, ...`, and a `tool.py` or `function.py` takes the plugin's own shared code with `from shared import NAME`. The bundler removes those two kinds of import, so write them only at the top level and without `as`; `function.py` and `tool.py` never import each other. A library name also needs its library in the bundle: `include: [routes, jobs, events, chat_data]` in `plugin.yaml`, while `static/`, `templates/`, `assets/` and `config.yaml` bring theirs in by being there. The bundler says which one is missing. Library reference: https://zmnatz.github.io/open-webui-plugin-protocol/libraries/
-- **Open-WebUI's own modules** (`open_webui.*`) are imported inside the function that uses them, so the plugin also loads in the mock.
+- **Open-WebUI's own modules** (`open_webui.*`) are imported inside the function that uses them, so `plugin_source()` can import the plugin's files without Open-WebUI.
 - **Valves** are `UPPER_SNAKE`, each a `Field(default=..., description="...")`. A valve's description is what the admin sees.
 - **Tool methods** are what the model sees: a type hint on every parameter, a docstring that says when to call it, and one `:param name:` line per parameter. Helpers start with `_`.
 - **Routes** are mounted with `plugin_mount(app, router, prefix)` only; it puts the sign-in guard on them. A route that needs more than a signed-in user is marked on its handler (`user: PluginAdmin`, `chat_id: WritableChat`). Public (`access="public"`) is per mount, and only for what must serve people who are not signed in.

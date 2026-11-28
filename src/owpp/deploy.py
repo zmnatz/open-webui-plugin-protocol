@@ -390,16 +390,17 @@ def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, s
     and the commit of the git repository it takes code from. `existing` is the live function
     (with its content), or None; `latest` notes which sources were moved to their latest commit."""
     old = existing.get("content") if existing else None
+    new = replace_imports(f.content)  # as Open-WebUI stores it, as `old` is
     changes = Changes()
     old_v, new_v = version_of(old), version_of(f.content)
     if existing is None:
         changes.details.append(f"function: new{f' ({new_v})' if new_v else ''}")
     elif old_v != new_v:
         changes.version_change("function", old_v, new_v)
-    elif own_code(old) != own_code(replace_imports(f.content)):
+    elif own_code(old) != own_code(new):
         changes.details.append(f"function: code changed, still {new_v or '(no version)'}")
-    _parts(changes, "tool", tools_of(old), tools_of(f.content), tool_version)
-    _parts(changes, "skill", skills_of(old), skills_of(f.content), skill_version)
+    _parts(changes, "tool", tools_of(old), tools_of(new), tool_version)
+    _parts(changes, "skill", skills_of(old), skills_of(new), skill_version)
     live_sources = FunctionMeta.of(existing).sources
     for label, sha in f.sources.items():
         was = live_sources.get(label)
@@ -423,6 +424,12 @@ def _with_content(instance: Instance, files: list[FunctionFile], live: list[dict
             fn = {**fn, "content": field_of(instance.open_webui.function(fn["id"]), "content")}
         out.append(fn)
     return out
+
+
+def _global_when_created(f: FunctionFile, kind: str | None) -> bool:
+    """A new function is made global if it says so, and a new filter unless it says
+    `global: false` (unattached, a filter does nothing; a toggle is one each user switches on)."""
+    return f.want_global or (kind == "filter" and not f.not_global)
 
 
 def _ensure_global(instance: Instance, fn_id: str, state: Any) -> list[str]:
@@ -491,6 +498,10 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
         version = version_of(f.content)
         if p.action == "unchanged" or choices.dry_run:
             pending = []
+            if p.existing is None:  # what creating it does, as the create branch below
+                pending.append("activate")
+                if _global_when_created(f, f.type):
+                    pending.append("make global")
             if f.want_global and p.existing:
                 if not p.existing.get("is_active"):
                     pending.append("activate")
@@ -547,10 +558,9 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
         if not field_of(created, "is_active"):
             created = api.toggle(f.id)
             notes.append("activated")
-        # A new filter is made global (unattached, it does nothing) unless it says
-        # `global: false`: a toggle that each user switches on.
-        default_global = field_of(created, "type") == "filter" and not f.not_global
-        if (f.want_global or default_global) and not field_of(created, "is_global"):
+        if _global_when_created(f, field_of(created, "type")) and not field_of(
+            created, "is_global"
+        ):
             api.toggle_global(f.id)
             notes.append("made global")
         results.append(
@@ -563,8 +573,7 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
         if choices.dry_run:
             results.append(Result(o["id"], "(no file)", "would delete"))
             continue
-        if not api.delete_function(o["id"]):
-            raise OwppError(f"deleting {o['id']} was not confirmed")
+        api.delete_function(o["id"])
         results.append(Result(o["id"], "(no file)", "deleted"))
     if choices.no_prune:
         for o in pruned:
@@ -710,22 +719,18 @@ def deploy(instance: Instance, choices: Choices, plugins: Build | None = None) -
 def iframe_sandbox_warning(instance: Instance, plugins: Build) -> str | None:
     """Warn when a plugin needs Open-WebUI's iframe Sandbox Allow Same Origin but the instance's
     default interface settings do not turn it on. Never changes the instance or stops a deploy:
-    a user's own setting can still enable it, and an unreadable admin config is not a reason to
-    refuse the rest of the deploy."""
+    a user's own setting can still enable it. The deploy signs in as an admin, who can always
+    read the admin config."""
     ids = [f.id for f in plugins.files if f.requires.get(IFRAME_REQUIREMENT) is True]
     if not ids:
         return None
-    try:
-        config = instance.open_webui.admin_config()
-        settings = config.get("DEFAULT_INTERFACE_SETTINGS") if isinstance(config, dict) else None
-        if isinstance(settings, dict) and settings.get(IFRAME_SETTING) is True:
-            return None
-        why = "it is not on in this instance's default interface settings"
-    except OwppError as e:
-        why = f"its default interface settings could not be read ({e})"
+    config = instance.open_webui.admin_config()
+    if (config.get("DEFAULT_INTERFACE_SETTINGS") or {}).get(IFRAME_SETTING) is True:
+        return None
     return (
         f"Warning: {', '.join(f'`{i}`' for i in ids)} need Open-WebUI's iframe Sandbox Allow Same "
-        f"Origin, and {why}. Set it with {IFRAME_FIX} or under Admin Settings > General > "
+        "Origin, and it is not on in this instance's default interface settings. Set it with "
+        f"{IFRAME_FIX} or under Admin Settings > General > "
         "Default Interface Settings (each user can also turn it on in Settings > Interface). "
         "Deploying anyway."
     )

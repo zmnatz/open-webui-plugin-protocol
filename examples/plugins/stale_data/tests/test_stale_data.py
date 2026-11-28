@@ -1,4 +1,4 @@
-"""The Stale Data Dashboard against a mock Open-WebUI. Run with `owpp test stale_data`."""
+"""The Stale Data Dashboard on the test harness. Run with `owpp test stale_data`."""
 
 import time
 
@@ -48,13 +48,13 @@ def test_it_is_gone_once_the_function_is_disabled(owui, started):
     assert owui.client(owui.admin).get("/stale-data").status_code == 404
 
 
-def test_nothing_is_mounted_until_open_webui_has_started(owui, plugin):
-    """Until Open-WebUI has finished starting, /stale-data is still Open-WebUI's own web app.
+def test_switching_it_on_mounts_the_dashboard_without_a_restart(owui, plugin):
+    """A deploy switches the function on, and that mounts /stale-data at once: Open-WebUI does
+    not have to start again.
 
-    By hand: hard to catch: it only lasts between the function loading and startup finishing.
+    By hand: deploy the function to a running instance and open /stale-data as an admin.
     """
-    # Before startup the path is still Open-WebUI's own web app.
-    assert "<title>Open WebUI</title>" in owui.client(owui.admin).get("/stale-data").text
+    assert "Stale" in dashboard(owui)
 
 
 def test_a_new_path_moves_the_page(owui, started):

@@ -1,9 +1,11 @@
-"""Inline Visualizer against a mock Open-WebUI. The tool and skill come from a pinned git
+"""Inline Visualizer on the test harness. The tool and skill come from a pinned git
 commit at deploy time; here stand-ins take their place (`sources=`), so the test needs no
 network. What is tested is this folder's part: that the generated function installs them,
 keeps them current and removes them. Run with `owpp test inline_visualizer`."""
 
 import pytest
+
+from owpp.testing import grants
 
 TOOL = '''"""
 title: Inline Visualizer
@@ -54,12 +56,12 @@ def test_loading_it_installs_the_tool_and_the_skill_for_everyone(owui, plugin):
     public = [{"principal_type": "user", "principal_id": "*", "permission": "read"}]
     tool = owui.tools["inline_visualizer"]
     assert tool.meta.manifest["parent_function_id"] == "inline_visualizer"
-    assert tool.access_grants == public
+    assert grants(tool) == public
     skill = owui.skills["visualize"]
     assert skill.description == "Draw diagrams and charts inline."
     assert skill.meta.tags == ["plugin:inline_visualizer"]
     assert [f["path"] for f in skill.data["files"]] == ["SKILL.md"]
-    assert skill.access_grants == public
+    assert grants(skill) == public
 
 
 def test_the_installed_tool_is_the_upstream_code(owui, plugin):
@@ -93,7 +95,7 @@ def test_a_new_upstream_commit_updates_them_in_place(owui, plugin, plugin_dir):
     By hand: set one of the Inline Visualizer tool's valves, change the pinned commit in
     plugin.yaml and deploy. The tool's code is the new commit's, and your valve is still set.
     """
-    owui.tool_valves["inline_visualizer"] = {"theme": "dark"}  # an admin's choice
+    owui.set_tool_valves("inline_visualizer", theme="dark")  # an admin's choice
     newer = TOOL.replace("rendered", "drew")
     owui.load(plugin_dir, sources={"tool.py": newer, "SKILL.md": SKILL.replace("charts", "maps")})
     owui.emit("function.updated", "inline_visualizer")

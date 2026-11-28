@@ -104,4 +104,4 @@ uvx --from 'owpp[live]' owpp live --down
 
 - [On a real Open-WebUI](../testing/live.md): how to write live tests, the fixtures, aimock.
 - [A live check in CI](../testing/ci.md#a-live-check): the workflow.
-- [`owpp test`](test.md): the tests against the mock, which need no Docker.
+- [`owpp test`](test.md): the unit tests on the test harness, which need no Docker.

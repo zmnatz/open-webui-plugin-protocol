@@ -185,14 +185,14 @@ You edit these in the files, because they depend on what the plugin does:
 ## After it is written
 
 1. Run `owpp check my_plugin --strict`. It passes immediately. Keep it clean.
-2. Run `uvx --from 'owpp[test]' owpp test my_plugin` to run the tests that the wizard wrote.
+2. Run `uvx --python 3.12 --from 'owpp[test]' owpp test my_plugin` to run the tests that the wizard wrote.
 3. Run `owpp deploy --only my_plugin --dry-run`, then run it again without `--dry-run`.
 4. Follow the [authoring guide](authoring.md): its conventions and its checklist.
 
 ```sh
-owpp check my_plugin --strict                   # clean right away; keep it clean
-uvx --from 'owpp[test]' owpp test my_plugin     # the tests it wrote
-owpp deploy --only my_plugin --dry-run          # then without --dry-run
+owpp check my_plugin --strict                              # clean right away; keep it clean
+uvx --python 3.12 --from 'owpp[test]' owpp test my_plugin  # the tests it wrote
+owpp deploy --only my_plugin --dry-run                     # then without --dry-run
 ```
 
 ## From a spec

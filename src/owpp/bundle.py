@@ -800,21 +800,30 @@ def load_function_files(
                 )
             )
         elif e.name in folders:
-            plugin = sources.resolve(e.path)
-            content = bundle_function(plugin)
-            if content is None:
-                continue
-            fn = plugin.manifest["function"]
-            declared = fn.get("global")
-            item = _make_item(
-                "function",
-                e.name,
-                f"{e.name}/",
-                content,
-                valves=fn.get("valves"),
-                global_=declared if isinstance(declared, bool) and "file" in fn else None,
-                plugin=plugin,
-            )
-            item.root = plugin.root
-            loaded.append(item)
+            item = function_file(e.path, sources)
+            if item is not None:
+                loaded.append(item)
     return loaded
+
+
+def function_file(folder: Path | str, sources: Sources) -> FunctionFile | None:
+    """The function one plugin folder deploys, as `owpp deploy` sends it (None if the plugin
+    has no function). Its id is the folder's name."""
+    folder = Path(folder)
+    plugin = sources.resolve(folder)
+    content = bundle_function(plugin)
+    if content is None:
+        return None
+    fn = plugin.manifest["function"]
+    declared = fn.get("global")
+    item = _make_item(
+        "function",
+        folder.name,
+        f"{folder.name}/",
+        content,
+        valves=fn.get("valves"),
+        global_=declared if isinstance(declared, bool) and "file" in fn else None,
+        plugin=plugin,
+    )
+    item.root = plugin.root
+    return item

@@ -240,7 +240,7 @@ The deploy report shows a warning, and the deploy continues:
 Warning: `<id>` need Open-WebUI's iframe Sandbox Allow Same Origin, and it is not on in this instance's default interface settings. Set it with DEFAULT_INTERFACE_SETTINGS='{"iframeSandboxAllowSameOrigin": true}' or under Admin Settings > General > Default Interface Settings (each user can also turn it on in Settings > Interface). Deploying anyway.
 ```
 
-The plugin declares [`requires: iframe_sandbox_allow_same_origin`](plugin-format.md#requires). Without that setting, the Artifacts panel sends no session. Thus the plugin's page cannot know who is signed in, and answers 401. If owpp cannot read the admin config, the warning says `its default interface settings could not be read (...)` instead.
+The plugin declares [`requires: iframe_sandbox_allow_same_origin`](plugin-format.md#requires). Without that setting, the Artifacts panel sends no session. Thus the plugin's page cannot know who is signed in, and answers 401.
 
 **Warning:** With the setting on, the script in any artifact can act in Open-WebUI as the user. Before you turn it on, read [why pages in the Artifacts panel need it](libraries.md#pages-in-the-artifacts-panel-need-iframe-sandbox-allow-same-origin).
 

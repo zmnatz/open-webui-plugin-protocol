@@ -1,7 +1,11 @@
-"""An Open-WebUI in memory, behind the same `Fetch` port urllib is (owpp.openwebui): the deploy,
-`owpp import --instance` and `owpp live`'s stack are tested against it. `serve()` puts it behind
-a real HTTP server, for the contract test of the urllib adapter and for commands run through
-`main()` with only an OPEN_WEBUI_URL."""
+"""An Open-WebUI in memory, behind the same `Fetch` port urllib is (owpp.openwebui), for what the
+real one (real_open_webui.py, the test harness) cannot give on demand: an instance that is still
+starting (owpp live waits for it), two instances side by side, and `owpp live`'s sign-up. Every other deploy and import test runs against the
+real Open-WebUI.
+
+`serve()` puts it behind a real HTTP server, for the contract test of the urllib adapter and for
+commands run through `main()` with only an OPEN_WEBUI_URL. tests/test_harness.py checks that a
+function it stores is the row the real Open-WebUI stores."""
 
 from __future__ import annotations
 
@@ -15,7 +19,7 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
-from owpp.bundle import parse_frontmatter
+from owpp.bundle import function_type, parse_frontmatter
 from owpp.deploy import Choices, Instance
 from owpp.openwebui import HttpResponse, replace_imports
 
@@ -42,17 +46,8 @@ class FakeOpenWebUI:
         self,
         live=(),
         key="sk-good",  # an admin's API key
-        created_type="filter",
-        created_active=False,
-        fail_delete=False,
         accounts=None,  # {email: password}: /auths/signin, with `role`
-        ldap=None,  # {user: password}: /auths/ldap
-        oidc=None,  # {provider: token}: /auths/oauth/<provider>/token/exchange
-        open_signin=False,  # an empty sign-in works (WEBUI_AUTH=False, or a trusted header)
         role="admin",  # of whoever signs in to an account given above
-        interface_settings=None,  # DEFAULT_INTERFACE_SETTINGS in the admin config
-        admin_config_status=200,  # 403: a signed-in account that cannot read the admin config
-        valves=None,  # {function id: its valves}
         starting=0,  # how many /health checks fail (connection refused) before it is up
     ):
         self.calls: list[str] = []
@@ -63,15 +58,7 @@ class FakeOpenWebUI:
         }
         self.tokens: dict[str, str] = {key: "admin"}  # token: role
         self.key, self.role = key, role
-        self.created_type, self.created_active, self.fail_delete = (
-            created_type,
-            created_active,
-            fail_delete,
-        )
-        self.ldap, self.oidc, self.open_signin = ldap or {}, oidc or {}, open_signin
-        self.interface_settings = interface_settings or {}
-        self.admin_config_status = admin_config_status
-        self.valves: dict[str, dict] = dict(valves or {})
+        self.valves: dict[str, dict] = {}
         self.starting = starting
 
     # ---- as deploy and import are given it
@@ -116,17 +103,11 @@ class FakeOpenWebUI:
 
     def _auths(self, method, path, form, token) -> HttpResponse:
         if path == "/api/v1/auths/admin/config":
-            if self.admin_config_status != 200:
-                return _json({"detail": "not allowed"}, self.admin_config_status)
-            return _json({"DEFAULT_INTERFACE_SETTINGS": self.interface_settings})
+            return _json({"DEFAULT_INTERFACE_SETTINGS": {}})
         if path == "/api/v1/auths/signin":
-            if form.get("email") == "" and form.get("password") == "":
-                if self.open_signin:
-                    return self._session({"email": "admin@example.com", "role": self.role})
-            else:
-                account = self.accounts.get(form.get("email"))
-                if account and account["password"] == form.get("password"):
-                    return self._session(account)
+            account = self.accounts.get(form.get("email"))
+            if account and account["password"] == form.get("password"):
+                return self._session(account)
             return _json({"detail": "The email or password provided is incorrect."}, 400)
         if path == "/api/v1/auths/signup":
             if form["email"] in self.accounts:
@@ -139,19 +120,6 @@ class FakeOpenWebUI:
                 return _json({"detail": "nope"}, 401)
             self.accounts[form["email"]] = {**form, "role": form.get("role") or "pending"}
             return _json({"email": form["email"], "role": self.accounts[form["email"]]["role"]})
-        if path == "/api/v1/auths/ldap":
-            if not self.ldap:
-                return _json({"detail": "LDAP authentication is not enabled"}, 400)
-            if self.ldap.get(form.get("user")) == form.get("password"):
-                return self._session({"email": form["user"], "role": self.role})
-            return _json({"detail": "Invalid credentials"}, 400)
-        exchange = re.fullmatch(r"/api/v1/auths/oauth/([^/]+)/token/exchange", path)
-        if exchange:
-            if not self.oidc:
-                return _json({"detail": "Token exchange is disabled"}, 403)
-            if self.oidc.get(exchange.group(1)) == form.get("token"):
-                return self._session({"email": "oidc@example.com", "role": self.role})
-            return _json({"detail": "Invalid token"}, 400)
         return _json({"detail": "not found"}, 404)
 
     # ---- functions
@@ -166,8 +134,9 @@ class FakeOpenWebUI:
                 "id": body["id"],
                 "name": body["name"],
                 **_saved(body),
-                "type": self.created_type,
-                "is_active": self.created_active,
+                # As Open-WebUI does: the type from the code, and switched off.
+                "type": (function_type(body["content"]) or ["filter"])[0],
+                "is_active": False,
                 "is_global": False,
             }
             state[body["id"]] = f
@@ -178,7 +147,7 @@ class FakeOpenWebUI:
         fn_id, rest = m.group(1), m.group(2) or ""
         if rest == "/delete" and method == "DELETE":
             existed = state.pop(fn_id, None) is not None
-            return _json(False if self.fail_delete else existed)
+            return _json(existed)
         f = state.get(fn_id)
         if not f:  # Open-WebUI answers a missing function as unauthorised
             return _json({"detail": "not found"}, 401)
@@ -201,10 +170,15 @@ class FakeOpenWebUI:
 
 
 def _saved(form: dict) -> dict:
-    """The code and meta as Open-WebUI saves them: imports rewritten, and the header it reads
-    from the code added to the meta as `manifest`."""
+    """The code and meta as Open-WebUI saves them: imports rewritten, the header it reads from
+    the code added to the meta as `manifest`, and `toggle`: whether a filter has the switch
+    (Open-WebUI reads `toggle` off the loaded module; here, a `self.toggle = True` in the code)."""
     content = replace_imports(form["content"])
-    return {"content": content, "meta": {**form["meta"], "manifest": parse_frontmatter(content)}}
+    toggle = function_type(content)[:1] == ["filter"] and bool(
+        re.search(r"self\.toggle\s*=\s*True", content)
+    )
+    meta = {**form["meta"], "manifest": parse_frontmatter(content), "toggle": toggle}
+    return {"content": content, "meta": meta}
 
 
 def _json(obj, status=200) -> HttpResponse:

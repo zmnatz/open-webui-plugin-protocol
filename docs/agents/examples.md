@@ -20,7 +20,7 @@ Done when all five places name the author and the licence.
 
 Follow [the `test-existing-plugin` skill](../../skills/test-existing-plugin/SKILL.md), steps 2 to 4 (the adapted code works, so its tests pin what it does): every valve and every branch has a test, each with a docstring that says what it checks and then **By hand**. The test names matter twice over: the screenshots link to them, and the [test catalogue](../testing/writing.md#describe-every-test) is built from the docstrings.
 
-Done when `uv run owpp test --dir examples/plugins <id>` and `uv run owpp check --strict --dir examples/plugins <id>` pass, and `uv run ruff check .` and `uv run ruff format --check .` (what CI runs) pass over the adapted code too. Every `open_webui` name the plugin imports must exist in the mock, which `tests/test_stubs.py` checks: add any that is missing to `src/owpp/testing/mock.py` (with a test in `tests/test_mock.py`), then regenerate the editor stubs with `uv run python -m owpp.testing.stubs` and commit `src/open_webui-stubs/`.
+Done when `uv run owpp test --dir examples/plugins <id>` and `uv run owpp check --strict --dir examples/plugins <id>` pass, and `uv run ruff check .` and `uv run ruff format --check .` (what CI runs) pass over the adapted code too. The tests run on the real Open-WebUI ([the test harness](../testing/harness.md)). A package that the plugin imports and that Open-WebUI's slim image does not have goes in the repository's `dev` dependency group, at the version that the harness's error names.
 
 ## 3. Photograph it
 
@@ -50,4 +50,4 @@ Done when the live suite passes and the new PNGs and `docs/screenshots/screensho
 - Add the example to the Examples menu in `zensical.toml` (`{ "Title" = "examples/<id>.md" }`): its page is built either way, but only the menu leads to it.
 - `uv run --group docs python tools/build_docs.py` builds the docs site with the new page and its screenshots; a broken link, or an example the menu leaves out, fails it. The button to the example's built function is added by the same build; nothing to write.
 
-Done when the docs build passes, and `uv run pytest` passes.
+Done when the docs build passes, and `uv run pytest -n auto` and `uv run owpp test --dir examples/plugins -- -n auto` pass.

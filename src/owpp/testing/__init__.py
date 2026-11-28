@@ -1,8 +1,8 @@
-"""Test plugins against a mock Open-WebUI (docs/testing.md).
+"""Test plugins against the real Open-WebUI, in the test process (docs/testing.md).
 
-    from owpp.testing import MockOpenWebUI
+    from owpp.testing import Harness
 
-    with MockOpenWebUI() as owui:
+    with Harness() as owui:
         plugin = owui.load("plugins/my_plugin")
         owui.startup()
 
@@ -11,14 +11,15 @@ and `owpp test` runs each plugin's tests/ folder. `plugin_source(path)` imports 
 as modules instead, for tests of their logic (owpp.testing.source).
 """
 
-from .mock import LoadedPlugin, LoadedTool, MockOpenWebUI, Record
+from .harness import Harness, LoadedPlugin, LoadedTool, User, grants
 
 __all__ = [
+    "Harness",
     "LoadedPlugin",
     "LoadedTool",
-    "MockOpenWebUI",
     "PluginSource",
-    "Record",
+    "User",
+    "grants",
     "plugin_folder",
     "plugin_source",
 ]

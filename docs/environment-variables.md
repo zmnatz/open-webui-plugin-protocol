@@ -123,6 +123,22 @@ The private key of [`OPEN_WEBUI_CLIENT_CERT`](#open_webui_client_cert), if it is
 - **Read by**: `owpp deploy` and `owpp import --instance`, as the default of `--client-key`.
 - It needs a client certificate. Without one, the command stops with `OPEN_WEBUI_CLIENT_KEY needs OPEN_WEBUI_CLIENT_CERT`.
 
+## The test harness
+
+### `OWPP_CACHE_DIR`
+
+The folder where [`owpp test`](commands/test.md) keeps the Open-WebUI code that the [test harness](testing/harness.md) runs. The first run downloads it there. Later runs use it again.
+
+- **Default**: `$XDG_CACHE_HOME/owpp`, or `~/.cache/owpp` if `XDG_CACHE_HOME` is not set.
+- **Read by**: `owpp test`, and any pytest run that uses the `owui` fixture.
+
+### `OWPP_FRESH_OPEN_WEBUI`
+
+If set, each test gets a new Open-WebUI: the harness imports and starts it again ([a new Open-WebUI for a test](testing/harness.md#a-new-open-webui-for-a-test)). This makes each test some seconds slower.
+
+- **Default**: not set. Each test gets the same Open-WebUI, put back as it was after its startup.
+- **Read by**: the `owui` fixture.
+
 ## Set by owpp live, for the live tests
 
 [`owpp live`](commands/live.md) sets these variables for the pytest run that it starts. With `--up`, it prints them, so you can run the tests yourself against the stack that stays up. The [fixtures](testing/live.md#the-fixtures) of owpp live read them. If an account variable is missing, a test that needs that account stops the run, and says to start `owpp live`.
@@ -158,6 +174,10 @@ A pytest variable: the plugins that pytest loads. `owpp live` adds `owpp.live.fi
 ### `GITHUB_STEP_SUMMARY`
 
 GitHub Actions sets it to the file of the job summary. If it is set, `owpp deploy` appends its report to that file, so the report shows on the page of the run.
+
+### `XDG_CACHE_HOME`
+
+The user's cache folder, on Linux and other systems that follow the XDG rules. If [`OWPP_CACHE_DIR`](#owpp_cache_dir) is not set, owpp keeps its cache in `owpp/` there.
 
 ### `PYTEST_DISABLE_PLUGIN_AUTOLOAD`
 

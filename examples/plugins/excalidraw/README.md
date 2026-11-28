@@ -65,7 +65,7 @@ This host is outside Open-WebUI, so it is yours to keep up: its files are public
 
 - `owpp check excalidraw` bundles it exactly as the deploy does, compiles it and lists names it uses but never defines (the function and any tool it embeds).
 - `owpp bundle excalidraw out.py` writes the deployed code to read or diff.
-- `owpp test excalidraw` runs `tests/` against a mock Open-WebUI (docs/testing.md).
+- `owpp test excalidraw` runs `tests/` against the real Open-WebUI, in process (docs/testing.md).
 - On a live Open-WebUI, with [iframe Sandbox Allow Same Origin](#requirement-iframe-sandbox-allow-same-origin) on: open a chat and ask the model to draw something: the editor opens in the Artifacts panel and edits survive a reload. With `EXCALIDRAW_ASSETS_URL` set, the network tab shows every file coming from your host.
 
 ## Deploy

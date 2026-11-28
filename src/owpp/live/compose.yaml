@@ -25,6 +25,11 @@ services:
       # Nothing downloaded at startup, no update checks: the run is the same offline or not.
       OFFLINE_MODE: "true"
       ENABLE_VERSION_UPDATE_CHECK: "false"
+      # No title, tag or follow-up requests after a reply: a fixture would have to copy
+      # Open-WebUI's task prompts to answer them, and they would fill aimock's journal.
+      ENABLE_TITLE_GENERATION: "false"
+      ENABLE_TAGS_GENERATION: "false"
+      ENABLE_FOLLOW_UP_GENERATION: "false"
     depends_on: [aimock]
 
   aimock:

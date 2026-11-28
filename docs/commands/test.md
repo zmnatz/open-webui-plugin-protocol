@@ -2,13 +2,18 @@
 
 ```
 owpp test [id ...] [--upstream] [--dir FOLDER] [-- pytest args]
+owpp test --editor
 ```
 
-`owpp test` runs the `tests/` folder of each plugin with pytest, against a mock Open-WebUI. With no ids, it tests every plugin that has such a folder. Arguments after `--` go to pytest.
+`owpp test` runs the `tests/` folder of each plugin with pytest, against the real Open-WebUI in the test process: the [test harness](../testing/harness.md). With no ids, it tests every plugin that has such a folder. Arguments after `--` go to pytest.
 
-The test fixtures bundle a plugin exactly as [`owpp deploy`](deploy.md) does. Then they load it as Open-WebUI loads a function. For the tests, the fixtures and the mock, see [testing plugins](../testing.md).
+The test fixtures bundle a plugin exactly as [`owpp deploy`](deploy.md) does. Then they deploy it through Open-WebUI's API. For the tests and the fixtures, see [testing plugins](../testing.md).
 
-The command needs the `test` extra: pytest, and the packages that Open-WebUI ships and that plugins import. Run it as `uvx --from 'owpp[test]' owpp test`. If a package is missing, the command stops and names it, for example ``error: owpp test needs pytest: run it as `uvx --from 'owpp[test]' owpp test`, or `pip install 'owpp[test]'` ``.
+The command needs the `test` extra: pytest, pytest-xdist, and the packages of Open-WebUI's slim image ([owpp mirrors Open-WebUI](../testing/harness.md#owpp-mirrors-open-webui)). Run it as `uvx --python 3.12 --from 'owpp[test]' owpp test`. To run the tests in parallel, add `-- -n auto`.
+
+- On a Python other than Open-WebUI's (3.12), the command stops and says so.
+- If a package is missing, the command stops and names it, for example ``error: owpp test needs pytest: run it as `uvx --python 3.12 --from 'owpp[test]' owpp test`, or `pip install 'owpp[test]'` ``.
+- The first run downloads Open-WebUI's code to [`OWPP_CACHE_DIR`](../environment-variables.md#owpp_cache_dir).
 
 ## Upstream tests
 
@@ -23,19 +28,22 @@ A plugin [taken whole from git](../plugin-format.md#a-whole-plugin-from-git) has
 | `id ...` | The plugins to test. Default: every plugin with a `tests/` folder. |
 | `--upstream` | Also run the tests of plugins taken whole from git, from the pinned commit. |
 | `-- pytest args` | Everything after `--` goes to pytest. |
+| `--editor` | Print the folder of the Open-WebUI code that the tests run, and stop. Add it to the search path of your editor ([in an editor](../testing/harness.md#in-an-editor)). It downloads the code if it is not in the cache. |
 | `--dir FOLDER` | The plugins folder. Default [`$OWPP_PLUGINS_DIR`](../environment-variables.md#owpp_plugins_dir), else `./plugins`. |
 
 ## Examples
 
 ```sh
-uvx --from 'owpp[test]' owpp test               # every plugin with a tests/ folder
-uvx --from 'owpp[test]' owpp test excalidraw    # just these
-owpp test excalidraw -- -k token -x             # after --: arguments for pytest
-owpp test --upstream                            # the upstream's tests too
+uvx --python 3.12 --from 'owpp[test]' owpp test             # every plugin with a tests/ folder
+uvx --python 3.12 --from 'owpp[test]' owpp test excalidraw  # just these
+owpp test excalidraw -- -k token -x                         # after --: arguments for pytest
+owpp test -- -n auto                                        # in parallel
+owpp test --upstream                                        # the upstream's tests too
+owpp test --editor                                          # where an editor finds open_webui
 ```
 
 ## Related
 
-- [Testing plugins](../testing.md): how to write tests, the fixtures, the mock.
+- [Testing plugins](../testing.md): how to write tests, the fixtures, the [test harness](../testing/harness.md).
 - [`owpp check`](check.md): bundle and compile, and run nothing.
 - [`owpp init`](init.md) and [`owpp create`](create.md): both write a first test that passes.

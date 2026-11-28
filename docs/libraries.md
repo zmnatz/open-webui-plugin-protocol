@@ -408,7 +408,7 @@ These two libraries are [Classic298's Shared Assets Protocol](https://github.com
 2. Import the protocol's names from `owpp.lib`, as for any library: `from owpp.lib import CUSTOM_CSS_PATH, asset_register, reload_active, reload_bootstrap, reload_on_event`.
 3. Define the parts in the table.
 
-In a test, the names of `live_reload` need the mock Open-WebUI. The file imports `open_webui` at its top, so `owpp.lib` loads those names on first use.
+In a test, the names of `live_reload` need Open-WebUI: open a [test harness](testing/harness.md) first. The file imports `open_webui` at its top, so `owpp.lib` loads those names on first use.
 
 There are two other ways to use an existing plugin that has the protocol:
 

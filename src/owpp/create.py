@@ -822,9 +822,9 @@ def _test(name: str, args: str, what: str, by_hand: str, body: list[str]) -> lis
 
 def render_tests(spec: PluginSpec) -> str:
     out = [
-        f'"""{spec.title} against a mock Open-WebUI: `owpp test {spec.id}` (docs/testing.md).',
+        f'"""{spec.title} on the test harness: `owpp test {spec.id}` (docs/testing.md).',
         "",
-        "`plugin` is this folder, bundled as the deploy would and loaded into `owui`, the mock.",
+        "`plugin` is this folder, bundled and deployed into `owui`, the real Open-WebUI in process.",
     ]
     if spec.source:
         out += [
@@ -980,39 +980,41 @@ def _type_tests(spec: PluginSpec) -> list[str]:
             body,
         )
     if spec.type == "action":
-        body = ['    user = owui.add_user("Ada")']
+        body = [
+            f'    owui.add_model("mock-model", actions=["{spec.id}"])  # an admin turns it on',
+            '    user = owui.add_user("Ada")',
+        ]
         if spec.buttons:
             body.append(
                 f'    assert [a["id"] for a in plugin.instance.actions] == {_py([b for b, _ in spec.buttons])}'
             )
         if spec.rich_ui:
             body += [
-                '    page = plugin.call("action", {"messages": []}, user=user)',
-                '    assert page.headers["content-disposition"] == "inline"',
-                "    assert TITLE in page.body.decode()",
+                '    plugin.call("action", {"messages": []}, user=user)',
+                "    # The page reaches the chat as an embed, above the message.",
+                '    (embed,) = [d for e, d in owui.emitted if d["data"]["type"] == "embeds"]',
+                '    assert TITLE in str(embed["data"]["data"]["embeds"])',
             ]
         else:
             body.append('    assert plugin.call("action", {"messages": []}, user=user) is None')
         return _test(
             "test_the_action_runs",
             "owui, plugin",
-            "The action runs on a message without failing.",
-            "under a reply, click the action's button: no error toast appears.",
+            "The action runs on a message without failing, once an admin turns it on for a model.",
+            "turn the action on for a model under Admin Settings > Models. Under a reply from that"
+            " model, click the action's button: no error toast appears.",
             body,
         )
     body = [
         '    user = owui.add_user("Ada")',
         f'    assert plugin.call("pipes") == [{_models_literal(spec)}]',
-        '    assert plugin.call("pipe", {"messages": []}, user=user) == "Hello from " + TITLE',
+        '    reply = plugin.call("pipe", {"messages": []}, user=user)  # what the chat gets',
+        '    assert reply["choices"][0]["message"]["content"] == "Hello from " + TITLE',
     ]
     if spec.stream:
         body += [
-            '    chunks = plugin.call("pipe", {"messages": [], "stream": True}, user=user)',
-            "",
-            "    async def read():",
-            '        return "".join([c async for c in chunks])',
-            "",
-            '    assert owui.run(read()) == "Hello from " + TITLE',
+            '    streamed = plugin.call("pipe", {"messages": [], "stream": True}, user=user)',
+            '    assert owui.stream_text(streamed) == "Hello from " + TITLE',
         ]
     return _test(
         "test_it_answers",
@@ -1114,7 +1116,7 @@ def render_readme(spec: PluginSpec) -> str:
         "## Test",
         "",
         f"- `owpp check {spec.id}` bundles it exactly as the deploy does, compiles it and lists undefined names.",
-        f"- `owpp test {spec.id}` runs `tests/` against a mock Open-WebUI (docs/testing.md).",
+        f"- `owpp test {spec.id}` runs `tests/` against the real Open-WebUI, in process (docs/testing.md).",
         f"- On a live Open-WebUI: {live}",
         "",
         "## Deploy",

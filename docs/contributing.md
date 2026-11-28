@@ -7,8 +7,9 @@ This page says what a change to this repository includes. Then the person who [r
 1. Find or open an issue on [GitHub Issues](https://github.com/zmnatz/open-webui-plugin-protocol/issues) that says what you change and why.
 2. Create your branch from `develop`, not `main` ([branches](#branches)).
 3. Install [uv](https://docs.astral.sh/uv/).
-4. Run `uv sync`.
-5. To work on this site, also run `uv sync --group docs`. It needs Python 3.11 or newer.
+4. Install Bun, Node (20 or newer) or Docker. The example tests that ask a model run [aimock](testing/harness.md#the-model-aimock) with the first one that is installed.
+5. Run `uv sync`. It installs Python 3.12, the Python of the pinned Open-WebUI (`.python-version`).
+6. To work on this site, also run `uv sync --group docs`.
 
 The triage labels are `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human` and `wontfix`.
 

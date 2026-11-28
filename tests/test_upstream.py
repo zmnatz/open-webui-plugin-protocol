@@ -263,12 +263,12 @@ class TestSync:
         assert "bump" not in out
 
 
-def test_the_mock_loads_it_from_stand_ins(tmp_path):
-    from owpp.testing import MockOpenWebUI
+def test_the_harness_loads_it_from_stand_ins(tmp_path):
+    from owpp.testing import Harness
 
     write_tree(tmp_path, {"viz/plugin.yaml": local("function:\n  valves:\n    SIZE: 9\n")})
     stand_ins = {k[len("plugins/viz/") :]: v for k, v in UPSTREAM.items()}
-    with MockOpenWebUI(static_dir=tmp_path / "static") as owui:
+    with Harness() as owui:
         plugin = owui.load(tmp_path / "viz", sources=stand_ins)
         assert plugin.row.name == "Viz" and plugin.row.type == "filter"
         assert owui.function_valves["viz"] == {"COLOR": "blue", "SIZE": 9}

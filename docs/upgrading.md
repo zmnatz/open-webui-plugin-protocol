@@ -24,6 +24,25 @@ Caution: move all the pins before you migrate (CI, the action, your own computer
 
 `check` gives a note for each manifest that is still on an older protocol. It gives a warning for a manifest with no `protocol:` key, and `--strict` makes that warning a failure.
 
+## 0.7 -> 0.8
+
+- **Nothing to migrate.** The protocol does not change, and the bundles that a deploy writes are the same.
+- **The tests run the real Open-WebUI.** `owpp test` runs each plugin on the [test harness](testing/harness.md): Open-WebUI v0.13.5 in the test process, in place of the mock ([why](adr/0004-unit-tests-run-the-real-open-webui.md)). The `owui` fixture keeps its calls.
+- **owpp runs on Python 3.12**, the Python of Open-WebUI v0.13.5 ([owpp mirrors Open-WebUI](testing/harness.md#owpp-mirrors-open-webui)). Add `--python 3.12` to `uvx` for the tests. Without it, uv can pick a newer Python. In a repository that installs owpp with uv, run `uv python pin 3.12`. With pip, use Python 3.12. The `test` extra now installs the packages of Open-WebUI's slim image, at Open-WebUI's versions. Your own test dependencies must agree with those versions.
+- **The first run downloads Open-WebUI** (about 110 MB) to [`OWPP_CACHE_DIR`](environment-variables.md#owpp_cache_dir). Later runs use the cache. In CI, cache that folder.
+- **Some tests need a change**, because Open-WebUI does what the mock did not:
+    - The rows in `owui.tools`, `owui.models` and the other tables are copies. A change to a row, or `owui.tool_valves[...] = ...`, does not go into the database. Use `owui.set_tool_valves()`, Open-WebUI's models in `owui.run(...)`, or its API through `owui.client(owui.admin)` ([the rows are copies](testing/harness.md#state-to-set-up-and-assert-on)).
+    - Access grants are Open-WebUI's `AccessGrantModel`s. Compare them with `grants(row)` from `owpp.testing`.
+    - `owui.load()` switches the function on through Open-WebUI's API, so the function gets `function.enable_started` when it loads, as on a deploy.
+    - Valves that Open-WebUI refuses raise `OwppError` with `HTTP 400`, not a `ValueError`.
+    - `owui.client()` is an `httpx.Client`, not a Starlette `TestClient`.
+    - The model is aimock: a test that sets `owui.model_reply` needs Bun, Node or Docker. A model id other than `mock-model` needs `owui.serve_model(id)`. `owui.completions` holds the requests as Open-WebUI sent them, without `metadata` ([the model](testing/harness.md#the-model-aimock)).
+    - `owui.load()` runs `owpp deploy` itself: a filter is made global as a deploy makes it, and an update with unchanged code writes nothing (change the code to test an update). Its `valves=` and `content=` arguments are gone. `owui.emit()` no longer sends a function its own `*_started` event: use `owui.enable(id)`.
+    - `plugin.call("action")` runs Open-WebUI's `chat_action`: a user can press an action only on a model that offers it (`owui.add_model(id, actions=[...])`), and a page reaches the chat as an `embeds` event. `plugin.call("pipe")` returns the completion that the chat gets (`owui.stream_text()` reads a streamed one). `tool.call()` runs through Open-WebUI's `get_tools`, which checks the user's access.
+    - `plugin.inlet()` and `plugin.outlet()` run the filter with Open-WebUI's own code. `__model__` is the model as Open-WebUI lists it, `__user__` has the user's valves in `valves`, and a filter does not get `__app__`, as on an instance. `owui.send(user, text)` runs the whole chat pipeline.
+    - `MockOpenWebUI` and `Record` are gone. Outside pytest, use `with Harness() as owui:` from `owpp.testing`.
+- **The `open_webui` type stubs are gone.** An editor finds `open_webui` in the cached wheel: `owpp test --editor` gives its folder ([in an editor](testing/harness.md#in-an-editor)).
+
 ## 0.6 -> 0.7
 
 - **Protocol 0.7.** `owpp migrate` sets `protocol: "0.7"` and changes nothing else. 0.7 changes no key, so a manifest that stays at 0.5 has the same meaning. `owpp check --strict` only gives a note for it. owpp 0.6 refuses a 0.7 manifest (see the caution in [steps](#steps)).
@@ -37,7 +56,7 @@ Caution: move all the pins before you migrate (CI, the action, your own computer
 - **`tool: templates:`** lists the files of `templates/` that a tool embeds (`[launcher/]`). Without it, a tool that includes templates embeds all of them ([plugin format](plugin-format.md#tool)).
 - **From 0.6.1, owpp refuses a plugin that edits `app.routes`** (`app.routes.insert(...)`, `app.routes[:] = ...`, `del app.routes[0]`, ...). Such a plugin added routes that the sign-in guard did not protect. `owpp check` gives the line. Mount those routes with `plugin_mount` ([libraries](libraries.md#routes)).
 - **`asset_vars()` values are filled in one pass.** Thus a value that holds the text of another placeholder is served as it is written.
-- **Plugin tests:** `owui.emit` also takes the subject itself, for events about users and models. The mock has `decode_token`, and the chat pipeline that a plugin calls to ask a model (`owui.model_reply`, `owui.completions`). A test that patched those stand-ins continues to work. It can use the stand-ins of the mock ([the mock](testing/mock.md)).
+- **Plugin tests:** `owui.emit` also takes the subject itself, for events about users and models. The mock has `decode_token`, and the chat pipeline that a plugin calls to ask a model (`owui.model_reply`, `owui.completions`). A test that patched those stand-ins continues to work. It can use the stand-ins of the mock. (owpp 0.8 replaced the mock with the [test harness](testing/harness.md).)
 
 ## 0.4 -> 0.5
 

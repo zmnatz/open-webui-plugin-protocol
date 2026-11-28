@@ -1,9 +1,0 @@
-# This repository's Excalidraw example, taken whole from git (docs/plugin-format.md#a-whole-plugin-from-git),
-# with tests of its own written by the test-existing-plugin skill without reading the example's.
-protocol: "0.7"
-source:
-  git: https://github.com/zmnatz/open-webui-plugin-protocol.git
-  ref: 3a9424d40e575e5994df62d0c810141c98359aac
-  branch: develop
-  path: examples/plugins/excalidraw
-  plugin: true

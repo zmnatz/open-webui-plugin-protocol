@@ -17,7 +17,7 @@ The quickest way to run a function is to paste it into Open-WebUI's admin UI. ow
 - **Version control.** The plugins are in git. Each change is a commit that someone can review, and you can deploy an earlier version again ([deploying an older version](commands/deploy.md#deploying-an-older-version)). An edit in the admin UI replaces the code and keeps no history.
 - **Reviewed upgrades of third-party code.** owpp takes someone else's function, tool or skill from their repository at a pinned commit, and does not copy it. [`owpp pull`](commands/pull.md) moves the pin and lists the files that changed. You review that change before the code runs with admin rights.
 - **Shared libraries.** Routes, scheduled jobs, per-chat data, static files and templates come from [libraries](libraries.md), not from a copy in each function.
-- **Tests.** [`owpp check`](commands/check.md) finds undefined names before you deploy. [`owpp test`](commands/test.md) runs each plugin's unit tests against a mock Open-WebUI. [`owpp live`](commands/live.md) runs a repository's live tests on a throwaway Open-WebUI in Docker, over its API and in the browser ([testing](testing.md)). [`owpp import`](commands/import.md) brings in a function that already works, and an agent can write its tests ([a plugin that already works](testing/existing-plugins.md)).
+- **Tests.** [`owpp check`](commands/check.md) finds undefined names before you deploy. [`owpp test`](commands/test.md) runs each plugin's unit tests against the real Open-WebUI, in the test process. [`owpp live`](commands/live.md) runs a repository's live tests on a throwaway Open-WebUI in Docker, over its API and in the browser ([testing](testing.md)). [`owpp import`](commands/import.md) brings in a function that already works, and an agent can write its tests ([the test-existing-plugin skill](ai-agents.md#the-test-existing-plugin-skill)).
 - **Repeatable deploys.** [`owpp deploy`](commands/deploy.md) makes the instance match the repository, from a laptop or from the [GitHub Action](tooling.md#github-action). `--dry-run` shows what it will change first. A plugin that did not change stays as it is ([what a deploy does](commands/deploy.md#what-a-deploy-does)).
 - **A function with a tool and skills.** The runtime installs and removes them together ([runtime](runtime.md)). You do not do it by hand in three places.
 
@@ -34,7 +34,7 @@ It is not worth the extra step when:
 | Deploy a first plugin | [getting started](getting-started.md), or [with an AI agent](ai-agents.md) |
 | Write a plugin | [creating a plugin](creating.md), then [authoring](authoring.md) and [plugin format](plugin-format.md) |
 | Bring a repository or existing functions over | [adopting](adopting.md), and [`owpp import`](commands/import.md) |
-| Test a plugin, or one that already works | [testing](testing.md), [live tests](testing/live.md), [a plugin that already works](testing/existing-plugins.md) |
+| Test a plugin, or one that already works | [testing](testing.md), [live tests](testing/live.md), [the test-existing-plugin skill](ai-agents.md#the-test-existing-plugin-skill) |
 | Deploy, or set up CI | [tooling](tooling.md) and its command pages |
 | Fix an error that owpp printed | [troubleshooting](troubleshooting.md) |
 | Move to a new owpp version | [upgrading](upgrading.md) |
@@ -72,7 +72,7 @@ tool: { id: my_plugin, access: public }
 ```
 owpp list                            # plugins and their function type
 owpp check my_plugin                 # bundle, compile, find undefined names
-owpp test my_plugin                  # its tests/, against a mock Open-WebUI
+owpp test my_plugin                  # its tests/, on the real Open-WebUI
 owpp deploy --only my_plugin --dry-run
 ```
 
@@ -85,7 +85,7 @@ owpp deploy --only my_plugin --dry-run
 
 ## Status and limits
 
-owpp is written against Open-WebUI **v0.13.5**. It started on v0.13.4, and it continues to support that version. The API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) come from that source. The libraries are tested against stubbed Open-WebUI modules. On each change, the [live suite](testing/live.md#this-repositorys-live-suite) deploys the examples to a real v0.13.5 and runs them end to end. It also takes their [screenshots](screenshots.md) there.
+owpp is written against Open-WebUI **v0.13.5**, the one version that it pins and tests ([owpp mirrors Open-WebUI](testing/harness.md#owpp-mirrors-open-webui)). An older or newer Open-WebUI can work, but owpp does not test it. The API shapes (skills as `files` lists, tool valves, `Functions.get_function_valves_by_id`) come from that source. The libraries and the examples are tested on the real Open-WebUI v0.13.5, in the test process ([the test harness](testing/harness.md)). On each change, the [live suite](testing/live.md#this-repositorys-live-suite) deploys the examples to a real v0.13.5 and runs them end to end. It also takes their [screenshots](screenshots.md) there.
 
 Known limits:
 

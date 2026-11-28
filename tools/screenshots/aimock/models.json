@@ -92,24 +92,6 @@
     {
       "match": {
         "model": "screenshot-model",
-        "userMessage": "Generate a concise"
-      },
-      "response": {
-        "content": "{\"title\": \"Screenshot demo\"}"
-      }
-    },
-    {
-      "match": {
-        "model": "screenshot-model",
-        "userMessage": "Generate 1-3 broad tags"
-      },
-      "response": {
-        "content": "{\"tags\": [\"Demo\"]}"
-      }
-    },
-    {
-      "match": {
-        "model": "screenshot-model",
         "toolName": "create_theme",
         "toolResultContains": "A card in the chat shows it"
       },

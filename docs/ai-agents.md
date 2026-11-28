@@ -20,18 +20,14 @@ You can also copy the folder into the skills folder of your agent. For Claude Co
 [`skills/test-existing-plugin/`](../skills/test-existing-plugin/SKILL.md) writes the tests for a function or plugin that already works. The code can be in Open-WebUI, in a `.py` file, in the repository of someone else, or in a plugin that has no tests.
 
 - It brings the code in with [`owpp import`](commands/import.md).
-- It lists each method, valve and branch. For each one, it writes a test against [the mock](testing/mock.md) that records what the code does now.
+- It lists each method, valve and branch. For each one, it writes a test on the [test harness](testing/harness.md) that records what the code does now.
 - Where the code does something that its author does not want, it reports a finding. It does not change the code.
-- It writes [live tests](testing/live.md#live-tests-in-your-repository) for what only a real Open-WebUI does, over the API or in the browser with Playwright. [`owpp live`](commands/live.md) runs them on a throwaway Open-WebUI, with aimock as its models.
+- It writes [live tests](testing/live.md#live-tests-in-your-repository) for what the harness cannot reach: the page in a browser, a deploy to a running Open-WebUI, and several workers. They run over the API or in the browser with Playwright. [`owpp live`](commands/live.md) runs them on a throwaway Open-WebUI, with aimock as its models.
 - In this repository, it also takes the example's [screenshots](screenshots.md).
 
 ```sh
 npx skills add zmnatz/open-webui-plugin-protocol@test-existing-plugin
 ```
-
-### How well it works
-
-This project tried the skill on two plugins: Classic298's Better Banners, imported from git, and this repository's Excalidraw. Then it put bugs into each plugin, one at a time, and ran all the tests that the skill wrote against each bug. The tests found 14 of 16 bugs in Better Banners, and 16 of 19 in Excalidraw. The tests against the mock found the bugs on the server, and the live tests found the bugs on the page. [Testing a plugin that already works](testing/existing-plugins.md) gives the full results.
 
 ## A plugin spec instead of the wizard
 

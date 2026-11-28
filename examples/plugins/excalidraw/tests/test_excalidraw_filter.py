@@ -1,5 +1,5 @@
 """The Excalidraw filter: the artifact it adds to replies, and the editor page and API it
-serves, against a mock Open-WebUI. Run with `owpp test excalidraw`."""
+serves, on the test harness. Run with `owpp test excalidraw`."""
 
 import json
 import re
@@ -254,7 +254,11 @@ def test_a_new_version_replaces_the_routes_instead_of_adding_to_them(owui, plugi
     def mounted():
         return [r for r in owui.app.routes if str(getattr(r, "path", "")).startswith("/excalidraw")]
 
+    from open_webui.models.functions import Functions
+
     before = len(mounted())
-    owui.update("excalidraw")
+    row = owui.functions["excalidraw"]  # as an earlier version left it: other code
+    owui.run(Functions.update_function_by_id("excalidraw", {"content": row.content + "\n# old\n"}))
+    owui.update("excalidraw")  # the deploy writes this version, and the function loads again
     assert len(mounted()) == before
     assert owui.app.routes[-1].name == "spa-static-files"  # still ahead of the catch-all

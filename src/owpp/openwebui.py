@@ -85,8 +85,8 @@ def field_of(obj: Any, key: str) -> Any:
 def replace_imports(content: Any) -> str:
     """Open-WebUI rewrites these import prefixes in the code before it stores it
     (utils/plugin.py replace_imports), so the stored copy of a file that uses them never
-    equals the file. The deploy compares against the rewritten text, and the mock Open-WebUI
-    stores it."""
+    equals the file. The deploy compares against the rewritten text, and the in-memory fake
+    of the tests stores it."""
     return (
         str(content or "")
         .replace("from utils", "from open_webui.utils")
@@ -257,10 +257,7 @@ class OpenWebUI:
 
     def functions(self) -> list[dict]:
         """Every function, without its `content` (function() has it)."""
-        live = self.call("GET", f"{FUNCTIONS}/list")
-        if not isinstance(live, list):
-            raise OwppError("GET /functions/list did not return a list")
-        return live
+        return self.call("GET", f"{FUNCTIONS}/list")
 
     def function(self, function_id: str) -> Any:
         """One function, with its code. One that is not there is a 401, as unauthorised is."""
@@ -288,7 +285,7 @@ class OpenWebUI:
 
     def valves(self, function_id: str) -> dict:
         values = self.call("GET", f"{FUNCTIONS}/id/{function_id}/valves")
-        return values if isinstance(values, dict) else {}
+        return values or {}
 
     def update_valves(self, function_id: str, values: dict) -> Any:
         return self.call("POST", f"{FUNCTIONS}/id/{function_id}/valves/update", values)
