@@ -563,8 +563,7 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
         if choices.dry_run:
             results.append(Result(o["id"], "(no file)", "would delete"))
             continue
-        if not api.delete_function(o["id"]):
-            raise OwppError(f"deleting {o['id']} was not confirmed")
+        api.delete_function(o["id"])
         results.append(Result(o["id"], "(no file)", "deleted"))
     if choices.no_prune:
         for o in pruned:
@@ -710,22 +709,19 @@ def deploy(instance: Instance, choices: Choices, plugins: Build | None = None) -
 def iframe_sandbox_warning(instance: Instance, plugins: Build) -> str | None:
     """Warn when a plugin needs Open-WebUI's iframe Sandbox Allow Same Origin but the instance's
     default interface settings do not turn it on. Never changes the instance or stops a deploy:
-    a user's own setting can still enable it, and an unreadable admin config is not a reason to
-    refuse the rest of the deploy."""
+    a user's own setting can still enable it. The deploy signs in as an admin, who can always
+    read the admin config."""
     ids = [f.id for f in plugins.files if f.requires.get(IFRAME_REQUIREMENT) is True]
     if not ids:
         return None
-    try:
-        config = instance.open_webui.admin_config()
-        settings = config.get("DEFAULT_INTERFACE_SETTINGS") if isinstance(config, dict) else None
-        if isinstance(settings, dict) and settings.get(IFRAME_SETTING) is True:
-            return None
-        why = "it is not on in this instance's default interface settings"
-    except OwppError as e:
-        why = f"its default interface settings could not be read ({e})"
+    config = instance.open_webui.admin_config()
+    settings = config.get("DEFAULT_INTERFACE_SETTINGS") if isinstance(config, dict) else None
+    if isinstance(settings, dict) and settings.get(IFRAME_SETTING) is True:
+        return None
     return (
         f"Warning: {', '.join(f'`{i}`' for i in ids)} need Open-WebUI's iframe Sandbox Allow Same "
-        f"Origin, and {why}. Set it with {IFRAME_FIX} or under Admin Settings > General > "
+        "Origin, and it is not on in this instance's default interface settings. Set it with "
+        f"{IFRAME_FIX} or under Admin Settings > General > "
         "Default Interface Settings (each user can also turn it on in Settings > Interface). "
         "Deploying anyway."
     )

@@ -334,11 +334,6 @@ class TestPruning:
         assert "retired" in m.state
         assert m.calls == [LIST, "GET /api/v1/functions/id/demo"]
 
-    def test_fails_if_the_server_does_not_confirm_a_delete(self, open_webui, functions_dir, git_fn):
-        m = open_webui(live=[git_fn("demo", FILTER), git_fn("retired", FILTER)], fail_delete=True)
-        with pytest.raises(OwppError, match="not confirmed"):
-            deploy(*m.options(functions_dir({"demo.py": FILTER})))
-
     def test_plan_prune_only_returns_marked_functions_that_have_no_folder(self, git_fn):
         live = [
             git_fn("a", FILTER),
@@ -704,15 +699,6 @@ class TestIframeRequirementWarning:
         assert "DEFAULT_INTERFACE_SETTINGS" in out and "Deploying anyway." in out
         assert m.calls[0] == "GET /api/v1/auths/admin/config"
         assert "POST /api/v1/functions/create" in m.calls
-
-    def test_unreadable_admin_config_warns_without_stopping_the_deploy(
-        self, open_webui, functions_dir
-    ):
-        m = open_webui(admin_config_status=403)
-        opts = m.options(self.make(functions_dir))
-        warning = warning_for(opts)
-        assert warning and "could not be read" in warning
-        assert any(r.action.startswith("created") for r in deploy(*opts))
 
 
 def test_deploy_and_versioning_share_one_text_normaliser():

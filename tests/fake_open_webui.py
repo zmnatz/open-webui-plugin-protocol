@@ -1,8 +1,8 @@
 """An Open-WebUI in memory, behind the same `Fetch` port urllib is (owpp.openwebui), for what the
 real one (real_open_webui.py, the test harness) cannot give on demand: sign-in by LDAP, OIDC or
-a trusted header, an account that is not an admin, an instance that is still starting, a delete
-that fails, a function created already active, two instances side by side, and `owpp live`'s
-sign-up. Every other deploy and import test runs against the real Open-WebUI.
+an open sign-in, an instance that is still starting (owpp live waits for it), two instances
+side by side, and `owpp live`'s sign-up. Every other deploy and import test runs against the
+real Open-WebUI.
 
 `serve()` puts it behind a real HTTP server, for the contract test of the urllib adapter and for
 commands run through `main()` with only an OPEN_WEBUI_URL. tests/test_harness.py checks that a
@@ -47,13 +47,11 @@ class FakeOpenWebUI:
         self,
         live=(),
         key="sk-good",  # an admin's API key
-        fail_delete=False,
         accounts=None,  # {email: password}: /auths/signin, with `role`
         ldap=None,  # {user: password}: /auths/ldap
         oidc=None,  # {provider: token}: /auths/oauth/<provider>/token/exchange
         open_signin=False,  # an empty sign-in works (WEBUI_AUTH=False, or a trusted header)
         role="admin",  # of whoever signs in to an account given above
-        admin_config_status=200,  # 403: a signed-in account that cannot read the admin config
         starting=0,  # how many /health checks fail (connection refused) before it is up
     ):
         self.calls: list[str] = []
@@ -63,9 +61,8 @@ class FakeOpenWebUI:
             for email, pw in (accounts or {}).items()
         }
         self.tokens: dict[str, str] = {key: "admin"}  # token: role
-        self.key, self.role, self.fail_delete = key, role, fail_delete
+        self.key, self.role = key, role
         self.ldap, self.oidc, self.open_signin = ldap or {}, oidc or {}, open_signin
-        self.admin_config_status = admin_config_status
         self.valves: dict[str, dict] = {}
         self.starting = starting
 
@@ -111,8 +108,6 @@ class FakeOpenWebUI:
 
     def _auths(self, method, path, form, token) -> HttpResponse:
         if path == "/api/v1/auths/admin/config":
-            if self.admin_config_status != 200:
-                return _json({"detail": "not allowed"}, self.admin_config_status)
             return _json({"DEFAULT_INTERFACE_SETTINGS": {}})
         if path == "/api/v1/auths/signin":
             if form.get("email") == "" and form.get("password") == "":
@@ -174,7 +169,7 @@ class FakeOpenWebUI:
         fn_id, rest = m.group(1), m.group(2) or ""
         if rest == "/delete" and method == "DELETE":
             existed = state.pop(fn_id, None) is not None
-            return _json(False if self.fail_delete else existed)
+            return _json(existed)
         f = state.get(fn_id)
         if not f:  # Open-WebUI answers a missing function as unauthorised
             return _json({"detail": "not found"}, 401)
