@@ -19,7 +19,7 @@ from .errors import OwppError
 from .imports import Upgrade, upgrade
 from .manifest import get, parse_yaml, plugin_folders, read_text, rename_key, set_key, text_of
 from .protocol import VERSION, parse
-from .sources import Sources
+from .sources import Sources, upstream_parts
 
 
 class Undecided(OwppError):
@@ -63,10 +63,9 @@ def _code_to_0_5(folder: Path, manifest: dict) -> Upgrade:
     """Each file imports what it used to find already in scope. Only the files in the folder are
     read: one the bundler takes from git instead (`function: {file}`, `tool: {file}`) is the
     upstream's, so a local file of that name is not bundled and is left alone."""
+    parts = upstream_parts(manifest)
     from_git = {
-        f"{key}.py"
-        for key in ("function", "tool")
-        if isinstance(manifest.get(key), dict) and manifest[key].get("file")
+        f"{key}.py" for key, taken in (("function", parts.function), ("tool", parts.tool)) if taken
     }
     return upgrade(folder, skip=from_git)
 

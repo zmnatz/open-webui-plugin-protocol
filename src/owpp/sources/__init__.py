@@ -5,7 +5,7 @@
 pinned to. See GLOSSARY.md."""
 
 from ._git import GIT_URL, SHA40, TRACK, refname
-from ._resolve import ResolvedPlugin, Sources, source_label
+from ._resolve import ResolvedPlugin, Sources, UpstreamParts, source_label, upstream_parts
 from ._upstream import is_plugin_source
 
 __all__ = [
@@ -14,7 +14,9 @@ __all__ = [
     "TRACK",
     "ResolvedPlugin",
     "Sources",
+    "UpstreamParts",
     "is_plugin_source",
     "refname",
     "source_label",
+    "upstream_parts",
 ]

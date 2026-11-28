@@ -61,7 +61,7 @@ from .manifest import (
     text_of,
 )
 from .openwebui import MANAGED_BY, FunctionMeta
-from .sources import ResolvedPlugin, Sources
+from .sources import ResolvedPlugin, Sources, upstream_parts
 
 NOTE = "Git-controlled: edits made here are overwritten on the next deploy."
 
@@ -245,15 +245,16 @@ def _tool_valves(folder: Path, valves: Any) -> dict:
 def _plugin_resources(plugin: ResolvedPlugin) -> dict:
     """The tool and skills a plugin declares, as the data the runtime installs."""
     folder, manifest = plugin.root, plugin.manifest
+    parts = upstream_parts(manifest)
     tools: list[dict] = []
     tool = manifest.get("tool")
     if isinstance(tool, dict):
-        is_self = tool.get("from") == "function"
+        is_self = parts.tool_is_function
         tool_id = text_of(coalesce(tool.get("id"), folder.name)).lower()
         if is_self:
             content = None
-        elif tool.get("file"):
-            content = plugin.read(tool["file"])
+        elif parts.tool_file:
+            content = plugin.read(parts.tool_file)
         else:
             code, from_lib = _bundle_code(
                 folder,
@@ -309,10 +310,11 @@ def _plugin_resources(plugin: ResolvedPlugin) -> dict:
     declared = manifest.get("skills")
     for skill_id, sk in declared.items() if isinstance(declared, dict) else []:
         label = f"{folder.name}/skills.{skill_id}"
-        if get(sk, "dir"):
-            add_skill(label, str(skill_id), plugin.read_dir(sk["dir"]), sk.get("access"))
-        elif get(sk, "file"):
-            text = plugin.read(sk["file"])
+        path, is_dir = parts.skill_paths.get(str(skill_id).lower(), ("", False))
+        if is_dir:
+            add_skill(label, str(skill_id), plugin.read_dir(path), sk.get("access"))
+        elif path:
+            text = plugin.read(path)
             add_skill(
                 label, str(skill_id), [{"path": "SKILL.md", "content": text}], sk.get("access")
             )
@@ -596,7 +598,8 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
     keys = omit(fn, ["valves"])
     held, data = _library_data(folder, manifest)
     assets = data.get("assets")
-    if "file" in fn:
+    taken = upstream_parts(manifest)
+    if taken.function:
         # The function itself comes from `source`, verbatim (its own header and all).
         extra = list(omit(fn, ["file", "global", "valves"]))
         if not manifest.get("source"):
@@ -606,7 +609,7 @@ def bundle_function(plugin: Path | str | ResolvedPlugin) -> str | None:
                 f"{folder}/plugin.yaml: with function.file the header comes from the file; "
                 f"remove {', '.join(extra)}"
             )
-        code = plugin.read(fn["file"])
+        code = plugin.read(taken.function_file)
     elif not _has_code(folder, "function") and assets is not None:
         if has_resources:
             raise OwppError(
@@ -817,7 +820,9 @@ def function_file(folder: Path | str, sources: Sources) -> FunctionFile | None:
         f"{folder.name}/",
         content,
         valves=fn.get("valves"),
-        global_=declared if isinstance(declared, bool) and "file" in fn else None,
+        global_=declared
+        if isinstance(declared, bool) and upstream_parts(plugin.manifest).function
+        else None,
         plugin=plugin,
     )
     item.root = plugin.root
