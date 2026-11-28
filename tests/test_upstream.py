@@ -139,7 +139,7 @@ def test_it_is_bundled_as_the_upstream_plugin_with_the_local_id(tmp_path, fetche
     assert [(t["id"], t["access"]) for t in data["tools"]] == [("viz_tool", "public")]
     assert [(s["id"], s["access"]) for s in data["skills"]] == [("drawing", "public")]
     assert item.valves == {"COLOR": "blue", "SIZE": 3}
-    assert item.sources == {f"{REPO} plugins/viz": SHA}
+    assert item.meta.sources == {f"{REPO} plugins/viz": SHA}
 
 
 def test_the_local_manifest_overrides_valves_global_and_the_tool(tmp_path, fetcher):
@@ -210,7 +210,7 @@ def test_what_the_upstream_takes_from_git_itself_is_fetched_too(tmp_path):
     write_tree(tmp_path, {"viz/plugin.yaml": local()})
     item = load(tmp_path, fetcher)["viz"]
     assert [t["id"] for t in embedded(item.content)["tools"]] == ["inner"]
-    assert item.sources == {f"{REPO} plugins/viz": SHA, f"{INNER} t": NEW}
+    assert item.meta.sources == {f"{REPO} plugins/viz": SHA, f"{INNER} t": NEW}
 
 
 def test_a_source_with_no_ref_says_to_run_pull(tmp_path):
@@ -222,7 +222,7 @@ def test_a_source_with_no_ref_says_to_run_pull(tmp_path):
 def test_its_requirements_are_the_upstream_ones(tmp_path, fetcher):
     write_tree(tmp_path, {"viz/plugin.yaml": local()})
     (item,) = load_function_files(tmp_path, Sources(fetcher))
-    assert item.requires == {"iframe_sandbox_allow_same_origin": True}
+    assert item.meta.requires == {"iframe_sandbox_allow_same_origin": True}
 
 
 def test_its_versions_are_the_upstream_ones(tmp_path):

@@ -80,7 +80,7 @@ A deploy does these steps in this order:
 5. It lists the functions (`GET /api/v1/functions/list`). A bad API key fails here, before the deploy writes anything.
 6. It stops if the run must delete two or more functions that are more than half of the managed functions. Thus renamed folders cannot delete them all. `--force-prune` removes this limit.
 7. It stops if a version goes back, unless you give `--force` ([older versions](#deploying-an-older-version)).
-8. It creates, updates or leaves alone each function, and sets its active and global state.
+8. It creates or updates each function. Then, if necessary, it activates the function and makes it global or not global.
 9. It sets the valves that the manifest declares. All other valves keep their values.
 10. It deletes each managed function that has no plugin.
 
@@ -90,7 +90,7 @@ In step 8, the deploy compares each function with the one on the instance:
 
 | On the instance | What the deploy does |
 | --- | --- |
-| No function with this id | Creates it and activates it. It makes a filter global, unless the plugin says `global: false`. |
+| No function with this id | Creates it and activates it. It makes it global if the plugin says `global: true`. It also makes a filter global, unless the plugin says `global: false`. |
 | A function that differs | Updates it. |
 | The same function | Leaves its code as it is. |
 
@@ -116,6 +116,8 @@ flowchart TD
 ```
 
 A plugin with `global: true` is active and global after every deploy. A plugin with `global: false` is never global. In all other cases, an existing function keeps its active and global state.
+
+The deploy decides all these steps before it writes. A dry run reports the steps, for example `would create, activate, make global`. A deploy does the same steps.
 
 The report names each function with its type, for example ``- event function `mcpo_sync` (mcpo_sync/): unchanged (0.3.0)``. In GitHub Actions, the deploy also writes the report to the job summary.
 

@@ -712,11 +712,9 @@ class FunctionFile:
     not_global: bool = False  # `global: false`: never global, kept so on every run
     valves: dict | None = None
     name: str = ""
-    description: str = ""
-    # The git repository the plugin takes code from, and the commit: {"<git>[ <path>]": sha}.
-    sources: dict = field(default_factory=dict)
-    # Instance settings the plugin needs (`requires:`), for the deploy's warning.
-    requires: dict = field(default_factory=dict)
+    # What the deploy stores with it (function_meta): the description, the commit of each git
+    # source ({"<git>[ <path>]": sha}) and the instance settings it `requires:`.
+    meta: FunctionMeta = field(default_factory=lambda: FunctionMeta(MANAGED_BY, requires={}))
     # The folder that was bundled: the plugin folder, or for a plugin taken whole from git the
     # upstream folder as fetched, with the local overrides applied. None for a loose <id>.py.
     root: Path | None = None
@@ -759,7 +757,6 @@ def _make_item(
         raise OwppError(
             f"{file}: `global` only applies to filters and actions, not to {types[0]} functions"
         )
-    stored = function_meta(content, plugin)
     return FunctionFile(
         kind=kind,
         type=types[0],
@@ -770,9 +767,7 @@ def _make_item(
         content=content,
         valves=valves,
         name=text_of(coalesce(meta.get("title"), id)),
-        description=stored.description,
-        sources=stored.sources,
-        requires=stored.requires,
+        meta=function_meta(content, plugin),
     )
 
 

@@ -61,14 +61,15 @@ class TestBuild:
         ]
         index = json.loads((out / "build.json").read_text())
         assert index == {
-            "format": 1,
+            "format": 2,
             "owpp": __version__,
             "complete": True,
             "plugins": ["demo", "up"],
             "latest": {},
         }
-        meta = json.loads((out / "up.json").read_text())
-        assert meta["want_global"] is True and meta["type"] == "filter"
+        data = json.loads((out / "up.json").read_text())
+        assert data["want_global"] is True and data["type"] == "filter"
+        meta = data["meta"]
         assert meta["sources"] == {f"{GIT} up": SHA}
         assert meta["requires"] == {"iframe_sandbox_allow_same_origin": True}
         assert [t["id"] for t in embedded((out / "up.py").read_text())["tools"]] == ["up_tool"]

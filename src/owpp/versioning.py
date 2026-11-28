@@ -341,7 +341,7 @@ def unbumped(old: FunctionFile, new: FunctionFile, manifest: dict, since: str) -
     function, *items = compare(old.content, new.content).parts
     findings: list[Finding] = []
     sourced = bool(manifest.get("source"))
-    plugin_changed = function.status != "unchanged" or old.sources != new.sources
+    plugin_changed = function.status != "unchanged" or old.meta.sources != new.meta.sources
     fixes = {
         "tool": f"owpp version {new.id} patch --tool",
         "skill": f"owpp version {new.id} patch --skill {{id}}",

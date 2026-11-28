@@ -203,7 +203,7 @@ def git_fn(functions_dir):
             "id": fn_id,
             "name": file.name,
             "content": content,
-            "meta": {"description": file.description, "managed_by": MANAGED_BY},
+            "meta": {"description": file.meta.description, "managed_by": MANAGED_BY},
             "type": "filter",
             "is_active": True,
             "is_global": False,

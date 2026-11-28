@@ -130,3 +130,12 @@ def test_meta_read_back_says_when_requires_was_never_recorded():
     assert FunctionMeta.of({"meta": {"managed_by": "owpp"}}).requires is None
     assert FunctionMeta.of({"meta": {"requires": {}}}).requires == {}
     assert FunctionMeta.of({"meta": None}) == FunctionMeta.of({}) == FunctionMeta()
+
+
+def test_a_requires_never_recorded_is_the_same_meta_as_none_required():
+    """So a function deployed before `requires` is not updated only to record {}."""
+    assert FunctionMeta.of({"meta": {"managed_by": "o", "description": "d"}}).same_as(
+        FunctionMeta("o", "d", requires={})
+    )
+    assert not FunctionMeta("o", "d").same_as(FunctionMeta("o", "d", requires={"k": True}))
+    assert not FunctionMeta("o", "d").same_as(FunctionMeta("o", "other"))

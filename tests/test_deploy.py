@@ -9,7 +9,7 @@ import shutil
 import pytest
 from conftest import EXAMPLES, FILTER
 
-from owpp.bundle import FunctionFile
+from owpp.bundle import FunctionFile, load_function_files
 from owpp.deploy import (
     MANAGED_BY,
     choices_from_env,
@@ -24,6 +24,7 @@ from owpp.deploy import (
     sign_in,
 )
 from owpp.errors import OwppError
+from owpp.openwebui import FunctionMeta
 from owpp.sources import Sources
 
 LIST = "GET /api/v1/functions/list"
@@ -49,8 +50,8 @@ class TestDeploy:
     def test_activates_a_created_event_function_once_and_does_not_make_it_global(
         self, real_open_webui, functions_dir
     ):
-        """Open-WebUI creates a function switched off and says what type it is: an event
-        function is switched on once, and never made global (only a filter is)."""
+        """Open-WebUI creates a function switched off: an event function is switched on once,
+        and never made global (only a filter is)."""
         m = real_open_webui()
         code = '"""\ntitle: Demo\n"""\nclass Event:\n    async def event(self, *a, **k):\n        pass\n'
         res = deploy(*m.options(functions_dir({"demo.py": code})))
@@ -304,6 +305,57 @@ class TestDeclaredNotGlobal:
         assert not any("toggle" in c for c in m.calls)
 
 
+class TestThePlanIsWhatTheDeployDoes:
+    """`plan_deploy` decides every step of a function; the dry run prints those steps and the
+    real run carries out the same ones."""
+
+    ACTION = (
+        '"""\ntitle: Demo Action\nglobal: true\n"""\n'
+        "class Action:\n    async def action(self, body):\n        pass\n"
+    )
+    TOGGLE = FILTER.replace("author: me\n", "author: me\nglobal: false\n")
+
+    def check(self, m, folder, live, steps, dry, done):
+        assert plan_deploy(load_function_files(folder), live)[0].steps == steps
+        assert deploy(*m.options(folder, dry_run=True))[0].action == dry
+        assert deploy(*m.options(folder))[0].action == done
+
+    def test_a_new_filter(self, real_open_webui, functions_dir):
+        m = real_open_webui()
+        folder = functions_dir({"demo.py": FILTER})
+        steps = ["create", "activate", "make global"]
+        dry, done = "would create, activate, make global", "created, activated, made global"
+        self.check(m, folder, [], steps, dry, done)
+        assert m.state["demo"]["is_active"] is True and m.state["demo"]["is_global"] is True
+
+    def test_a_toggle_that_is_global(self, real_open_webui, functions_dir, git_fn):
+        live = git_fn("demo", self.TOGGLE, is_active=True, is_global=True)
+        m = real_open_webui(live=[live])
+        folder = functions_dir({"demo.py": self.TOGGLE})
+        dry, done = "would make not global", "unchanged, made not global"
+        self.check(m, folder, [live], ["make not global"], dry, done)
+        assert m.state["demo"]["is_global"] is False
+
+    def test_an_action_declared_global_that_is_inactive(
+        self, real_open_webui, functions_dir, git_fn
+    ):
+        live = git_fn("demo", self.ACTION, type="action", is_active=False, is_global=True)
+        m = real_open_webui(live=[live])
+        folder = functions_dir({"demo.py": self.ACTION})
+        self.check(m, folder, [live], ["activate"], "would activate", "unchanged, activated")
+        assert m.state["demo"]["is_active"] is True and m.state["demo"]["is_global"] is True
+
+    def test_a_metadata_change_alone_is_an_update(self, real_open_webui, functions_dir, git_fn):
+        live = git_fn("demo", FILTER)
+        live["meta"] = {**live["meta"], "description": "an old description"}
+        m = real_open_webui(live=[live])
+        folder = functions_dir({"demo.py": FILTER})
+        (item,) = plan_deploy(load_function_files(folder), [live])
+        assert item.action == "update" and item.comparison.unchanged
+        self.check(m, folder, [live], ["update"], "would update", "updated")
+        assert m.state["demo"]["meta"]["description"].endswith("A demo filter.")
+
+
 class TestPruning:
     def test_deletes_a_git_controlled_function_whose_folder_is_gone_and_leaves_hand_made_ones(
         self, real_open_webui, functions_dir, git_fn
@@ -438,7 +490,7 @@ class TestStandaloneUse:
         assert choices_from_env({}).managed_by == MANAGED_BY
 
     def test_marks_compares_and_prunes_with_the_configured_marker_only(self):
-        files = [FunctionFile(id="a", content="x", description="d")]
+        files = [FunctionFile(id="a", content="x", meta=FunctionMeta(MANAGED_BY, "d"))]
         live = [
             {"id": "a", "content": "x", "meta": {"managed_by": "mine", "description": "d"}},
             {"id": "gone", "meta": {"managed_by": "mine"}},

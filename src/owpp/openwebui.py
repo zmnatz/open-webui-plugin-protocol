@@ -111,7 +111,11 @@ class FunctionMeta:
     @classmethod
     def of(cls, function: Any) -> FunctionMeta:
         """The meta of a function as Open-WebUI returns it."""
-        meta = field_of(function, "meta")
+        return cls.from_stored(field_of(function, "meta"))
+
+    @classmethod
+    def from_stored(cls, meta: Any) -> FunctionMeta:
+        """The meta from its stored form (stored()): a function's `meta`, or a build's."""
         meta = meta if isinstance(meta, dict) else {}
         requires = meta.get("requires")
         return cls(
@@ -128,6 +132,11 @@ class FunctionMeta:
             meta["sources"] = self.sources
         meta["requires"] = self.requires or {}
         return meta
+
+    def same_as(self, other: FunctionMeta) -> bool:
+        """Whether a deploy of `other` would store the same meta as this. A `requires` never
+        recorded (None) is the same as none required ({}), so the function is not updated for it."""
+        return self.stored() == other.stored()
 
 
 # ---- the API -------------------------------------------------------------------------------
