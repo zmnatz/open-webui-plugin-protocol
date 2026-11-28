@@ -80,11 +80,13 @@ A deploy does these steps in this order:
 5. It lists the functions (`GET /api/v1/functions/list`). A bad API key fails here, before the deploy writes anything.
 6. It stops if the run must delete two or more functions that are more than half of the managed functions. Thus renamed folders cannot delete them all. `--force-prune` removes this limit.
 7. It stops if a version goes back, unless you give `--force` ([older versions](#deploying-an-older-version)).
-8. It creates, updates or leaves alone each function, and sets its active and global state.
+8. It does the steps of each function in this order: create or update, then activate, make global or make not global.
 9. It sets the valves that the manifest declares. All other valves keep their values.
 10. It deletes each managed function that has no plugin.
 
 A dry run also stops at step 6, but not at step 7.
+
+The deploy decides the steps of each function before it writes. A dry run reports these steps, for example `would create, activate, make global`. A deploy then does the same steps.
 
 In step 8, the deploy compares each function with the one on the instance:
 

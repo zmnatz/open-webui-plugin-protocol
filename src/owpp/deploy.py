@@ -33,11 +33,10 @@ import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
 
 from .build import Build, read_build
 from .bundle import VALID_ID, FunctionFile, load_function_files
-from .compare import Part, compare
+from .compare import Comparison, Part, compare
 from .errors import OwppError
 from .manifest import plugin_folders, read_manifest
 from .openwebui import (
@@ -279,9 +278,38 @@ def sign_in(instance: Instance) -> str:
 
 @dataclass
 class PlanItem:
+    """What the deploy does for one function. `steps` is every call, in order: create or
+    update, then activate, make global or make not global. A dry run prints them, and a real
+    run carries them out. `comparison` is the code of `existing` (or of nothing) against the
+    new bundle."""
+
     file: FunctionFile
     action: str  # create | update | unchanged | invalid
+    comparison: Comparison
     existing: dict | None = None
+    steps: list[str] = field(default_factory=list)
+
+
+def _global_when_created(f: FunctionFile) -> bool:
+    """A new function is made global if it says so, and a new filter unless it says
+    `global: false` (unattached, a filter does nothing; a toggle is one each user switches on)."""
+    return f.want_global or (f.type == "filter" and not f.not_global)
+
+
+def _flag_steps(f: FunctionFile, existing: dict | None) -> list[str]:
+    """The flag steps. Open-WebUI creates a function inactive and not global. A function
+    declared global is brought to active and global; one declared `global: false` is taken out
+    of global. Any other existing function keeps its flags. A flag already right is no step."""
+    if existing is None:
+        return ["activate", *(["make global"] if _global_when_created(f) else [])]
+    if f.want_global:
+        return [
+            *([] if existing.get("is_active") else ["activate"]),
+            *([] if existing.get("is_global") else ["make global"]),
+        ]
+    if f.not_global and existing.get("is_global"):
+        return ["make not global"]
+    return []
 
 
 def plan_deploy(
@@ -294,20 +322,17 @@ def plan_deploy(
     plan = []
     for f in files:
         existing = by_id.get(f.id)
+        comparison = compare((existing.get("content") or "") if existing else None, f.content)
         if not VALID_ID.fullmatch(f.id):
-            plan.append(PlanItem(f, "invalid"))
-        elif existing is None:
-            plan.append(PlanItem(f, "create"))
+            plan.append(PlanItem(f, "invalid", comparison, existing))
+            continue
+        if existing is None:
+            action = "create"
         else:
-            meta = FunctionMeta.of(existing)
-            same = (
-                compare(existing.get("content") or "", f.content).unchanged
-                and meta.managed_by == managed_by
-                and meta.description == f.description
-                and meta.sources == f.sources
-                and (meta.requires or {}) == f.requires
-            )
-            plan.append(PlanItem(f, "unchanged" if same else "update", existing))
+            same_meta = FunctionMeta.of(existing).same_as(replace(f.meta, managed_by=managed_by))
+            action = "unchanged" if comparison.unchanged and same_meta else "update"
+        steps = [*([] if action == "unchanged" else [action]), *_flag_steps(f, existing)]
+        plan.append(PlanItem(f, action, comparison, existing, steps))
     return plan
 
 
@@ -368,14 +393,14 @@ def _part_line(part: Part, older: bool) -> str:
     return f"{label}: {_from_to(old, new)}" + (", OLDER than the live version" if older else "")
 
 
-def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, str]) -> Changes:
-    """What deploying `f` changes, by version: the function, each tool and skill it installs,
-    and the commit of the git repository it takes code from. `existing` is the live function
-    (with its content), or None; `latest` notes which sources were moved to their latest commit."""
-    comparison = compare((existing.get("content") or "") if existing else None, f.content)
+def describe_changes(item: PlanItem, latest: dict[str, str]) -> Changes:
+    """What deploying the item's function changes, by version: the function, each tool and
+    skill it installs, and the commit of the git repository it takes code from. `latest` notes
+    which sources were moved to their latest commit."""
+    f, existing = item.file, item.existing
     changes = Changes()
-    downgrades = comparison.downgrades
-    for part in comparison.parts:
+    downgrades = item.comparison.downgrades
+    for part in item.comparison.parts:
         if part.status == "unchanged":
             continue
         older = part in downgrades
@@ -383,7 +408,7 @@ def describe_changes(f: FunctionFile, existing: dict | None, latest: dict[str, s
         if older:
             changes.downgrades.append(f"{_label(part)} {part.old_version} -> {part.new_version}")
     live_sources = FunctionMeta.of(existing).sources
-    for label, sha in f.sources.items():
+    for label, sha in f.meta.sources.items():
         was = live_sources.get(label)
         note = f" ({latest[label]})" if label in latest else ""
         if existing is None:
@@ -407,31 +432,33 @@ def _with_content(instance: Instance, files: list[FunctionFile], live: list[dict
     return out
 
 
-def _global_when_created(f: FunctionFile, kind: str | None) -> bool:
-    """A new function is made global if it says so, and a new filter unless it says
-    `global: false` (unattached, a filter does nothing; a toggle is one each user switches on)."""
-    return f.want_global or (kind == "filter" and not f.not_global)
+# The past tense of each step, for the report of a real run.
+_DONE = {
+    "create": "created",
+    "update": "updated",
+    "activate": "activated",
+    "make global": "made global",
+    "make not global": "made not global",
+}
 
 
-def _ensure_global(instance: Instance, fn_id: str, state: Any) -> list[str]:
-    """Brings a function declared global to active + global. A toggle is only sent when
-    the flag is off, so a run that is already right makes no call."""
-    notes = []
-    if not field_of(state, "is_active"):
-        instance.open_webui.toggle(fn_id)
-        notes.append("activated")
-    if not field_of(state, "is_global"):
-        instance.open_webui.toggle_global(fn_id)
-        notes.append("made global")
-    return notes
+def _carry_out(api: OpenWebUI, f: FunctionFile, step: str, meta: FunctionMeta) -> None:
+    if step == "create":
+        api.create_function(f.id, f.name, f.content, meta)
+    elif step == "update":
+        api.update_function(f.id, f.name, f.content, meta)
+    elif step == "activate":
+        api.toggle(f.id)
+    else:  # make global, make not global
+        api.toggle_global(f.id)
 
 
-def _ensure_not_global(instance: Instance, fn_id: str, state: Any) -> list[str]:
-    """Takes a function declared `global: false` (a toggle) out of global, when it is in."""
-    if field_of(state, "is_global"):
-        instance.open_webui.toggle_global(fn_id)
-        return ["made not global"]
-    return []
+def _action(item: PlanItem, dry_run: bool) -> str:
+    """The report's word for the item: the steps a dry run would take, or the ones taken."""
+    if dry_run:
+        return f"would {', '.join(item.steps)}" if item.steps else "unchanged"
+    done = [_DONE[s] for s in item.steps]
+    return ", ".join(done if item.action != "unchanged" else ["unchanged", *done])
 
 
 def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> list[Result]:
@@ -463,7 +490,7 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
         )
 
     plan = plan_deploy(files, _with_content(instance, files, live), managed_by)
-    changes = {p.file.id: describe_changes(p.file, p.existing, latest) for p in plan}
+    changes = {p.file.id: describe_changes(p, latest) for p in plan}
     # Going back a version is refused before anything is written, unless forced.
     older = {i: c.downgrades for i, c in changes.items() if c.downgrades}
     if older and not choices.dry_run and not choices.force:
@@ -475,77 +502,24 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
     results: list[Result] = []
     for p in plan:
         f = p.file
-        details, downgrades = changes[f.id].details, changes[f.id].downgrades
-        version = version_of(f.content)
-        if p.action == "unchanged" or choices.dry_run:
-            pending = []
-            if p.existing is None:  # what creating it does, as the create branch below
-                pending.append("activate")
-                if _global_when_created(f, f.type):
-                    pending.append("make global")
-            if f.want_global and p.existing:
-                if not p.existing.get("is_active"):
-                    pending.append("activate")
-                if not p.existing.get("is_global"):
-                    pending.append("make global")
-            if f.not_global and p.existing and p.existing.get("is_global"):
-                pending.append("make not global")
-            action = p.action
-            if choices.dry_run:
-                steps = [*([] if p.action == "unchanged" else [p.action]), *pending]
-                action = f"would {', '.join(steps)}" if steps else "unchanged"
-            elif pending:
-                notes = (
-                    _ensure_global(instance, f.id, p.existing)
-                    if f.want_global
-                    else _ensure_not_global(instance, f.id, p.existing)
-                )
-                action = f"unchanged, {', '.join(notes)}"
-            results.append(
-                Result(f.id, f.file, action, f.kind, f.type, version, details, downgrades)
-            )
-            continue
-
-        # The commit it was deployed from, for the next report; what plugin.yaml requires of
-        # the instance, for `owpp import --instance`. A function stored without `requires` is
-        # not updated for it: a missing one counts as {} above.
-        meta = FunctionMeta(managed_by, f.description, f.sources, f.requires)
-        if p.action == "update":
-            updated = api.update_function(f.id, f.name, f.content, meta)
-            state = updated if updated is not None else p.existing
-            notes = (
-                _ensure_global(instance, f.id, state)
-                if f.want_global
-                else _ensure_not_global(instance, f.id, state)
-                if f.not_global
-                else []
-            )
-            results.append(
-                Result(
-                    f.id,
-                    f.file,
-                    ", ".join(["updated", *notes]),
-                    f.kind,
-                    f.type,
-                    version,
-                    details,
-                    downgrades,
-                )
-            )
-            continue
-
-        created = api.create_function(f.id, f.name, f.content, meta)
-        notes = []
-        if not field_of(created, "is_active"):
-            created = api.toggle(f.id)
-            notes.append("activated")
-        if _global_when_created(f, field_of(created, "type")) and not field_of(
-            created, "is_global"
-        ):
-            api.toggle_global(f.id)
-            notes.append("made global")
+        if not choices.dry_run:
+            # The commit it was deployed from, for the next report; what plugin.yaml requires
+            # of the instance, for `owpp import --instance`.
+            meta = replace(f.meta, managed_by=managed_by)
+            for step in p.steps:
+                _carry_out(api, f, step, meta)
+        c = changes[f.id]
         results.append(
-            Result(f.id, f.file, ", ".join(["created", *notes]), f.kind, f.type, version, details)
+            Result(
+                f.id,
+                f.file,
+                _action(p, choices.dry_run),
+                f.kind,
+                f.type,
+                version_of(f.content),
+                c.details,
+                c.downgrades,
+            )
         )
 
     _valves_pass(instance, choices, plan, results)
@@ -702,7 +676,7 @@ def iframe_sandbox_warning(instance: Instance, plugins: Build) -> str | None:
     default interface settings do not turn it on. Never changes the instance or stops a deploy:
     a user's own setting can still enable it. The deploy signs in as an admin, who can always
     read the admin config."""
-    ids = [f.id for f in plugins.files if f.requires.get(IFRAME_REQUIREMENT) is True]
+    ids = [f.id for f in plugins.files if f.meta.requires.get(IFRAME_REQUIREMENT) is True]
     if not ids:
         return None
     config = instance.open_webui.admin_config()
