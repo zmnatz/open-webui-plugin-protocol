@@ -166,7 +166,7 @@ With such code, note these points:
 
 ## Code from git
 
-A plugin can take its tool, function or skills from a `source:`. A load then fetches the files from the pinned commit, which needs the network. To test offline, and to test only the files in your folder, load the plugin with stand-ins:
+A plugin can take its tool, function or skills from a `source:`. A load then reads the files at the pinned commit. It needs the network if [`.owpp/`](../bundling.md#the-owpp-folder) does not hold them. To test offline, and to test only the files in your folder, load the plugin with stand-ins:
 
 ```python
 @pytest.fixture

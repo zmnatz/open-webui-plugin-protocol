@@ -566,7 +566,10 @@ def latest_copy(directory: Path, sources: Sources, work: Path) -> tuple[Path, di
 
     copy = work / directory.name
     shutil.copytree(
-        directory, copy, symlinks=True, ignore=shutil.ignore_patterns(".git", "node_modules")
+        directory,
+        copy,
+        symlinks=True,
+        ignore=shutil.ignore_patterns(".git", ".owpp", "node_modules"),
     )
     notes: dict[str, str] = {}
     for folder in plugin_folders(copy):

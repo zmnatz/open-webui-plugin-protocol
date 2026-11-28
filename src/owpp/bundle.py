@@ -703,11 +703,12 @@ def function_type(content: str) -> list[str]:
 class FunctionFile:
     """One function to deploy.
 
-    `root` is the plugin's folder in the plugins folder, or None. It is None when the bundled
-    folder is a temporary one: the upstream copy of a plugin taken whole from git, which lasts
-    only as long as its Sources (`Sources.resolve` gives it), or a folder in a temporary copy
-    of the plugins folder (a build at the latest commits, the old tree of `check --since`). It
-    is also None for a loose <id>.py and a function read from a build."""
+    `root` is the folder that was bundled, when it stays on disk: the plugin's folder in the
+    plugins folder, or for a plugin taken whole from git its `.owpp/modules/<id>`. It is None
+    when that folder is a temporary one: a scratch copy of a whole plugin (its Sources keeps no
+    `.owpp/`; `Sources.resolve` gives the copy while it is open), or anything made from a
+    temporary copy of the plugins folder (a build at the latest commits, the old tree of
+    `check --since`). It is also None for a loose <id>.py and a function read from a build."""
 
     id: str
     content: str = ""
@@ -824,5 +825,5 @@ def function_file(folder: Path | str, sources: Sources) -> FunctionFile | None:
         global_=declared if isinstance(declared, bool) and "file" in fn else None,
         plugin=plugin,
     )
-    item.root = folder if plugin.root == folder else None
+    item.root = None if plugin.temporary else plugin.root
     return item

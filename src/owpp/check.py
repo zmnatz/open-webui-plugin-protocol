@@ -118,7 +118,7 @@ def _check_function(directory: Path, fn: FunctionFile, sources: Sources) -> Iter
 
 def _check_folder(folder: Path, fn: FunctionFile, sources: Sources) -> Iterator[Finding]:
     """What only a plugin folder has: a changelog, a manifest and the variables it reads."""
-    # No root: a plugin taken whole from git, whose upstream copy `sources` holds.
+    # No root: a plugin taken whole from git into a scratch copy, which `sources` holds.
     root = fn.root or sources.resolve(folder).root
     problem = changelog_problem(root, version_of(fn.content))
     if problem:

@@ -17,7 +17,7 @@ The command needs the `test` extra: pytest, pytest-xdist, and the packages of Op
 
 ## Upstream tests
 
-A plugin [taken whole from git](../plugin-format.md#a-whole-plugin-from-git) has the upstream's tests. By default, `owpp test` does not run them. With `--upstream`, it also runs them from the pinned commit, against your bundle of the plugin, with your overrides.
+A plugin [taken whole from git](../plugin-format.md#a-whole-plugin-from-git) has the upstream's tests. By default, `owpp test` does not run them. With `--upstream`, it also runs them from the pinned commit, against your bundle of the plugin, with your overrides. They run in a scratch copy, so they do not change [`.owpp/modules/`](../bundling.md#the-owpp-folder).
 
 **Caution:** Read the upstream tests before you use `--upstream`. They run code from a different repository on your machine. The command first removes the `OPEN_WEBUI_*` [variables](../environment-variables.md#signing-in) from their environment.
 

@@ -19,9 +19,11 @@ Every command takes --dir <plugins folder> (default: $OWPP_PLUGINS_DIR, else ./p
 from __future__ import annotations
 
 import argparse
+import contextlib
+import functools
 import os
 import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 
 import yaml
@@ -216,7 +218,8 @@ def _cmd_test(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
     whole = [f for f in chosen if is_plugin_source(read_manifest(f))]
     if args.upstream and whole:
         for f in whole:
-            tests = args.sources.resolve(f).root / "tests"
+            # A scratch copy: what they write must not change the folder that is bundled.
+            tests = args.sources.resolve(f, scratch=True).root / "tests"
             if tests.is_dir():
                 paths.append(str(tests))
                 upstream_tested.add(f.name)
@@ -252,7 +255,23 @@ def _cmd_test(args: argparse.Namespace, directory: Path, env: Mapping[str, str])
     ]
     if env.get("PYTEST_DISABLE_PLUGIN_AUTOLOAD"):
         pytest_args += ["-p", "owpp.testing.pytest_plugin"]
-    return int(pytest.main(pytest_args))
+    # The test fixtures keep what they read from git in this plugins folder's project.
+    with _environment("OWPP_PLUGINS_DIR", str(directory)):
+        return int(pytest.main(pytest_args))
+
+
+@contextlib.contextmanager
+def _environment(name: str, value: str) -> Iterator[None]:
+    """The environment variable `name` set to `value` until the block ends."""
+    before = os.environ.get(name)
+    os.environ[name] = value
+    try:
+        yield
+    finally:
+        if before is None:
+            del os.environ[name]
+        else:
+            os.environ[name] = before
 
 
 def _cmd_init(args: argparse.Namespace, directory: Path, env: Mapping[str, str]) -> int:
@@ -552,18 +571,20 @@ def plugins_dir(args: argparse.Namespace, env: Mapping[str, str]) -> Path:
 def main(
     argv: Sequence[str] | None = None,
     env: Mapping[str, str] | None = None,
-    sources: Callable[[], Sources] = Sources,
+    sources: Callable[[], Sources] | None = None,
 ) -> int:
-    """Run one command. `sources` makes what it reads plugin files from git through."""
+    """Run one command. `sources` makes what it reads plugin files from git through; by default,
+    git itself, keeping what it reads in the project's `.owpp/`."""
     env = os.environ if env is None else env
     args = parse_command(argv)
     if not getattr(args, "handler", None):
         build_parser().print_help()
         return 0
     directory = plugins_dir(args, env)
-    # One Sources for the command: each file from git is fetched once, and the upstream copies of
+    # One Sources for the command: each file from git is read once, and the scratch copies of
     # plugins taken whole from git last until the command (pytest, for `owpp test`) is done.
-    with sources() as args.sources:
+    make = sources if sources is not None else functools.partial(Sources, plugins=directory)
+    with make() as args.sources:
         return args.handler(args, directory, env)
 
 

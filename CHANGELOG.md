@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- owpp keeps what it takes from git in `.owpp/` beside the plugins folder, so it fetches a pinned file once and needs no network for it after that; add `.owpp/` to your `.gitignore` ([the `.owpp/` folder](docs/bundling.md#the-owpp-folder), [#147](https://github.com/zmnatz/open-webui-plugin-protocol/issues/147)).
+- owpp refuses a file in `.owpp/` that was changed after owpp wrote it, and a `.owpp/` that git tracks ([troubleshooting](docs/troubleshooting.md#a-file-in-owpp-was-changed)).
 - A dry run reports the same steps that `owpp deploy` then does, because the deploy decides each step of a function before it writes ([owpp deploy](docs/commands/deploy.md#what-a-deploy-does), [#132](https://github.com/zmnatz/open-webui-plugin-protocol/issues/132)).
 - `owpp check --since` compares the two bundles as the deploy does, so a plugin whose code differs only in an import prefix that Open-WebUI rewrites (`from utils`) no longer needs a new version ([owpp check](docs/commands/check.md#a-change-needs-a-new-version), [#131](https://github.com/zmnatz/open-webui-plugin-protocol/issues/131)).
 - A dry run now says what a deploy would do to a new function (`would create, activate, make global`), and no longer reports a tool or skill as changed when Open-WebUI only rewrote its old import prefixes on save ([owpp deploy](docs/commands/deploy.md)).

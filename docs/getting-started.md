@@ -10,6 +10,12 @@ Make a git repository:
 mkdir my-plugins && cd my-plugins && git init
 ```
 
+A plugin can take code from git. owpp keeps that code in [`.owpp/`](bundling.md#the-owpp-folder), which you must not commit. Ignore the folder now:
+
+```sh
+echo ".owpp/" >> .gitignore
+```
+
 The plugins go in `plugins/`, one folder for each plugin. You do not need to make the folder: `owpp` makes it.
 
 ## 2. Create a plugin

@@ -1,7 +1,7 @@
 """A whole plugin folder taken from git: `source: {git, ref, path, plugin: true}`.
 
 The folder at `path` is an owpp plugin itself (it has a plugin.yaml). Its files are written to a
-scratch folder named after the local plugin, with the local manifest's few overrides applied to
+folder named after the local plugin (in `.owpp/modules/`, else a scratch folder), with the local manifest's few overrides applied to
 its plugin.yaml and a local config.yaml put in place of the upstream's. That folder is then
 bundled, checked and tested like any local plugin, by the owpp that reads it. Nothing in it is
 run while bundling: only its files are read.
@@ -9,14 +9,13 @@ run while bundling: only its files are read.
 
 from __future__ import annotations
 
-import base64
 from pathlib import Path
 
 import yaml
 
 from ..errors import OwppError
 from ..manifest import SOURCED_OVERRIDES as OVERRIDES
-from ..manifest import Value, get, read_manifest, read_text
+from ..manifest import Value, get, read_manifest, read_text, value_bytes
 
 
 def is_plugin_source(manifest: dict) -> bool:
@@ -65,9 +64,7 @@ def write_upstream(root: Path, folder: Path, manifest: dict, files: dict[str, Va
             raise OwppError(f"{folder.name}: {where}{rel} is not a plain path")
         path = root.joinpath(*parts)
         path.parent.mkdir(parents=True, exist_ok=True)
-        data = (
-            value.encode("utf-8") if isinstance(value, str) else base64.b64decode(value["base64"])
-        )
+        data = value_bytes(value)
         path.write_bytes(data)
         if data.startswith(b"#!"):  # git's file mode is not fetched; a script keeps its x bit
             path.chmod(0o755)

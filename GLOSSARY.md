@@ -7,12 +7,16 @@ A plugins folder in git, bundled into the single-file functions Open-WebUI store
 ### Code taken from git
 
 **Sources**:
-Everything one run reads from git for its plugins: the files each `source:` names, at pinned commits, each fetched once; also the commit a branch or tag points at, and which of the two a name is.
+Everything one run reads from git for its plugins: the files each `source:` names, at pinned commits, each read once and fetched only when `.owpp/` does not hold it; also the commit a branch or tag points at, and which of the two a name is.
 _Avoid_: remote, checkout
 
 **Resolved plugin**:
 A plugin folder with its `source:` applied: the folder that is bundled, its merged manifest, its files and the commits they were pinned to.
 _Avoid_: upstream root, plugin root
+
+**`.owpp/`**:
+The folder in a project where owpp keeps what it takes from git: the store (upstream files, by repository and commit) and the modules (each whole plugin from git, as it is bundled). Never committed.
+_Avoid_: cache, vendor folder, owpp_modules
 
 ### Bundling
 
