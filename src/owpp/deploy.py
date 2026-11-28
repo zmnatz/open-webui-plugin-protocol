@@ -30,9 +30,10 @@ import shutil
 import ssl
 import sys
 import tempfile
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Any
 
 from .build import Build, read_build
 from .bundle import VALID_ID, FunctionFile, load_function_files
@@ -432,32 +433,21 @@ def _with_content(instance: Instance, files: list[FunctionFile], live: list[dict
     return out
 
 
-# The past tense of each step, for the report of a real run.
-_DONE = {
-    "create": "created",
-    "update": "updated",
-    "activate": "activated",
-    "make global": "made global",
-    "make not global": "made not global",
+# Each step: its past tense, for the report of a real run, and the call that does it.
+_STEPS: dict[str, tuple[str, Callable[[OpenWebUI, FunctionFile, FunctionMeta], Any]]] = {
+    "create": ("created", lambda api, f, meta: api.create_function(f.id, f.name, f.content, meta)),
+    "update": ("updated", lambda api, f, meta: api.update_function(f.id, f.name, f.content, meta)),
+    "activate": ("activated", lambda api, f, _: api.toggle(f.id)),
+    "make global": ("made global", lambda api, f, _: api.toggle_global(f.id)),
+    "make not global": ("made not global", lambda api, f, _: api.toggle_global(f.id)),
 }
-
-
-def _carry_out(api: OpenWebUI, f: FunctionFile, step: str, meta: FunctionMeta) -> None:
-    if step == "create":
-        api.create_function(f.id, f.name, f.content, meta)
-    elif step == "update":
-        api.update_function(f.id, f.name, f.content, meta)
-    elif step == "activate":
-        api.toggle(f.id)
-    else:  # make global, make not global
-        api.toggle_global(f.id)
 
 
 def _action(item: PlanItem, dry_run: bool) -> str:
     """The report's word for the item: the steps a dry run would take, or the ones taken."""
     if dry_run:
         return f"would {', '.join(item.steps)}" if item.steps else "unchanged"
-    done = [_DONE[s] for s in item.steps]
+    done = [_STEPS[s][0] for s in item.steps]
     return ", ".join(done if item.action != "unchanged" else ["unchanged", *done])
 
 
@@ -507,7 +497,7 @@ def _deploy_functions(instance: Instance, choices: Choices, plugins: Build) -> l
             # of the instance, for `owpp import --instance`.
             meta = replace(f.meta, managed_by=managed_by)
             for step in p.steps:
-                _carry_out(api, f, step, meta)
+                _STEPS[step][1](api, f, meta)
         c = changes[f.id]
         results.append(
             Result(
